@@ -1,0 +1,148 @@
+# Конфігурація, яку запускає адміністратор інсталяції.
+#
+# Файл самодостатній: не посилається на інші файли репозиторію, тому його можна
+# розгортати як з каталогу deploy/, так і з панелей керування (Portainer,
+# Dokploy), які отримують лише цей файл і змінні середовища.
+#
+# Усе, що відрізняється між інсталяціями, задається змінними середовища
+# (файл .env або налаштування панелі). Усе, що відрізняється між релізами,
+# міститься в образах.
+#
+#   docker compose up -d --wait
+
+name: crm
+
+services:
+  # Єдина точка входу: TLS, автоматичні сертифікати, маршрутизація.
+  # Клієнт і API розміщені на одному origin, тому CORS не потрібен, а сесія
+  # зберігається в httpOnly-куці.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+  web:
+    image: ghcr.io/uniia-ave-team/crm-web:${CRM_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  api:
+    image: ghcr.io/uniia-ave-team/crm-api:${CRM_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Auth__SigningKey: ${AUTH_SIGNING_KEY:?змінна AUTH_SIGNING_KEY не задана}
+      Crm__PublicUrl: https://${DOMAIN:?змінна DOMAIN не задана}
+      TZ: ${TZ:-Europe/Kyiv}
+    expose:
+      - "8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Healthcheck визначено в Dockerfile образу: chiseled-образ .NET не має
+    # оболонки, тому перевірка реалізована окремим виконуваним файлом.
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?змінна POSTGRES_DB не задана}
+      POSTGRES_USER: ${POSTGRES_USER:?змінна POSTGRES_USER не задана}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?змінна POSTGRES_PASSWORD не задана}
+      TZ: ${TZ:-Europe/Kyiv}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Автоматичні резервні копії бази за розкладом. Файли зберігаються в томі
+  # backups у підкаталогах daily/, weekly/, monthly/, last/.
+  # Копії на тому самому сервері не замінюють зовнішнього зберігання —
+  # див. docs/deployment/backups.md.
+  db-backup:
+    image: prodrigestivill/postgres-backup-local:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_EXTRA_OPTS: "-Z1 --clean --if-exists"
+      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-4}
+      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-6}
+      HEALTHCHECK_PORT: "8080"
+      TZ: ${TZ:-Europe/Kyiv}
+    volumes:
+      - backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+configs:
+  # Конфігурація Caddy для сервера з публічним доменом. Значення DOMAIN та
+  # ACME_EMAIL підставляє Docker Compose під час запуску.
+  caddyfile:
+    content: |
+      {
+        email ${ACME_EMAIL:?змінна ACME_EMAIL не задана}
+      }
+
+      ${DOMAIN} {
+        encode zstd gzip
+
+        header {
+          Strict-Transport-Security "max-age=31536000; includeSubDomains"
+          X-Content-Type-Options "nosniff"
+          X-Frame-Options "DENY"
+          Referrer-Policy "strict-origin-when-cross-origin"
+          -Server
+        }
+
+        handle /api/* {
+          reverse_proxy api:8080
+        }
+
+        handle {
+          reverse_proxy web:8080
+        }
+
+        log {
+          output stdout
+          format console
+        }
+      }
+
+volumes:
+  db_data:
+  backups:
+  caddy_data:
+  caddy_config:

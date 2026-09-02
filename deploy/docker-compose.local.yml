@@ -1,0 +1,43 @@
+# Конфігурація для інсталяцій без публічного доменного імені: сервер в офісі,
+# комп'ютер у локальній мережі, ноутбук.
+#
+# Замінює конфігурацію Caddy на варіант із локальним центром сертифікації.
+# Браузери довіряють такому сертифікату після встановлення кореневого
+# сертифіката на робочих місцях — див. docs/deployment/own-hardware.md.
+#
+# Вмикається значенням CRM_MODE=local у .env; install.sh та update.sh
+# підключають цей файл автоматично. Вручну:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --wait
+#
+# DOMAIN може містити ім'я в локальній мережі, IP-адресу або кілька значень
+# через кому: "crm.local, 192.168.1.20".
+
+configs:
+  caddyfile:
+    content: |
+      ${DOMAIN} {
+        tls internal
+
+        encode zstd gzip
+
+        header {
+          X-Content-Type-Options "nosniff"
+          X-Frame-Options "DENY"
+          Referrer-Policy "strict-origin-when-cross-origin"
+          -Server
+        }
+
+        handle /api/* {
+          reverse_proxy api:8080
+        }
+
+        handle {
+          reverse_proxy web:8080
+        }
+
+        log {
+          output stdout
+          format console
+        }
+      }

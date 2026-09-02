@@ -1,0 +1,34 @@
+# Конфігурація для розробки. Використовується в `just dev-api` та `just dev-web`.
+#
+# Відмінності від робочої конфігурації: частина іншої команди береться як
+# опублікований образ :edge; порти відкриті на хост для локально запущених
+# API або Angular; реверс-проксі та резервні копії вимкнені (профіль proxy
+# вмикає Caddy для відтворення робочої маршрутизації).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db api
+
+services:
+  caddy:
+    profiles: ["proxy"]
+
+  db-backup:
+    profiles: ["backup"]
+
+  web:
+    image: ghcr.io/uniia-ave-team/crm-web:edge
+    restart: "no"
+    ports:
+      - "127.0.0.1:4200:8080"
+
+  api:
+    image: ghcr.io/uniia-ave-team/crm-api:edge
+    restart: "no"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "127.0.0.1:5080:8080"
+
+  db:
+    restart: "no"
+    ports:
+      - "127.0.0.1:5432:5432"

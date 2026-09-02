@@ -1,0 +1,42 @@
+# --- Секрети й локальне середовище -------------------------------------------
+.env
+.env.*
+!.env.example
+deploy/backups/
+deploy/crm-root-ca.crt
+*.pem
+*.pfx
+
+# --- Операційна система ------------------------------------------------------
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- Редактори ---------------------------------------------------------------
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+*.user
+*.suo
+
+# --- .NET (apps/api) ---------------------------------------------------------
+# Переміститься в apps/api/.gitignore після створення рішення.
+[Bb]in/
+[Oo]bj/
+artifacts/
+*.nupkg
+TestResults/
+
+# --- Angular / Ionic (apps/web) ----------------------------------------------
+# Переміститься в apps/web/.gitignore після створення застосунку.
+node_modules/
+.angular/
+dist/
+www/
+*.tsbuildinfo
+
+# --- Згенерований клієнт API -------------------------------------------------
+# Відтворюється з packages/api-contract/openapi.json.
+apps/web/src/app/api/generated/
