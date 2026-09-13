@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="src/Crm.Api/Crm.Api.csproj" Id="00198e69-3f2d-48c3-8e54-8fc9ffbf4587" />
+  <Project Path="src/Crm.Application/Crm.Application.csproj" Id="8bce9343-c61e-4315-bf83-345e55aaa006" />
+  <Project Path="src/Crm.Domain/Crm.Domain.csproj" Id="f274ca8e-7044-42d1-b90b-70f2fd7c5add" />
+  <Project Path="src/Crm.Infrastructure/Crm.Infrastructure.csproj" Id="3e87db51-0e0a-45aa-a3f7-739c8abda35c" />
+  <Project Path="src/Crm.Tests/Crm.Tests.csproj" Id="949b127e-1331-443c-9ba1-cc16e5ada157" />
+</Solution>
