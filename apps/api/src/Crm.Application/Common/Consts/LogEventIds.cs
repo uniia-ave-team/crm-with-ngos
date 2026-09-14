@@ -1,5 +1,6 @@
 namespace Crm.Application.Common.Consts;
 
+// TODO: Translate logs in different languages.
 public static class LogEventIds
 {
     // 1000s: Roles, Claims, and Cache
