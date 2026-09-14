@@ -10,4 +10,5 @@ public record CreateUserCommand(
     string FirstName,
     string LastName,
     string Email,
-    string Password) : IRequest<Guid>, ITransactionalCommand;
+    string Password,
+    string ConfirmPassword) : IRequest<Guid>, ITransactionalCommand;

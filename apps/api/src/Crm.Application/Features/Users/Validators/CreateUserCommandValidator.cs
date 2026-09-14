@@ -36,6 +36,10 @@ public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
             .MinimumLength(options.RequiredLength)
             .WithMessage($"Password must be at least {options.RequiredLength} characters long.");
 
+        RuleFor(x => x.ConfirmPassword)
+            .NotEmpty().WithMessage("Confirm password is required.")
+            .Equal(x => x.Password).WithMessage("Passwords do not match.");
+
         if (options.RequireDigit)
         {
             RuleFor(x => x.Password)

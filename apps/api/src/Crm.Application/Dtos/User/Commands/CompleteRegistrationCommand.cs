@@ -11,4 +11,5 @@ public record CompleteRegistrationCommand(
     string Token,
     string FirstName,
     string LastName,
-    string Password) : IRequest<AuthTokensDto>, ITransactionalCommand;
+    string Password,
+    string ConfirmPassword) : IRequest<AuthTokensDto>, ITransactionalCommand;
