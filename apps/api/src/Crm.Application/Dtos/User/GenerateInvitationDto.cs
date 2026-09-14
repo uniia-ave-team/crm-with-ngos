@@ -6,4 +6,4 @@ namespace Crm.Application.Dtos.User;
 public record GenerateInvitationDto(
     string Email,
     Guid NgoId,
-    IEnumerable<Guid> RoleIds);
+    IReadOnlyList<Guid> RoleIds);

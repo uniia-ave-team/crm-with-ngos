@@ -6,4 +6,4 @@ namespace Crm.Application.Dtos.User.Commands;
 /// </summary>
 public record InviteUserCommand(
     string Email,
-    IEnumerable<Guid> RoleIds) : IRequest<InvitationTokenResultDto>;
+    IReadOnlyList<Guid> RoleIds) : IRequest<InvitationTokenResultDto>;
