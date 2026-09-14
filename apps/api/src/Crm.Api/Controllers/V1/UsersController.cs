@@ -77,6 +77,8 @@ public class UsersController(
         return Ok(result);
     }
 
+    // TODO: Add a middleware or filter that disables this endpoint entirely after the first user exists (or maybe add that to SystemController and disable it entirely).
+
     /// <summary>
     /// Creates a new user (typically used only for the first system admin initialization).
     /// </summary>

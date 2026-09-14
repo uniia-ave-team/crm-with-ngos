@@ -26,6 +26,7 @@ public static class HostingExtensions
     {
         builder.Host.AddSerilog();
 
+        // TODO: Resolve CreatedAtAction trouble with lowercase urls.
         builder.Services.Configure<RouteOptions>(options =>
         {
             options.LowercaseUrls = true;
