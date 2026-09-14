@@ -18,6 +18,11 @@ public class GenericRepository<T>(DbContext context)
     where T : class, IEntity
 {
     /// <summary>
+    /// Gets the maximum allowed page size.
+    /// </summary>
+    protected const int MaxPageSize = 100;
+
+    /// <summary>
     /// Gets the <see cref="DbSet{TEntity}"/> for the entity type <typeparamref name="T"/>.
     /// </summary>
     protected DbSet<T> DbSet { get; } = context.Set<T>();
@@ -182,6 +187,11 @@ public class GenericRepository<T>(DbContext context)
         if (!string.IsNullOrWhiteSpace(orderBy))
         {
             query = query.OrderByDynamic(orderBy, sortOrder);
+        }
+
+        if (pageSize > MaxPageSize)
+        {
+            pageSize = MaxPageSize;
         }
 
         var items = await query
