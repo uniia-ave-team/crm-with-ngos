@@ -24,10 +24,10 @@ public class NgoController(IMediator mediator) : ControllerBase
     /// <returns>A DTO containing the NGO details.</returns>
     [HttpGet]
     [HasAccessRight(AccessRight.ViewNgo)]
-    [ProducesResponseType(typeof(NgoDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<NgoDto>> GetAsync(CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetNgoQuery(), cancellationToken);
         return Ok(result);
@@ -41,10 +41,10 @@ public class NgoController(IMediator mediator) : ControllerBase
     /// <returns>The unique identifier of the created NGO.</returns>
     [HttpPost]
     [HasAccessRight(AccessRight.CreateNgo)]
-    [ProducesResponseType(typeof(Guid), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CreateAsync(
+    public async Task<ActionResult<Guid>> CreateAsync(
         [FromBody] CreateNgoCommand command,
         CancellationToken cancellationToken)
     {

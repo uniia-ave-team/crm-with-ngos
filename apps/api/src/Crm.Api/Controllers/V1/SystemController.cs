@@ -19,8 +19,8 @@ public class SystemController(IMediator mediator) : ControllerBase
     /// Used by the frontend to determine whether to show the initial setup wizard.
     /// </summary>
     [HttpGet("status")]
-    [ProducesResponseType(typeof(SystemSetupStatusDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSystemStatusAsync(CancellationToken cancellationToken)
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<SystemSetupStatusDto>> GetSystemStatusAsync(CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetSystemSetupStatusQuery(), cancellationToken);
         return Ok(result);

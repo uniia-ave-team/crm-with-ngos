@@ -31,9 +31,9 @@ public class UsersController(
     /// <returns>A paginated list of users.</returns>
     [HttpGet]
     [HasAccessRight(AccessRight.ViewUser)]
-    [ProducesResponseType(typeof(PagedResult<UserDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetUsersAsync(
+    public async Task<ActionResult<PagedResult<UserDto>>> GetUsersAsync(
         [FromQuery] GetUsersQuery query,
         CancellationToken cancellationToken)
     {
@@ -49,9 +49,9 @@ public class UsersController(
     /// <returns>The detailed profile of the user.</returns>
     [HttpGet("{id:guid}/profile")]
     [HasAccessRight(AccessRight.ViewUser)]
-    [ProducesResponseType(typeof(UserProfileDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserProfileAsync(
+    public async Task<ActionResult<UserProfileDto>> GetUserProfileAsync(
         Guid id,
         CancellationToken cancellationToken)
     {
@@ -66,10 +66,10 @@ public class UsersController(
     /// <returns>The detailed profile of the current user.</returns>
     [HttpGet("me/profile")]
     [Authorize]
-    [ProducesResponseType(typeof(UserProfileDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetCurrentUserProfileAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<UserProfileDto>> GetCurrentUserProfileAsync(CancellationToken cancellationToken)
     {
         var currentUserId = currentUserService.GetUserId();
 
@@ -88,7 +88,7 @@ public class UsersController(
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> CreateUserAsync(
+    public async Task<ActionResult<Guid>> CreateUserAsync(
         [FromBody] CreateUserCommand command,
         CancellationToken cancellationToken)
     {
@@ -107,6 +107,7 @@ public class UsersController(
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateUserProfileAsync(
         Guid id,
         [FromBody] UpdateProfileRequest command,
@@ -155,6 +156,22 @@ public class UsersController(
     }
 
     /// <summary>
+    /// Retrieves the list of unique UI permissions for the currently authenticated user.
+    /// Used by the client application to build the user interface dynamically.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A list of access right strings.</returns>
+    [HttpGet("me/permissions")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<List<string>>> GetMyPermissionsAsync(CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetUserPermissionsQuery(currentUserService.GetRoleIds()), cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Activates a previously deactivated user.
     /// </summary>
     /// <param name="id">The unique identifier of the user to activate.</param>
@@ -163,6 +180,7 @@ public class UsersController(
     [HttpPut("{id:guid}/activate")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ActivateUserAsync(
         Guid id,
         CancellationToken cancellationToken)
@@ -180,6 +198,7 @@ public class UsersController(
     [HttpPut("{id:guid}/deactivate")]
     [HasAccessRight(AccessRight.DisableUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeactivateUserAsync(
         Guid id,
         CancellationToken cancellationToken)
@@ -199,6 +218,7 @@ public class UsersController(
     [HasAccessRight(AccessRight.AssignRoleToUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AssignRoleAsync(
         Guid id,
         Guid roleId,
@@ -220,6 +240,7 @@ public class UsersController(
     [HttpDelete("{id:guid}/roles/{roleId:guid}")]
     [HasAccessRight(AccessRight.AssignRoleToUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveRoleAsync(
         Guid id,
         Guid roleId,
@@ -227,21 +248,5 @@ public class UsersController(
     {
         await mediator.Send(new RemoveUserRoleCommand(id, roleId), cancellationToken);
         return NoContent();
-    }
-
-    /// <summary>
-    /// Retrieves the list of unique UI permissions for the currently authenticated user.
-    /// Used by the client application to build the user interface dynamically.
-    /// </summary>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A list of access right strings.</returns>
-    [HttpGet("me/permissions")]
-    [Authorize]
-    [ProducesResponseType(typeof(List<string>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetMyPermissionsAsync(CancellationToken cancellationToken)
-    {
-        var result = await mediator.Send(new GetUserPermissionsQuery(currentUserService.GetRoleIds()), cancellationToken);
-        return Ok(result);
     }
 }

@@ -26,11 +26,11 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     /// <returns>The generated invitation token.</returns>
     [HttpPost]
     [HasAccessRight(AccessRight.CreateUser)]
-    [ProducesResponseType(typeof(InvitationTokenResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> InviteUserAsync(
+    public async Task<ActionResult<InvitationTokenResultDto>> InviteUserAsync(
         [FromBody] InviteUserCommand command,
         CancellationToken cancellationToken)
     {
@@ -45,9 +45,9 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The extracted details from the valid invitation token.</returns>
     [HttpGet("validate")]
-    [ProducesResponseType(typeof(InvitationDetailsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ValidateInvitationAsync(
+    public async Task<ActionResult<InvitationDetailsDto>> ValidateInvitationAsync(
         [FromQuery] ValidateInvitationTokenQuery query,
         CancellationToken cancellationToken)
     {
@@ -62,9 +62,9 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A DTO containing the JWT access token and refresh token.</returns>
     [HttpPost("accept")]
-    [ProducesResponseType(typeof(AuthTokensDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> AcceptInvitationAsync(
+    public async Task<ActionResult<AuthTokensDto>> AcceptInvitationAsync(
         [FromBody] CompleteRegistrationCommand command,
         CancellationToken cancellationToken)
     {

@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Crm.Api.Controllers.V1;
 
 /// <summary>
-/// Controller responsible for authentication, token management, and user registration processes.
+/// Controller responsible for authentication and token management processes.
 /// </summary>
 [ApiController]
 [ApiVersion("1.0")]
@@ -25,10 +25,10 @@ public class AuthController(
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A DTO containing the JWT access token and refresh token.</returns>
     [HttpPost("login")]
-    [ProducesResponseType(typeof(AuthTokensDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> LoginAsync(
+    public async Task<ActionResult<AuthTokensDto>> LoginAsync(
         [FromBody] AuthenticateUserCommand command,
         CancellationToken cancellationToken)
     {
@@ -43,10 +43,10 @@ public class AuthController(
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A new pair of access and refresh tokens.</returns>
     [HttpPost("refresh-token")]
-    [ProducesResponseType(typeof(AuthTokensDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> RefreshTokensAsync(
+    public async Task<ActionResult<AuthTokensDto>> RefreshTokensAsync(
         [FromBody] RefreshTokensCommand command,
         CancellationToken cancellationToken)
     {
