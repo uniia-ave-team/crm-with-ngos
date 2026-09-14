@@ -27,6 +27,12 @@ public partial class AddClaimToRoleCommandHandler(
     {
         LogAddingClaim(logger, request.ClaimValue, request.RoleId);
 
+        if (!PermissionExtensions.GetAllStringValues().Contains(request.ClaimValue))
+        {
+            LogInvalidClaimAttempt(logger, request.ClaimValue, request.RoleId);
+            throw new ArgumentException($"The permission '{request.ClaimValue}' does not exist in the system.");
+        }
+
         var role = await roleManager.FindByIdAsync(request.RoleId.ToString());
 
         if (role == null)
@@ -67,6 +73,9 @@ public partial class AddClaimToRoleCommandHandler(
 
     [LoggerMessage(EventId = LogEventIds.AddingClaim, Level = LogLevel.Information, Message = "Initiating addition of claim '{ClaimValue}' to role ID: {RoleId}")]
     private static partial void LogAddingClaim(ILogger logger, string claimValue, Guid roleId);
+
+    [LoggerMessage(EventId = LogEventIds.InvalidClaimToAddAttempt, Level = LogLevel.Warning, Message = "Attempted to assign an invalid or non-existent claim '{ClaimValue}' to role ID {RoleId}.")]
+    private static partial void LogInvalidClaimAttempt(ILogger logger, string claimValue, Guid roleId);
 
     [LoggerMessage(EventId = LogEventIds.RoleNotFound, Level = LogLevel.Warning, Message = "Claim addition failed. Role with ID {RoleId} was not found.")]
     private static partial void LogRoleNotFound(ILogger logger, Guid roleId);

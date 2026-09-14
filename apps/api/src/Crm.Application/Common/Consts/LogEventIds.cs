@@ -46,6 +46,8 @@ public static class LogEventIds
     public const int RoleDetailsFetched = 1040;
     public const int AdminRoleAddingClaimAttempt = 1041;
     public const int AdminRoleRemovingClaimAttempt = 1042;
+    public const int InvalidClaimToAddAttempt = 1043;
+    public const int InvalidClaimToRemoveAttempt = 1044;
 
     // 2000s: Users, Authentication, and Profiles
     public const int ActivatingUser = 2001;

@@ -28,6 +28,12 @@ public partial class RemoveClaimFromRoleCommandHandler(
     {
         LogRemovingClaim(logger, request.ClaimValue, request.RoleId);
 
+        if (!PermissionExtensions.GetAllStringValues().Contains(request.ClaimValue))
+        {
+            LogInvalidClaimAttempt(logger, request.ClaimValue, request.RoleId);
+            throw new ArgumentException($"The permission '{request.ClaimValue}' does not exist in the system.");
+        }
+
         var role = await roleManager.FindByIdAsync(request.RoleId.ToString());
 
         if (role == null)
@@ -67,6 +73,9 @@ public partial class RemoveClaimFromRoleCommandHandler(
 
     [LoggerMessage(EventId = LogEventIds.RemovingClaim, Level = LogLevel.Information, Message = "Initiating removal of claim '{ClaimValue}' from role ID: {RoleId}")]
     private static partial void LogRemovingClaim(ILogger logger, string claimValue, Guid roleId);
+
+    [LoggerMessage(EventId = LogEventIds.InvalidClaimToRemoveAttempt, Level = LogLevel.Warning, Message = "Attempted to remove an invalid or non-existent claim '{ClaimValue}' from role ID {RoleId}.")]
+    private static partial void LogInvalidClaimAttempt(ILogger logger, string claimValue, Guid roleId);
 
     [LoggerMessage(EventId = LogEventIds.RemoveClaimFromRoleCommandHandlerRoleNotFound, Level = LogLevel.Warning, Message = "Claim removal failed. Role with ID {RoleId} was not found.")]
     private static partial void LogRoleNotFound(ILogger logger, Guid roleId);
