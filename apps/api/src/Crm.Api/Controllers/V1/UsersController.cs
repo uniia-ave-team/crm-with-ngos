@@ -228,4 +228,20 @@ public class UsersController(
         await mediator.Send(new RemoveUserRoleCommand(id, roleId), cancellationToken);
         return NoContent();
     }
+
+    /// <summary>
+    /// Retrieves the list of unique UI permissions for the currently authenticated user.
+    /// Used by the client application to build the user interface dynamically.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A list of access right strings.</returns>
+    [HttpGet("me/permissions")]
+    [Authorize]
+    [ProducesResponseType(typeof(List<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetMyPermissionsAsync(CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetUserPermissionsQuery(currentUserService.GetRoleIds()), cancellationToken);
+        return Ok(result);
+    }
 }

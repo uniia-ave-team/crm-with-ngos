@@ -111,6 +111,9 @@ public static class LogEventIds
     public const int CannotActivateSelf = 2061;
     public const int CannotDeactivateSelf = 2062;
     public const int CannotDeactivateLastAdmin = 2063;
+    public const int FetchingUserPermissions = 2064;
+    public const int NoRoleIdsProvidedForPermissions = 2065;
+    public const int PermissionsFetchedSuccessfully = 2066;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;

@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Crm.Application.Interfaces;
+using Crm.Domain.Consts;
 using Microsoft.AspNetCore.Http;
 
 namespace Crm.Infrastructure.Services;
@@ -29,5 +30,29 @@ public sealed class CurrentUserService(IHttpContextAccessor httpContextAccessor)
         return string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid userId)
             ? throw new UnauthorizedAccessException("User ID claim is missing or invalid in the current security context.")
             : userId;
+    }
+
+    /// <inheritdoc />
+    public List<Guid> GetRoleIds()
+    {
+        var user = httpContextAccessor.HttpContext?.User;
+
+        if (user == null)
+        {
+            return [];
+        }
+
+        var roleIdClaims = user.FindAll(CustomClaimTypes.RoleId);
+        var roleIds = new List<Guid>();
+
+        foreach (var claim in roleIdClaims)
+        {
+            if (Guid.TryParse(claim.Value, out var roleId))
+            {
+                roleIds.Add(roleId);
+            }
+        }
+
+        return roleIds;
     }
 }
