@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore.ValueGeneration;
 namespace Crm.Infrastructure.Persistence.ValueGenerators;
 
 /// <summary>
-/// Генератор значень для автоматичного створення Guid Version 7 через Entity Framework Core.
+/// Represents a value generator that automatically creates time-ordered Version 7 GUIDs
+/// for Entity Framework Core properties.
 /// </summary>
 public class GuidV7ValueGenerator : ValueGenerator<Guid>
 {
