@@ -6,10 +6,10 @@
     <Project Path="src/Crm.Infrastructure/Crm.Infrastructure.csproj" Id="3e87db51-0e0a-45aa-a3f7-739c8abda35c" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Crm.Api.Tests/Crm.Api.Tests.csproj" Id="dd281939-7c7f-46d0-ba15-f19296460be8" />
-    <Project Path="tests/Crm.Application.Tests/Crm.Application.Tests.csproj" Id="1c8d4cd8-a5d9-45fc-b510-a4d576dbc63d" />
-    <Project Path="tests/Crm.Architecture.Tests/Crm.Architecture.Tests.csproj" Id="029c6205-b961-46eb-a880-856ed72e6fa8" />
-    <Project Path="tests/Crm.Domain.Tests/Crm.Domain.Tests.csproj" Id="e6ede78e-03bf-4438-9978-f80182227954" />
-    <Project Path="tests/Crm.Infrastructure.Tests/Crm.Infrastructure.Tests.csproj" Id="909b2a79-c48f-4bf7-9de1-fe71e72a62d3" />
+    <Project Path="src/Crm.Api.Tests/Crm.Api.Tests.csproj" Id="dd281939-7c7f-46d0-ba15-f19296460be8" />
+    <Project Path="src/Crm.Application.Tests/Crm.Application.Tests.csproj" Id="1c8d4cd8-a5d9-45fc-b510-a4d576dbc63d" />
+    <Project Path="src/Crm.Architecture.Tests/Crm.Architecture.Tests.csproj" Id="029c6205-b961-46eb-a880-856ed72e6fa8" />
+    <Project Path="src/Crm.Domain.Tests/Crm.Domain.Tests.csproj" Id="e6ede78e-03bf-4438-9978-f80182227954" />
+    <Project Path="src/Crm.Infrastructure.Tests/Crm.Infrastructure.Tests.csproj" Id="909b2a79-c48f-4bf7-9de1-fe71e72a62d3" />
   </Folder>
 </Solution>

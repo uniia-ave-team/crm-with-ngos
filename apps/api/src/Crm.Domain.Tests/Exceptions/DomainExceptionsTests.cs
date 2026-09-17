@@ -66,6 +66,24 @@ public class DomainExceptionsTests
     }
 
     /// <summary>
+    /// Verifies that the <see cref="EntityAlreadyExistsException"/> correctly formats its message
+    /// and assigns a 409 Conflict status code when no key is provided.
+    /// </summary>
+    [Fact]
+    public void EntityAlreadyExistsExceptionWithoutKeyShouldFormatMessageProperly()
+    {
+        // Arrange
+        var entityType = "Ngo";
+
+        // Act
+        var exception = new EntityAlreadyExistsException(entityType);
+
+        // Assert
+        exception.Message.ShouldBe("Entity 'Ngo' already exists.");
+        exception.StatusCode.ShouldBe(409);
+    }
+
+    /// <summary>
     /// Verifies that the <see cref="EntitiesNotFoundException"/> correctly formats its message
     /// and assigns a 404 status code when multiple missing keys are provided.
     /// </summary>
