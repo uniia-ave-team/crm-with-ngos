@@ -28,7 +28,7 @@ public class AuthController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<AuthTokensDto>> LoginAsync(
+    public async Task<ActionResult<AuthTokensDto>> Login(
         [FromBody] AuthenticateUserCommand command,
         CancellationToken cancellationToken)
     {
@@ -46,7 +46,7 @@ public class AuthController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<AuthTokensDto>> RefreshTokensAsync(
+    public async Task<ActionResult<AuthTokensDto>> RefreshTokens(
         [FromBody] RefreshTokensCommand command,
         CancellationToken cancellationToken)
     {
@@ -64,7 +64,7 @@ public class AuthController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> LogoutAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
         await mediator.Send(new LogoutCommand(currentUserService.GetUserId()), cancellationToken);
         return NoContent();

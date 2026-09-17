@@ -30,7 +30,7 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<ActionResult<InvitationTokenResultDto>> InviteUserAsync(
+    public async Task<ActionResult<InvitationTokenResultDto>> InviteUser(
         [FromBody] InviteUserCommand command,
         CancellationToken cancellationToken)
     {
@@ -47,7 +47,7 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     [HttpGet("validate")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<InvitationDetailsDto>> ValidateInvitationAsync(
+    public async Task<ActionResult<InvitationDetailsDto>> ValidateInvitation(
         [FromQuery] ValidateInvitationTokenQuery query,
         CancellationToken cancellationToken)
     {
@@ -64,7 +64,7 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     [HttpPost("accept")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<AuthTokensDto>> AcceptInvitationAsync(
+    public async Task<ActionResult<AuthTokensDto>> AcceptInvitation(
         [FromBody] CompleteRegistrationCommand command,
         CancellationToken cancellationToken)
     {

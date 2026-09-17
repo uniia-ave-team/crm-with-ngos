@@ -33,7 +33,7 @@ public class UsersController(
     [HasAccessRight(AccessRight.ViewUser)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<ActionResult<PagedResult<UserDto>>> GetUsersAsync(
+    public async Task<ActionResult<PagedResult<UserDto>>> GetUsers(
         [FromQuery] GetUsersQuery query,
         CancellationToken cancellationToken)
     {
@@ -47,11 +47,11 @@ public class UsersController(
     /// <param name="id">The unique identifier of the user.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The detailed profile of the user.</returns>
-    [HttpGet("{id:guid}/profile")]
+    [HttpGet("{id:guid}/profile", Name = nameof(GetUserProfile))]
     [HasAccessRight(AccessRight.ViewUser)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<UserProfileDto>> GetUserProfileAsync(
+    public async Task<ActionResult<UserProfileDto>> GetUserProfile(
         Guid id,
         CancellationToken cancellationToken)
     {
@@ -69,7 +69,7 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<UserProfileDto>> GetCurrentUserProfileAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<UserProfileDto>> GetCurrentUserProfile(CancellationToken cancellationToken)
     {
         var currentUserId = currentUserService.GetUserId();
 
@@ -88,12 +88,16 @@ public class UsersController(
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<Guid>> CreateUserAsync(
+    public async Task<ActionResult<Guid>> CreateUser(
         [FromBody] CreateUserCommand command,
         CancellationToken cancellationToken)
     {
         var userId = await mediator.Send(command, cancellationToken);
-        return CreatedAtAction(nameof(GetUserProfileAsync), new { id = userId }, new { UserId = userId });
+
+        return CreatedAtRoute(
+            nameof(GetUserProfile),
+            new { id = userId },
+            new { UserId = userId });
     }
 
     /// <summary>
@@ -108,7 +112,7 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateUserProfileAsync(
+    public async Task<IActionResult> UpdateUserProfile(
         Guid id,
         [FromBody] UpdateProfileRequest command,
         CancellationToken cancellationToken)
@@ -128,7 +132,7 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> UpdateCurrentUserProfileAsync(
+    public async Task<IActionResult> UpdateCurrentUserProfile(
         [FromBody] UpdateProfileRequest command,
         CancellationToken cancellationToken)
     {
@@ -147,7 +151,7 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> UpdateMyPasswordAsync(
+    public async Task<IActionResult> UpdateMyPassword(
         [FromBody] UpdatePasswordRequest command,
         CancellationToken cancellationToken)
     {
@@ -165,7 +169,7 @@ public class UsersController(
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<List<string>>> GetMyPermissionsAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<List<string>>> GetMyPermissions(CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetUserPermissionsQuery(currentUserService.GetRoleIds()), cancellationToken);
         return Ok(result);
@@ -181,7 +185,7 @@ public class UsersController(
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ActivateUserAsync(
+    public async Task<IActionResult> ActivateUser(
         Guid id,
         CancellationToken cancellationToken)
     {
@@ -199,7 +203,7 @@ public class UsersController(
     [HasAccessRight(AccessRight.DisableUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeactivateUserAsync(
+    public async Task<IActionResult> DeactivateUser(
         Guid id,
         CancellationToken cancellationToken)
     {
@@ -219,7 +223,7 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> AssignRoleAsync(
+    public async Task<IActionResult> AssignRole(
         Guid id,
         Guid roleId,
         CancellationToken cancellationToken)
@@ -241,7 +245,7 @@ public class UsersController(
     [HasAccessRight(AccessRight.AssignRoleToUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveRoleAsync(
+    public async Task<IActionResult> RemoveRole(
         Guid id,
         Guid roleId,
         CancellationToken cancellationToken)

@@ -16,6 +16,8 @@ namespace Crm.Api.Controllers.V1;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status403Forbidden)]
 public class RolesController(IMediator mediator) : ControllerBase
 {
     /// <summary>
@@ -27,9 +29,7 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HttpGet]
     [HasAccessRight(AccessRight.ViewRole)]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<ActionResult<PagedResult<RoleDto>>> GetRolesAsync(
+    public async Task<ActionResult<PagedResult<RoleDto>>> GetRoles(
         [FromQuery] GetAllRolesQuery query,
         CancellationToken cancellationToken)
     {
@@ -43,11 +43,11 @@ public class RolesController(IMediator mediator) : ControllerBase
     /// <param name="id">The unique identifier of the role.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The detailed role information.</returns>
-    [HttpGet("{id:guid}")]
+    [HttpGet("{id:guid}", Name = nameof(GetRoleById))]
     [HasAccessRight(AccessRight.ViewRole)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<RoleDetailsDto>> GetRoleByIdAsync(
+    public async Task<ActionResult<RoleDetailsDto>> GetRoleById(
         Guid id,
         CancellationToken cancellationToken)
     {
@@ -63,7 +63,7 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HttpGet("permissions")]
     [HasAccessRight(AccessRight.ViewRole)]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlySet<string>>> GetAvailableAccessRightsAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlySet<string>>> GetAvailableAccessRights(CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetAvailableAccessRightsQuery(), cancellationToken);
         return Ok(result);
@@ -79,12 +79,16 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.CreateRole)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<Guid>> CreateRoleAsync(
+    public async Task<ActionResult<Guid>> CreateRole(
         [FromBody] CreateRoleCommand command,
         CancellationToken cancellationToken)
     {
         var roleId = await mediator.Send(command, cancellationToken);
-        return CreatedAtAction(nameof(GetRoleByIdAsync), new { id = roleId }, new { Id = roleId });
+
+        return CreatedAtRoute(
+            nameof(GetRoleById),
+            new { id = roleId },
+            new { Id = roleId });
     }
 
     /// <summary>
@@ -98,7 +102,7 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.UpdateRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> UpdateRoleAsync(
+    public async Task<IActionResult> UpdateRole(
         Guid id,
         [FromBody] UpdateRoleRequest request,
         CancellationToken cancellationToken)
@@ -118,7 +122,7 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HttpDelete("{id:guid}")]
     [HasAccessRight(AccessRight.DeleteRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> DeleteRoleAsync(
+    public async Task<IActionResult> DeleteRole(
         Guid id,
         CancellationToken cancellationToken)
     {
@@ -137,7 +141,7 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.ManageRolePermissions)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> AddClaimToRoleAsync(
+    public async Task<IActionResult> AddClaimToRole(
         Guid id,
         string claimValue,
         CancellationToken cancellationToken)
@@ -156,7 +160,7 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HttpDelete("{id:guid}/claims/{claimValue}")]
     [HasAccessRight(AccessRight.ManageRolePermissions)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RemoveClaimFromRoleAsync(
+    public async Task<IActionResult> RemoveClaimFromRole(
         Guid id,
         string claimValue,
         CancellationToken cancellationToken)

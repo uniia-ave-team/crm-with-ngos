@@ -15,6 +15,8 @@ namespace Crm.Api.Controllers.V1;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
+[ProducesResponseType(StatusCodes.Status401Unauthorized)]
+[ProducesResponseType(StatusCodes.Status403Forbidden)]
 public class NgoController(IMediator mediator) : ControllerBase
 {
     /// <summary>
@@ -22,12 +24,11 @@ public class NgoController(IMediator mediator) : ControllerBase
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A DTO containing the NGO details.</returns>
-    [HttpGet]
+    [HttpGet(Name = nameof(Get))]
     [HasAccessRight(AccessRight.ViewNgo)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<NgoDto>> GetAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<NgoDto>> Get(CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetNgoQuery(), cancellationToken);
         return Ok(result);
@@ -43,13 +44,12 @@ public class NgoController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.CreateNgo)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<Guid>> CreateAsync(
+    public async Task<IActionResult> Create(
         [FromBody] CreateNgoCommand command,
         CancellationToken cancellationToken)
     {
-        var ngoId = await mediator.Send(command, cancellationToken);
-        return CreatedAtAction(nameof(GetAsync), null, ngoId);
+        await mediator.Send(command, cancellationToken);
+        return CreatedAtRoute(nameof(Get), null, null);
     }
 
     /// <summary>
@@ -62,8 +62,7 @@ public class NgoController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.UpdateNgo)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> UpdateAsync(
+    public async Task<IActionResult> Update(
         [FromBody] UpdateNgoCommand command,
         CancellationToken cancellationToken)
     {

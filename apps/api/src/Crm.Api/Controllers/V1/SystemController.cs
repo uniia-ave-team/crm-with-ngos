@@ -20,7 +20,7 @@ public class SystemController(IMediator mediator) : ControllerBase
     /// </summary>
     [HttpGet("status")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<ActionResult<SystemSetupStatusDto>> GetSystemStatusAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<SystemSetupStatusDto>> GetSystemStatus(CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetSystemSetupStatusQuery(), cancellationToken);
         return Ok(result);
