@@ -14,10 +14,10 @@ public class UserMappingRegister : IRegister
     public void Register(TypeAdapterConfig config)
     {
         config.NewConfig<User, UserDto>()
-            .Map(dest => dest.Email, src => src.AuthUser != null ? src.AuthUser.Email : string.Empty);
+            .Map(dest => dest.Email, src => src.AuthUser.Email ?? string.Empty);
 
         config.NewConfig<User, UserProfileDto>()
-            .Map(dest => dest.Email, src => src.AuthUser != null ? src.AuthUser.Email : string.Empty)
+            .Map(dest => dest.Email, src => src.AuthUser.Email ?? string.Empty)
             .Ignore(dest => dest.Roles);
 
         config.NewConfig<UpdateUserProfileCommand, User>()

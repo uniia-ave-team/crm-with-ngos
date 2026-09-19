@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 using System.Linq.Dynamic.Core;
 using System.Linq.Expressions;
-using System.Reflection;
 using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
+using Crm.Infrastructure.Helpers;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,10 +25,10 @@ public abstract class GenericRepository<T>(DbContext context)
     protected const int MaxPageSize = 100;
 
     /// <summary>
-    /// Thread-safe cache mapping DTO types to their public instance property names
-    /// to eliminate reflection overhead and prevent expression/SQL injection during dynamic sorting.
+    /// Thread-safe cache mapping DTO properties to their corresponding Entity navigation paths (via Mapster).
+    /// Prevents reflection and expression parsing overhead during runtime.
     /// </summary>
-    private static readonly ConcurrentDictionary<Type, HashSet<string>> _propertyCache = new();
+    private static readonly ConcurrentDictionary<Type, Dictionary<string, string>> _dtoSortMappingCache = new();
 
     /// <summary>
     /// Case-insensitive whitelist of allowed sort direction specifiers ("asc" / "desc") for dynamic sorting validation.
@@ -197,21 +197,21 @@ public abstract class GenericRepository<T>(DbContext context)
 
         int totalCount = await query.CountAsync(ct);
 
-        IQueryable<TResult> projectedQuery = query.ProjectToType<TResult>();
-
         if (!string.IsNullOrWhiteSpace(orderBy))
         {
-            bool propertyExists = GetAllowedProperties(typeof(TResult)).Contains(orderBy);
+            var sortMapping = GetSortMapping<TResult>();
 
-            if (propertyExists)
+            if (sortMapping.TryGetValue(orderBy, out string? resolvedEntityPath))
             {
-                string safeSortOrder = _allowedSortOrders.Contains(sortOrder ?? string.Empty)
+                string safeSortOrder = _allowedSortOrders.Contains(sortOrder ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                                     ? sortOrder
                                     : SortOrderConstants.Ascending;
 
-                projectedQuery = projectedQuery.OrderBy($"{orderBy} {safeSortOrder}");
+                query = query.OrderBy($"{resolvedEntityPath} {safeSortOrder}");
             }
         }
+
+        IQueryable<TResult> projectedQuery = query.ProjectToType<TResult>();
 
         var items = await projectedQuery
             .Skip((pageNumber - 1) * pageSize)
@@ -247,9 +247,6 @@ public abstract class GenericRepository<T>(DbContext context)
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)
         => Context.SaveChangesAsync(cancellationToken);
 
-    private static HashSet<string> GetAllowedProperties(Type type) =>
-        _propertyCache.GetOrAdd(type, t =>
-            new HashSet<string>(
-            t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => p.Name),
-            StringComparer.OrdinalIgnoreCase));
+    private static Dictionary<string, string> GetSortMapping<TResult>() =>
+        _dtoSortMappingCache.GetOrAdd(typeof(TResult), _ => MapsterSortResolver.GetSortMapping<T, TResult>());
 }
