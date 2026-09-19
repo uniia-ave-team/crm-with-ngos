@@ -1,6 +1,7 @@
 namespace Crm.Application.Common.Consts;
 
 // TODO: Translate logs in different languages.
+// TODO: Write unit tests for logging to ensure that all log consts are unique and they are used only once in the application. This will help to avoid duplicate log event.
 public static class LogEventIds
 {
     // 1000s: Roles, Claims, and Cache
