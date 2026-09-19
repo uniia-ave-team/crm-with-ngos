@@ -1,3 +1,4 @@
+using Crm.Api.Logging;
 using Crm.Api.Middleware;
 using Crm.Application.Extensions;
 using Crm.Infrastructure.Extensions;
@@ -85,7 +86,10 @@ public static class HostingExtensions
             app.UseHsts();
         }
 
-        app.UseSerilogRequestLogging();
+        app.UseSerilogRequestLogging(options =>
+        {
+            options.GetLevel = (httpContext, _, ex) => SerilogLogLevelResolver.Resolve(httpContext, ex);
+        });
 
         app.UseHttpsRedirection();
 
@@ -109,7 +113,6 @@ public static class HostingExtensions
     /// <param name="host">The <see cref="ConfigureHostBuilder"/> to configure.</param>
     private static void AddSerilog(this ConfigureHostBuilder host)
     {
-        // TODO: Check why serialog writes exceptions which should be <500 to error log file. It should write them to all log file only.
         host.UseSerilog((ctx, lc) =>
         {
             var serilogOptions = new SerilogOptions();

@@ -1,6 +1,5 @@
-using System.Security.Authentication;
+using Crm.Api.Extensions;
 using Crm.Application.Common.Consts;
-using Crm.Domain.Exceptions;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +20,7 @@ public sealed partial class GlobalExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
-        int statusCode = DetermineStatusCode(exception);
+        int statusCode = exception.MapToStatusCode();
         bool isClientError = statusCode < StatusCodes.Status500InternalServerError;
 
         httpContext.Response.StatusCode = statusCode;
@@ -76,18 +75,6 @@ public sealed partial class GlobalExceptionHandler(
             Type = nameof(ValidationException),
         };
     }
-
-    /// <summary>
-    /// Maps specific exception types to HTTP status codes.
-    /// </summary>
-    private static int DetermineStatusCode(Exception exception) => exception switch
-    {
-        DomainException domainEx => domainEx.StatusCode,
-        InvalidCredentialException => StatusCodes.Status401Unauthorized,
-        UnauthorizedAccessException => StatusCodes.Status403Forbidden,
-        ValidationException or ArgumentException or InvalidOperationException or NotSupportedException => StatusCodes.Status400BadRequest,
-        _ => StatusCodes.Status500InternalServerError,
-    };
 
     /// <summary>
     /// Determines the safest detail message to expose to the client.
