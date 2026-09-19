@@ -24,6 +24,14 @@ public interface IAuthRoleRepository : IGenericRepository<AuthRole>
     Task<List<Guid>> GetRoleIdsByUserAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>
+    /// Asynchronously checks if the specified user is the last active administrator in the system.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>True if the user is the last active administrator; otherwise, false.</returns>
+    Task<bool> IsUserLastAdminAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Asynchronously retrieves the names of the roles matching the specified identifiers.
     /// Throws an exception containing all missing role IDs if any role is not found.
     /// </summary>

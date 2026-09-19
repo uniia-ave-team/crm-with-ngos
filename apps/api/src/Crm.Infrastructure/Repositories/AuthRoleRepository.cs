@@ -1,3 +1,4 @@
+using Crm.Domain.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -44,6 +45,29 @@ public class AuthRoleRepository(
             .Where(aur => aur.UserId == userId)
             .Select(aur => aur.RoleId)
             .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Asynchronously checks if the specified user is the last active administrator in the system.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>True if the user is the last active administrator; otherwise, false.</returns>
+    public async Task<bool> IsUserLastAdminAsync(Guid userId, CancellationToken ct = default)
+    {
+        var adminRoleQuery = Context.Set<AuthUserRole>().Where(ur => ur.Role.Name == RoleConsts.Admin);
+
+        bool isUserAdmin = await adminRoleQuery.AnyAsync(ur => ur.UserId == userId, ct);
+        if (!isUserAdmin)
+        {
+            return false;
+        }
+
+        bool hasOtherActiveAdmin = await adminRoleQuery
+            .Where(ur => ur.UserId != userId)
+            .AnyAsync(ur => ur.User != null && ur.User.UserProfile != null && ur.User.UserProfile.IsActive, ct);
+
+        return !hasOtherActiveAdmin;
     }
 
     /// <summary>
