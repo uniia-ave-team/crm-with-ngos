@@ -1,6 +1,5 @@
 using Crm.Application.Dtos.Ngo;
 using Crm.Application.Dtos.Ngo.Queries;
-using Crm.Application.Features.Ngos.Mappings;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using MediatR;
@@ -21,9 +20,5 @@ public class GetNgoQueryHandler(INgoRepository repository) : IRequestHandler<Get
     /// <returns>A task that represents the asynchronous operation, containing the mapped <see cref="NgoDto"/>.</returns>
     /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
     public async Task<NgoDto?> Handle(GetNgoQuery request, CancellationToken cancellationToken)
-    {
-        var ngo = await repository.GetAsync(cancellationToken);
-
-        return ngo.ToDto();
-    }
+        => await repository.GetAsync<NgoDto>(cancellationToken);
 }

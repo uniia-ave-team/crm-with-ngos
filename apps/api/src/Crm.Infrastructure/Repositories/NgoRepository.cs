@@ -2,6 +2,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
+using Mapster;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -38,6 +39,22 @@ public class NgoRepository(
     /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
     public async Task<Ngo> GetAsync(CancellationToken cancellationToken = default)
         => await DbSet.AsNoTracking().FirstOrDefaultAsync(cancellationToken) ?? throw new EntityNotFoundException(nameof(Ngo));
+
+    /// <summary>
+    /// Asynchronously retrieves the first record from the data set and projects it to the target type.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the projected result (e.g., DTO).</typeparam>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the projected entity.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the record is not found in the database.</exception>
+    public async Task<TResult> GetAsync<TResult>(CancellationToken ct = default)
+    {
+        return await DbSet
+            .AsNoTracking()
+            .ProjectToType<TResult>()
+            .FirstOrDefaultAsync(ct)
+            ?? throw new EntityNotFoundException(nameof(Ngo));
+    }
 
     /// <summary>
     /// Asynchronously checks if there is NGO in the system.

@@ -1,11 +1,20 @@
 using Crm.Domain.Entities;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Persistence;
 
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-    : IdentityDbContext<AuthUser, AuthRole, Guid>(options)
+    : IdentityDbContext<
+    AuthUser,
+    AuthRole,
+    Guid,
+    IdentityUserClaim<Guid>,
+    AuthUserRole,
+    IdentityUserLogin<Guid>,
+    IdentityRoleClaim<Guid>,
+    IdentityUserToken<Guid>>(options)
 {
     /// <summary>
     /// Configures the entity mappings and seeds initial data for the model.

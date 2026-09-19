@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Ngo.Commands;
-using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
+using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -21,18 +21,9 @@ public partial class UpdateNgoCommandHandler(
 
         LogUpdatingNgo(logger, ngo.Id);
 
-        UpdateNgoDetails(ngo, request);
-
-        repository.Update(ngo);
+        repository.Update(request.Adapt(ngo));
 
         LogNgoUpdatedSuccessfully(logger, ngo.Id);
-    }
-
-    private static void UpdateNgoDetails(Ngo ngo, UpdateNgoCommand request)
-    {
-        ngo.Name = request.Name;
-        ngo.Description = request.Description;
-        ngo.LogoUrl = request.LogoUrl;
     }
 
     [LoggerMessage(EventId = LogEventIds.UpdatingNgo, Level = LogLevel.Information, Message = "Updating details for NGO ID: {NgoId}")]

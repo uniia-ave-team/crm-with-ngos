@@ -3,7 +3,6 @@ using System.Linq.Expressions;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Queries;
-using Crm.Application.Features.Users.Mappings;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
@@ -25,8 +24,7 @@ public partial class GetUsersQueryHandler(
 
         var filter = BuildUserFilter(request.SearchTerm, request.ShowDeleted);
 
-        var pagedResult = await userRepository.GetPagedAsync(
-            selector: UserMappingExtensions.ToDtoExpression(),
+        var pagedResult = await userRepository.GetPagedAsync<UserDto>(
             predicate: filter,
             orderBy: request.OrderBy,
             sortOrder: request.SortOrder,

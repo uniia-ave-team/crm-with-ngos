@@ -22,15 +22,14 @@ public interface IGenericRepository<T>
     Task<T> GetAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
-    /// Asynchronously retrieves and projects an entity by its unique identifier.
+    /// Asynchronously retrieves and projects an entity by its unique identifier using Mapster.
     /// </summary>
     /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
     /// <param name="id">The unique identifier of the entity to retrieve.</param>
-    /// <param name="selector">Projection expression to transform the entity into a DTO.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
     /// <returns>The projected entity DTO with the specified ID.</returns>
     /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
-    Task<TResult> GetAsync<TResult>(Guid id, Expression<Func<T, TResult>> selector, CancellationToken ct = default);
+    Task<TResult> GetAsync<TResult>(Guid id, CancellationToken ct = default);
 
     /// <summary>
     /// Asynchronously checks if an entity with the specified unique identifier exists.
@@ -63,7 +62,6 @@ public interface IGenericRepository<T>
     /// Asynchronously retrieves a paginated, filtered, and sorted list of projected entities.
     /// </summary>
     /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
-    /// <param name="selector">Projection expression to transform entities into DTOs directly in SQL.</param>
     /// <param name="predicate">Optional expression to filter the entities.</param>
     /// <param name="orderBy">The name of the property to sort by.</param>
     /// <param name="sortOrder">The sort direction ("asc" or "desc").</param>
@@ -72,7 +70,6 @@ public interface IGenericRepository<T>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
     /// <returns>A paginated result containing the projected items and metadata.</returns>
     Task<PagedResult<TResult>> GetPagedAsync<TResult>(
-        Expression<Func<T, TResult>> selector,
         Expression<Func<T, bool>>? predicate = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
@@ -102,4 +99,15 @@ public interface IGenericRepository<T>
     /// <param name="ct">A cancellation token that can be used to cancel the underlying operation.</param>
     /// <returns>A task that represents the asynchronous deletion operation.</returns>
     Task DeleteAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Persists all pending changes to the underlying data store.
+    /// </summary>
+    /// <param name="cancellationToken">
+    /// A token to observe while waiting for the operation to complete.
+    /// </param>
+    /// <returns>
+    /// A task that represents the asynchronous save operation.
+    /// </returns>
+    Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

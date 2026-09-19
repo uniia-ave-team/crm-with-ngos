@@ -23,4 +23,9 @@ public class AuthUser : IdentityUser<Guid>
     /// Gets or sets the UTC expiration timestamp for the associated refresh token.
     /// </summary>
     public DateTime? RefreshTokenExpiryTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets the collection of role assignments for this authentication user.
+    /// </summary>
+    public virtual ICollection<AuthUserRole> UserRoles { get; set; }
 }

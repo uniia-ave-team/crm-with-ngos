@@ -16,8 +16,8 @@ namespace Crm.Application.Dtos.User.Commands;
 /// <param name="PreferredLanguage">The updated preferred interface language.</param>
 public record UpdateUserProfileCommand(
     Guid UserId,
-    string FirstName,
-    string LastName,
+    string? FirstName,
+    string? LastName,
     string? Patronymic,
     string? InternalPosition,
     string? PhoneNumber,

@@ -1,4 +1,4 @@
-namespace Crm.Application.Dtos.User;
+namespace Crm.Api.Dtos;
 
 /// <summary>
 /// Represents a command to update the profile details of the currently authenticated user.

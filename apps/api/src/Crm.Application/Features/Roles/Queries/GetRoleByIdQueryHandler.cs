@@ -1,9 +1,9 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Role;
 using Crm.Application.Dtos.Role.Queries;
-using Crm.Application.Features.Roles.Mappings;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
+using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -33,11 +33,9 @@ public partial class GetRoleByIdQueryHandler(
 
         var claimNames = roleClaims.Select(c => c.Value).ToList();
 
-        var roleDetails = role.ToDetailsDto(claimNames);
-
         LogRoleDetailsFetched(logger, request.Id, claimNames.Count);
 
-        return roleDetails;
+        return role.Adapt<RoleDetailsDto>() with { Claims = claimNames };
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingRoleDetails, Level = LogLevel.Information, Message = "Fetching details for role ID {RoleId}.")]

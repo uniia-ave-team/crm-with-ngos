@@ -39,8 +39,7 @@ public partial class AuthenticateUserCommandHandler(
             throw new InvalidCredentialException("This user account is deactivated.");
         }
 
-        var roles = await roleRepository.GetRolesByUserAsync(user.Id, cancellationToken);
-        var roleIds = roles.Select(r => r.Id).ToList();
+        var roleIds = await roleRepository.GetRoleIdsByUserAsync(user.Id, cancellationToken);
 
         var accessToken = tokenService.GenerateAccessToken(user, roleIds);
 

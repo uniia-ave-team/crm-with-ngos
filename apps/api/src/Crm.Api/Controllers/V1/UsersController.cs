@@ -1,12 +1,13 @@
 using Asp.Versioning;
+using Crm.Api.Dtos;
 using Crm.Api.Security;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Dtos.User.Queries;
-using Crm.Application.Features.Users.Mappings;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
+using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -104,7 +105,7 @@ public class UsersController(
     /// Updates the profile details of an existing user.
     /// </summary>
     /// <param name="id">The unique identifier of the user to update.</param>
-    /// <param name="command">The updated profile details.</param>
+    /// <param name="request">The updated profile details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPut("{id:guid}/profile")]
@@ -114,17 +115,20 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateUserProfile(
         Guid id,
-        [FromBody] UpdateProfileRequest command,
+        [FromBody] UpdateProfileRequest request,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command.ToUpdateUserProfileCommand(id), cancellationToken);
+        var command = request.Adapt<UpdateUserProfileCommand>() with { UserId = id };
+
+        await mediator.Send(command, cancellationToken);
+
         return NoContent();
     }
 
     /// <summary>
     /// Updates the profile details of the currently authenticated user.
     /// </summary>
-    /// <param name="command">The updated profile details.</param>
+    /// <param name="request">The updated profile details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPut("me/profile")]
@@ -133,17 +137,20 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateCurrentUserProfile(
-        [FromBody] UpdateProfileRequest command,
+        [FromBody] UpdateProfileRequest request,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command.ToUpdateUserProfileCommand(currentUserService.GetUserId()), cancellationToken);
+        var command = request.Adapt<UpdateUserProfileCommand>() with { UserId = currentUserService.GetUserId() };
+
+        await mediator.Send(command, cancellationToken);
+
         return NoContent();
     }
 
     /// <summary>
     /// Securely changes the password for the currently authenticated user.
     /// </summary>
-    /// <param name="command">The current and new password details.</param>
+    /// <param name="request">The current and new password details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPut("me/password")]
@@ -152,10 +159,13 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateMyPassword(
-        [FromBody] UpdatePasswordRequest command,
+        [FromBody] UpdatePasswordRequest request,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command.ToUpdatePasswordCommand(currentUserService.GetUserId()), cancellationToken);
+        var command = request.Adapt<UpdatePasswordCommand>() with { UserId = currentUserService.GetUserId() };
+
+        await mediator.Send(command, cancellationToken);
+
         return NoContent();
     }
 

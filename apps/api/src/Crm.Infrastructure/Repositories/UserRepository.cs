@@ -39,4 +39,17 @@ public class UserRepository(
 
         return isActive;
     }
+
+    /// <summary>
+    /// Asynchronously assigns all unassigned users (where NgoId is null or empty) to the specified NGO using a bulk update operation.
+    /// </summary>
+    /// <param name="ngoId">The unique identifier of the NGO to assign the users to.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>A task containing the number of rows updated in the database.</returns>
+    public async Task<int> AssignUnassignedUsersToNgoAsync(Guid ngoId, CancellationToken ct = default)
+    {
+        return await DbSet
+            .Where(u => u.NgoId == null || u.NgoId == Guid.Empty)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.NgoId, ngoId), ct);
+    }
 }

@@ -97,8 +97,7 @@ public partial class RefreshTokensCommandHandler(
 
     private async Task<AuthTokensDto> GenerateAndPersistNewTokensAsync(AuthUser user, CancellationToken cancellationToken)
     {
-        var roles = await roleRepository.GetRolesByUserAsync(user.Id, cancellationToken);
-        var roleIds = roles.Select(r => r.Id).ToList();
+        var roleIds = await roleRepository.GetRoleIdsByUserAsync(user.Id, cancellationToken);
 
         var newAccessToken = tokenService.GenerateAccessToken(user, roleIds);
         var newRefreshToken = tokenService.GenerateRefreshToken();

@@ -1,8 +1,7 @@
 using Crm.Application.Common.Consts;
+using Crm.Application.Dtos.Role;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Queries;
-using Crm.Application.Features.Roles.Mappings;
-using Crm.Application.Features.Users.Mappings;
 using Crm.Domain.Interfaces.Repositories;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -21,15 +20,13 @@ public partial class GetUserProfileQueryHandler(
     {
         LogFetchingUserProfile(logger, request.UserId);
 
-        var roles = await authRoleRepository.GetRolesByUserAsync(request.UserId, cancellationToken);
+        var user = await userRepository.GetAsync<UserProfileDto>(request.UserId, cancellationToken);
 
-        var roleDtos = roles.Select(role => role.ToDto());
-
-        var user = await userRepository.GetAsync(request.UserId, UserMappingExtensions.ToUserProfileDtoExpression(roleDtos), cancellationToken);
+        var roles = await authRoleRepository.GetRolesByUserAsync<RoleDto>(request.UserId, cancellationToken);
 
         LogUserProfileFetched(logger, request.UserId);
 
-        return user;
+        return user with { Roles = roles };
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingUserProfile, Level = LogLevel.Information, Message = "Fetching profile for user ID: {UserId}")]

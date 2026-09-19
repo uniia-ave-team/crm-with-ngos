@@ -2,7 +2,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Identity;
+using Mapster;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -16,21 +16,33 @@ public class AuthRoleRepository(
       IAuthRoleRepository
 {
     /// <summary>
-    /// Asynchronously retrieves all roles assigned to a specific user by their unique identifier.
+    /// Asynchronously retrieves all roles assigned to a specific user by their unique identifier,
+    /// projected to the target type <typeparamref name="TRole"/> using compile-time projection.
+    /// </summary>
+    /// <typeparam name="TRole">The type of the role DTO/model to project into.</typeparam>
+    /// <param name="userId">The unique identifier of the user.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>A list of projected roles assigned to the user.</returns>
+    public async Task<List<TRole>> GetRolesByUserAsync<TRole>(Guid userId, CancellationToken ct = default)
+        => await DbSet
+            .AsNoTracking()
+            .Where(role => role.UserRoles.Any(ur => ur.UserId == userId))
+            .ProjectToType<TRole>()
+            .ToListAsync(ct);
+
+    /// <summary>
+    /// Asynchronously retrieves the unique identifiers of all roles assigned to a specific user.
     /// </summary>
     /// <param name="userId">The unique identifier of the user.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns>A list of roles assigned to the user.</returns>
-    public async Task<List<AuthRole>> GetRolesByUserAsync(Guid userId, CancellationToken ct = default)
+    /// <returns>A list of role IDs assigned to the user.</returns>
+    public async Task<List<Guid>> GetRoleIdsByUserAsync(Guid userId, CancellationToken ct = default)
     {
-        return await Context.Set<IdentityUserRole<Guid>>()
-            .Where(ur => ur.UserId == userId)
-            .Join(
-                DbSet,
-                ur => ur.RoleId,
-                role => role.Id,
-                (ur, role) => role)
+        return await Context
+            .Set<AuthUserRole>()
             .AsNoTracking()
+            .Where(aur => aur.UserId == userId)
+            .Select(aur => aur.RoleId)
             .ToListAsync(ct);
     }
 

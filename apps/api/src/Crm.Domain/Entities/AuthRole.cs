@@ -10,4 +10,8 @@ namespace Crm.Domain.Entities;
 /// </summary>
 public class AuthRole : IdentityRole<Guid>, IEntity
 {
+    /// <summary>
+    /// Gets or sets the collection of user role assignments associated with this role.
+    /// </summary>
+    public virtual ICollection<AuthUserRole> UserRoles { get; set; }
 }

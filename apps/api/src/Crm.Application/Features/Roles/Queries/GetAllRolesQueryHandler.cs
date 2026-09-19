@@ -2,7 +2,6 @@ using System.Linq.Expressions;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Role;
 using Crm.Application.Dtos.Role.Queries;
-using Crm.Application.Features.Roles.Mappings;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
@@ -24,8 +23,7 @@ public partial class GetAllRolesQueryHandler(
 
         var filter = BuildRoleFilter(request.SearchTerm);
 
-        var pagedResult = await authRoleRepository.GetPagedAsync(
-            selector: RoleMappingExtensions.ToDtoExpression(),
+        var pagedResult = await authRoleRepository.GetPagedAsync<RoleDto>(
             predicate: filter,
             orderBy: request.OrderBy,
             sortOrder: request.SortOrder,

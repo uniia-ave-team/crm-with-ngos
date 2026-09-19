@@ -34,16 +34,11 @@ public partial class CreateNgoCommandHandler(
 
         await ngoRepository.CreateAsync(ngo, cancellationToken);
 
-        var users = await userRepository.GetListAsync(cancellationToken);
-        var unassignedUsers = users.Where(u => u.NgoId == null || u.NgoId == Guid.Empty).ToList();
+        await ngoRepository.SaveChangesAsync(cancellationToken);
 
-        foreach (var user in unassignedUsers)
-        {
-            user.NgoId = ngo.Id;
-            userRepository.Update(user);
-        }
+        var unassignedUsersCount = await userRepository.AssignUnassignedUsersToNgoAsync(ngo.Id, cancellationToken);
 
-        LogNgoCreatedSuccessfully(logger, ngo.Id, unassignedUsers.Count);
+        LogNgoCreatedSuccessfully(logger, ngo.Id, unassignedUsersCount);
 
         return ngo.Id;
     }

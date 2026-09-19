@@ -144,7 +144,7 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Ngo");
+                    b.ToTable("Ngo", (string)null);
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.User", b =>
@@ -199,7 +199,7 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasIndex("NgoId");
 
-                    b.ToTable("User");
+                    b.ToTable("User", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

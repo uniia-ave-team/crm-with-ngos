@@ -1,4 +1,4 @@
-namespace Crm.Application.Dtos.Role;
+namespace Crm.Api.Dtos;
 
 /// <summary>
 /// Request DTO for updating a role's details without duplicating the ID in the body.

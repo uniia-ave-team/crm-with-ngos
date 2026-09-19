@@ -1,4 +1,4 @@
-namespace Crm.Application.Dtos.User;
+namespace Crm.Api.Dtos;
 
 /// <summary>
 /// Command to update the password for the currently authenticated user.
