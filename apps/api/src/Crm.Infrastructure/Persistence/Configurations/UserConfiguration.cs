@@ -41,6 +41,12 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.PreferredLanguage)
             .HasMaxLength(UserValidationConstants.MaxPreferredLanguageLength);
 
+        builder.Property(u => u.Pronouns)
+            .HasMaxLength(UserValidationConstants.MaxPronounsLength);
+
+        builder.Property(u => u.AvatarUrl)
+            .HasMaxLength(UserValidationConstants.MaxAvatarUrlLength);
+
         builder.HasOne(u => u.AuthUser)
                .WithOne(au => au.UserProfile)
                .HasForeignKey<User>(u => u.Id)

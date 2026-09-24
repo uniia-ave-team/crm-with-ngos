@@ -48,6 +48,16 @@ public class User : BaseEntity
     public string? PreferredLanguage { get; set; }
 
     /// <summary>
+    /// Gets or sets the user's preferred pronouns (e.g., "he/him", "she/her", "they/them").
+    /// </summary>
+    public string? Pronouns { get; set; }
+
+    /// <summary>
+    /// Gets or sets the URL or path to the user's avatar image.
+    /// </summary>
+    public string? AvatarUrl { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the user account is active.
     /// If false, the account is soft-deleted or deactivated. Default is true.
     /// </summary>

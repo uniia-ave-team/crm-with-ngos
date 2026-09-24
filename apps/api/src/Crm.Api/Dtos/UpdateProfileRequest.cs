@@ -11,12 +11,16 @@ namespace Crm.Api.Dtos;
 /// <param name="Country">The updated country of residence.</param>
 /// <param name="EmergencyContact">The updated emergency contact information.</param>
 /// <param name="PreferredLanguage">The updated preferred interface language.</param>
+/// <param name="Pronouns">The updated preferred pronouns.</param>
+/// <param name="AvatarUrl">The updated avatar URL or file path.</param>
 public record UpdateProfileRequest(
-    string FirstName,
-    string LastName,
+    string? FirstName,
+    string? LastName,
     string? Patronymic,
     string? InternalPosition,
     string? PhoneNumber,
     string? Country,
     string? EmergencyContact,
-    string? PreferredLanguage);
+    string? PreferredLanguage,
+    string? Pronouns,
+    string? AvatarUrl);
