@@ -13,11 +13,6 @@ public class Ngo : BaseEntity
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the optional description or mission statement of the NGO.
-    /// </summary>
-    public string? Description { get; set; }
-
-    /// <summary>
     /// Gets or sets the optional URL or storage path pointing to the NGO's logo image.
     /// </summary>
     public string? LogoUrl { get; set; }

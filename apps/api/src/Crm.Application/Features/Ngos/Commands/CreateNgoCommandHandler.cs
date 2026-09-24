@@ -2,6 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Ngo.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
+using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -24,13 +25,9 @@ public partial class CreateNgoCommandHandler(
 
         await ngoRepository.EnsureDoesNotExistAsync(cancellationToken);
 
-        var ngo = new Ngo
-        {
-            Name = request.Name,
-            Description = request.Description,
-            LogoUrl = request.LogoUrl,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var ngo = request.Adapt<Ngo>();
+
+        ngo.CreatedAt = DateTime.UtcNow;
 
         await ngoRepository.CreateAsync(ngo, cancellationToken);
 
