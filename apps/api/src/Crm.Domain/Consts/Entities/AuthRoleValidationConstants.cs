@@ -6,4 +6,6 @@ namespace Crm.Domain.Consts.Entities;
 public static class AuthRoleValidationConstants
 {
     public const int MaxNameLength = 256;
+    public const int MaxFeminitiveNameLength = 256;
+    public const int MaxPluralNameLength = 256;
 }

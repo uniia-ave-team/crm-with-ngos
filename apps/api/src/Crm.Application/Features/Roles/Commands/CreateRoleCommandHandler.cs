@@ -1,6 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Role.Commands;
 using Crm.Domain.Entities;
+using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -20,10 +21,7 @@ public partial class CreateRoleCommandHandler(
     {
         LogCreatingRole(logger, request.Name);
 
-        var role = new AuthRole()
-        {
-            Name = request.Name,
-        };
+        var role = request.Adapt<AuthRole>();
 
         var result = await roleManager.CreateAsync(role);
 
@@ -35,7 +33,7 @@ public partial class CreateRoleCommandHandler(
             throw new InvalidOperationException($"Role creation failed: {errors}");
         }
 
-        LogRoleCreatedSuccessfully(logger, role.Name, role.Id);
+        LogRoleCreatedSuccessfully(logger, request.Name, role.Id);
 
         return role.Id;
     }

@@ -1,4 +1,5 @@
 using Crm.Application.Dtos.Role;
+using Crm.Domain.Enums;
 
 namespace Crm.Application.Dtos.User;
 
@@ -16,8 +17,9 @@ namespace Crm.Application.Dtos.User;
 /// <param name="EmergencyContact">The emergency contact information for the user.</param>
 /// <param name="PreferredLanguage">The preferred interface language of the user.</param>
 /// <param name="Pronouns">The preferred pronouns of the user.</param>
+/// <param name="PronounCategory">The grammatical category of the user's pronouns.</param>
 /// <param name="AvatarUrl">The URL or file path to the user's avatar.</param>
-/// <param name="Roles">The collection of role names assigned to the user.</param>
+/// <param name="Roles">The collection of roles assigned to the user.</param>
 public record UserProfileDto(
     Guid Id,
     string Email,
@@ -30,5 +32,6 @@ public record UserProfileDto(
     string? EmergencyContact,
     string? PreferredLanguage,
     string? Pronouns,
+    PronounCategory? PronounCategory,
     string? AvatarUrl,
-    IEnumerable<RoleDto> Roles);
+    IEnumerable<RoleUserDto> Roles);

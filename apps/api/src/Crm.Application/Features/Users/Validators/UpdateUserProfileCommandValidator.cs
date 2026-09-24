@@ -51,6 +51,10 @@ public class UpdateUserProfileCommandValidator : AbstractValidator<UpdateUserPro
             .MaximumLength(UserValidationConstants.MaxPronounsLength)
             .When(x => !string.IsNullOrEmpty(x.Pronouns));
 
+        RuleFor(x => x.PronounCategory)
+            .IsInEnum().WithMessage("Invalid pronoun category value.")
+            .When(x => x.PronounCategory.HasValue);
+
         RuleFor(x => x.AvatarUrl)
             .MaximumLength(UserValidationConstants.MaxAvatarUrlLength)
             .WithMessage($"Avatar URL must not exceed {UserValidationConstants.MaxAvatarUrlLength} characters.")

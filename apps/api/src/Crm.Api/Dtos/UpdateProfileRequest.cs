@@ -1,3 +1,5 @@
+using Crm.Domain.Enums;
+
 namespace Crm.Api.Dtos;
 
 /// <summary>
@@ -12,6 +14,7 @@ namespace Crm.Api.Dtos;
 /// <param name="EmergencyContact">The updated emergency contact information.</param>
 /// <param name="PreferredLanguage">The updated preferred interface language.</param>
 /// <param name="Pronouns">The updated preferred pronouns.</param>
+/// <param name="PronounCategory">The updated grammatical category of pronouns.</param>
 /// <param name="AvatarUrl">The updated avatar URL or file path.</param>
 public record UpdateProfileRequest(
     string? FirstName,
@@ -23,4 +26,5 @@ public record UpdateProfileRequest(
     string? EmergencyContact,
     string? PreferredLanguage,
     string? Pronouns,
+    PronounCategory? PronounCategory,
     string? AvatarUrl);

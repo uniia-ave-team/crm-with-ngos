@@ -2,6 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Role;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Queries;
+using Crm.Application.Features.Roles.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -26,7 +27,7 @@ public partial class GetUserProfileQueryHandler(
 
         LogUserProfileFetched(logger, request.UserId);
 
-        return user with { Roles = roles };
+        return user with { Roles = roles.Select(r => r.ResolveNameForUser(user.PronounCategory)) };
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingUserProfile, Level = LogLevel.Information, Message = "Fetching profile for user ID: {UserId}")]

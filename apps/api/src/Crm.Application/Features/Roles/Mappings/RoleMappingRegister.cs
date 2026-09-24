@@ -1,4 +1,5 @@
 using Crm.Application.Dtos.Role;
+using Crm.Application.Dtos.Role.Commands;
 using Crm.Domain.Entities;
 using Mapster;
 
@@ -19,5 +20,10 @@ public class RoleMappingRegister : IRegister
 
             // Claims are loaded separately via RoleManager.GetClaimsAsync and set via `with` expression.
             .Ignore(dest => dest.Claims);
+
+        config.NewConfig<UpdateRoleCommand, AuthRole>()
+            .Map(dest => dest.Name, src => src.NewName)
+            .Ignore(dest => dest.Id)
+            .IgnoreNullValues(true);
     }
 }

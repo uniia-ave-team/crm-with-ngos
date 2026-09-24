@@ -3,6 +3,7 @@ using Crm.Application.Dtos.Role.Commands;
 using Crm.Domain.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
+using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -29,7 +30,7 @@ public partial class UpdateRoleCommandHandler(
             throw new InvalidOperationException($"The system role '{role.Name}' cannot be modified.");
         }
 
-        role.Name = request.NewName;
+        request.Adapt(role);
 
         var result = await roleManager.UpdateAsync(role);
         if (!result.Succeeded)

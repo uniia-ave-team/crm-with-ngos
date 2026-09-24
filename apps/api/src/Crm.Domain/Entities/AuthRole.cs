@@ -11,6 +11,16 @@ namespace Crm.Domain.Entities;
 public class AuthRole : IdentityRole<Guid>, IEntity
 {
     /// <summary>
+    /// Gets or sets the optional feminitive form of the role name.
+    /// </summary>
+    public string? FeminitiveName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optional plural form of the role name.
+    /// </summary>
+    public string? PluralName { get; set; }
+
+    /// <summary>
     /// Gets or sets the collection of user role assignments associated with this role.
     /// </summary>
     public virtual ICollection<AuthUserRole> UserRoles { get; set; }

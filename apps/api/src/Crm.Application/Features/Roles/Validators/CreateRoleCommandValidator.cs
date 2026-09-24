@@ -18,5 +18,15 @@ public class CreateRoleCommandValidator : AbstractValidator<CreateRoleCommand>
             .NotEmpty().WithMessage("Role name is required.")
             .MaximumLength(AuthRoleValidationConstants.MaxNameLength)
             .WithMessage($"Role name must not exceed {AuthRoleValidationConstants.MaxNameLength} characters.");
+
+        RuleFor(x => x.FeminitiveName)
+            .MaximumLength(AuthRoleValidationConstants.MaxFeminitiveNameLength)
+            .WithMessage($"Feminitive name must not exceed {AuthRoleValidationConstants.MaxFeminitiveNameLength} characters.")
+            .When(x => !string.IsNullOrEmpty(x.FeminitiveName));
+
+        RuleFor(x => x.PluralName)
+            .MaximumLength(AuthRoleValidationConstants.MaxPluralNameLength)
+            .WithMessage($"Plural name must not exceed {AuthRoleValidationConstants.MaxPluralNameLength} characters.")
+            .When(x => !string.IsNullOrEmpty(x.PluralName));
     }
 }

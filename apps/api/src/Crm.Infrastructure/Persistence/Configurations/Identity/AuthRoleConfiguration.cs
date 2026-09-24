@@ -22,5 +22,11 @@ public class AuthRoleConfiguration : IEntityTypeConfiguration<AuthRole>
 
         builder.Property(r => r.NormalizedName)
             .HasMaxLength(AuthRoleValidationConstants.MaxNameLength);
+
+        builder.Property(r => r.FeminitiveName)
+            .HasMaxLength(AuthRoleValidationConstants.MaxFeminitiveNameLength);
+
+        builder.Property(r => r.PluralName)
+            .HasMaxLength(AuthRoleValidationConstants.MaxPluralNameLength);
     }
 }

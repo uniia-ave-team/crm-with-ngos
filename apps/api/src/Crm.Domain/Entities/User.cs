@@ -1,3 +1,5 @@
+using Crm.Domain.Enums;
+
 namespace Crm.Domain.Entities;
 
 /// <summary>
@@ -51,6 +53,11 @@ public class User : BaseEntity
     /// Gets or sets the user's preferred pronouns (e.g., "he/him", "she/her", "they/them").
     /// </summary>
     public string? Pronouns { get; set; }
+
+    /// <summary>
+    /// Gets or sets the grammatical category of the user's pronouns for system logic and role declension.
+    /// </summary>
+    public PronounCategory? PronounCategory { get; set; }
 
     /// <summary>
     /// Gets or sets the URL or path to the user's avatar image.
