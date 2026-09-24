@@ -4,6 +4,7 @@ namespace Crm.Domain.Enums;
 /// Represents all available system permissions.
 /// </summary>
 public enum AccessRight
+    : byte
 {
     // --- User ---
     ViewUser,
@@ -11,6 +12,7 @@ public enum AccessRight
     UpdateUser,
     DisableUser,
     AssignRoleToUser,
+    ViewEmergencyContact,
 
     // --- Role ---
     ViewRole,

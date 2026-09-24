@@ -154,9 +154,10 @@ public sealed partial class RolePermissionsCache(
             rights = [.. claims
                 .Where(c => c.Type == PermissionExtensions.ClaimType)
                 .Select(c => c.Value)];
+
+            await SetRolePermissionsAsync(roleId, rights, cancellationToken);
         }
 
-        await SetRolePermissionsAsync(roleId, rights, cancellationToken);
         return rights;
     }
 

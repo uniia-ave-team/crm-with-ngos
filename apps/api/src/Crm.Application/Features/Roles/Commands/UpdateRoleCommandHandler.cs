@@ -21,8 +21,13 @@ public partial class UpdateRoleCommandHandler(
     {
         LogUpdatingRole(logger, request.Id, request.NewName);
 
-        var role = await roleManager.FindByIdAsync(request.Id.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthRole), request.Id);
+        var role = await roleManager.FindByIdAsync(request.Id.ToString());
+
+        if (role == null)
+        {
+            LogRoleNotFound(logger, request.Id);
+            throw new EntityNotFoundException(nameof(AuthRole), request.Id);
+        }
 
         if (role.Name == RoleConsts.Admin)
         {

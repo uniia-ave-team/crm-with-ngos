@@ -23,7 +23,6 @@ public class RoleMappingRegister : IRegister
 
         config.NewConfig<UpdateRoleCommand, AuthRole>()
             .Map(dest => dest.Name, src => src.NewName)
-            .Ignore(dest => dest.Id)
-            .IgnoreNullValues(true);
+            .Ignore(dest => dest.Id);
     }
 }

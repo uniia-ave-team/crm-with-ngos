@@ -159,6 +159,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IPermissionService, PermissionService>();
 
         return services;
     }

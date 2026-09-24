@@ -1,7 +1,5 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
-using Crm.Domain.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -11,9 +9,7 @@ namespace Crm.Api.Security;
 /// Represents an asynchronous authorization filter that validates if the current user's roles
 /// possess all required system access rights retrieved from the high-performance cache.
 /// </summary>
-public partial class AccessRightAuthorizationFilter(
-    IRolePermissionsCache permissionsCache,
-    ILogger<AccessRightAuthorizationFilter> logger) : IAsyncAuthorizationFilter
+public partial class AccessRightAuthorizationFilter(ILogger<AccessRightAuthorizationFilter> logger) : IAsyncAuthorizationFilter
 {
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
@@ -33,22 +29,9 @@ public partial class AccessRightAuthorizationFilter(
             return;
         }
 
-        var roleIdClaims = user.FindAll(CustomClaimTypes.RoleId).ToList();
-        if (roleIdClaims.Count == 0)
-        {
-            LogMissingRoleIdClaim(logger, user.Identity.Name ?? "Unknown");
-            context.Result = new ForbidResult();
-            return;
-        }
+        var currentUserService = context.HttpContext.RequestServices.GetRequiredService<ICurrentUserService>();
 
-        var roleIds = new List<Guid>();
-        foreach (var claim in roleIdClaims)
-        {
-            if (Guid.TryParse(claim.Value, out var roleId))
-            {
-                roleIds.Add(roleId);
-            }
-        }
+        var roleIds = currentUserService.GetRoleIds();
 
         if (roleIds.Count == 0)
         {
@@ -57,42 +40,15 @@ public partial class AccessRightAuthorizationFilter(
             return;
         }
 
-        bool hasAccess = await HasRequiredRightsAsync(roleIds, attributes, context.HttpContext.RequestAborted);
+        var permissionService = context.HttpContext.RequestServices.GetRequiredService<IPermissionService>();
+
+        bool hasAccess = await permissionService.HasAccessAsync(roleIds, attributes.Select(a => a.RequiredRight), context.HttpContext.RequestAborted);
 
         if (!hasAccess)
         {
             LogAccessDenied(logger, user.Identity.Name ?? "Unknown", string.Join(", ", roleIds));
             context.Result = new ForbidResult();
         }
-    }
-
-    /// <summary>
-    /// Helper method to verify if the combined permissions from all roles have all specified access rights.
-    /// </summary>
-    private async Task<bool> HasRequiredRightsAsync(IEnumerable<Guid> roleIds, List<HasAccessRightAttribute> attributes, CancellationToken cancellationToken)
-    {
-        var allPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var roleId in roleIds)
-        {
-            var rolePermissions = await permissionsCache.GetRolePermissionsAsync(roleId, cancellationToken);
-            foreach (var permission in rolePermissions)
-            {
-                allPermissions.Add(permission);
-            }
-        }
-
-        foreach (var attribute in attributes)
-        {
-            string requiredRightString = attribute.RequiredRight.ToClaimValue();
-
-            if (!allPermissions.Contains(requiredRightString))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     [LoggerMessage(EventId = LogEventIds.MissingRoleIdClaim, Level = LogLevel.Warning, Message = "Authorization failed: 'RoleId' claims are missing or invalid for user '{UserName}'.")]

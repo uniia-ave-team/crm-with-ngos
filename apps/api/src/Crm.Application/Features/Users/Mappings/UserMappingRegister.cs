@@ -16,7 +16,7 @@ public class UserMappingRegister : IRegister
         config.NewConfig<User, UserDto>()
             .Map(dest => dest.Email, src => src.AuthUser.Email ?? string.Empty);
 
-        config.NewConfig<User, UserProfileDto>()
+        config.NewConfig<User, UserProfileResult>()
             .Map(dest => dest.Email, src => src.AuthUser.Email ?? string.Empty)
             .Ignore(dest => dest.Roles);
 

@@ -43,6 +43,12 @@ public sealed class CurrentUserService(IHttpContextAccessor httpContextAccessor)
         }
 
         var roleIdClaims = user.FindAll(CustomClaimTypes.RoleId);
+
+        if (!roleIdClaims.Any())
+        {
+            return [];
+        }
+
         var roleIds = new List<Guid>();
 
         foreach (var claim in roleIdClaims)

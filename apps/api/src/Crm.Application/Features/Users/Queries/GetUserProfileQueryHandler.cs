@@ -3,7 +3,10 @@ using Crm.Application.Dtos.Role;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Queries;
 using Crm.Application.Features.Roles.Extensions;
+using Crm.Application.Interfaces;
+using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories;
+using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -15,19 +18,30 @@ namespace Crm.Application.Features.Users.Queries;
 public partial class GetUserProfileQueryHandler(
     IUserRepository userRepository,
     IAuthRoleRepository authRoleRepository,
+    ICurrentUserService currentUserService,
+    IPermissionService permissionService,
     ILogger<GetUserProfileQueryHandler> logger) : IRequestHandler<GetUserProfileQuery, UserProfileDto>
 {
     public async Task<UserProfileDto> Handle(GetUserProfileQuery request, CancellationToken cancellationToken)
     {
         LogFetchingUserProfile(logger, request.UserId);
 
-        var user = await userRepository.GetAsync<UserProfileDto>(request.UserId, cancellationToken);
+        var user = await userRepository.GetAsync<UserProfileResult>(request.UserId, cancellationToken);
 
         var roles = await authRoleRepository.GetRolesByUserAsync<RoleDto>(request.UserId, cancellationToken);
 
         LogUserProfileFetched(logger, request.UserId);
 
-        return user with { Roles = roles.Select(r => r.ResolveNameForUser(user.PronounCategory)) };
+        var canViewEmergencyContact = currentUserService.GetUserId() == request.UserId ||
+            await permissionService.HasAccessAsync(currentUserService.GetRoleIds(), AccessRight.ViewEmergencyContact, cancellationToken);
+
+        user = user with
+        {
+            Roles = roles.Select(r => r.ResolveNameForUser(user.PronounCategory)),
+            EmergencyContact = canViewEmergencyContact ? user.EmergencyContact : null,
+        };
+
+        return user.Adapt<UserProfileDto>();
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingUserProfile, Level = LogLevel.Information, Message = "Fetching profile for user ID: {UserId}")]
