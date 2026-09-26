@@ -28,7 +28,7 @@ public partial class GetUserPermissionsQueryHandler(
         var results = await Task.WhenAll(tasks);
 
         var permissionsList = results
-            .SelectMany(r => r ?? [])
+            .SelectMany(r => r)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 

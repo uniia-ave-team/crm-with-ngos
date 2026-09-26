@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.User;
-using Crm.Domain.Entities;
 
 namespace Crm.Application.Interfaces;
 
@@ -16,10 +15,10 @@ public interface ITokenService
     /// along with its exact expiration timestamp.
     /// Permission claims and role names are intentionally omitted to support policy-based authorization securely.
     /// </summary>
-    /// <param name="user">The authenticated user entity for which the token is being generated.</param>
+    /// <param name="user">The basic user data transfer object containing the unique identifier and email for whom the token is being generated.</param>
     /// <param name="roleIds">A collection of role unique identifiers assigned to the user.</param>
     /// <returns>A <see cref="TokenResult"/> containing the JWT access token string and its expiration time.</returns>
-    TokenResult GenerateAccessToken(AuthUser user, IList<Guid> roleIds);
+    TokenResult GenerateAccessToken(UserBasicDto user, IList<Guid> roleIds);
 
     /// <summary>
     /// Generates a cryptographically secure random string to be used as a Refresh Token,

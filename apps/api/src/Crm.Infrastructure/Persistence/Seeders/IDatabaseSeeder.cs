@@ -8,6 +8,6 @@ public interface IDatabaseSeeder
     /// <summary>
     /// Executes the seeding logic asynchronously.
     /// </summary>
-    /// <param name="ct">The cancellation token.</param>
-    Task SeedAsync(CancellationToken ct = default);
+    /// <param name="cancellationToken">The cancellation token.</param>
+    Task SeedAsync(CancellationToken cancellationToken = default);
 }

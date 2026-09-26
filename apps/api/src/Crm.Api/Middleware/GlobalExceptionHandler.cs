@@ -36,7 +36,7 @@ public sealed partial class GlobalExceptionHandler(
                 Status = statusCode,
                 Title = isClientError ? "Client Error" : "Server Error",
                 Detail = GetDetailMessage(exception, isClientError, env.IsDevelopment()),
-                Type = exception.GetType().Name,
+                Type = $"https://tools.ietf.org/html/rfc9110#section-{statusCode}",
             },
         };
 
@@ -72,7 +72,7 @@ public sealed partial class GlobalExceptionHandler(
             Status = statusCode,
             Title = "Validation Failed",
             Detail = "One or more validation errors occurred.",
-            Type = nameof(ValidationException),
+            Type = $"https://tools.ietf.org/html/rfc9110#section-{statusCode}",
         };
     }
 

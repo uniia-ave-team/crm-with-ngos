@@ -41,22 +41,46 @@ public static class MapsterSortResolver
         {
             var typeTuple = new TypeTuple(typeof(TEntity), typeof(TDto));
 
-            // Creates a lambda expression representing the projection: src => new Dto { Email = src.AuthUser.Email ?? "" }
+            // Creates a lambda expression representing the projection
             var mapExpression = TypeAdapterConfig.GlobalSettings.CreateMapExpression(typeTuple, MapType.Projection);
-
-            if (mapExpression?.Body is MemberInitExpression memberInit)
+            if (mapExpression == null)
             {
-                var parameter = mapExpression.Parameters[0]; // Represents the root 'src' entity parameter
+                return;
+            }
 
-                // Iterate over all explicit property assignments in the Mapster config
+            var parameter = mapExpression.Parameters[0]; // Represents the root 'src' entity parameter
+
+            // 1. Handle standard object initialization: new Dto { Prop = src.Prop }
+            if (mapExpression.Body is MemberInitExpression memberInit)
+            {
                 foreach (var assignment in memberInit.Bindings.OfType<MemberAssignment>())
                 {
                     var visitor = new PropertyPathVisitor(parameter);
-                    visitor.Visit(assignment.Expression); // Traverse the right side of the assignment
+                    visitor.Visit(assignment.Expression);
 
                     if (!string.IsNullOrEmpty(visitor.ResolvedPath))
                     {
                         map[assignment.Member.Name] = visitor.ResolvedPath;
+                    }
+                }
+            }
+
+            // 2. Handle C# records and constructors: new Dto(src.Prop1, src.Prop2)
+            else if (mapExpression.Body is NewExpression { Constructor: not null } newExpr)
+            {
+                foreach (var (param, arg) in newExpr.Constructor.GetParameters().Zip(newExpr.Arguments))
+                {
+                    if (string.IsNullOrEmpty(param.Name))
+                    {
+                        continue;
+                    }
+
+                    var visitor = new PropertyPathVisitor(parameter);
+                    visitor.Visit(arg);
+
+                    if (!string.IsNullOrEmpty(visitor.ResolvedPath))
+                    {
+                        map[param.Name] = visitor.ResolvedPath;
                     }
                 }
             }

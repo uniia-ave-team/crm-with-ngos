@@ -34,9 +34,7 @@ public partial class DeactivateUserCommandHandler(
 
         await EnsureUserIsNotLastAdminAsync(request.UserId, cancellationToken);
 
-        user.IsActive = false;
-
-        userRepository.Update(user);
+        await userRepository.SetUserActivationStatusAsync(user.Id, isActive: false, cancellationToken);
 
         LogUserDeactivatedSuccessfully(logger, request.UserId);
     }
@@ -46,9 +44,7 @@ public partial class DeactivateUserCommandHandler(
     /// </summary>
     private async Task EnsureUserIsNotLastAdminAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var isLastAdmin = await roleRepository.IsUserLastAdminAsync(userId, cancellationToken);
-
-        if (isLastAdmin)
+        if (await roleRepository.IsUserLastAdminAsync(userId, cancellationToken))
         {
             LogCannotDeactivateLastAdmin(logger, userId);
             throw new InvalidOperationException("Cannot deactivate the user because they are the last system administrator.");

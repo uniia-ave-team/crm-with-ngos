@@ -1,5 +1,5 @@
 using Crm.Domain.Consts.Entities;
-using Crm.Domain.Entities;
+using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence.ValueGenerators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

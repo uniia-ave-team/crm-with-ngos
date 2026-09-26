@@ -1,6 +1,5 @@
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
-using Crm.Domain.Entities;
 using MediatR;
 
 namespace Crm.Application.Dtos.Role.Queries;
@@ -28,7 +27,7 @@ namespace Crm.Application.Dtos.Role.Queries;
 /// </param>
 public record GetAllRolesQuery(
     string? SearchTerm = null,
-    string? OrderBy = nameof(AuthRole.Name),
+    string? OrderBy = nameof(RoleDto.Name),
     string? SortOrder = SortOrderConstants.Ascending,
     int PageNumber = 1,
     int PageSize = 10) : IRequest<PagedResult<RoleDto>>;

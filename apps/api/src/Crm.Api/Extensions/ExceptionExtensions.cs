@@ -1,4 +1,5 @@
 using System.Security.Authentication;
+using Crm.Application.Exceptions;
 using Crm.Domain.Exceptions;
 using FluentValidation;
 
@@ -16,7 +17,10 @@ public static class ExceptionExtensions
     /// <returns>An HTTP status code (e.g., 400, 401, 403, 500).</returns>
     public static int MapToStatusCode(this Exception exception) => exception switch
     {
-        DomainException domainEx => domainEx.StatusCode,
+        EntityNotFoundException => StatusCodes.Status404NotFound,
+        EntitiesNotFoundException => StatusCodes.Status404NotFound,
+        EntityAlreadyExistsException => StatusCodes.Status409Conflict,
+        UserOperationException => StatusCodes.Status400BadRequest,
         InvalidCredentialException => StatusCodes.Status401Unauthorized,
         UnauthorizedAccessException => StatusCodes.Status403Forbidden,
         ValidationException or ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,

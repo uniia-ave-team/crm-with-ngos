@@ -10,9 +10,10 @@ var app = builder.Build();
 
 app.ConfigurePipeline();
 
+using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
 using var cts = CancellationTokenSource.CreateLinkedTokenSource(
     app.Lifetime.ApplicationStopping,
-    new CancellationTokenSource(TimeSpan.FromMinutes(1)).Token);
+    timeoutCts.Token);
 
 await app.Services.UseInfrastructureDatabaseAsync(cts.Token);
 await app.Services.SeedDatabaseAsync(cts.Token);

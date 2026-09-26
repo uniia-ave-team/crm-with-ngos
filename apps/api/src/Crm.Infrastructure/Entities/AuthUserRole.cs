@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 
-namespace Crm.Domain.Entities;
+namespace Crm.Infrastructure.Entities;
 
 /// <summary>
 /// Represents the join entity linking an authenticated system user (<see cref="AuthUser"/>)

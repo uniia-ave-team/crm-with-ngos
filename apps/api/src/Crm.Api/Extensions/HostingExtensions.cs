@@ -50,6 +50,8 @@ public static class HostingExtensions
 
         builder.Services.AddCustomRateLimiting(builder.Configuration);
 
+        builder.Services.AddCustomAuthorization();
+
         builder.Services.AddInfrastructureServices(builder.Configuration, builder.Environment);
         builder.Services.AddApplicationServices();
 
@@ -93,7 +95,7 @@ public static class HostingExtensions
 
         app.UseHttpsRedirection();
 
-        app.UseCors(CorsOptions.PolicyName);
+        app.UseCors(AppCorsOptions.PolicyName);
 
         app.UseRateLimiter();
 

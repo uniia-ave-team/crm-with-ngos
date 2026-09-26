@@ -1,4 +1,5 @@
 using Crm.Application.Dtos.Auth;
+using Crm.Application.Interfaces;
 using MediatR;
 
 namespace Crm.Application.Dtos.User.Commands;
@@ -7,4 +8,4 @@ namespace Crm.Application.Dtos.User.Commands;
 /// </summary>
 public record AuthenticateUserCommand(
     string Email,
-    string Password) : IRequest<AuthTokensDto>;
+    string Password) : IRequest<AuthTokensDto>, ITransactionalCommand;

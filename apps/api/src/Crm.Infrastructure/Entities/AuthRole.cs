@@ -1,7 +1,7 @@
 using Crm.Domain.Interfaces;
 using Microsoft.AspNetCore.Identity;
 
-namespace Crm.Domain.Entities;
+namespace Crm.Infrastructure.Entities;
 
 /// <summary>
 /// Represents an application role used for role-based access control and authorization.
@@ -23,5 +23,10 @@ public class AuthRole : IdentityRole<Guid>, IEntity
     /// <summary>
     /// Gets or sets the collection of user role assignments associated with this role.
     /// </summary>
-    public virtual ICollection<AuthUserRole> UserRoles { get; set; }
+    public virtual ICollection<AuthUserRole> UserRoles { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the collection of claims (permissions) associated with this role.
+    /// </summary>
+    public virtual ICollection<AuthRoleClaim> RoleClaims { get; set; } = [];
 }

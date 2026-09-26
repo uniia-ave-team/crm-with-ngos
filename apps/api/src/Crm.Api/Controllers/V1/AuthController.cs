@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Crm.Api.Dtos;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
@@ -57,6 +58,7 @@ public class AuthController(
     /// <summary>
     /// Logs out the currently authenticated user by revoking their refresh token.
     /// </summary>
+    /// <param name="request">The logout request containing the refresh token to be revoked.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status code indicating the successful logout.</returns>
     [HttpPost("logout")]
@@ -64,9 +66,11 @@ public class AuthController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    public async Task<IActionResult> Logout(
+        [FromBody] LogoutRequest request,
+        CancellationToken cancellationToken)
     {
-        await mediator.Send(new LogoutCommand(currentUserService.GetUserId()), cancellationToken);
+        await mediator.Send(new LogoutCommand(currentUserService.GetUserId(), request.RefreshToken), cancellationToken);
         return NoContent();
     }
 }

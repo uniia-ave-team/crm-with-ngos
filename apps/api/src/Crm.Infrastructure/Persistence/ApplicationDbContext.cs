@@ -1,4 +1,4 @@
-using Crm.Domain.Entities;
+using Crm.Infrastructure.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +13,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     IdentityUserClaim<Guid>,
     AuthUserRole,
     IdentityUserLogin<Guid>,
-    IdentityRoleClaim<Guid>,
+    AuthRoleClaim,
     IdentityUserToken<Guid>>(options)
 {
     /// <summary>

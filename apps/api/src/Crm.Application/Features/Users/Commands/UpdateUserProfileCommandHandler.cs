@@ -18,11 +18,9 @@ public partial class UpdateUserProfileCommandHandler(
     {
         LogUpdatingUserProfile(logger, request.UserId);
 
-        var user = await userRepository.GetAsync(request.UserId, cancellationToken);
+        var user = await userRepository.GetForUpdateAsync(request.UserId, cancellationToken);
 
         request.Adapt(user);
-
-        userRepository.Update(user);
 
         LogUserProfileUpdatedSuccessfully(logger, request.UserId);
     }

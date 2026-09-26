@@ -1,6 +1,5 @@
 using Crm.Domain.Consts.Entities;
 using Crm.Domain.Entities;
-using Crm.Infrastructure.Persistence.ValueGenerators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -13,7 +12,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasKey(u => u.Id);
 
         builder.Property(u => u.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+            .ValueGeneratedNever();
 
         builder.Property(u => u.FirstName)
             .IsRequired()
@@ -46,11 +45,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.AvatarUrl)
             .HasMaxLength(UserValidationConstants.MaxAvatarUrlLength);
-
-        builder.HasOne(u => u.AuthUser)
-               .WithOne(au => au.UserProfile)
-               .HasForeignKey<User>(u => u.Id)
-               .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(u => u.Ngo)
                .WithMany(n => n.Users)

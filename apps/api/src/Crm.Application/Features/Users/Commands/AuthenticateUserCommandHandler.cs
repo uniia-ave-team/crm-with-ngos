@@ -1,12 +1,13 @@
 using System.Security.Authentication;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Auth;
+using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
-using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
+using Mapster;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -15,42 +16,37 @@ namespace Crm.Application.Features.Users.Commands;
 /// Handles the <see cref="AuthenticateUserCommand"/> to verify user credentials and issue a JWT access token.
 /// </summary>
 public partial class AuthenticateUserCommandHandler(
-    UserManager<AuthUser> userManager,
-    IUserRepository userRepository,
+    IIdentityService identityService,
     IAuthRoleRepository roleRepository,
     ITokenService tokenService,
+    IAuthUserRepository authUserRepository,
     ILogger<AuthenticateUserCommandHandler> logger) : IRequestHandler<AuthenticateUserCommand, AuthTokensDto>
 {
     public async Task<AuthTokensDto> Handle(AuthenticateUserCommand request, CancellationToken cancellationToken)
     {
-        LogAuthenticatingUser(logger, request.Email);
+        var maskedEmail = request.Email.MaskEmail();
 
-        var user = await userManager.FindByEmailAsync(request.Email);
+        LogAuthenticatingUser(logger, maskedEmail);
 
-        if (user == null || !await userManager.CheckPasswordAsync(user, request.Password))
+        var isPasswordValid = await identityService.CheckPasswordAsync(request.Email, request.Password, cancellationToken);
+
+        var user = await authUserRepository.GetAsync<UserStatusDto>(request.Email, cancellationToken);
+
+        if (!isPasswordValid || !user.IsActive)
         {
-            LogAuthenticationFailed(logger, request.Email);
+            LogAuthenticationFailed(logger, maskedEmail);
             throw new InvalidCredentialException("Invalid email or password.");
-        }
-
-        if (!await userRepository.IsActiveAsync(user.Id, cancellationToken))
-        {
-            LogAuthenticationFailed(logger, request.Email);
-            throw new InvalidCredentialException("This user account is deactivated.");
         }
 
         var roleIds = await roleRepository.GetRoleIdsByUserAsync(user.Id, cancellationToken);
 
-        var accessToken = tokenService.GenerateAccessToken(user, roleIds);
+        var accessToken = tokenService.GenerateAccessToken(user.Adapt<UserBasicDto>(), roleIds);
 
         var refreshToken = tokenService.GenerateRefreshToken();
 
-        user.RefreshToken = refreshToken.Token;
-        user.RefreshTokenExpiryTime = refreshToken.ExpiresAt;
+        await identityService.AddRefreshTokenAsync(user.Id, refreshToken, cancellationToken);
 
-        await userManager.UpdateAsync(user);
-
-        LogUserAuthenticatedSuccessfully(logger, request.Email, user.Id);
+        LogUserAuthenticatedSuccessfully(logger, maskedEmail, user.Id);
 
         return new AuthTokensDto(accessToken.Token, refreshToken.Token);
     }

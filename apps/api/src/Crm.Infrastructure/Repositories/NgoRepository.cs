@@ -44,25 +44,46 @@ public class NgoRepository(
     /// Asynchronously retrieves the first record from the data set and projects it to the target type.
     /// </summary>
     /// <typeparam name="TResult">The type of the projected result (e.g., DTO).</typeparam>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the projected entity.</returns>
     /// <exception cref="EntityNotFoundException">Thrown if the record is not found in the database.</exception>
-    public async Task<TResult> GetAsync<TResult>(CancellationToken ct = default)
+    public async Task<TResult> GetAsync<TResult>(CancellationToken cancellationToken = default)
     {
         return await DbSet
             .AsNoTracking()
             .ProjectToType<TResult>()
-            .FirstOrDefaultAsync(ct)
+            .FirstOrDefaultAsync(cancellationToken)
             ?? throw new EntityNotFoundException(nameof(Ngo));
     }
 
     /// <summary>
+    /// Asynchronously retrieves the single NGO entity with change tracking enabled.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved tracked NGO entity.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
+    public async Task<Ngo> GetForUpdateAsync(CancellationToken cancellationToken = default)
+        => await DbSet.FirstOrDefaultAsync(cancellationToken) ?? throw new EntityNotFoundException(nameof(Ngo));
+
+    /// <summary>
+    /// Asynchronously retrieves the ID of the single NGO entity.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved NGO ID.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
+    public async Task<Guid> GetIdAsync(CancellationToken cancellationToken = default)
+        => await DbSet
+            .Select(n => (Guid?)n.Id)
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new EntityNotFoundException(nameof(Ngo));
+
+    /// <summary>
     /// Asynchronously checks if there is NGO in the system.
     /// </summary>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>True if at least one NGO exists; otherwise, false.</returns>
-    public async Task<bool> AnyAsync(CancellationToken ct = default)
+    public async Task<bool> AnyAsync(CancellationToken cancellationToken = default)
     {
-        return await DbSet.AsNoTracking().AnyAsync(ct);
+        return await DbSet.AsNoTracking().AnyAsync(cancellationToken);
     }
 }

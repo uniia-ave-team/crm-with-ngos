@@ -5,6 +5,7 @@ namespace Crm.Domain.Enums;
 /// used for role declension, feminitives, and system logic.
 /// </summary>
 public enum PronounCategory
+    : byte
 {
     /// <summary>
     /// Masculine pronouns or forms (e.g., "he/him").
@@ -19,5 +20,5 @@ public enum PronounCategory
     /// <summary>
     /// Non-binary pronouns or forms (e.g., "they/them").
     /// </summary>
-    Plural = 3,
+    Neutral = 3,
 }

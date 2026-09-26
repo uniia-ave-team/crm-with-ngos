@@ -37,28 +37,22 @@ public sealed class CurrentUserService(IHttpContextAccessor httpContextAccessor)
     {
         var user = httpContextAccessor.HttpContext?.User;
 
-        if (user == null)
+        if (user is null)
         {
             return [];
         }
 
-        var roleIdClaims = user.FindAll(CustomClaimTypes.RoleId);
+        var claims = user.FindAll(CustomClaimTypes.RoleId).ToList();
+        var result = new List<Guid>(claims.Count);
 
-        if (!roleIdClaims.Any())
-        {
-            return [];
-        }
-
-        var roleIds = new List<Guid>();
-
-        foreach (var claim in roleIdClaims)
+        foreach (var claim in claims)
         {
             if (Guid.TryParse(claim.Value, out var roleId))
             {
-                roleIds.Add(roleId);
+                result.Add(roleId);
             }
         }
 
-        return roleIds;
+        return result;
     }
 }

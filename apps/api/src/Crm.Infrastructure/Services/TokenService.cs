@@ -7,7 +7,6 @@ using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.User;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
-using Crm.Domain.Entities;
 using Crm.Infrastructure.Options;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
@@ -20,14 +19,24 @@ namespace Crm.Infrastructure.Services;
 /// Generates and validates JWT tokens and secure refresh tokens.
 /// Follows the Single Responsibility Principle by delegating specific validation logic to reusable configurations.
 /// </summary>
-public sealed partial class TokenService(
-    IOptions<JwtOptions> jwtOptions,
-    ILogger<TokenService> logger) : ITokenService
+public sealed partial class TokenService : ITokenService
 {
-    private readonly JwtOptions _jwtOptions = jwtOptions.Value;
+    private readonly JwtOptions _jwtOptions;
+    private readonly ILogger<TokenService> _logger;
+    private readonly SymmetricSecurityKey _signingKey;
+    private readonly SigningCredentials _signingCredentials;
+    private static readonly JwtSecurityTokenHandler TokenHandler = new();
+
+    public TokenService(IOptions<JwtOptions> jwtOptions, ILogger<TokenService> logger)
+    {
+        _jwtOptions = jwtOptions.Value;
+        _logger = logger;
+        _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Secret));
+        _signingCredentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
+    }
 
     /// <inheritdoc />
-    public TokenResult GenerateAccessToken(AuthUser user, IList<Guid> roleIds)
+    public TokenResult GenerateAccessToken(UserBasicDto user, IList<Guid> roleIds)
     {
         var claims = new List<Claim>
         {
@@ -45,9 +54,9 @@ public sealed partial class TokenService(
         var expiresAt = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpiryMinutes);
         var token = CreateJwtToken(claims, expiresAt);
 
-        LogAccessTokenGenerated(logger, user.Id);
+        LogAccessTokenGenerated(_logger, user.Id);
 
-        return new(new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
+        return new(TokenHandler.WriteToken(token), expiresAt);
     }
 
     /// <inheritdoc />
@@ -58,7 +67,7 @@ public sealed partial class TokenService(
 
         var expiresAt = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenExpiryDays);
 
-        LogRefreshTokenGenerated(logger);
+        LogRefreshTokenGenerated(_logger);
 
         return new(token, expiresAt);
     }
@@ -67,16 +76,15 @@ public sealed partial class TokenService(
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
     {
         var tokenValidationParameters = GetTokenValidationParameters(validateLifetime: false);
-        var tokenHandler = new JwtSecurityTokenHandler();
 
         try
         {
-            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
+            var principal = TokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
 
             if (securityToken is not JwtSecurityToken jwtSecurityToken ||
                 !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
             {
-                LogInvalidExpiredToken(logger, "Invalid token algorithm.");
+                LogInvalidExpiredToken(_logger, "Invalid token algorithm.");
                 return null;
             }
 
@@ -84,7 +92,7 @@ public sealed partial class TokenService(
         }
         catch (Exception ex)
         {
-            LogExpiredTokenValidationFailed(logger, ex.Message);
+            LogExpiredTokenValidationFailed(_logger, ex.Message);
             return null;
         }
     }
@@ -105,9 +113,9 @@ public sealed partial class TokenService(
 
         var token = CreateJwtToken(claims, expiresAt);
 
-        LogInvitationTokenGenerated(logger, dto.Email);
+        LogInvitationTokenGenerated(_logger, dto.Email);
 
-        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+        var tokenString = TokenHandler.WriteToken(token);
 
         return new InvitationTokenResultDto(tokenString, expiresAt);
     }
@@ -116,21 +124,20 @@ public sealed partial class TokenService(
     public async Task<ClaimsPrincipal?> ValidateInvitationTokenAsync(string token)
     {
         var tokenValidationParameters = GetTokenValidationParameters(validateLifetime: true);
-        var tokenHandler = new JwtSecurityTokenHandler();
 
         try
         {
-            var validationResult = await tokenHandler.ValidateTokenAsync(token, tokenValidationParameters);
+            var validationResult = await TokenHandler.ValidateTokenAsync(token, tokenValidationParameters);
 
             if (!validationResult.IsValid)
             {
-                LogInvalidInvitationToken(logger, "Token validation failed according to validation parameters.");
+                LogInvalidInvitationToken(_logger, "Token validation failed according to validation parameters.");
                 return null;
             }
 
             if (!validationResult.ClaimsIdentity.HasClaim(CustomClaimTypes.InviteType, CustomClaimTypes.RegistrationInviteValue))
             {
-                LogInvalidInvitationToken(logger, "Token does not contain the required registration invite claims.");
+                LogInvalidInvitationToken(_logger, "Token does not contain the required registration invite claims.");
                 return null;
             }
 
@@ -138,7 +145,7 @@ public sealed partial class TokenService(
         }
         catch (Exception ex)
         {
-            LogTokenValidationFailed(logger, ex.Message);
+            LogTokenValidationFailed(_logger, ex.Message);
             return null;
         }
     }
@@ -148,16 +155,13 @@ public sealed partial class TokenService(
     /// </summary>
     private JwtSecurityToken CreateJwtToken(IEnumerable<Claim> claims, DateTime expires)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Secret));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
         return new JwtSecurityToken(
             issuer: _jwtOptions.Issuer,
             audience: _jwtOptions.Audience,
             claims: claims,
             notBefore: DateTime.UtcNow,
             expires: expires,
-            signingCredentials: creds);
+            signingCredentials: _signingCredentials);
     }
 
     /// <summary>
@@ -168,7 +172,7 @@ public sealed partial class TokenService(
         return new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Secret)),
+            IssuerSigningKey = _signingKey,
             ValidateIssuer = true,
             ValidIssuer = _jwtOptions.Issuer,
             ValidateAudience = true,

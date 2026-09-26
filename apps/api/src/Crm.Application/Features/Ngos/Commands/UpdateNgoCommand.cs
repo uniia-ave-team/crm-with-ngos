@@ -17,11 +17,11 @@ public partial class UpdateNgoCommandHandler(
 {
     public async Task Handle(UpdateNgoCommand request, CancellationToken cancellationToken)
     {
-        var ngo = await repository.GetAsync(cancellationToken);
+        var ngo = await repository.GetForUpdateAsync(cancellationToken);
 
         LogUpdatingNgo(logger, ngo.Id);
 
-        repository.Update(request.Adapt(ngo));
+        request.Adapt(ngo);
 
         LogNgoUpdatedSuccessfully(logger, ngo.Id);
     }

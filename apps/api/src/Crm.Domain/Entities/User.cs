@@ -4,8 +4,7 @@ namespace Crm.Domain.Entities;
 
 /// <summary>
 /// Represents the extended business profile of a system member within the NGO.
-/// Inherits from <see cref="BaseEntity"/> and maintains personal details, contact information,
-/// operational status, and a 1-to-1 relationship with the security entity <see cref="AuthUser"/>.
+/// Inherits from <see cref="BaseEntity"/> and maintains personal details, contact information and operational status.
 /// </summary>
 public class User : BaseEntity
 {
@@ -73,7 +72,7 @@ public class User : BaseEntity
     /// <summary>
     /// Gets or sets the UTC timestamp when the user profile was initially created.
     /// </summary>
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
     /// <summary>
     /// Gets or sets the unique foreign key identifier of the associated <see cref="Ngo"/> instance.
@@ -84,9 +83,4 @@ public class User : BaseEntity
     /// Gets or sets the navigation property pointing to the parent <see cref="Ngo"/> organization.
     /// </summary>
     public Ngo? Ngo { get; set; }
-
-    /// <summary>
-    /// Gets or sets the 1-to-1 navigation property pointing to the associated security and authentication credentials (<see cref="AuthUser"/>).
-    /// </summary>
-    public AuthUser AuthUser { get; set; }
 }

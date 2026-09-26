@@ -20,7 +20,7 @@ public static class RoleDtoExtensions
         var resolvedName = pronounCategory switch
         {
             PronounCategory.Feminine when !string.IsNullOrWhiteSpace(role.FeminitiveName) => role.FeminitiveName,
-            PronounCategory.Plural when !string.IsNullOrWhiteSpace(role.PluralName) => role.PluralName,
+            PronounCategory.Neutral when !string.IsNullOrWhiteSpace(role.PluralName) => role.PluralName,
             PronounCategory.Masculine when !string.IsNullOrWhiteSpace(role.Name) => role.Name,
             null or _ => role.Name ?? string.Empty,
         };

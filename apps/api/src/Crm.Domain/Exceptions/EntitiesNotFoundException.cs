@@ -6,10 +6,8 @@ namespace Crm.Domain.Exceptions;
 public sealed class EntitiesNotFoundException(
     string entityType,
     IReadOnlyCollection<object> missingKeys)
-    : DomainException(FormatMessage(entityType, missingKeys))
+    : Exception(FormatMessage(entityType, missingKeys))
 {
-    public override int StatusCode => 404;
-
     private static string FormatMessage(string entityType, IReadOnlyCollection<object> missingKeys)
     {
         if (missingKeys.Count == 0)

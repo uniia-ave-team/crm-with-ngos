@@ -2,11 +2,9 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -14,13 +12,13 @@ namespace Crm.Application.Features.Users.Commands;
 /// <summary>
 /// Handles the <see cref="InviteUserCommand"/> to generate an invitation token for a new user.
 /// </summary>
-/// <param name="userManager">The ASP.NET Core Identity user manager used to check existing emails.</param>
+/// <param name="userRepository">The repository used to check if a user already exists.</param>
 /// <param name="ngoRepository">The repository used to fetch the current NGO instance ID.</param>
 /// <param name="roleRepository">The repository used to validate role existence.</param>
 /// <param name="tokenService">The service responsible for generating JWT tokens.</param>
 /// <param name="logger">The logger used to record the invitation process.</param>
 public partial class InviteUserCommandHandler(
-    UserManager<AuthUser> userManager,
+    IAuthUserRepository userRepository,
     INgoRepository ngoRepository,
     IAuthRoleRepository roleRepository,
     ITokenService tokenService,
@@ -39,20 +37,15 @@ public partial class InviteUserCommandHandler(
     {
         LogInvitingUser(logger, request.Email, request.RoleIds);
 
-        var existingUser = await userManager.FindByEmailAsync(request.Email);
-        if (existingUser != null)
-        {
-            LogUserAlreadyExists(logger, request.Email);
-            throw new EntityAlreadyExistsException(nameof(AuthUser), request.Email);
-        }
+        await userRepository.EnsureNotExistsAsync(request.Email, cancellationToken);
 
-        var ngo = await ngoRepository.GetAsync(cancellationToken);
+        var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
 
         await roleRepository.EnsureAllExistAsync(request.RoleIds, cancellationToken);
 
         var generateInvitationDto = new GenerateInvitationDto(
             request.Email,
-            ngo.Id,
+            ngoId,
             request.RoleIds);
 
         var invitationToken = tokenService.GenerateInvitationToken(generateInvitationDto);
@@ -64,9 +57,6 @@ public partial class InviteUserCommandHandler(
 
     [LoggerMessage(EventId = LogEventIds.InvitingUser, Level = LogLevel.Information, Message = "Initiating invitation for user with email: {Email} and roles: {RoleIds}")]
     private static partial void LogInvitingUser(ILogger logger, string email, IEnumerable<Guid> roleIds);
-
-    [LoggerMessage(EventId = LogEventIds.InviteUserCommandHandlerUserAlreadyExists, Level = LogLevel.Warning, Message = "Invitation failed. User with email '{Email}' already exists.")]
-    private static partial void LogUserAlreadyExists(ILogger logger, string email);
 
     [LoggerMessage(EventId = LogEventIds.UserInvitedSuccessfully, Level = LogLevel.Information, Message = "Successfully generated invitation token for user: {Email}")]
     private static partial void LogUserInvitedSuccessfully(ILogger logger, string email);

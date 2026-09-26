@@ -20,7 +20,7 @@ public class Ngo : BaseEntity
     /// <summary>
     /// Gets or sets the UTC timestamp indicating when the NGO instance was initially created.
     /// </summary>
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
     /// <summary>
     /// Gets or sets the collection of business user profiles belonging to this NGO instance.

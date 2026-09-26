@@ -25,6 +25,13 @@ public class PermissionService(IRolePermissionsCache permissionsCache) : IPermis
             return false;
         }
 
+        if (roleIds.Count == 1)
+        {
+            var permissions = await permissionsCache.GetRolePermissionsAsync(roleIds[0], cancellationToken);
+
+            return requiredRights.All(right => permissions.Contains(right.ToClaimValue()));
+        }
+
         var tasks = roleIds.Select(id => permissionsCache.GetRolePermissionsAsync(id, cancellationToken));
         var rolePermissionsCollection = await Task.WhenAll(tasks);
 

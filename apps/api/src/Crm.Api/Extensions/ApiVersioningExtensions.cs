@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
+using Crm.Api.OpenApi.Transformers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
@@ -63,6 +64,8 @@ public static class ApiVersioningExtensions
 
                 return Task.CompletedTask;
             });
+
+            options.AddOperationTransformer<AccessRightOperationTransformer>();
         });
 
         return services;

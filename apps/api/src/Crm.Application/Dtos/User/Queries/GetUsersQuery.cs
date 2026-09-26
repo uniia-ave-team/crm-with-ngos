@@ -1,6 +1,5 @@
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
-using Crm.Domain.Entities;
 using MediatR;
 
 namespace Crm.Application.Dtos.User.Queries;
@@ -31,7 +30,7 @@ namespace Crm.Application.Dtos.User.Queries;
 /// </param>
 public record GetUsersQuery(
     string? SearchTerm = null,
-    string? OrderBy = nameof(AuthUser.Email),
+    string? OrderBy = nameof(Domain.Entities.User.FirstName),
     string? SortOrder = SortOrderConstants.Ascending,
     int PageNumber = 1,
     int PageSize = 10,

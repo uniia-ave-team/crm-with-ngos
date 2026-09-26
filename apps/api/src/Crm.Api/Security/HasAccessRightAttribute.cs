@@ -1,17 +1,21 @@
 using Crm.Domain.Enums;
-using Microsoft.AspNetCore.Mvc;
+using Crm.Domain.Extensions;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Crm.Api.Security;
 
 /// <summary>
 /// Specifies that the class or method requires a specific access right.
 /// </summary>
-/// <param name="right">The required access right enum value.</param>
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true)]
-public class HasAccessRightAttribute(AccessRight right) : TypeFilterAttribute(typeof(AccessRightAuthorizationFilter))
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
+public class HasAccessRightAttribute : AuthorizeAttribute
 {
     /// <summary>
-    /// Gets the required access right value.
+    /// Initializes a new instance of the <see cref="HasAccessRightAttribute"/> class.
     /// </summary>
-    public AccessRight RequiredRight { get; } = right;
+    /// <param name="right">The required access right to bind to the authorization policy.</param>
+    public HasAccessRightAttribute(AccessRight right)
+    {
+        Policy = right.ToClaimValue();
+    }
 }

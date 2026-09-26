@@ -5,8 +5,6 @@ namespace Crm.Domain.Extensions;
 
 public static class PermissionExtensions
 {
-    public const string ClaimType = "Permission";
-
     private const string PermissionPrefix = "Permissions";
 
     private static readonly FrozenSet<string> _allPermissions =

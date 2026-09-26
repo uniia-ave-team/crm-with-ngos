@@ -25,7 +25,6 @@ public class DomainExceptionsTests
 
         // Assert
         exception.Message.ShouldBe($"Entity 'User' with key '{Guid.Empty}' was not found.");
-        exception.StatusCode.ShouldBe(404);
     }
 
     /// <summary>
@@ -43,7 +42,6 @@ public class DomainExceptionsTests
 
         // Assert
         exception.Message.ShouldBe("Entity 'User' was not found.");
-        exception.StatusCode.ShouldBe(404);
     }
 
     /// <summary>
@@ -62,7 +60,6 @@ public class DomainExceptionsTests
 
         // Assert
         exception.Message.ShouldBe("Entity 'Ngo' with key '123' already exists.");
-        exception.StatusCode.ShouldBe(409);
     }
 
     /// <summary>
@@ -80,7 +77,6 @@ public class DomainExceptionsTests
 
         // Assert
         exception.Message.ShouldBe("Entity 'Ngo' already exists.");
-        exception.StatusCode.ShouldBe(409);
     }
 
     /// <summary>
@@ -99,7 +95,6 @@ public class DomainExceptionsTests
 
         // Assert
         exception.Message.ShouldBe("Entities of type 'Role' with keys ['1', '2', '3'] were not found.");
-        exception.StatusCode.ShouldBe(404);
     }
 
     /// <summary>
@@ -118,6 +113,5 @@ public class DomainExceptionsTests
 
         // Assert
         exception.Message.ShouldContain("One or more entities of type 'Role' were not found.");
-        exception.StatusCode.ShouldBe(404);
     }
 }

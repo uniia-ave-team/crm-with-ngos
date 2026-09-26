@@ -16,7 +16,7 @@ namespace Crm.Application.Features.Users.Queries;
 /// Handles the <see cref="GetUserProfileQuery"/> to retrieve specific user profile details.
 /// </summary>
 public partial class GetUserProfileQueryHandler(
-    IUserRepository userRepository,
+    IAuthUserRepository authUserRepository,
     IAuthRoleRepository authRoleRepository,
     ICurrentUserService currentUserService,
     IPermissionService permissionService,
@@ -26,7 +26,7 @@ public partial class GetUserProfileQueryHandler(
     {
         LogFetchingUserProfile(logger, request.UserId);
 
-        var user = await userRepository.GetAsync<UserProfileResult>(request.UserId, cancellationToken);
+        var user = await authUserRepository.GetAsync<UserProfileResult>(request.UserId, cancellationToken);
 
         var roles = await authRoleRepository.GetRolesByUserAsync<RoleDto>(request.UserId, cancellationToken);
 

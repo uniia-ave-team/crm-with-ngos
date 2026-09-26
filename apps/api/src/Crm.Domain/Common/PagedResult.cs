@@ -14,7 +14,9 @@ public class PagedResult<T>(ICollection<T> items, int totalCount, int pageNumber
 
     public int PageSize { get; } = pageSize;
 
-    public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
+    public int TotalPages => PageSize > 0
+        ? (int)Math.Ceiling(TotalCount / (double)PageSize)
+        : 0;
 
     public bool HasPreviousPage => PageNumber > 1;
 

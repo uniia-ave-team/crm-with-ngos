@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Interfaces;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Crm.Api.Security;
 
@@ -9,45 +8,38 @@ namespace Crm.Api.Security;
 /// Represents an asynchronous authorization filter that validates if the current user's roles
 /// possess all required system access rights retrieved from the high-performance cache.
 /// </summary>
-public partial class AccessRightAuthorizationFilter(ILogger<AccessRightAuthorizationFilter> logger) : IAsyncAuthorizationFilter
+public partial class AccessRightAuthorizationHandler(
+    ICurrentUserService currentUserService,
+    IPermissionService permissionService,
+    ILogger<AccessRightAuthorizationHandler> logger)
+    : AuthorizationHandler<AccessRightRequirement>
 {
-    public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
+    protected override async Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        AccessRightRequirement requirement)
     {
-        var attributes = context.ActionDescriptor.EndpointMetadata
-            .OfType<HasAccessRightAttribute>()
-            .ToList();
-
-        if (attributes.Count == 0)
-        {
-            return;
-        }
-
-        var user = context.HttpContext.User;
-        if (user.Identity?.IsAuthenticated != true)
-        {
-            context.Result = new UnauthorizedResult();
-            return;
-        }
-
-        var currentUserService = context.HttpContext.RequestServices.GetRequiredService<ICurrentUserService>();
+        var user = context.User;
 
         var roleIds = currentUserService.GetRoleIds();
 
         if (roleIds.Count == 0)
         {
-            LogMissingRoleIdClaim(logger, user.Identity.Name ?? "Unknown");
-            context.Result = new ForbidResult();
+            LogMissingRoleIdClaim(logger, user.Identity?.Name ?? "Unknown");
             return;
         }
 
-        var permissionService = context.HttpContext.RequestServices.GetRequiredService<IPermissionService>();
+        bool hasAccess = await permissionService.HasAccessAsync(
+            roleIds,
+            requirement.RequiredRight,
+            CancellationToken.None);
 
-        bool hasAccess = await permissionService.HasAccessAsync(roleIds, attributes.Select(a => a.RequiredRight), context.HttpContext.RequestAborted);
-
-        if (!hasAccess)
+        if (hasAccess)
+        {
+            context.Succeed(requirement);
+        }
+        else
         {
             LogAccessDenied(logger, user.Identity.Name ?? "Unknown", string.Join(", ", roleIds));
-            context.Result = new ForbidResult();
         }
     }
 
