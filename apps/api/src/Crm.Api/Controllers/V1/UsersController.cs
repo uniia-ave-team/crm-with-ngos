@@ -200,7 +200,7 @@ public class UsersController(
         [FromBody] AddCustomFieldRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new AddUserCustomFieldCommand(currentUserService.GetUserId(), request.Key, request.Value);
+        var command = request.Adapt<AddUserCustomFieldCommand>() with { UserId = currentUserService.GetUserId() };
 
         await mediator.Send(command, cancellationToken);
         return NoContent();
@@ -245,7 +245,11 @@ public class UsersController(
         [FromBody] UpdateCustomFieldRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new UpdateUserCustomFieldCommand(customFieldId, currentUserService.GetUserId(), request.Value);
+        var command = request.Adapt<UpdateUserCustomFieldCommand>() with
+        {
+            CustomFieldId = customFieldId,
+            UserId = currentUserService.GetUserId(),
+        };
 
         await mediator.Send(command, cancellationToken);
         return NoContent();
@@ -304,7 +308,7 @@ public class UsersController(
         [FromBody] AddCustomFieldRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new AddUserCustomFieldCommand(id, request.Key, request.Value);
+        var command = request.Adapt<AddUserCustomFieldCommand>() with { UserId = id };
 
         await mediator.Send(command, cancellationToken);
         return NoContent();
@@ -351,7 +355,11 @@ public class UsersController(
         [FromBody] UpdateCustomFieldRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new UpdateUserCustomFieldCommand(customFieldId, id, request.Value);
+        var command = request.Adapt<UpdateUserCustomFieldCommand>() with
+        {
+            CustomFieldId = customFieldId,
+            UserId = id,
+        };
 
         await mediator.Send(command, cancellationToken);
         return NoContent();

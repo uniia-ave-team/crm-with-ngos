@@ -1,6 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Interfaces.Repositories;
+using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -26,7 +27,7 @@ public partial class UpdateUserCustomFieldCommandHandler(
             throw new InvalidOperationException("Cannot update a custom field that belongs to another user.");
         }
 
-        customField.Value = request.Value;
+        request.Adapt(customField);
 
         LogCustomFieldUpdatedSuccessfully(logger, request.CustomFieldId, request.UserId);
     }

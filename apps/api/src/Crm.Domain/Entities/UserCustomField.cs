@@ -25,4 +25,10 @@ public class UserCustomField : BaseEntity
     /// Gets or sets the string value of the custom field.
     /// </summary>
     public string Value { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this custom field is visible to other regular users.
+    /// If false, it is private and typically only visible to the owner and administrators.
+    /// </summary>
+    public bool IsPublic { get; set; }
 }

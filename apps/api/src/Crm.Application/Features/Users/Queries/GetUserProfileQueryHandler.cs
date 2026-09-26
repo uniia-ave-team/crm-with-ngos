@@ -32,16 +32,24 @@ public partial class GetUserProfileQueryHandler(
 
         LogUserProfileFetched(logger, request.UserId);
 
-        var canViewEmergencyContact = currentUserService.GetUserId() == request.UserId ||
-            await permissionService.HasAccessAsync(currentUserService.GetRoleIds(), AccessRight.ViewEmergencyContact, cancellationToken);
+        var currentUserId = currentUserService.GetUserId();
+        var currentUserRoleIds = currentUserService.GetRoleIds();
+        var isSelf = currentUserId == request.UserId;
 
-        user = user with
+        var canViewEmergencyContact = isSelf ||
+            await permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, cancellationToken);
+
+        var canViewCustomFields = isSelf ||
+            await permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewCustomFields, cancellationToken);
+
+        var securedUserResult = user with
         {
             Roles = roles.Select(r => r.ResolveNameForUser(user.PronounCategory)),
             EmergencyContact = canViewEmergencyContact ? user.EmergencyContact : null,
+            CustomFields = canViewCustomFields ? user.CustomFields : user.CustomFields.Where(cf => cf.IsPublic),
         };
 
-        return user.Adapt<UserProfileDto>();
+        return securedUserResult.Adapt<UserProfileDto>();
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingUserProfile, Level = LogLevel.Information, Message = "Fetching profile for user ID: {UserId}")]

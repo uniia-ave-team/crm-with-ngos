@@ -9,7 +9,9 @@ namespace Crm.Application.Dtos.User.Commands;
 /// <param name="UserId">The unique identifier of the user to whom the field is added.</param>
 /// <param name="Key">The unique key or name of the custom field.</param>
 /// <param name="Value">The string value of the custom field.</param>
+/// <param name="IsPublic">Indicates whether the custom field is publicly visible or private.</param>
 public record AddUserCustomFieldCommand(
     Guid UserId,
     string Key,
-    string Value) : IRequest, ITransactionalCommand;
+    string Value,
+    bool IsPublic) : IRequest, ITransactionalCommand;
