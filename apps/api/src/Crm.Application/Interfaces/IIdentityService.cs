@@ -88,4 +88,14 @@ public interface IIdentityService
     /// <exception cref="EntityNotFoundException">Thrown if the user with the specified ID does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown if the password change operation fails (e.g., incorrect current password, or the new password does not meet complexity requirements).</exception>
     Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously deletes a user and all their associated personal data permanently (GDPR hard-delete).
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user to delete.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the user with the specified ID does not exist.</exception>
+    /// <exception cref="UserOperationException">Thrown if the deletion operation fails.</exception>
+    Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken = default);
 }

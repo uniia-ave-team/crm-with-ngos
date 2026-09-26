@@ -99,6 +99,9 @@ public static class LogEventIds
     public const int UpdatingUserCustomField = 2072;
     public const int UserCustomFieldUpdatedSuccessfully = 2073;
     public const int UnauthorizedCustomFieldUpdate = 2074;
+    public const int DeletingUser = 2075;
+    public const int CannotDeleteLastAdmin = 2076;
+    public const int UserDeletedSuccessfully = 2077;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;

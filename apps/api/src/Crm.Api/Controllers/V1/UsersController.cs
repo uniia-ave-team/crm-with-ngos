@@ -43,12 +43,31 @@ public class UsersController(
     }
 
     /// <summary>
+    /// Permanently deletes a specific user and all associated personal data (GDPR hard-delete).
+    /// </summary>
+    /// <param name="id">The unique identifier of the user to delete.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpDelete("{id:guid}")]
+    [HasAccessRight(AccessRight.DeleteUser)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteUser(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        await mediator.Send(new DeleteUserCommand(id), cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// Retrieves the detailed profile of a specific user.
     /// </summary>
     /// <param name="id">The unique identifier of the user.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The detailed profile of the user.</returns>
-    [HttpGet("{id:guid}/profile", Name = nameof(GetUserProfile))]
+    [HttpGet("{id:guid}", Name = nameof(GetUserProfile))]
     [HasAccessRight(AccessRight.ViewUser)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -65,7 +84,7 @@ public class UsersController(
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The detailed profile of the current user.</returns>
-    [HttpGet("me/profile")]
+    [HttpGet("me")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -108,7 +127,7 @@ public class UsersController(
     /// <param name="request">The updated profile details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("{id:guid}/profile")]
+    [HttpPut("{id:guid}")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -126,12 +145,29 @@ public class UsersController(
     }
 
     /// <summary>
+    /// Permanently deletes the currently authenticated user's account and all associated personal data (GDPR hard-delete).
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpDelete("me")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> DeleteMe(
+        CancellationToken cancellationToken)
+    {
+        await mediator.Send(new DeleteUserCommand(currentUserService.GetUserId()), cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// Updates the profile details of the currently authenticated user.
     /// </summary>
     /// <param name="request">The updated profile details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("me/profile")]
+    [HttpPut("me")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -153,7 +189,7 @@ public class UsersController(
     /// <param name="request">The current and new password details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("me/password")]
+    [HttpPost("me/password")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -261,7 +297,7 @@ public class UsersController(
     /// <param name="id">The unique identifier of the user to activate.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("{id:guid}/activate")]
+    [HttpPost("{id:guid}/activate")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -279,7 +315,7 @@ public class UsersController(
     /// <param name="id">The unique identifier of the user to deactivate.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("{id:guid}/deactivate")]
+    [HttpPost("{id:guid}/deactivate")]
     [HasAccessRight(AccessRight.DisableUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

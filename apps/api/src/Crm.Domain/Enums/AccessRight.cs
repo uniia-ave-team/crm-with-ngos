@@ -11,19 +11,20 @@ public enum AccessRight
     CreateUser = 1,
     UpdateUser = 2,
     DisableUser = 3,
-    AssignRoleToUser = 4,
-    ViewEmergencyContact = 5,
-    ViewCustomFields = 6,
+    DeleteUser = 4,
+    AssignRoleToUser = 5,
+    ViewEmergencyContact = 6,
+    ViewCustomFields = 7,
 
     // --- Role ---
-    ViewRole = 7,
-    CreateRole = 8,
-    UpdateRole = 9,
-    DeleteRole = 10,
-    ManageRolePermissions = 11,
+    ViewRole = 8,
+    CreateRole = 9,
+    UpdateRole = 10,
+    DeleteRole = 11,
+    ManageRolePermissions = 12,
 
     // --- Ngo ---
-    ViewNgo = 12,
-    CreateNgo = 13,
-    UpdateNgo = 14,
+    ViewNgo = 13,
+    CreateNgo = 14,
+    UpdateNgo = 15,
 }

@@ -110,4 +110,18 @@ public class IdentityService(
             throw new UserOperationException(UserOperation.ChangePassword, result.FormatErrors());
         }
     }
+
+    /// <inheritdoc />
+    public async Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString())
+            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+
+        var result = await userManager.DeleteAsync(user);
+
+        if (!result.Succeeded)
+        {
+            throw new UserOperationException(UserOperation.Delete, result.FormatErrors());
+        }
+    }
 }
