@@ -2,6 +2,7 @@ namespace Crm.Application.Common.Consts;
 
 // TODO: Translate logs in different languages.
 // TODO: Write unit tests for logging to ensure that all log consts are unique and they are used only once in the application. This will help to avoid duplicate log event.
+// TODO: Before end refactor all code values entirely
 public static class LogEventIds
 {
     // 1000s: Roles, Claims, and Cache
@@ -90,6 +91,14 @@ public static class LogEventIds
     public const int FetchingUserPermissions = 2064;
     public const int NoRoleIdsProvidedForPermissions = 2065;
     public const int PermissionsFetchedSuccessfully = 2066;
+    public const int AddingUserCustomField = 2067;
+    public const int UserCustomFieldAddedSuccessfully = 2068;
+    public const int RemovingUserCustomField = 2069;
+    public const int UserCustomFieldRemovedSuccessfully = 2070;
+    public const int UnauthorizedCustomFieldRemoval = 2071;
+    public const int UpdatingUserCustomField = 2072;
+    public const int UserCustomFieldUpdatedSuccessfully = 2073;
+    public const int UnauthorizedCustomFieldUpdate = 2074;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;

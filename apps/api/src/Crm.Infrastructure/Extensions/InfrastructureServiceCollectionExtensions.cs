@@ -95,6 +95,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IAuthUserRepository, AuthUserRepository>();
         services.AddScoped<IAuthRoleRepository, AuthRoleRepository>();
         services.AddScoped<IUserRefreshTokenRepository, UserRefreshTokenRepository>();
+        services.AddScoped<IUserCustomFieldRepository, UserCustomFieldRepository>();
 
         return services;
     }

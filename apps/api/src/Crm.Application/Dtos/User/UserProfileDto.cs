@@ -18,6 +18,7 @@ namespace Crm.Application.Dtos.User;
 /// <param name="Pronouns">The preferred pronouns of the user.</param>
 /// <param name="AvatarUrl">The URL or file path to the user's avatar.</param>
 /// <param name="Roles">The collection of roles assigned to the user.</param>
+/// <param name="CustomFields">The collection of custom key-value fields associated with the user.</param>
 public record UserProfileDto(
     Guid Id,
     string Email,
@@ -31,4 +32,5 @@ public record UserProfileDto(
     string? PreferredLanguage,
     string? Pronouns,
     string? AvatarUrl,
-    IEnumerable<RoleUserDto> Roles);
+    IEnumerable<RoleUserDto> Roles,
+    IEnumerable<UserCustomFieldDto> CustomFields);

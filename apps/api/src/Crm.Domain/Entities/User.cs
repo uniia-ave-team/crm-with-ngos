@@ -83,4 +83,9 @@ public class User : BaseEntity
     /// Gets or sets the navigation property pointing to the parent <see cref="Ngo"/> organization.
     /// </summary>
     public Ngo? Ngo { get; set; }
+
+    /// <summary>
+    /// Gets or sets the collection of custom key-value fields associated with this user.
+    /// </summary>
+    public ICollection<UserCustomField> CustomFields { get; set; } = [];
 }
