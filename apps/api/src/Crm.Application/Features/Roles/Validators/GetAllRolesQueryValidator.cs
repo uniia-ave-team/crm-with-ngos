@@ -15,10 +15,10 @@ public class GetAllRolesQueryValidator : AbstractValidator<GetAllRolesQuery>
     public GetAllRolesQueryValidator()
     {
         RuleFor(x => x.PageNumber)
-            .GreaterThanOrEqualTo(1).WithMessage("Page number must be greater than or equal to 1.");
+            .GreaterThanOrEqualTo(PaginationConstants.MinPageNumber).WithMessage($"Page number must be greater than or equal to {PaginationConstants.MinPageNumber}.");
 
         RuleFor(x => x.PageSize)
-            .InclusiveBetween(1, 100).WithMessage("Page size must be between 1 and 100.");
+            .InclusiveBetween(PaginationConstants.MinPageSize, PaginationConstants.MaxPageSize).WithMessage($"Page size must be between {PaginationConstants.MinPageSize} and {PaginationConstants.MaxPageSize}.");
 
         RuleFor(x => x.SortOrder)
             .Must(sortOrder => sortOrder is SortOrderConstants.Ascending or SortOrderConstants.Descending)

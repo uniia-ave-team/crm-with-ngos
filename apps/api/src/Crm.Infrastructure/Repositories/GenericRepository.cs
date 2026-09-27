@@ -21,11 +21,6 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     where T : class, IEntity
 {
     /// <summary>
-    /// Gets the maximum allowed page size.
-    /// </summary>
-    protected const int MaxPageSize = 100;
-
-    /// <summary>
     /// Thread-safe cache mapping DTO properties to their corresponding Entity navigation paths (via Mapster).
     /// Prevents reflection and expression parsing overhead during runtime.
     /// </summary>
@@ -186,6 +181,23 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
         => await DbSet.AsNoTracking().ToListAsync(cancellationToken);
 
     /// <summary>
+    /// Asynchronously retrieves a single random entity from the database and projects it to the specified type using Mapster.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A random projected entity.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if no entities exist in the database for this type.</exception>
+    public async Task<TResult> GetRandomAsync<TResult>(CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .AsNoTracking()
+            .OrderBy(x => Guid.NewGuid())
+            .ProjectToType<TResult>()
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new EntityNotFoundException(typeof(T).Name);
+    }
+
+    /// <summary>
     /// Asynchronously retrieves a paginated, filtered, and sorted list of projected entities.
     /// </summary>
     /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
@@ -203,12 +215,12 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
         Expression<Func<T, bool>>? predicate = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
-        int pageNumber = 1,
-        int pageSize = 10,
+        int pageNumber = PaginationConstants.MinPageNumber,
+        int pageSize = PaginationConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
-        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
-        pageNumber = Math.Max(1, pageNumber);
+        pageSize = Math.Clamp(pageSize, PaginationConstants.MinPageSize, PaginationConstants.MaxPageSize);
+        pageNumber = Math.Max(PaginationConstants.MinPageNumber, pageNumber);
 
         IQueryable<T> query = DbSet.AsNoTracking();
 

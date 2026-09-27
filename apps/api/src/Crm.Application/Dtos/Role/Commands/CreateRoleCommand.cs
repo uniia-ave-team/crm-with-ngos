@@ -1,3 +1,4 @@
+using Crm.Application.Interfaces;
 using MediatR;
 
 namespace Crm.Application.Dtos.Role.Commands;
@@ -11,4 +12,4 @@ namespace Crm.Application.Dtos.Role.Commands;
 public record CreateRoleCommand(
     string Name,
     string? FeminitiveName,
-    string? PluralName) : IRequest<Guid>;
+    string? PluralName) : IRequest<Guid>, ITransactionalCommand;

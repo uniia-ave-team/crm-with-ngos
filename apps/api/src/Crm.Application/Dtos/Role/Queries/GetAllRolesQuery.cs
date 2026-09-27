@@ -29,5 +29,5 @@ public record GetAllRolesQuery(
     string? SearchTerm = null,
     string? OrderBy = nameof(RoleDto.Name),
     string? SortOrder = SortOrderConstants.Ascending,
-    int PageNumber = 1,
-    int PageSize = 10) : IRequest<PagedResult<RoleDto>>;
+    int PageNumber = PaginationConstants.MinPageNumber,
+    int PageSize = PaginationConstants.DefaultPageSize) : IRequest<PagedResult<RoleDto>>;

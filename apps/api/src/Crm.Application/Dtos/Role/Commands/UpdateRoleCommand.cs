@@ -1,3 +1,4 @@
+using Crm.Application.Interfaces;
 using MediatR;
 
 namespace Crm.Application.Dtos.Role.Commands;
@@ -13,4 +14,4 @@ public record UpdateRoleCommand(
     Guid Id,
     string NewName,
     string? FeminitiveName,
-    string? PluralName) : IRequest;
+    string? PluralName) : IRequest, ITransactionalCommand;

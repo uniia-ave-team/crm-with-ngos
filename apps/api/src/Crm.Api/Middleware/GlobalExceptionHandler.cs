@@ -1,3 +1,4 @@
+using Crm.Api.Consts;
 using Crm.Api.Extensions;
 using Crm.Application.Common.Consts;
 using FluentValidation;
@@ -34,9 +35,9 @@ public sealed partial class GlobalExceptionHandler(
             _ => new ProblemDetails
             {
                 Status = statusCode,
-                Title = isClientError ? "Client Error" : "Server Error",
+                Title = isClientError ? ProblemDetailsDefaults.ClientErrorTitle : ProblemDetailsDefaults.ServerErrorTitle,
                 Detail = GetDetailMessage(exception, isClientError, env.IsDevelopment()),
-                Type = $"https://tools.ietf.org/html/rfc9110#section-{statusCode}",
+                Type = ProblemDetailsDefaults.GetTypeUrl(statusCode),
             },
         };
 
@@ -44,7 +45,7 @@ public sealed partial class GlobalExceptionHandler(
 
         if (env.IsDevelopment() && exception is not ValidationException)
         {
-            problemDetails.Extensions["stackTrace"] = exception.StackTrace;
+            problemDetails.Extensions[ProblemDetailsDefaults.StackTraceExtensionKey] = exception.StackTrace;
         }
 
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
@@ -70,9 +71,9 @@ public sealed partial class GlobalExceptionHandler(
         return new HttpValidationProblemDetails(errors)
         {
             Status = statusCode,
-            Title = "Validation Failed",
-            Detail = "One or more validation errors occurred.",
-            Type = $"https://tools.ietf.org/html/rfc9110#section-{statusCode}",
+            Title = ProblemDetailsDefaults.ValidationFailedTitle,
+            Detail = ProblemDetailsDefaults.ValidationFailedDetail,
+            Type = ProblemDetailsDefaults.GetTypeUrl(statusCode),
         };
     }
 
@@ -82,7 +83,7 @@ public sealed partial class GlobalExceptionHandler(
     private static string GetDetailMessage(Exception exception, bool isClientError, bool isDev) =>
         isDev || isClientError
             ? exception.Message
-            : "An unexpected error occurred while processing your request. Please try again later.";
+            : ProblemDetailsDefaults.UnexpectedErrorDetail;
 
     /// <summary>
     /// Routes the exception to the appropriate high-performance logger method.

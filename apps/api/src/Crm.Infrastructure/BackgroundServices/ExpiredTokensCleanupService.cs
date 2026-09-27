@@ -1,4 +1,5 @@
 using Crm.Application.Common.Consts;
+using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,7 +15,7 @@ public partial class ExpiredTokensCleanupService(
     IServiceScopeFactory scopeFactory,
     ILogger<ExpiredTokensCleanupService> logger) : BackgroundService
 {
-    private readonly TimeSpan _cleanupInterval = TimeSpan.FromHours(24);
+    private readonly TimeSpan _cleanupInterval = TimeSpan.FromHours(TokenConstants.CleanupIntervalHours);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

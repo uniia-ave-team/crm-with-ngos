@@ -22,6 +22,27 @@ namespace Crm.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Crm.Domain.Entities.LoginPageImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("NgoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NgoId");
+
+                    b.ToTable("LoginPageImages", (string)null);
+                });
+
             modelBuilder.Entity("Crm.Domain.Entities.Ngo", b =>
                 {
                     b.Property<Guid>("Id")
@@ -369,6 +390,17 @@ namespace Crm.Infrastructure.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AuthUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("Crm.Domain.Entities.LoginPageImage", b =>
+                {
+                    b.HasOne("Crm.Domain.Entities.Ngo", "Ngo")
+                        .WithMany()
+                        .HasForeignKey("NgoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ngo");
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.User", b =>

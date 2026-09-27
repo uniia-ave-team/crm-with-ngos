@@ -14,6 +14,8 @@ public partial class AccessRightAuthorizationHandler(
     ILogger<AccessRightAuthorizationHandler> logger)
     : AuthorizationHandler<AccessRightRequirement>
 {
+    private const string UnknownUser = "Unknown";
+
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
         AccessRightRequirement requirement)
@@ -24,7 +26,7 @@ public partial class AccessRightAuthorizationHandler(
 
         if (roleIds.Count == 0)
         {
-            LogMissingRoleIdClaim(logger, user.Identity?.Name ?? "Unknown");
+            LogMissingRoleIdClaim(logger, user.Identity?.Name ?? UnknownUser);
             return;
         }
 
@@ -39,7 +41,7 @@ public partial class AccessRightAuthorizationHandler(
         }
         else
         {
-            LogAccessDenied(logger, user.Identity.Name ?? "Unknown", string.Join(", ", roleIds));
+            LogAccessDenied(logger, user.Identity.Name ?? UnknownUser, string.Join(", ", roleIds));
         }
     }
 

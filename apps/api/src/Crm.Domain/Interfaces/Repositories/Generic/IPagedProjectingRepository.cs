@@ -29,7 +29,7 @@ public interface IPagedProjectingRepository<T>
         Expression<Func<T, bool>>? predicate = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
-        int pageNumber = 1,
-        int pageSize = 10,
+        int pageNumber = PaginationConstants.MinPageNumber,
+        int pageSize = PaginationConstants.DefaultPageSize,
         CancellationToken cancellationToken = default);
 }

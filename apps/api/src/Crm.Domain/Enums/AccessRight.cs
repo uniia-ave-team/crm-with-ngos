@@ -27,4 +27,9 @@ public enum AccessRight
     ViewNgo = 13,
     CreateNgo = 14,
     UpdateNgo = 15,
+
+    // --- Login Page Images ---
+    ViewLoginPageImages = 16,
+    CreateLoginPageImages = 17,
+    DeleteLoginPageImages = 18,
 }

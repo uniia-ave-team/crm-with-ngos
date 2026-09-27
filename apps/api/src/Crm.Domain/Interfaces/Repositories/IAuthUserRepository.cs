@@ -46,8 +46,8 @@ public interface IAuthUserRepository :
         string? searchTerm = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
-        int pageNumber = 1,
-        int pageSize = 10,
+        int pageNumber = PaginationConstants.MinPageNumber,
+        int pageSize = PaginationConstants.DefaultPageSize,
         bool showDeleted = false,
         CancellationToken cancellationToken = default);
 

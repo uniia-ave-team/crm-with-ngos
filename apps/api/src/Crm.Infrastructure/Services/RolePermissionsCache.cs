@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using Crm.Application.Common.Consts;
 using Crm.Application.Interfaces;
+using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Options;
@@ -22,9 +23,11 @@ public sealed partial class RolePermissionsCache(
     IOptions<JwtOptions> jwtOptions,
     ILogger<RolePermissionsCache> logger) : IRolePermissionsCache, IDisposable
 {
-    private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(24);
+    private const string CacheKeyPrefix = "RoleAccessRights_";
+    private const int LockBucketCount = 16;
+    private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(CacheConstants.RolePermissionsCacheExpirationHours);
     private readonly TimeSpan _negativeCacheTtl = TimeSpan.FromMinutes(jwtOptions.Value.AccessTokenExpiryMinutes);
-    private readonly SemaphoreSlim[] _locks = [.. Enumerable.Range(0, 16).Select(_ => new SemaphoreSlim(1, 1))];
+    private readonly SemaphoreSlim[] _locks = [.. Enumerable.Range(0, LockBucketCount).Select(_ => new SemaphoreSlim(1, 1))];
     private int _disposed;
 
     /// <inheritdoc />
@@ -176,7 +179,7 @@ public sealed partial class RolePermissionsCache(
     /// <summary>
     /// Generates a standardized, collision-resistant key for the underlying caching provider.
     /// </summary>
-    private static string GenerateCacheKey(Guid roleId) => $"RoleAccessRights_{roleId}";
+    private static string GenerateCacheKey(Guid roleId) => $"{CacheKeyPrefix}{roleId}";
 
     [LoggerMessage(EventId = LogEventIds.CacheMiss, Level = LogLevel.Warning, Message = "Cache miss for role ID '{RoleId}'. Fetching from database as fallback.")]
     private static partial void LogCacheMiss(ILogger logger, Guid roleId);

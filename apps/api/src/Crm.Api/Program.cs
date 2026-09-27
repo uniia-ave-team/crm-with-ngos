@@ -10,7 +10,8 @@ var app = builder.Build();
 
 app.ConfigurePipeline();
 
-using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+const int DatabaseMigrationTimeoutMinutes = 1;
+using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(DatabaseMigrationTimeoutMinutes));
 using var cts = CancellationTokenSource.CreateLinkedTokenSource(
     app.Lifetime.ApplicationStopping,
     timeoutCts.Token);

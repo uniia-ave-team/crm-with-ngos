@@ -129,6 +129,18 @@ public static class LogEventIds
     public const int ClientError = 6001;
     public const int ServerError = 6002;
 
+    // 7000s: UI Customizations and Settings
+    public const int CreatingLoginPageImage = 7001;
+    public const int LoginPageImageCreatedSuccessfully = 7002;
+    public const int DeletingLoginPageImage = 7003;
+    public const int LoginPageImageDeletedSuccessfully = 7004;
+    public const int FetchingAllLoginPageImages = 7005;
+    public const int AllLoginPageImagesFetched = 7006;
+    public const int FetchingRandomLoginPageImage = 7007;
+    public const int RandomLoginPageImageFetched = 7008;
+    public const int FetchingLoginPageImageById = 7009;
+    public const int LoginPageImageByIdFetchedSuccessfully = 7010;
+
     // 8000s: Background Services
     public const int CleanupServiceStarting = 8001;
     public const int CleanupServiceStopping = 8002;

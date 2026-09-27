@@ -62,7 +62,7 @@ public sealed partial class TokenService : ITokenService
     /// <inheritdoc />
     public TokenResult GenerateRefreshToken()
     {
-        byte[] randomNumber = RandomNumberGenerator.GetBytes(32);
+        byte[] randomNumber = RandomNumberGenerator.GetBytes(TokenConstants.RefreshTokenBytesLength);
         string token = WebEncoders.Base64UrlEncode(randomNumber);
 
         var expiresAt = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenExpiryDays);

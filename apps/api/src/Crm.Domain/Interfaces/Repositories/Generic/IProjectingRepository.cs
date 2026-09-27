@@ -16,4 +16,13 @@ public interface IProjectingRepository
     /// <returns>The projected entity DTO with the specified ID.</returns>
     /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
     Task<TResult> GetAsync<TResult>(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously retrieves a single random entity from the database and projects it to the specified type using Mapster.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A random projected entity.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if no entities exist in the database for this type.</exception>
+    Task<TResult> GetRandomAsync<TResult>(CancellationToken cancellationToken = default);
 }

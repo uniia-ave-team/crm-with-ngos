@@ -32,6 +32,6 @@ public record GetUsersQuery(
     string? SearchTerm = null,
     string? OrderBy = nameof(Domain.Entities.User.FirstName),
     string? SortOrder = SortOrderConstants.Ascending,
-    int PageNumber = 1,
-    int PageSize = 10,
+    int PageNumber = PaginationConstants.MinPageNumber,
+    int PageSize = PaginationConstants.DefaultPageSize,
     bool ShowDeleted = false) : IRequest<PagedResult<UserDto>>;

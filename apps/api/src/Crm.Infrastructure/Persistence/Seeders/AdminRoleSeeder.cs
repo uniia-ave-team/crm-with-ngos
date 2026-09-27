@@ -86,6 +86,8 @@ public partial class AdminRoleSeeder(
             cancellationToken.ThrowIfCancellationRequested();
 
             await roleIdentityService.AddPermissionToRoleAsync(roleId, permissionValue, cancellationToken);
+
+            addedCount++;
         }
 
         LogClaimsAddedSuccessfully(logger, addedCount, RoleConsts.Admin);

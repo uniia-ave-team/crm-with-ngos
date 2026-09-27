@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
+using Crm.Domain.Common;
 using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -102,12 +103,12 @@ public class AuthRoleRepository(
     /// <param name="pageSize">The number of items per page. Defaults to 10.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a paginated collection of projected items along with pagination metadata.</returns>
-    public Task<Domain.Common.PagedResult<TResult>> GetPagedAsync<TResult>(
+    public Task<PagedResult<TResult>> GetPagedAsync<TResult>(
         string? searchTerm = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
-        int pageNumber = 1,
-        int pageSize = 10,
+        int pageNumber = PaginationConstants.MinPageNumber,
+        int pageSize = PaginationConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
         => GetPagedAsync<TResult>(
             predicate: BuildRoleFilter(searchTerm),
