@@ -17,19 +17,15 @@ public enum AccessRight
     ViewCustomFields = 7,
 
     // --- Role ---
-    ViewRole = 8,
-    CreateRole = 9,
-    UpdateRole = 10,
-    DeleteRole = 11,
-    ManageRolePermissions = 12,
+    ManageRole = 8,
 
     // --- Ngo ---
-    ViewNgo = 13,
-    CreateNgo = 14,
-    UpdateNgo = 15,
+    ViewNgo = 9,
+    CreateNgo = 10,
+    UpdateNgo = 11,
 
     // --- Login Page Images ---
-    ViewLoginPageImages = 16,
-    CreateLoginPageImages = 17,
-    DeleteLoginPageImages = 18,
+    ViewLoginPageImages = 12,
+    CreateLoginPageImages = 13,
+    DeleteLoginPageImages = 14,
 }
