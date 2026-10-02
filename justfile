@@ -94,6 +94,23 @@ api:
 web:
     npm --prefix {{web_dir}} start
 
+# --- API contract ------------------------------------------------------------
+
+# Regenerate packages/api-contract/openapi.json and the Angular client. Run after changing any endpoint.
+contract: contract-spec contract-client
+
+# Write packages/api-contract/openapi.json from the API code.
+contract-spec:
+    dotnet build {{api_project}} -p:GenerateOpenApi=true
+
+# Generate the Angular client in apps/web/src/app/api/generated from openapi.json.
+contract-client:
+    npm --prefix {{web_dir}} run generate:api
+
+# Fail if the committed openapi.json does not match the API code.
+contract-check: contract-spec
+    git diff --exit-code -- packages/api-contract/openapi.json
+
 # --- Quality -----------------------------------------------------------------
 
 # Format API code and auto-fix web lint issues.
@@ -132,7 +149,7 @@ _clean-test-results:
 # --- CI ----------------------------------------------------------------------
 
 # Run every check CI runs.
-ci: api-ci web-ci
+ci: api-ci contract-check web-ci
 
 api-ci:
     dotnet restore {{solution}}
