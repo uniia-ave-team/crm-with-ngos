@@ -40,7 +40,6 @@
     docs.yml
   dependabot.yml
   CODEOWNERS
-  pull_request_template.md
 apps/api/                       ASP.NET Core API (структура коду не змінюється)
 apps/web/                       Ionic Angular клієнт
   proxy.conf.json               проксі /api -> http://localhost:5065
@@ -156,19 +155,31 @@ Docker Desktop, `just`.
 
 ### `ci.yml`
 
-Тригери: `pull_request` у `main`, `push` у `main`.
+Тригери: `pull_request` у будь-яку гілку (щоб перевірялись і PR, складені
+один на одного), `push` у `main`. Новіший запуск для того самого PR скасовує
+попередній.
 
-| Джоба      | Умова запуску                          | Дії                                                            |
-| ---------- | -------------------------------------- | -------------------------------------------------------------- |
-| `changes`  | завжди                                 | `dorny/paths-filter`: `api`, `web`, `docs`, `contract`         |
-| `api`      | змінено `api`                          | `just api-ci`: `dotnet format --verify-no-changes`, збірка, тести |
-| `contract` | змінено `api` або `contract`           | `just contract-check`, `oasdiff` у підсумок                     |
-| `web`      | змінено `web` або `contract`           | `just web-ci`: `npm ci`, генерація клієнта, lint, тести, production-збірка |
-| `docs`     | змінено `docs` або `contract`          | `just docs-build`                                               |
-| `trivy`    | завжди                                 | `trivy fs`: вразливі залежності npm, помилки конфігурації; SARIF у вкладку Security |
-| `ci-ok`    | завжди, після всіх                     | Падає, якщо будь-яка джоба завершилась `failure` або `cancelled`; `skipped` вважається успіхом |
+Фільтри змін: `api` (`apps/api/**`, `global.json`, `dotnet-tools.json`),
+`web` (`apps/web/**`, `.nvmrc`), `contract` (`packages/api-contract/**`),
+`tooling` (`ci.yml`, `justfile`; запускає всі джоби). Фільтр `docs`
+додається разом із сайтом документації.
+
+| Джоба     | Умова запуску                          | Дії                                                            |
+| --------- | -------------------------------------- | -------------------------------------------------------------- |
+| `changes` | завжди                                 | `dorny/paths-filter`                                            |
+| `api`     | змінено `api`, `contract` або `tooling` | `just api-ci` (`dotnet format --verify-no-changes`, збірка, тести), `just contract-check`, у PR — `oasdiff breaking` у підсумок джоби |
+| `web`     | змінено `web`, `contract` або `tooling` | `just web-ci`: `npm ci`, генерація клієнта, lint, тести, production-збірка |
+| `docs`    | змінено `docs`, `contract` або `tooling` | `just docs-build` (з кроком 4)                                  |
+| `trivy`   | завжди                                 | `trivy fs`: вразливі залежності npm (лише ті, для яких є виправлення), помилки конфігурації; SARIF у вкладку Security. Не блокує |
+| `ci-ok`   | завжди, після всіх                     | Падає, якщо будь-яка джоба завершилась `failure` або `cancelled`; `skipped` вважається успіхом |
+
+Перевірка контракту виконується в джобі `api`, а не окремо: вона однаково
+потребує .NET SDK і відновлених пакетів.
 
 `ci-ok` — єдина обов'язкова перевірка CI в правилах гілки `main`.
+
+Сторонні actions закріплені за SHA коміту з тегом версії в коментарі;
+Dependabot оновлює обидва. Actions від GitHub закріплені за мажорною версією.
 
 Тести API використовують Testcontainers; раннер `ubuntu-latest` має Docker.
 
@@ -180,10 +191,12 @@ Docker Desktop, `just`.
 ### Інші workflow
 
 - **`pr-title.yml`** — `amannn/action-semantic-pull-request` на подіях
-  `opened`, `edited`, `synchronize`. Типи Conventional Commits; допустимі
-  scope: `api`, `web`, `docs`, `ci`, `deps`; scope необов'язковий.
-- **`codeql.yml`** — мови `csharp` (`build-mode: none`) і
-  `javascript-typescript`; на PR у `main`, push у `main` і щотижня.
+  `opened`, `edited`, `synchronize`, `reopened`. Типи Conventional Commits;
+  допустимі scope: `api`, `web`, `docs`, `ci`, `deps`, `deps-dev`
+  (останній Dependabot ставить для dev-залежностей); scope необов'язковий.
+- **`codeql.yml`** — мови `csharp`, `javascript-typescript` і `actions`
+  (аналіз самих workflow), усі з `build-mode: none`; на PR у `main`, push у
+  `main` і щопонеділка.
 - **`release-please.yml`** — на push у `main`. Тип релізу `simple` з однією
   версією для всього репозиторію. Додаткові файли з версією:
   `apps/api/Directory.Build.props` (`<Version>`) і `apps/web/package.json`.
@@ -192,10 +205,12 @@ Docker Desktop, `just`.
   `packages/api-contract/**`, а також вручну. Збирає сайт, кладе
   `openapi.json` поруч зі сторінкою Scalar і публікує через
   `actions/deploy-pages`.
-- **`dependabot.yml`** — щотижня: `nuget` (`/apps/api`), `npm` (`/apps/web`,
-  `/docs`), `github-actions` (`/`). Групи: Angular та Ionic; ASP.NET Core та
-  EF Core; тестові пакети; GitHub Actions. Назви PR відповідають
-  Conventional Commits (`chore(deps): ...`).
+- **`dependabot.yml`** — щопонеділка: `nuget` (`/apps/api`), `npm`
+  (`/apps/web`; `/docs` — з кроком 4), `github-actions` (`/`). Групи:
+  ASP.NET Core, EF Core, `Microsoft.Extensions.*` і Npgsql; тестові пакети;
+  Angular і TypeScript; Ionic і Capacitor; ESLint і Vitest; усі GitHub
+  Actions. Назви PR відповідають Conventional Commits: `chore(deps): ...`,
+  `chore(deps-dev): ...`, `ci: ...` для actions.
 
 Trivy сканує образи, коли з'являться Dockerfile-и (поза межами цього дизайну).
 
@@ -249,7 +264,7 @@ Trivy сканує образи, коли з'являться Dockerfile-и (п�
 2. **`feat/api-contract`** — генерація `openapi.json`, `ng-openapi-gen`,
    `just contract`.
 3. **`ci/pipeline`** — `ci.yml`, `pr-title.yml`, `codeql.yml`,
-   `dependabot.yml`, шаблон PR.
+   `dependabot.yml`.
 4. **`docs/site`** — Starlight, сторінка Scalar, `docs.yml`.
 5. **`ci/release-please`** — release-please.
 

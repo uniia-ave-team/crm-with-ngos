@@ -26,7 +26,8 @@ chore/update-ef-core
 ## Коміти
 
 Формат — [Conventional Commits](https://www.conventionalcommits.org)
-англійською. Scope необов'язковий: `api`, `web`, `docs`, `ci`, `deps`.
+англійською. Scope необов'язковий: `api`, `web`, `docs`, `ci`, `deps`
+(`deps-dev` для dev-залежностей ставить Dependabot).
 
 ```
 feat(api): add CSV import for contacts
@@ -43,7 +44,19 @@ feat(api)!: rename Deal.amount to Deal.value
 - Вливаються через **squash merge**: назва PR стає повідомленням коміту в
   `main`, тому вона теж має відповідати Conventional Commits.
 - Розмір — придатний для рецензії за один підхід.
-- Перед відкриттям PR: `just lint` і `just test`.
+- Перед відкриттям PR: `just lint` і `just test`; `just ci` виконує локально
+  те саме, що CI для API і вебклієнта.
+
+Обов'язкові перевірки для злиття:
+
+- **`ci-ok`** — підсумок `ci.yml`. Запускаються лише джоби для змінених
+  частин (API, вебклієнт, контракт); пропущена джоба не вважається
+  помилкою.
+- **`pr-title`** — назва PR відповідає Conventional Commits.
+
+Ламкі зміни API (`oasdiff`) і знахідки Trivy та CodeQL злиття не блокують:
+перші видно в підсумку джоби `api`, інші — у вкладці Security.
+Dependabot щопонеділка відкриває згруповані PR з оновленнями залежностей.
 
 ## Зміна API
 
