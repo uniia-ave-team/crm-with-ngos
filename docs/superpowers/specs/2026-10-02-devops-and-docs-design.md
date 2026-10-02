@@ -161,15 +161,14 @@ Docker Desktop, `just`.
 
 Фільтри змін: `api` (`apps/api/**`, `global.json`, `dotnet-tools.json`),
 `web` (`apps/web/**`, `.nvmrc`), `contract` (`packages/api-contract/**`),
-`tooling` (`ci.yml`, `justfile`; запускає всі джоби). Фільтр `docs`
-додається разом із сайтом документації.
+`docs` (`docs/**`), `tooling` (`ci.yml`, `justfile`; запускає всі джоби).
 
 | Джоба     | Умова запуску                          | Дії                                                            |
 | --------- | -------------------------------------- | -------------------------------------------------------------- |
 | `changes` | завжди                                 | `dorny/paths-filter`                                            |
 | `api`     | змінено `api`, `contract` або `tooling` | `just api-ci` (`dotnet format --verify-no-changes`, збірка, тести), `just contract-check`, у PR — `oasdiff breaking` у підсумок джоби |
 | `web`     | змінено `web`, `contract` або `tooling` | `just web-ci`: `npm ci`, генерація клієнта, lint, тести, production-збірка |
-| `docs`    | змінено `docs`, `contract` або `tooling` | `just docs-build` (з кроком 4)                                  |
+| `docs`    | змінено `docs`, `contract` або `tooling` | `just docs-build`                                               |
 | `trivy`   | завжди                                 | `trivy fs`: вразливі залежності npm (лише ті, для яких є виправлення), помилки конфігурації; SARIF у вкладку Security. Не блокує |
 | `ci-ok`   | завжди, після всіх                     | Падає, якщо будь-яка джоба завершилась `failure` або `cancelled`; `skipped` вважається успіхом |
 
@@ -206,10 +205,11 @@ Dependabot оновлює обидва. Actions від GitHub закріплен
   `openapi.json` поруч зі сторінкою Scalar і публікує через
   `actions/deploy-pages`.
 - **`dependabot.yml`** — щопонеділка: `nuget` (`/apps/api`), `npm`
-  (`/apps/web`; `/docs` — з кроком 4), `github-actions` (`/`). Групи:
+  (`/apps/web`, `/docs`), `github-actions` (`/`). Групи:
   ASP.NET Core, EF Core, `Microsoft.Extensions.*` і Npgsql; тестові пакети;
-  Angular і TypeScript; Ionic і Capacitor; ESLint і Vitest; усі GitHub
-  Actions. Назви PR відповідають Conventional Commits: `chore(deps): ...`,
+  Angular і TypeScript; Ionic і Capacitor; ESLint і Vitest; усі пакети
+  сайту документації; усі GitHub Actions. TypeScript оновлюється лише в
+  межах патч-версій: мінорні й мажорні версії приходять з `ng update`. Назви PR відповідають Conventional Commits: `chore(deps): ...`,
   `chore(deps-dev): ...`, `ci: ...` для actions.
 
 Trivy сканує образи, коли з'являться Dockerfile-и (поза межами цього дизайну).
@@ -236,11 +236,12 @@ Trivy сканує образи, коли з'являться Dockerfile-и (п�
 
 ### Сторінка API
 
-`docs/public/api/index.html` — статична сторінка Scalar
-(`@scalar/api-reference` з CDN), що завантажує `./openapi.json`. Під час
-збірки `docs.yml` і `just docs-build` копіюють
-`packages/api-contract/openapi.json` у `docs/public/api/`. Скопійований файл
-у `.gitignore`. Адреса:
+`docs/public/api/index.html` — статична сторінка Scalar, що завантажує
+`./openapi.json`. Бандл Scalar береться з npm-пакета `@scalar/api-reference`
+(залежність `docs/`, її оновлює Dependabot), а не з CDN. Перед `dev` і
+`build` скрипт `docs/scripts/prepare-api.mjs` копіює
+`packages/api-contract/openapi.json` і бандл у `docs/public/api/`.
+Скопійовані файли в `.gitignore`. Адреса:
 `https://uniia-ave-team.github.io/crm-with-ngos/api/`.
 
 ## 6. Налаштування GitHub (вручну, потрібні права адміністратора)
