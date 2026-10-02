@@ -29,14 +29,4 @@ artifacts/
 *.nupkg
 TestResults/
 
-# --- Angular / Ionic (apps/web) ----------------------------------------------
-# Переміститься в apps/web/.gitignore після створення застосунку.
-node_modules/
-.angular/
-dist/
-www/
-*.tsbuildinfo
-
-# --- Згенерований клієнт API -------------------------------------------------
-# Відтворюється з packages/api-contract/openapi.json.
-apps/web/src/app/api/generated/
+# Angular / Ionic (apps/web): див. apps/web/.gitignore.

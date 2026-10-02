@@ -1,0 +1,19 @@
+# Залежності: відтворюються з package-lock.json командою `npm install`.
+node_modules/
+
+# Артефакти збірки й кешу Angular CLI.
+www/
+dist/
+.angular/
+*.tsbuildinfo
+
+# Артефакти Ionic та тестів.
+.ionic/
+.sass-cache/
+coverage/
+
+# Логи npm.
+npm-debug.log*
+
+# Згенерований клієнт API: відтворюється з packages/api-contract/openapi.json.
+src/app/api/generated/
