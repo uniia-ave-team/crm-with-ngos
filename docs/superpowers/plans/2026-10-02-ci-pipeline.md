@@ -59,7 +59,10 @@ v6.1.1.
 - [x] У контейнері `mcr.microsoft.com/dotnet/sdk:10.0` (Linux, як раннер):
   `dotnet format --verify-no-changes` проходить; `openapi.json`,
   згенерований з нуля, побайтово збігається із закоміченим.
-- [ ] Перший запуск на GitHub після відкриття PR.
+- [x] Перший запуск на GitHub (PR #4): `ci-ok`, `pr-title`, усі джоби
+  зелені; виконано 14 тестів API, `contract-check`, `oasdiff`, lint, тести й
+  збірка вебклієнта; результати Trivy потрапили у вкладку Security.
+- [x] Назва PR без типу Conventional Commits валить `pr-title`.
 
 ### Task 4: Документація
 
