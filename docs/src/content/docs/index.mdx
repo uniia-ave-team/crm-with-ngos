@@ -1,37 +1,46 @@
 ---
-title: CRM для громадських організацій
-description: Документація для розробників CRM з відкритим кодом для громадських організацій.
+title: Головна
+description: Документація CRM з відкритим кодом для громадських організацій.
 template: splash
 hero:
-  tagline: Як запустити проєкт, як влаштований код і як вносити зміни.
+  title: CRM для громадських організацій
+  tagline: Відкрита система для команд, волонтерів і партнерів вашої організації. Тут — як її розгорнути, налаштувати й щодня нею користуватися.
+  image:
+    file: ../../assets/logo.svg
   actions:
-    - text: Почати роботу
-      link: start/setup/
+    - text: Швидкий старт
+      link: start/quick-start/
       icon: right-arrow
-    - text: Довідник API
-      link: api/
-      icon: external
+    - text: Розгортання
+      link: deployment/requirements/
+      icon: setting
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Розділи документації
+
+<CardGrid stagger>
+  <Card title="Початок роботи" icon="rocket">
+    Що вміє система і як почати нею користуватися за кілька хвилин.
+  </Card>
+  <Card title="Розгортання" icon="laptop">
+    Встановлення на власний сервер, налаштування, оновлення й резервні копії.
+  </Card>
+  <Card title="Посібник користувача" icon="open-book">
+    Покрокові інструкції: профіль, команда, запрошення, ролі та права.
+  </Card>
+  <Card title="Довідка" icon="information">
+    Відповіді на часті запитання, глосарій і довідник API.
+  </Card>
+</CardGrid>
+
+## З чого почати
 
 <CardGrid>
-  <Card title="Початок роботи" icon="rocket">
-    Інструменти, [перший запуск](start/setup/) і [структура
-    репозиторію](start/structure/).
-  </Card>
-  <Card title="Розробка" icon="pencil">
-    [Гілки, коміти й PR](development/workflow/), [перевірки
-    CI](development/checks/), [зміна API](development/api-contract/),
-    [міграції](development/migrations/).
-  </Card>
-  <Card title="Архітектура" icon="puzzle">
-    [Шари й залежності](architecture/overview/), [обробка
-    запитів](architecture/requests/), [права доступу](architecture/access/).
-  </Card>
-  <Card title="Довідник API" icon="open-book">
-    [Усі ендпоінти](api/) з моделями та прикладами. Генерується з коду
-    .NET і оновлюється після кожного злиття в `main`.
-  </Card>
+  <LinkCard title="Про систему" description="Для кого CRM і які задачі вона розв'язує." href="start/about/" />
+  <LinkCard title="Швидкий старт" description="Перший вхід і налаштування за кілька кроків." href="start/quick-start/" />
+  <LinkCard title="Встановлення" description="Як запустити CRM на сервері організації." href="deployment/installation/" />
+  <LinkCard title="Часті запитання" description="Короткі відповіді на типові питання." href="help/faq/" />
 </CardGrid>
