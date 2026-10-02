@@ -35,6 +35,10 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # Angular pins a narrow TypeScript range; minor and major bumps come with `ng update`.
+    ignore:
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
     groups:
       angular:
         patterns:
