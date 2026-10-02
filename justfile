@@ -1,92 +1,147 @@
-# Єдина точка входу для команд бекенду та фронтенду.
+# Single entry point for development commands. Run `just` to list them.
 #
-# Встановлення: winget install Casey.Just | brew install just | cargo install just
+# Install just: winget install Casey.Just | brew install just
 
-set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
-set dotenv-load := false
+set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 
-compose     := "docker compose --env-file deploy/.env -f deploy/docker-compose.yml"
-compose_dev := compose + " -f deploy/docker-compose.dev.yml"
+solution := "apps/api/Crm.slnx"
+api_project := "apps/api/src/Crm.Api"
+infrastructure_project := "apps/api/src/Crm.Infrastructure"
+web_dir := "apps/web"
+test_results := "apps/api/TestResults"
+compose := "docker compose -f compose.yaml"
+db_connection := "Host=localhost;Port=5432;Database=crm;Username=crm;Password=crm"
 
-# Показати доступні команди.
+# List available commands.
 default:
-    @just --list
+    @just --list --unsorted
 
-# Створити deploy/.env із шаблону. Наявний файл не перезаписується.
-init:
-    @just _copy-env
-    @echo "deploy/.env створено. Заповніть значення перед 'just up'."
+# --- Setup -------------------------------------------------------------------
 
-[unix]
-_copy-env:
-    @test -f deploy/.env || cp deploy/.env.example deploy/.env
+# Install dependencies and configure local secrets. Safe to re-run.
+setup: _check-tools
+    dotnet restore {{solution}}
+    dotnet tool restore
+    npm --prefix {{web_dir}} ci
+    @just _secrets
 
 [windows]
-_copy-env:
-    @if (-not (Test-Path deploy/.env)) { Copy-Item deploy/.env.example deploy/.env }
+_check-tools:
+    @foreach ($tool in 'dotnet', 'node', 'npm', 'docker') { if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Required tool '$tool' is not installed. See README.md." } }
 
-# --- Запуск стека ------------------------------------------------------------
+[unix]
+_check-tools:
+    #!/usr/bin/env sh
+    for tool in dotnet node npm docker; do
+        command -v "$tool" >/dev/null 2>&1 || { echo "Required tool '$tool' is not installed. See README.md."; exit 1; }
+    done
 
-# Весь продукт у Docker у тій самій конфігурації, що й в адміністратора.
-up:
-    {{compose}} up -d --wait
+[windows]
+_secrets:
+    @$existing = dotnet user-secrets list --project {{api_project}} | Out-String; \
+    if ($existing -notmatch 'ConnectionStrings:PostgreSqlConnection') { dotnet user-secrets set 'ConnectionStrings:PostgreSqlConnection' '{{db_connection}}' --project {{api_project}} | Out-Null; Write-Host 'user-secrets: set ConnectionStrings:PostgreSqlConnection' }; \
+    if ($existing -notmatch 'JwtOptions:Secret') { $bytes = New-Object byte[] 48; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes); dotnet user-secrets set 'JwtOptions:Secret' ([Convert]::ToBase64String($bytes)) --project {{api_project}} | Out-Null; Write-Host 'user-secrets: set JwtOptions:Secret' }
 
-down:
+[unix]
+_secrets:
+    #!/usr/bin/env sh
+    set -eu
+    existing="$(dotnet user-secrets list --project {{api_project}})"
+    case "$existing" in
+        *ConnectionStrings:PostgreSqlConnection*) ;;
+        *) dotnet user-secrets set 'ConnectionStrings:PostgreSqlConnection' '{{db_connection}}' --project {{api_project}} >/dev/null
+           echo 'user-secrets: set ConnectionStrings:PostgreSqlConnection' ;;
+    esac
+    case "$existing" in
+        *JwtOptions:Secret*) ;;
+        *) dotnet user-secrets set 'JwtOptions:Secret' "$(head -c 48 /dev/urandom | base64 | tr -d '\n')" --project {{api_project}} >/dev/null
+           echo 'user-secrets: set JwtOptions:Secret' ;;
+    esac
+
+# --- Database ----------------------------------------------------------------
+
+# Start PostgreSQL in Docker (localhost:5432).
+db:
+    {{compose}} up -d --wait db
+
+# Stop PostgreSQL. Data is kept.
+db-down:
     {{compose}} down
 
-# Зупинити й видалити том бази даних. Знищує всі локальні дані.
-reset:
+# Stop PostgreSQL and delete all local data.
+db-reset:
     {{compose}} down -v
 
-logs service="":
-    {{compose}} logs -f --tail=200 {{service}}
-
-ps:
-    {{compose}} ps
-
-# --- Розробка ----------------------------------------------------------------
-
-# Бекенд: база та опублікований образ клієнта в Docker, API на хості.
-dev-api:
-    {{compose_dev}} up -d --wait db web
-    @echo "Запустіть API з apps/api (dotnet watch). PostgreSQL: localhost:5432, клієнт: http://localhost:4200"
-
-# Фронтенд: база та опублікований образ API в Docker, Angular на хості.
-dev-web:
-    {{compose_dev}} up -d --wait db api
-    @echo "Виконайте 'npm start' в apps/web. API: http://localhost:5080 (проксі /api налаштовано в proxy.conf.json)"
-
-# Оновити образи :edge іншої частини.
-refresh:
-    {{compose_dev}} pull
-
-# psql до бази розробки.
+# Open psql in the development database.
 psql:
     {{compose}} exec db psql -U crm -d crm
 
-# --- Контракт ----------------------------------------------------------------
+# Add an EF Core migration, e.g. `just migration-add AddContacts`.
+migration-add name:
+    dotnet ef migrations add {{name}} --project {{infrastructure_project}} --startup-project {{api_project}}
 
-# Перегенерувати packages/api-contract/openapi.json з API та Angular-клієнт
-# зі специфікації. Виконувати після зміни будь-якого ендпоінта.
-contract: contract-spec contract-client
+# Remove the last EF Core migration if it has not been applied.
+migration-remove:
+    dotnet ef migrations remove --project {{infrastructure_project}} --startup-project {{api_project}}
 
-contract-spec:
-    @echo "TODO: вивантажити OpenAPI з apps/api у packages/api-contract/openapi.json"
+# --- Run ---------------------------------------------------------------------
 
-contract-client:
-    @echo "TODO: згенерувати apps/web/src/app/api/generated зі специфікації"
+# Run the API with hot reload on http://localhost:5065.
+api:
+    dotnet watch run --project {{api_project}} --launch-profile http
 
-# --- Збірка ------------------------------------------------------------------
+# Run the web client on http://localhost:4200; /api is proxied to the API.
+web:
+    npm --prefix {{web_dir}} start
 
-# Зібрати обидва образи локально з тегами, ідентичними CI.
-build version="dev":
-    docker build -t ghcr.io/uniia-ave-team/crm-api:{{version}} apps/api
-    docker build -t ghcr.io/uniia-ave-team/crm-web:{{version}} apps/web
+# --- Quality -----------------------------------------------------------------
 
-# --- Якість ------------------------------------------------------------------
-
+# Format API code and auto-fix web lint issues.
 fmt:
-    @echo "TODO: dotnet format apps/api && npm --prefix apps/web run format"
+    dotnet format {{solution}}
+    npm --prefix {{web_dir}} run lint -- --fix
 
+# Check formatting and lint without changing files.
 lint:
-    @echo "TODO: dotnet build -warnaserror && npm --prefix apps/web run lint"
+    dotnet format {{solution}} --verify-no-changes
+    npm --prefix {{web_dir}} run lint
+
+# Run all tests.
+test: test-api test-web
+
+test-api:
+    dotnet test {{solution}}
+
+test-web:
+    npm --prefix {{web_dir}} test -- --configuration ci
+
+# Run API tests with coverage and build an HTML report.
+test-coverage: _clean-test-results
+    dotnet test {{solution}} --results-directory {{test_results}} --collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByFile="**/*.generated.cs,**/*.g.cs"
+    dotnet reportgenerator -reports:"{{test_results}}/**/coverage.cobertura.xml" -targetdir:"{{test_results}}/Report" -reporttypes:Html -filefilters:"-*.generated.cs;-*.g.cs" -classfilters:"-*Microsoft.AspNetCore.OpenApi*" -verbosity:Error
+    @echo "Coverage report: {{test_results}}/Report/index.html"
+
+[windows]
+_clean-test-results:
+    @if (Test-Path {{test_results}}) { Remove-Item -Recurse -Force {{test_results}} }
+
+[unix]
+_clean-test-results:
+    @rm -rf {{test_results}}
+
+# --- CI ----------------------------------------------------------------------
+
+# Run every check CI runs.
+ci: api-ci web-ci
+
+api-ci:
+    dotnet restore {{solution}}
+    dotnet format {{solution}} --verify-no-changes --no-restore
+    dotnet build {{solution}} --no-restore --configuration Release
+    dotnet test {{solution}} --no-build --configuration Release
+
+web-ci:
+    npm --prefix {{web_dir}} ci
+    npm --prefix {{web_dir}} run lint
+    npm --prefix {{web_dir}} test -- --configuration ci
+    npm --prefix {{web_dir}} run build -- --configuration production
