@@ -1,0 +1,24 @@
+---
+description: Which language to use for git artifacts, code, and documentation
+alwaysApply: true
+---
+
+# Language conventions
+
+| What | Language |
+| ---- | -------- |
+| Commit messages, branch names, tags | English |
+| Pull request titles and descriptions, review comments | English |
+| Code, identifiers, file names, code comments, technical logs | English |
+| Documentation: `docs/`, `README.md`, `CONTRIBUTING.md`, ADRs, specs and plans | Ukrainian |
+| UI text and user-facing error messages | Ukrainian |
+
+Commit messages follow Conventional Commits; the changelog is generated from them, so it is English too.
+
+```text
+# BAD
+docs: додано дизайн флоу розробки
+
+# GOOD
+docs: add development flow and documentation design
+```

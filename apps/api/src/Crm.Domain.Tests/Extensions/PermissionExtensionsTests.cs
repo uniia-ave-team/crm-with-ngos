@@ -44,6 +44,6 @@ public class PermissionExtensionsTests
         // Assert
         allPermissions.Count.ShouldBe(expectedEnumValuesCount);
         allPermissions.ShouldContain("Permissions.ViewUser");
-        allPermissions.ShouldContain("Permissions.ManageRolePermissions");
+        allPermissions.ShouldContain("Permissions.ManageRole");
     }
 }

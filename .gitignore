@@ -1,18 +1,16 @@
-# --- Секрети й локальне середовище -------------------------------------------
+# --- Secrets and local environment -------------------------------------------
 .env
 .env.*
 !.env.example
-deploy/backups/
-deploy/crm-root-ca.crt
 *.pem
 *.pfx
 
-# --- Операційна система ------------------------------------------------------
+# --- Operating systems -------------------------------------------------------
 Thumbs.db
 Desktop.ini
 .DS_Store
 
-# --- Редактори ---------------------------------------------------------------
+# --- Editors -----------------------------------------------------------------
 .vs/
 .idea/
 .vscode/*
@@ -21,12 +19,11 @@ Desktop.ini
 *.user
 *.suo
 
-# --- .NET (apps/api) ---------------------------------------------------------
-# Переміститься в apps/api/.gitignore після створення рішення.
+# --- .NET (apps/api): see also apps/api/.gitignore ---------------------------
 [Bb]in/
 [Oo]bj/
 artifacts/
 *.nupkg
 TestResults/
 
-# Angular / Ionic (apps/web): див. apps/web/.gitignore.
+# --- Angular / Ionic (apps/web): see apps/web/.gitignore ---------------------
