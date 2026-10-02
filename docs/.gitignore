@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.astro/
+
+# Copied by scripts/prepare-api.mjs
+public/api/openapi.json
+public/api/scalar.js

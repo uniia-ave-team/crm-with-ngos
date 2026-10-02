@@ -1,0 +1,37 @@
+---
+title: CRM для громадських організацій
+description: Документація для розробників CRM з відкритим кодом для громадських організацій.
+template: splash
+hero:
+  tagline: Як запустити проєкт, як влаштований код і як вносити зміни.
+  actions:
+    - text: Почати роботу
+      link: start/setup/
+      icon: right-arrow
+    - text: Довідник API
+      link: api/
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Початок роботи" icon="rocket">
+    Інструменти, [перший запуск](start/setup/) і [структура
+    репозиторію](start/structure/).
+  </Card>
+  <Card title="Розробка" icon="pencil">
+    [Гілки, коміти й PR](development/workflow/), [перевірки
+    CI](development/checks/), [зміна API](development/api-contract/),
+    [міграції](development/migrations/).
+  </Card>
+  <Card title="Архітектура" icon="puzzle">
+    [Шари й залежності](architecture/overview/), [обробка
+    запитів](architecture/requests/), [права доступу](architecture/access/).
+  </Card>
+  <Card title="Довідник API" icon="open-book">
+    [Усі ендпоінти](api/) з моделями та прикладами. Генерується з коду
+    .NET і оновлюється після кожного злиття в `main`.
+  </Card>
+</CardGrid>
