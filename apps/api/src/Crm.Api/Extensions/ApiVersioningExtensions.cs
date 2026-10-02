@@ -14,6 +14,7 @@ namespace Crm.Api.Extensions;
 public static class ApiVersioningExtensions
 {
     private const string ApiTitle = "CRM API";
+    private const string ApiDescription = "REST API of the open-source CRM for non-governmental organizations.";
 
     /// <summary>
     /// Configures and registers API versioning services, setting up URL segment versioning,
@@ -39,6 +40,7 @@ public static class ApiVersioningExtensions
             options.Document.AddDocumentTransformer((document, context, cancellationToken) =>
             {
                 document.Info.Title = ApiTitle;
+                document.Info.Description = ApiDescription;
                 return Task.CompletedTask;
             });
         });

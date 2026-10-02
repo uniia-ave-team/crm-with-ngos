@@ -1,0 +1,19 @@
+{
+  "name": "crm-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:api": "node scripts/prepare-api.mjs",
+    "predev": "npm run prepare:api",
+    "dev": "astro dev",
+    "prebuild": "npm run prepare:api",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.5",
+    "@scalar/api-reference": "^1.72.4",
+    "astro": "^7.3.5",
+    "sharp": "^0.35.5"
+  }
+}

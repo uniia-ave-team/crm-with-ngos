@@ -6,6 +6,10 @@ CRM з відкритим кодом для громадських органі�
 
 > **Статус: у розробці.** Розгортання на сервер ще не підготовлене.
 
+**Документація для розробників:** <https://uniia-ave-team.github.io/crm-with-ngos/>
+— перший запуск, архітектура, правила роботи з репозиторієм і
+[довідник API](https://uniia-ave-team.github.io/crm-with-ngos/api/).
+
 ## Стек
 
 | Частина   | Технології                                                        |
@@ -20,6 +24,7 @@ CRM з відкритим кодом для громадських органі�
 apps/api/                ASP.NET Core API (рішення Crm.slnx)
 apps/web/                Ionic Angular клієнт
 packages/api-contract/   openapi.json — контракт API, генерується з коду
+docs/                    сайт документації (Starlight)
 compose.yaml             PostgreSQL для розробки
 justfile                 усі команди розробки
 ```
@@ -66,6 +71,7 @@ just web      # вебклієнт: http://localhost:4200
 | `just db-reset`           | Видалити локальну базу разом з даними                |
 | `just psql`               | Консоль `psql` до бази розробки                      |
 | `just api` / `just web`   | Запустити API / вебклієнт                            |
+| `just docs`               | Запустити сайт документації локально                 |
 | `just migration-add Name` | Створити міграцію EF Core                            |
 | `just contract`           | Оновити `openapi.json` і Angular-клієнт після зміни API |
 | `just fmt`                | Відформатувати код                                   |
@@ -84,7 +90,9 @@ JWT-секрет. Наявні значення не перезаписують�
 
 ## Участь у проєкті
 
-Див. [CONTRIBUTING.md](CONTRIBUTING.md).
+Див. [CONTRIBUTING.md](CONTRIBUTING.md) і розділ
+[«Розробка»](https://uniia-ave-team.github.io/crm-with-ngos/development/workflow/)
+на сайті документації.
 
 ## Ліцензія
 
