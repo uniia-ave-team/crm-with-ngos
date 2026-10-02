@@ -8,6 +8,7 @@ solution := "apps/api/Crm.slnx"
 api_project := "apps/api/src/Crm.Api"
 infrastructure_project := "apps/api/src/Crm.Infrastructure"
 web_dir := "apps/web"
+docs_dir := "docs"
 test_results := "apps/api/TestResults"
 compose := "docker compose -f compose.yaml"
 db_connection := "Host=localhost;Port=5432;Database=crm;Username=crm;Password=crm"
@@ -23,6 +24,7 @@ setup: _check-tools
     dotnet restore {{solution}}
     dotnet tool restore
     npm --prefix {{web_dir}} ci
+    npm --prefix {{docs_dir}} ci
     @just _secrets
 
 [windows]
@@ -94,6 +96,10 @@ api:
 web:
     npm --prefix {{web_dir}} start
 
+# Run the documentation site on http://localhost:4321/crm-with-ngos/.
+docs:
+    npm --prefix {{docs_dir}} run dev
+
 # --- API contract ------------------------------------------------------------
 
 # Regenerate packages/api-contract/openapi.json and the Angular client. Run after changing any endpoint.
@@ -149,7 +155,7 @@ _clean-test-results:
 # --- CI ----------------------------------------------------------------------
 
 # Run every check CI runs.
-ci: api-ci contract-check web-ci
+ci: api-ci contract-check web-ci docs-build
 
 api-ci:
     dotnet restore {{solution}}
@@ -162,3 +168,8 @@ web-ci:
     npm --prefix {{web_dir}} run lint
     npm --prefix {{web_dir}} run test:ci
     npm --prefix {{web_dir}} run build
+
+# Build the documentation site into docs/dist.
+docs-build:
+    npm --prefix {{docs_dir}} ci
+    npm --prefix {{docs_dir}} run build
