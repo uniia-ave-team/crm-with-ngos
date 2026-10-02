@@ -2,7 +2,7 @@
 title: Гілки, коміти й PR
 description: Як оформлювати гілки, коміти та pull request'и.
 sidebar:
-  order: 1
+  order: 3
 ---
 
 ## Мова

@@ -1,0 +1,178 @@
+---
+title: Backend-розробка
+description: Як влаштований API і як додати або змінити ендпоінт.
+sidebar:
+  order: 5
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+API — ASP.NET Core на .NET 10 у `apps/api`, рішення `Crm.slnx`. Для роботи
+потрібні база й сам API, кожен в окремому терміналі:
+
+```bash
+just db     # PostgreSQL у Docker
+just api    # http://localhost:5065, hot reload
+```
+
+Інтерактивна документація локального API —
+[localhost:5065/scalar](http://localhost:5065/scalar).
+
+## Шари
+
+```
+Crm.Api ──────────────▶ Crm.Application ──▶ Crm.Domain
+   │                          ▲
+   └──▶ Crm.Infrastructure ───┘
+```
+
+| Проєкт               | Що містить                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `Crm.Domain`         | Сутності, перелічення (зокрема `AccessRight`), доменні винятки, інтерфейси репозиторіїв     |
+| `Crm.Application`    | Команди й запити MediatR, обробники, валідатори FluentValidation, DTO, поведінки конвеєра   |
+| `Crm.Infrastructure` | EF Core і PostgreSQL, Identity, міграції й сидинг, репозиторії, JWT, кеш прав               |
+| `Crm.Api`            | Контролери, версіонування, авторизація, обробка винятків, rate limiting, OpenAPI            |
+
+## Де шукати
+
+| Що                                  | Де                                                            |
+| ----------------------------------- | ------------------------------------------------------------- |
+| Ендпоінти                           | `Crm.Api/Controllers/V1`                                      |
+| Команди й запити (`record`)         | `Crm.Application/Dtos/<Область>/Commands`, `.../Queries`      |
+| Обробники                           | `Crm.Application/Features/<Області>/Commands`, `.../Queries`  |
+| Валідатори                          | `Crm.Application/Features/<Області>/Validators`               |
+| Мапінг Mapster                      | `Crm.Application/Features/<Області>/Mappings`, `Crm.Infrastructure/Mappings` |
+| `DbContext`, конфігурації сутностей | `Crm.Infrastructure/Persistence`                              |
+| Ідентифікатори подій логування      | `Crm.Application/Common/Consts/LogEventIds.cs`                |
+
+Теки DTO названі в однині (`User`, `Role`, `Ngo`), теки обробників — у
+множині (`Users`, `Roles`, `Ngos`).
+
+## Як додати ендпоінт
+
+<Steps>
+
+1. **Модель.** Якщо змінюється схема бази — сутність у `Crm.Domain`,
+   конфігурація в `Crm.Infrastructure/Persistence`, потім
+   `just migration-add Name` ([Міграції бази](../migrations/)).
+
+2. **Команда або запит.** `record` у `Dtos/<Область>`, що реалізує
+   `IRequest<T>`. Команда змінює стан, запит лише читає. Команда, яка
+   змінює кілька записів, додатково позначається `ITransactionalCommand`.
+
+   ```csharp
+   public record CreateRoleCommand(
+       string Name,
+       string? FeminitiveName,
+       string? PluralName) : IRequest<Guid>, ITransactionalCommand;
+   ```
+
+3. **Обробник і валідатор.** `CreateRoleCommandHandler` у
+   `Features/<Області>/Commands`, `CreateRoleCommandValidator` у
+   `.../Validators`. Обробник не повертає коди помилок: він кидає
+   відповідний виняток (див. [Помилки](#помилки)).
+
+4. **Контролер.** Метод лише передає запит у MediatR. Права — атрибутом
+   `[HasAccessRight]`, опис операції — XML-коментарем.
+
+   ```csharp
+   /// <summary>
+   /// Retrieves a paginated and filtered list of users.
+   /// </summary>
+   [HttpGet]
+   [HasAccessRight(AccessRight.ViewUser)]
+   [ProducesResponseType(StatusCodes.Status200OK)]
+   [ProducesResponseType(StatusCodes.Status403Forbidden)]
+   public async Task<ActionResult<PagedResult<UserDto>>> GetUsers(
+       [FromQuery] GetUsersQuery query, CancellationToken cancellationToken)
+   {
+       var result = await mediator.Send(query, cancellationToken);
+       return Ok(result);
+   }
+   ```
+
+5. **Контракт.** `just contract` оновлює `packages/api-contract/openapi.json`
+   і клієнт вебзастосунку. `openapi.json` комітиться разом зі зміною коду.
+   Якщо зміна ламає виклики у вебклієнті, їх оновлюють у тому ж PR
+   ([Frontend-розробка](../frontend/)).
+
+6. **Тести й перевірки.** Тести у відповідному проєкті
+   ([Тести](../testing/)), потім `just ci`.
+
+</Steps>
+
+## Конвеєр запиту
+
+```
+HTTP ─▶ rate limiting ─▶ JWT ─▶ права ─▶ контролер ─▶ IMediator.Send
+     ─▶ ValidationBehavior ─▶ TransactionalBehavior ─▶ обробник
+```
+
+- **`ValidationBehavior`** запускає валідатори FluentValidation; якщо є
+  помилки, обробник не викликається.
+- **`TransactionalBehavior`** — лише для `ITransactionalCommand`: відкриває
+  транзакцію через `IUnitOfWork`, комітить після успішного обробника,
+  відкочує, якщо він кинув виняток.
+
+## Помилки
+
+Винятки перехоплює `GlobalExceptionHandler` і повертає
+[Problem Details](https://www.rfc-editor.org/rfc/rfc9457). Код відповіді
+визначає `ExceptionExtensions.MapToStatusCode`:
+
+| Виняток                                                            | Код |
+| ------------------------------------------------------------------ | --- |
+| `EntityNotFoundException`, `EntitiesNotFoundException`             | 404 |
+| `EntityAlreadyExistsException`                                     | 409 |
+| `ValidationException`, `UserOperationException`, `ArgumentException`, `InvalidOperationException` | 400 |
+| `InvalidCredentialException`                                       | 401 |
+| `UnauthorizedAccessException`                                      | 403 |
+| Будь-який інший                                                    | 500 |
+
+## Права доступу
+
+- Право — значення переліку `AccessRight`. Ролі зберігають права як claim
+  `Permission` зі значенням `Permissions.{Назва}`, тому **існуючі права не
+  перейменовують**: збережені в базі значення перестануть збігатися.
+- Нове право достатньо додати в `AccessRight`: під час запуску
+  `AdminRoleSeeder` додає ролі `Admin` усі права, яких їй бракує.
+- Користувач має право, якщо воно є хоча б в одній з його ролей.
+
+## Контракт API
+
+```
+код API ──just contract-spec──▶ openapi.json ──just contract-client──▶ клієнт вебзастосунку
+                                     │
+                                     └──▶ довідник API на цьому сайті
+```
+
+- Документ OpenAPI 3.1 для версії `v1`, маршрути — `/api/v1/...`.
+- `operationId` має вигляд `{Контролер}{Дія}`, наприклад `RolesCreateRole`.
+  З нього генерується назва функції клієнта, тож перейменування методу
+  контролера змінює й функцію у вебклієнті.
+- Операції з `[HasAccessRight]` отримують в описі перелік потрібних прав.
+- `just contract-spec` збирає `Crm.Api` з `-p:GenerateOpenApi=true`; база
+  для цього не потрібна. `just contract-check` (входить у `just ci`) падає,
+  якщо закомічений `openapi.json` не відповідає коду.
+- У PR CI порівнює контракт з базовою гілкою й пише перелік ламких змін у
+  підсумок джоби `api` ([Перевірки](../checks/)).
+
+## Логування
+
+Повідомлення логів — через `[LoggerMessage]` з ідентифікатором події з
+`LogEventIds`. Ідентифікатори згруповані тисячами за областями (1000 —
+ролі й права тощо); новий додається в діапазон своєї області.
+
+## Конфігурація
+
+| Секція `appsettings.json` | Що налаштовує                                            |
+| ------------------------- | -------------------------------------------------------- |
+| `ConnectionStrings`       | Підключення до PostgreSQL                                |
+| `JwtOptions`              | Ключ підпису, терміни дії токенів                        |
+| `IdentityOptions`         | Вимоги до паролів і користувачів                         |
+| `CorsSettings`            | Дозволені origin                                         |
+| `RateLimiting`            | Ліміти політики `Global`                                 |
+| `SerilogOptions`          | Шляхи й ротація файлів логів                             |
+
+Секрети (`ConnectionStrings:PostgreSqlConnection`, `JwtOptions:Secret`)
+локально зберігаються в user-secrets, їх записує `just setup`.

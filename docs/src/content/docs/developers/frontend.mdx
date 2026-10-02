@@ -1,0 +1,111 @@
+---
+title: Frontend-розробка
+description: Як працювати з вебклієнтом і згенерованим клієнтом API.
+sidebar:
+  order: 6
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+Вебклієнт — Ionic 9 і Angular 22 на `NgModule` у `apps/web`. Тести — Vitest,
+lint — ESLint з `angular-eslint`.
+
+## Запуск
+
+```bash
+just web    # http://localhost:4200
+```
+
+`ng serve` перенаправляє запити `/api` на `http://localhost:5065`
+(`proxy.conf.json`), тому CORS у розробці не задіяний. Щоб працювати з
+реальними даними, запустіть ще базу й API, кожен в окремому терміналі:
+
+```bash
+just db
+just api
+```
+
+Для збірки, тестів і lint вебклієнта .NET не потрібен: клієнт API
+генерується із закоміченого `openapi.json`. Лише залежності вебклієнта
+встановлює `npm --prefix apps/web ci`; `just setup` встановлює все
+одразу й перевіряє наявність .NET SDK.
+
+## Структура
+
+| Що                    | Де                                                         |
+| --------------------- | ---------------------------------------------------------- |
+| Кореневий модуль      | `src/app/app.module.ts`                                    |
+| Маршрути              | `src/app/app-routing.module.ts`                            |
+| Сторінки              | `src/app/<сторінка>/` — модуль сторінки з власним routing-модулем |
+| Згенерований клієнт   | `src/app/api/generated` (не комітиться)                     |
+| Налаштування оточення | `src/environments`                                          |
+
+Сторінки підключаються ліниво через `loadChildren`, як `folder` у
+`app-routing.module.ts`. Схеми Ionic налаштовані з `standalone: false`:
+компоненти оголошуються в модулях.
+
+Тексти інтерфейсу й повідомлення для користувача — українською.
+
+## Клієнт API
+
+Клієнт генерує [ng-openapi-gen](https://github.com/cyclosproject/ng-openapi-gen)
+з `packages/api-contract/openapi.json` (налаштування — `ng-openapi-gen.json`).
+Генерація запускається автоматично перед `npm start`, `npm run build` і
+тестами; вручну — `just contract-client`. Згенеровані файли не редагують.
+
+Кожна операція API — окрема функція. Назва береться з `operationId`:
+`RolesCreateRole` стає `rolesCreateRole`. Функцію викликають через сервіс
+`Api`:
+
+```ts
+import { inject } from '@angular/core';
+import { Api } from '../api/generated/api';
+import { rolesCreateRole } from '../api/generated/functions';
+
+export class RolesPage {
+  private readonly api = inject(Api);
+
+  async create() {
+    const roleId = await this.api.invoke(rolesCreateRole, {
+      body: { name: 'Координатор', feminitiveName: 'Координаторка', pluralName: 'Координатори' },
+    });
+  }
+}
+```
+
+Моделі запитів і відповідей — у `api/generated/models`. Шляхи в контракті
+відносні (`/api/v1/...`), тож у розробці запити йдуть через проксі.
+
+:::note
+Сервіс `Api` використовує `HttpClient`. Разом з першим викликом API до
+`providers` у `AppModule` треба додати `provideHttpClient()`.
+:::
+
+## Коли змінюється API
+
+<Steps>
+
+1. Зміну ендпоінта робить backend-розробник разом з оновленим
+   `openapi.json` ([Backend-розробка](../backend/)). Згенерувати
+   `openapi.json` без .NET не вийде.
+
+2. Після оновлення гілки клієнт перегенеровується під час наступного
+   `npm start`. Помилки TypeScript показують місця, де змінилися функції
+   або моделі.
+
+3. Оновіть виклики в тому ж PR, що й зміну API, щоб `main` завжди
+   збиралася. Перелік ламких змін контракту CI пише в підсумок джоби
+   `api` ([Перевірки](../checks/)).
+
+</Steps>
+
+## Перевірки
+
+```bash
+just test-web                    # тести один раз, як у CI
+npm --prefix apps/web run lint   # lint лише вебклієнта
+just web-ci                      # усе, що CI виконує для вебклієнта
+```
+
+Тести — файли `*.spec.ts` поруч з компонентами. `just fmt` і `just lint`
+обробляють і API, і вебклієнт.
