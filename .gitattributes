@@ -1,28 +1,26 @@
-# Нормалізація переносів рядків: файли з Windows не повинні ламати
-# Linux-контейнери.
+# Normalize line endings to LF so files from Windows do not break Linux
+# runners and containers.
 * text=auto eol=lf
 
-# Виконуються всередині Linux-образів; CRLF неприпустимий.
 *.sh            text eol=lf
-*.command       text eol=lf
 Dockerfile      text eol=lf
 *.Dockerfile    text eol=lf
 *.yml           text eol=lf
 *.yaml          text eol=lf
 
-# Інструменти лише для Windows.
+# Windows-only tooling.
 *.ps1           text eol=crlf
 *.cmd           text eol=crlf
 *.bat           text eol=crlf
 
-# Файли рішення веде IDE.
+# Solution files are maintained by the IDE.
 *.sln           text eol=crlf merge=union
 
-# Згенеровані артефакти.
+# Generated artifacts.
 package-lock.json                   linguist-generated=true -diff
 packages/api-contract/openapi.json  linguist-generated=true
 
-# Бінарні файли.
+# Binary files.
 *.png binary
 *.jpg binary
 *.ico binary
