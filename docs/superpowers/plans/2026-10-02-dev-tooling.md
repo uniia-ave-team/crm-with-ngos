@@ -1,7 +1,7 @@
 # Крок 1. Інструменти розробки — план реалізації
 
 > **Для агентів:** виконується послідовно в гілці `chore/dev-tooling`. Кроки
-> позначаються чекбоксами (`- [ ]`).
+> позначаються чекбоксами (`- [x]`).
 
 **Мета:** локальний флоу розробки однією командою `just`: база в Docker, API і
 вебклієнт на хості, перевірки якості, ті самі команди, що використовуватиме CI.
@@ -39,14 +39,14 @@ Node.js 24, Angular CLI 22.
 **Files:**
 - Create: `global.json`, `.nvmrc`, `compose.yaml`, `dotnet-tools.json`
 
-- [ ] `global.json`: SDK `10.0.100`, `rollForward: latestFeature`.
-- [ ] `.nvmrc`: `24`.
-- [ ] `compose.yaml`: сервіс `db` (`postgres:17-alpine`), порт
+- [x] `global.json`: SDK `10.0.100`, `rollForward: latestFeature`.
+- [x] `.nvmrc`: `24`.
+- [x] `compose.yaml`: сервіс `db` (`postgres:17-alpine`), порт
   `127.0.0.1:5432:5432`, том `db_data`, healthcheck `pg_isready`.
-- [ ] Local tool manifest: `dotnet new tool-manifest`,
+- [x] Local tool manifest: `dotnet new tool-manifest`,
   `dotnet tool install dotnet-ef --version 10.0.12`,
   `dotnet tool install dotnet-reportgenerator-globaltool`.
-- [ ] Перевірка: `docker compose up -d --wait db` завершується успіхом;
+- [x] Перевірка: `docker compose up -d --wait db` завершується успіхом;
   `dotnet tool restore` відновлює обидва інструменти.
 
 ### Task 2: `justfile`
@@ -60,8 +60,8 @@ Node.js 24, Angular CLI 22.
 `_check-tools`, `_secrets`, `_clean-test-results` з варіантами `[windows]` і
 `[unix]`.
 
-- [ ] Перевірка: `just --list` показує всі публічні рецепти.
-- [ ] Перевірка: `just setup` на чистій машині записує
+- [x] Перевірка: `just --list` показує всі публічні рецепти.
+- [x] Перевірка: `just setup` на чистій машині записує
   `ConnectionStrings:PostgreSqlConnection` і `JwtOptions:Secret`; повторний
   запуск їх не змінює.
 
@@ -71,15 +71,15 @@ Node.js 24, Angular CLI 22.
 - Create: `apps/web/proxy.conf.json`
 - Modify: `apps/web/angular.json` (`serve.options.proxyConfig`)
 
-- [ ] `/api` → `http://localhost:5065`.
-- [ ] Перевірка: `just db`, `just api`, `just web`; запит
+- [x] `/api` → `http://localhost:5065`.
+- [x] Перевірка: `just db`, `just api`, `just web`; запит
   `GET http://localhost:4200/api/v1/system/status` повертає `200`.
 
 ### Task 4: Перевірки якості через `just`
 
-- [ ] `just lint` → код виходу 0.
-- [ ] `just test` → 14 тестів API, 3 тести вебклієнта, код виходу 0.
-- [ ] `just test-coverage` → `apps/api/TestResults/Report/index.html`.
+- [x] `just lint` → код виходу 0.
+- [x] `just test` → 14 тестів API, 3 тести вебклієнта, код виходу 0.
+- [x] `just test-coverage` → `apps/api/TestResults/Report/index.html`.
 
 ### Task 5: Прибирання і нова документація
 
@@ -92,13 +92,13 @@ Node.js 24, Angular CLI 22.
   `*.command`), `.github/CODEOWNERS`
 - Replace: `README.md`, `CONTRIBUTING.md`
 
-- [ ] `README.md`: що це, стек, структура, швидкий старт, основні команди.
-- [ ] `CONTRIBUTING.md`: гілки, коміти англійською за Conventional Commits,
+- [x] `README.md`: що це, стек, структура, швидкий старт, основні команди.
+- [x] `CONTRIBUTING.md`: гілки, коміти англійською за Conventional Commits,
   squash merge, перевірки перед PR, міграції.
-- [ ] Перевірка: у репозиторії немає посилань на видалені файли
+- [x] Перевірка: у репозиторії немає посилань на видалені файли
   (`rg "deploy/|docs/deployment|docs/development.md|generate_test_report"`).
 
 ### Task 6: Коміти
 
-- [ ] Окремі коміти: інструменти й база; `justfile`; проксі; прибирання й
+- [x] Окремі коміти: інструменти й база; `justfile`; проксі; прибирання й
   документація.
