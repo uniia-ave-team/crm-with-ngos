@@ -99,7 +99,7 @@ web:
 # Format API code and auto-fix web lint issues.
 fmt:
     dotnet format {{solution}}
-    npm --prefix {{web_dir}} run lint -- --fix
+    npm --prefix {{web_dir}} run lint:fix
 
 # Check formatting and lint without changing files.
 lint:
@@ -113,7 +113,7 @@ test-api:
     dotnet test {{solution}}
 
 test-web:
-    npm --prefix {{web_dir}} test -- --configuration ci
+    npm --prefix {{web_dir}} run test:ci
 
 # Run API tests with coverage and build an HTML report.
 test-coverage: _clean-test-results
@@ -143,5 +143,5 @@ api-ci:
 web-ci:
     npm --prefix {{web_dir}} ci
     npm --prefix {{web_dir}} run lint
-    npm --prefix {{web_dir}} test -- --configuration ci
-    npm --prefix {{web_dir}} run build -- --configuration production
+    npm --prefix {{web_dir}} run test:ci
+    npm --prefix {{web_dir}} run build
