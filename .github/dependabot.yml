@@ -1,0 +1,67 @@
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: /apps/api
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      aspnetcore-efcore:
+        patterns:
+          - 'Microsoft.AspNetCore.*'
+          - 'Microsoft.EntityFrameworkCore*'
+          - 'Microsoft.Extensions.*'
+          - 'Npgsql*'
+      testing:
+        patterns:
+          - 'xunit*'
+          - 'Microsoft.NET.Test.Sdk'
+          - 'coverlet.*'
+          - 'NSubstitute*'
+          - 'Shouldly'
+          - 'Bogus'
+          - 'Respawn'
+          - 'Testcontainers*'
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      angular:
+        patterns:
+          - '@angular/*'
+          - '@angular-devkit/*'
+          - 'angular-eslint'
+          - 'typescript'
+      ionic-capacitor:
+        patterns:
+          - '@ionic/*'
+          - '@capacitor/*'
+          - 'ionicons'
+      lint-test:
+        patterns:
+          - 'eslint'
+          - 'typescript-eslint'
+          - 'vitest'
+          - 'jsdom'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns:
+          - '*'
