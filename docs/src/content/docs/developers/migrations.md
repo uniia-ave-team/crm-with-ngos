@@ -2,7 +2,7 @@
 title: Міграції бази
 description: Як створювати й застосовувати міграції EF Core.
 sidebar:
-  order: 4
+  order: 7
 ---
 
 Схема бази описана моделями EF Core в `Crm.Infrastructure`; міграції
