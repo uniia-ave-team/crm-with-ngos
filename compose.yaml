@@ -1,0 +1,25 @@
+# PostgreSQL for local development. Use `just db`, `just db-down`, `just db-reset`.
+# The credentials are for local use only and match the connection string
+# written to user-secrets by `just setup`.
+
+name: crm-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: crm
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  db_data:
