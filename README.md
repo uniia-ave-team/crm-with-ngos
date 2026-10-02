@@ -17,10 +17,11 @@ CRM з відкритим кодом для громадських органі�
 ## Структура репозиторію
 
 ```
-apps/api/      ASP.NET Core API (рішення Crm.slnx)
-apps/web/      Ionic Angular клієнт
-compose.yaml   PostgreSQL для розробки
-justfile       усі команди розробки
+apps/api/                ASP.NET Core API (рішення Crm.slnx)
+apps/web/                Ionic Angular клієнт
+packages/api-contract/   openapi.json — контракт API, генерується з коду
+compose.yaml             PostgreSQL для розробки
+justfile                 усі команди розробки
 ```
 
 ## Швидкий старт
@@ -66,6 +67,7 @@ just web      # вебклієнт: http://localhost:4200
 | `just psql`               | Консоль `psql` до бази розробки                      |
 | `just api` / `just web`   | Запустити API / вебклієнт                            |
 | `just migration-add Name` | Створити міграцію EF Core                            |
+| `just contract`           | Оновити `openapi.json` і Angular-клієнт після зміни API |
 | `just fmt`                | Відформатувати код                                   |
 | `just lint`               | Перевірити форматування й lint                       |
 | `just test`               | Запустити всі тести                                  |
