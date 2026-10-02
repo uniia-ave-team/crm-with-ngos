@@ -7,8 +7,9 @@ CRM з відкритим кодом для громадських органі�
 > **Статус: у розробці.** Розгортання на сервер ще не підготовлене.
 
 **Документація:** <https://uniia-ave-team.github.io/crm-with-ngos/>
-— швидкий старт, розгортання, посібник користувача і
-[довідник API](https://uniia-ave-team.github.io/crm-with-ngos/api/).
+— швидкий старт, розгортання, посібник користувача,
+[розділ для розробників](https://uniia-ave-team.github.io/crm-with-ngos/developers/setup/)
+і [довідник API](https://uniia-ave-team.github.io/crm-with-ngos/api/).
 
 ## Стек
 
@@ -90,7 +91,9 @@ JWT-секрет. Наявні значення не перезаписують�
 
 ## Участь у проєкті
 
-Див. [CONTRIBUTING.md](CONTRIBUTING.md).
+Див. [CONTRIBUTING.md](CONTRIBUTING.md) і розділ
+[«Для розробників»](https://uniia-ave-team.github.io/crm-with-ngos/developers/workflow/)
+на сайті документації.
 
 ## Ліцензія
 

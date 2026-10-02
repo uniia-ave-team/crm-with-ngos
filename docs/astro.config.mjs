@@ -27,10 +27,12 @@ export default defineConfig({
         { label: 'Початок роботи', items: [{ autogenerate: { directory: 'start' } }] },
         { label: 'Розгортання', items: [{ autogenerate: { directory: 'deployment' } }] },
         { label: 'Посібник користувача', items: [{ autogenerate: { directory: 'guides' } }] },
+        { label: 'Довідка', items: [{ autogenerate: { directory: 'help' } }] },
         {
-          label: 'Довідка',
+          label: 'Для розробників',
+          collapsed: true,
           items: [
-            { autogenerate: { directory: 'help' } },
+            { autogenerate: { directory: 'developers' } },
             { label: 'Довідник API', link: '/api/', attrs: { target: '_self' } },
           ],
         },
