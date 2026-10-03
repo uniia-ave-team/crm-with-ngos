@@ -36,15 +36,30 @@ just api
 | --------------------- | ---------------------------------------------------------- |
 | Кореневий модуль      | `src/app/app.module.ts`                                    |
 | Маршрути              | `src/app/app-routing.module.ts`                            |
+| Оболонка й навігація  | `src/app/core/layout` — `LayoutService`, бічна й друга панелі |
+| Мова інтерфейсу       | `src/app/core/i18n` — `LanguageService`                    |
 | Сторінки              | `src/app/<сторінка>/` — модуль сторінки з власним routing-модулем |
+| Переклади             | `src/assets/i18n/*.json`                                    |
 | Згенерований клієнт   | `src/app/api/generated` (не комітиться)                     |
-| Налаштування оточення | `src/environments`                                          |
+| Тема й шрифти         | `src/theme`                                                 |
 
-Сторінки підключаються ліниво через `loadChildren`, як `folder` у
-`app-routing.module.ts`. Схеми Ionic налаштовані з `standalone: false`:
-компоненти оголошуються в модулях.
+Сторінки підключаються ліниво через `loadChildren` в
+`app-routing.module.ts`. Сторінка без бічного меню (як `/login`)
+позначається в маршруті `data: { layout: 'none' }`. Схеми Ionic
+налаштовані з `standalone: false`: компоненти оголошуються в модулях.
 
-Тексти інтерфейсу й повідомлення для користувача — українською.
+Докладніше про поточний стан застосунку — у `apps/web/README.md`.
+
+## Тексти й мови
+
+Тексти інтерфейсу не пишуться в шаблонах напряму: вони лежать у
+`src/assets/i18n/*.json` і підставляються через
+[`@ngx-translate/core`](https://github.com/ngx-translate/core)
+(`{{ 'ключ' | translate }}`). Мови — українська, англійська,
+кримськотатарська й білоруська. Новий ключ додається в усі чотири файли.
+
+Мову за мовою пристрою визначає `LanguageService` і зберігає її в
+`localStorage`.
 
 ## Клієнт API
 
@@ -75,11 +90,8 @@ export class RolesPage {
 
 Моделі запитів і відповідей — у `api/generated/models`. Шляхи в контракті
 відносні (`/api/v1/...`), тож у розробці запити йдуть через проксі.
-
-:::note
-Сервіс `Api` використовує `HttpClient`. Разом з першим викликом API до
-`providers` у `AppModule` треба додати `provideHttpClient()`.
-:::
+`HttpClient`, потрібний сервісу `Api`, уже підключений в `AppModule`
+(`provideHttpClient()`).
 
 ## Коли змінюється API
 

@@ -1,119 +1,115 @@
-ion-menu ion-content {
-  --background: var(--ion-item-background, var(--ion-background-color, #fff));
+:host {
+  display: block;
+  height: 100%;
 }
 
-ion-menu.md ion-content {
-  --padding-start: 8px;
-  --padding-end: 8px;
-  --padding-top: 20px;
-  --padding-bottom: 20px;
+.shell {
+  display: flex;
+  height: 100%;
 }
 
-ion-menu.md ion-list {
-  padding: 20px 0;
+// Хост app-primary-nav не має власного вигляду — його внутрішні блоки
+// (.rail / .mobile-topbar / .bottom-tabs) самі відповідають за розмітку
+// й брейкпоінти (primary-nav.component.scss), тож просто прибираємо
+// хост-елемент з потоку, щоб flex .shell бачив ці блоки напряму.
+app-primary-nav {
+  display: contents;
 }
 
-ion-menu.md ion-note {
-  margin-bottom: 30px;
+ion-split-pane {
+  // Ionic задає ion-split-pane position:absolute;inset:0 за замовчуванням
+  // (він розрахований як кореневий елемент розкладки). Тут це другий
+  // flex-елемент поряд з рейлом, тож повертаємо його у звичайний потік.
+  position: relative;
+  flex: 1 1 auto;
+  inset: auto;
 }
 
-ion-menu.md ion-list-header,
-ion-menu.md ion-note {
-  padding-left: 10px;
+ion-menu {
+  --width: 280px;
+
+  // На макеті друга панель — суцільний блок: шапка (назва + кнопка
+  // згортання) і дерево під нею на одному тлі, без лінії розділення.
+  // Тло, контур і відсутність тіні для ion-toolbar — глобально в
+  // global.scss; тут прибираємо саме нижню лінію під заголовком (::part
+  // специфічніший за тег, тому global.scss тут не заважає).
+  ion-toolbar::part(background) {
+    border-bottom: none;
+  }
+
+  ion-title {
+    font-family: var(--font-secondary-title);
+  }
+
+  ion-content {
+    --background: var(--nav-bg);
+  }
 }
 
-ion-menu.md ion-list#inbox-list {
-  border-bottom: 1px solid var(--ion-background-color-step-150, #d7d8da);
+// Брейкпоінт відповідає when="lg" у ion-split-pane вище й $desktop у
+// primary-nav.component.scss.
+@media (min-width: 992px) {
+  ion-menu.shell__menu--collapsed {
+    display: none;
+  }
 }
 
-ion-menu.md ion-list#inbox-list ion-list-header {
-  font-size: 22px;
-  font-weight: 600;
+@media (max-width: 991px) {
+  // Резервуємо місце під фіксовані мобільну верхню панель (52px) і нижнє
+  // меню (76px) з primary-nav.component.scss. Стосується і router-outlet,
+  // і ion-menu (та сама фіксована мобільна обв'язка навколо обох).
+  ion-router-outlet,
+  ion-menu {
+    top: 52px;
+    bottom: 76px;
+  }
 
-  min-height: 20px;
+  // На телефоні друга панель відкривається як шторка з кнопки-гамбургера в
+  // шапці самої сторінки (ion-menu-button), яка вже показує ту саму назву —
+  // власний заголовок ion-menu тут зайвий, а кнопка згортання не має сенсу
+  // (згортання — суто десктопна поведінка для економії місця під контент).
+  ion-menu ion-header {
+    display: none;
+  }
 }
 
-ion-menu.md ion-list#labels-list ion-list-header {
-  font-size: 16px;
-
-  margin-bottom: 18px;
-
-  color: #757575;
-
-  min-height: 26px;
+// Кнопка повернення другої панелі: коли вона згорнута на десктопі, її
+// власна кнопка (усередині ion-menu) згортається разом з нею, тож потрібен
+// окремий постійний тригер над вмістом сторінки. На телефоні панель
+// відкривається/закривається нативним ion-menu-button у шапці сторінки,
+// тому тут кнопка не потрібна.
+.expand-panel {
+  display: none;
 }
 
-ion-menu.md ion-item {
-  --padding-start: 10px;
-  --padding-end: 10px;
-  border-radius: 4px;
-}
+@media (min-width: 992px) {
+  .expand-panel {
+    // Позиціонуємо по вертикальному центру лівого краю контенту, а не
+    // зверху — там кожна сторінка малює власний ion-toolbar із заголовком,
+    // і фіксована кнопка в кутку перекривала б його текст.
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 40px;
+    border: 1px solid var(--nav-border);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    background: var(--nav-bg);
+    color: var(--nav-fg-inactive);
+    cursor: pointer;
+    z-index: 10;
 
-ion-menu.md ion-item.selected {
-  --background: rgba(var(--ion-color-primary-rgb), 0.14);
-}
+    ion-icon {
+      font-size: 16px;
+    }
 
-ion-menu.md ion-item.selected ion-icon {
-  color: var(--ion-color-primary);
-}
-
-ion-menu.md ion-item ion-icon {
-  color: #616e7e;
-}
-
-ion-menu.md ion-item ion-label {
-  font-weight: 500;
-}
-
-ion-menu.ios ion-content {
-  --padding-bottom: 20px;
-}
-
-ion-menu.ios ion-list {
-  padding: 20px 0 0 0;
-}
-
-ion-menu.ios ion-note {
-  line-height: 24px;
-  margin-bottom: 20px;
-}
-
-ion-menu.ios ion-item {
-  --padding-start: 16px;
-  --padding-end: 16px;
-  --min-height: 50px;
-}
-
-ion-menu.ios ion-item.selected ion-icon {
-  color: var(--ion-color-primary);
-}
-
-ion-menu.ios ion-item ion-icon {
-  font-size: 24px;
-  color: #73849a;
-}
-
-ion-menu.ios ion-list#labels-list ion-list-header {
-  margin-bottom: 8px;
-}
-
-ion-menu.ios ion-list-header,
-ion-menu.ios ion-note {
-  padding-left: 16px;
-  padding-right: 16px;
-}
-
-ion-menu.ios ion-note {
-  margin-bottom: 8px;
-}
-
-ion-note {
-  display: inline-block;
-  font-size: 16px;
-
-  color: var(--ion-color-medium-shade);
-}
-
-ion-item.selected {
-  --color: var(--ion-color-primary);
+    &:hover {
+      color: var(--nav-fg-active);
+    }
+  }
 }

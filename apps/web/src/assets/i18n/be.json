@@ -1,0 +1,23 @@
+{
+  "common": {
+    "mainNav": "Асноўная навігацыя",
+    "collapsePanel": "Згарнуць панэль",
+    "expandPanel": "Разгарнуць панэль"
+  },
+  "nav": {
+    "calendar": "Каляндар",
+    "planner": "Планавальнік",
+    "knowledgeBase": "База ведаў",
+    "colleagues": "Калегі",
+    "profile": "Профіль і налады",
+    "zorya": "Зорка",
+    "logo": "Yavir — Планавальнік"
+  },
+  "page": {
+    "calendar": "Каляндар",
+    "planner": "Планавальнік",
+    "knowledgeBase": "База ведаў",
+    "colleagues": "Калегі",
+    "settings": "Налады"
+  }
+}

@@ -1,0 +1,46 @@
+// Шрифт e-Ukraine — apps/web/src/assets/fonts/ (ліцензія CC BY 4.0,
+// джерело: https://github.com/bennetfabian/e-Ukraine, дзеркало офіційного
+// шрифту Мінцифри). Кожна вага зареєстрована під окремою назвою родини, щоб
+// уникнути синтетичного жирного/курсивного накреслення браузером.
+@font-face {
+  font-family: "e-Ukraine";
+  src: url("/assets/fonts/e-Ukraine-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "e-Ukraine Light";
+  src: url("/assets/fonts/e-Ukraine-Light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "e-Ukraine Medium";
+  src: url("/assets/fonts/e-Ukraine-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "e-Ukraine Bold";
+  src: url("/assets/fonts/e-Ukraine-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  // Основна навігація (рейл, нижнє меню на телефоні).
+  --font-menu: "e-Ukraine", sans-serif;
+  // Друга (контекстна) панель: заголовок і дерево розділу.
+  --font-secondary-title: "e-Ukraine Medium", sans-serif;
+  --font-secondary-body: "e-Ukraine", sans-serif;
+  // Сторінка входу: заголовок кроку й другорядний опис під ним.
+  --font-login-title: "e-Ukraine Bold", sans-serif;
+  --font-login-body: "e-Ukraine Light", sans-serif;
+}

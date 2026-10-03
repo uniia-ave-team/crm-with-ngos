@@ -1,0 +1,73 @@
+<!-- Десктоп: вертикальна панель -->
+<nav class="rail" [attr.aria-label]="'common.mainNav' | translate">
+  <a class="rail__logo" routerLink="/planner" [attr.aria-label]="'nav.logo' | translate">
+    <img class="theme-light" src="assets/logo.svg" alt="" />
+    <img class="theme-dark" src="assets/logo_dark.svg" alt="" />
+  </a>
+
+  <ul class="rail__items">
+    @for (item of navItems; track item.url) {
+      <li>
+        <a
+          class="rail__item"
+          [routerLink]="item.url"
+          routerLinkActive="rail__item--active"
+          #rla="routerLinkActive"
+        >
+          <span class="rail__item-icon">
+            <ion-icon [name]="rla.isActive ? item.iconActive : item.icon" aria-hidden="true"></ion-icon>
+          </span>
+          <span>{{ item.labelKey | translate }}</span>
+        </a>
+      </li>
+    }
+  </ul>
+
+  <button class="rail__zorya" type="button" [attr.aria-label]="'nav.zorya' | translate">
+    <img class="theme-light" src="assets/zoria.svg" alt="" />
+    <img class="theme-dark" src="assets/zoria_dark.svg" alt="" />
+    <span>{{ 'nav.zorya' | translate }}</span>
+  </button>
+
+  <div class="rail__account">
+    <a
+      class="rail__avatar"
+      routerLink="/settings"
+      routerLinkActive="rail__avatar--active"
+      [attr.aria-label]="'nav.profile' | translate"
+    >
+      <span aria-hidden="true">{{ userInitials }}</span>
+    </a>
+  </div>
+</nav>
+
+<!-- Телефон: верхня панель з аватаром і нижнє меню навігації -->
+<header class="mobile-topbar">
+  <a class="mobile-topbar__avatar" routerLink="/settings" [attr.aria-label]="'nav.profile' | translate">
+    <span aria-hidden="true">{{ userInitials }}</span>
+  </a>
+  <a class="mobile-topbar__logo" routerLink="/planner" [attr.aria-label]="'nav.logo' | translate">
+    <img class="theme-light" [src]="'assets/' + mobileLogoBase() + '.svg'" alt="" />
+    <img class="theme-dark" [src]="'assets/' + mobileLogoBase() + '_dark.svg'" alt="" />
+  </a>
+  <button class="mobile-topbar__zorya" type="button" [attr.aria-label]="'nav.zorya' | translate">
+    <img class="theme-light" src="assets/zoria.svg" alt="" />
+    <img class="theme-dark" src="assets/zoria_dark.svg" alt="" />
+  </button>
+</header>
+
+<nav class="bottom-tabs" [attr.aria-label]="'common.mainNav' | translate">
+  @for (item of navItems; track item.url) {
+    <a
+      class="bottom-tabs__item"
+      [routerLink]="item.url"
+      routerLinkActive="bottom-tabs__item--active"
+      #rlaMobile="routerLinkActive"
+    >
+      <span class="bottom-tabs__item-icon">
+        <ion-icon [name]="rlaMobile.isActive ? item.iconActive : item.icon" aria-hidden="true"></ion-icon>
+      </span>
+      <span>{{ item.labelKey | translate }}</span>
+    </a>
+  }
+</nav>

@@ -1,0 +1,23 @@
+{
+  "common": {
+    "mainNav": "Esas navigatsiya",
+    "collapsePanel": "Paneli daralt",
+    "expandPanel": "Paneli kenişlet"
+  },
+  "nav": {
+    "calendar": "Taqvim",
+    "planner": "Reje",
+    "knowledgeBase": "Bilim bazası",
+    "colleagues": "İş arqadaşları",
+    "profile": "Profil ve ayarlar",
+    "zorya": "Zoria",
+    "logo": "Yavir — Reje"
+  },
+  "page": {
+    "calendar": "Taqvim",
+    "planner": "Reje",
+    "knowledgeBase": "Bilim bazası",
+    "colleagues": "İş arqadaşları",
+    "settings": "Ayarlar"
+  }
+}

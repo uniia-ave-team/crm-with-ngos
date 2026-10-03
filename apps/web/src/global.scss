@@ -35,3 +35,39 @@
 /* @import "@ionic/angular/css/palettes/dark.always.css"; */
 /* @import "@ionic/angular/css/palettes/dark.class.css"; */
 @import "@ionic/angular/css/palettes/dark.system.css";
+
+/* Кольорові токени бічного меню й перемикач картинок за темою. */
+@import "theme/nav-tokens.scss";
+
+/* Шрифт e-Ukraine для бічного меню. */
+@import "theme/fonts.scss";
+
+/*
+ * Тулбар шапки сторінки (ion-toolbar): тло й контур знизу — ті самі токени,
+ * що й у бічного меню, без тіні. Стосується кожної сторінки; вторинна
+ * панель (app.component.scss) додатково прибирає цю лінію під заголовком,
+ * щоб шапка й дерево читались одним блоком.
+ *
+ * --border-width за замовчуванням у Ionic дорівнює 0 (border.md.css), тому
+ * самого --border-color замало — товщину теж треба задати явно. Робимо це
+ * не через --border-width (він застосував би контур з усіх чотирьох боків
+ * через .toolbar-background), а напряму через ::part(background), щоб лінія
+ * була лише знизу.
+ */
+ion-toolbar::part(background) {
+  background: var(--nav-bg);
+  border-width: 0;
+  border-bottom: 1px solid var(--nav-border);
+  box-shadow: none;
+}
+
+/*
+ * Тінь шапки сидить не на ion-header, а на класі .header-md/.header-ios,
+ * який Ionic сам додає на той самий елемент (header.md.css) — селектор за
+ * класом специфічніший за селектор за тегом, тому й потрібен саме він.
+ */
+.header-md,
+.header-ios {
+  box-shadow: none;
+}
+

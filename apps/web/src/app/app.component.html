@@ -1,33 +1,54 @@
 <ion-app>
-  <ion-split-pane contentId="main-content">
-    <ion-menu contentId="main-content" type="overlay">
-      <ion-content>
-        <ion-list id="inbox-list">
-          <ion-list-header>Inbox</ion-list-header>
-          <ion-note>hi&#64;ionicframework.com</ion-note>
+  @if (layout.hideShell()) {
+    <!-- Сторінки без оболонки (наразі /login): жодного рейла чи другої
+         панелі, просто маршрутизований вміст на всю площу. -->
+    <ion-router-outlet></ion-router-outlet>
+  } @else {
+    <div class="shell">
+      <app-primary-nav></app-primary-nav>
 
-          @for (p of appPages; track p; let i = $index) {
-            <ion-menu-toggle auto-hide="false">
-              <ion-item routerDirection="root" [routerLink]="[p.url]" lines="none" detail="false" routerLinkActive="selected">
-                <ion-icon aria-hidden="true" slot="start" [ios]="p.icon + '-outline'" [md]="p.icon + '-sharp'"></ion-icon>
-                <ion-label>{{ p.title }}</ion-label>
-              </ion-item>
-            </ion-menu-toggle>
+      <ion-split-pane contentId="main-content" when="lg">
+        @if (layout.section(); as section) {
+          <ion-menu
+            menuId="secondary"
+            contentId="main-content"
+            type="overlay"
+            when="lg"
+            [class.shell__menu--collapsed]="layout.collapsed()"
+          >
+            <ion-header>
+              <ion-toolbar>
+                <ion-title>{{ titleKeys[section] | translate }}</ion-title>
+                <ion-buttons slot="end">
+                  <ion-button
+                    (click)="layout.toggleCollapsed()"
+                    [attr.aria-label]="(layout.collapsed() ? 'common.expandPanel' : 'common.collapsePanel') | translate"
+                  >
+                    <ion-icon
+                      slot="icon-only"
+                      [name]="layout.collapsed() ? 'chevron-forward-outline' : 'chevron-back-outline'"
+                    ></ion-icon>
+                  </ion-button>
+                </ion-buttons>
+              </ion-toolbar>
+            </ion-header>
+            <ion-content>
+              <app-secondary-panel [section]="section"></app-secondary-panel>
+            </ion-content>
+          </ion-menu>
+          @if (layout.collapsed()) {
+            <button
+              type="button"
+              class="expand-panel"
+              (click)="layout.toggleCollapsed()"
+              [attr.aria-label]="'common.expandPanel' | translate"
+            >
+              <ion-icon name="chevron-forward-outline" aria-hidden="true"></ion-icon>
+            </button>
           }
-        </ion-list>
-
-        <ion-list id="labels-list">
-          <ion-list-header>Labels</ion-list-header>
-
-          @for (label of labels; track label) {
-            <ion-item lines="none">
-              <ion-icon aria-hidden="true" slot="start" ios="bookmark-outline" md="bookmark-sharp"></ion-icon>
-              <ion-label>{{ label }}</ion-label>
-            </ion-item>
-          }
-        </ion-list>
-      </ion-content>
-    </ion-menu>
-    <ion-router-outlet id="main-content"></ion-router-outlet>
-  </ion-split-pane>
+        }
+        <ion-router-outlet id="main-content"></ion-router-outlet>
+      </ion-split-pane>
+    </div>
+  }
 </ion-app>

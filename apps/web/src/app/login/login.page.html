@@ -1,0 +1,17 @@
+<ion-content [fullscreen]="true" class="login">
+  <div class="login__card">
+    <h1 class="login__title">Крок 1: введіть адресу серверу</h1>
+    <p class="login__description">
+      Будь ласка, введіть адресу серверу, на якій розміщена копія системи вашої організації. Адресу можна дізнатися у відповідальної особи в межах вашої організації.
+    </p>
+    <ion-input
+      class="login__input"
+      fill="outline"
+      type="text"
+      inputmode="url"
+      placeholder="Наприклад, crm.organization.org або 192.168.0.1"
+      aria-label="Адреса серверу"
+    ></ion-input>
+    <ion-button class="login__submit" type="button" expand="block">Продовжити</ion-button>
+  </div>
+</ion-content>

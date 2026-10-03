@@ -1,0 +1,60 @@
+@switch (section) {
+  @case ('knowledge-base') {
+    <ul class="tree">
+      <li>
+        <a
+          class="tree__link tree__link--home"
+          routerLink="/knowledge-base"
+          routerLinkActive="tree__link--active"
+          [routerLinkActiveOptions]="{ exact: true }"
+        >
+          <ion-icon name="home-outline" aria-hidden="true"></ion-icon>
+          <span>Головна</span>
+        </a>
+      </li>
+
+      @for (group of knowledgeBaseGroups; track group.label) {
+        <li class="tree__group">
+          <span class="tree__group-label">
+            <ion-icon [name]="group.icon" aria-hidden="true"></ion-icon>
+            <span>{{ group.label }}</span>
+          </span>
+          <ul>
+            @for (item of group.items; track $index) {
+              <li>
+                <span class="tree__link tree__link--placeholder">
+                  <ion-icon [name]="item.icon" aria-hidden="true"></ion-icon>
+                  <span>{{ item.label }}</span>
+                </span>
+              </li>
+            }
+          </ul>
+        </li>
+      }
+
+      <li>
+        <span class="tree__link tree__link--placeholder">
+          <ion-icon name="grid-outline" aria-hidden="true"></ion-icon>
+          <span>База донорів</span>
+        </span>
+      </li>
+    </ul>
+  }
+
+  @case ('planner') {
+    <ul class="tree">
+      <li>
+        <a
+          class="tree__link tree__link--home"
+          routerLink="/planner"
+          routerLinkActive="tree__link--active"
+          [routerLinkActiveOptions]="{ exact: true }"
+        >
+          <ion-icon name="home-outline" aria-hidden="true"></ion-icon>
+          <span>Головна</span>
+        </a>
+      </li>
+    </ul>
+    <p class="hint">Структуру розділу ще не визначено.</p>
+  }
+}
