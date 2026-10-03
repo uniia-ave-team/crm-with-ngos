@@ -1,0 +1,51 @@
+// Кольорові токени бічного меню (primary-nav, secondary-panel).
+// Тема визначається системно, як і решта застосунку (@import
+// "@ionic/angular/css/palettes/dark.system.css" в global.scss).
+:root {
+  --nav-bg: #f7f8f8;
+  --nav-border: #e8e9ea;
+  --nav-fg-inactive: #676d74;
+  --nav-fg-active: #020b18;
+  --nav-active-bg: rgb(2 11 24 / 3%);
+  --nav-avatar-bg: #f0f1f1;
+
+  // Тло сторінок (ion-content без власного --background) — стандартна
+  // Ionic-змінна, перевизначаємо, щоб не покладатись на дефолт палітри.
+  --ion-background-color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --nav-bg: #121316;
+    --nav-border: #2a2c30;
+    --nav-fg-inactive: #9aa0a8;
+    --nav-fg-active: #f2f3f4;
+    --nav-active-bg: rgb(242 243 244 / 6%);
+    --nav-avatar-bg: #202226;
+    --ion-background-color: #1b1c1f;
+  }
+
+  // dark.system.css (global.scss) задає --ion-background-color через
+  // :root.ios / :root.md — специфічність вища за звичайний :root, тому
+  // без цього наше значення вище програло б каскаду.
+  :root.ios,
+  :root.md {
+    --ion-background-color: #1b1c1f;
+  }
+}
+
+// Пара іконок/зображень для світлої й темної теми (лого, «Зоря»): показуємо
+// одну з них залежно від системної теми, без JS-визначення.
+.theme-dark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .theme-light {
+    display: none;
+  }
+
+  .theme-dark {
+    display: block;
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "common": {
+    "mainNav": "Основна навігація",
+    "collapsePanel": "Згорнути панель",
+    "expandPanel": "Розгорнути панель"
+  },
+  "nav": {
+    "calendar": "Календар",
+    "planner": "Планер",
+    "knowledgeBase": "База знань",
+    "colleagues": "Колеги",
+    "profile": "Профіль і налаштування",
+    "zorya": "Зоря",
+    "logo": "Yavir — Планер"
+  },
+  "page": {
+    "calendar": "Календар",
+    "planner": "Планер",
+    "knowledgeBase": "База знань",
+    "colleagues": "Колеги",
+    "settings": "Налаштування"
+  }
+}
