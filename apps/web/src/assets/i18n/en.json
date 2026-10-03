@@ -1,0 +1,23 @@
+{
+  "common": {
+    "mainNav": "Main navigation",
+    "collapsePanel": "Collapse panel",
+    "expandPanel": "Expand panel"
+  },
+  "nav": {
+    "calendar": "Calendar",
+    "planner": "Planner",
+    "knowledgeBase": "Knowledge base",
+    "colleagues": "Colleagues",
+    "profile": "Profile and settings",
+    "zorya": "Zoria",
+    "logo": "Yavir — Planner"
+  },
+  "page": {
+    "calendar": "Calendar",
+    "planner": "Planner",
+    "knowledgeBase": "Knowledge base",
+    "colleagues": "Colleagues",
+    "settings": "Settings"
+  }
+}

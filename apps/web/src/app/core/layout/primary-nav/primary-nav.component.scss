@@ -1,0 +1,272 @@
+// Брейкпоінт відповідає when="lg" у ion-split-pane (app.component.html),
+// щоб рейл і друга панель перемикались в один момент.
+$desktop: 992px;
+
+:host {
+  font-family: var(--font-menu);
+}
+
+.rail {
+  display: none;
+}
+
+.mobile-topbar {
+  display: flex;
+}
+
+.bottom-tabs {
+  display: flex;
+}
+
+@media (min-width: $desktop) {
+  .rail {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 88px;
+    flex: 0 0 auto;
+    height: 100%;
+    background: var(--nav-bg);
+    border-right: 1px solid var(--nav-border);
+    padding: 16px 8px;
+    gap: 24px;
+    box-sizing: border-box;
+    // На малій висоті екрана (лого + 4 пункти + Зоря + акаунт) вміст може
+    // не влізти — даємо рейлу власний скрол замість обрізання.
+    overflow-y: auto;
+  }
+
+  .mobile-topbar,
+  .bottom-tabs {
+    display: none;
+  }
+}
+
+.rail__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0 16px;
+
+  img {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+.rail__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rail__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  color: var(--nav-fg-inactive);
+  text-decoration: none;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+
+  &--active {
+    color: var(--nav-fg-active);
+  }
+}
+
+// Фон активного пункту лежить лише під іконкою, а не під усією кнопкою
+// з підписом.
+.rail__item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+
+  ion-icon {
+    font-size: 22px;
+  }
+
+  .rail__item--active & {
+    background: var(--nav-active-bg);
+  }
+}
+
+// Окремий блок на всю ширину бічної панелі — лише навколо акаунта (Зоря
+// лежить просто на тлі рейла, над блоком). Виходить за межі горизонтального
+// padding рейла (16px 8px) і до самого низу, має власне тло й контур
+// зверху, що відділяє його від решти рейла.
+.rail__account {
+  margin: 0 -8px -16px;
+  padding: 12px 8px calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  justify-content: center;
+  background: var(--nav-avatar-bg);
+  border-top: 1px solid var(--nav-border);
+}
+
+// Squircle-форма: великий border-radius у відсотках на квадратній коробці
+// дає заокруглений «квадрат із заокругленими кутами», а не коло. Плейсхолдер
+// аватара — фірмовий колір з ініціалами (профілю користувача ще нема, див.
+// apps/web/README.md, розділ «Ще не зроблено»), той самий і в світлій,
+// і в темній темі — це колір самого аватара, а не тема інтерфейсу.
+.rail__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 35%;
+  border: none;
+  background: #146ef4;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+
+  &--active {
+    box-shadow: 0 0 0 2px var(--nav-fg-active);
+  }
+}
+
+.rail__zorya {
+  // Притискає себе й .rail__account (що йде одразу після) до низу рейла.
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  color: var(--nav-fg-inactive);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+
+  img {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+// Мобільна верхня панель.
+.mobile-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--nav-border);
+  z-index: 20;
+  box-sizing: border-box;
+}
+
+.mobile-topbar__avatar,
+.mobile-topbar__zorya {
+  width: 32px;
+  height: 32px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mobile-topbar__avatar {
+  border-radius: 35%;
+  background: #146ef4;
+  color: #fff;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+// Лого по центру шапки — абсолютне позиціонування відносно .mobile-topbar
+// (position: fixed вище і так створює контекст), щоб центр був точний,
+// а не «між» аватаркою й Зорею, чия сумарна ширина може відрізнятись.
+.mobile-topbar__logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+
+  img {
+    height: 22px;
+    width: auto;
+  }
+}
+
+.mobile-topbar__zorya {
+  border-radius: 50%;
+  background: none;
+
+  img {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+// Нижнє меню навігації.
+.bottom-tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 76px;
+  justify-content: space-around;
+  align-items: stretch;
+  background: var(--nav-bg);
+  border-top: 1px solid var(--nav-border);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  z-index: 20;
+  box-sizing: content-box;
+}
+
+.bottom-tabs__item {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--nav-fg-inactive);
+  text-decoration: none;
+  font-size: 11px;
+
+  &--active {
+    color: var(--nav-fg-active);
+  }
+}
+
+.bottom-tabs__item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+
+  ion-icon {
+    font-size: 22px;
+  }
+
+  .bottom-tabs__item--active & {
+    background: var(--nav-active-bg);
+  }
+}
