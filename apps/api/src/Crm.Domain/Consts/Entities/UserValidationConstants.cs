@@ -13,4 +13,6 @@ public static class UserValidationConstants
     public const int MaxCountryLength = 100;
     public const int MaxEmergencyContactLength = 250;
     public const int MaxPreferredLanguageLength = 10;
+    public const int MaxPronounsLength = 50;
+    public const int MaxAvatarUrlLength = 500;
 }

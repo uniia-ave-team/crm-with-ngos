@@ -1,7 +1,9 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Ngo.Commands;
+using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
+using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -12,10 +14,14 @@ namespace Crm.Application.Features.Ngos.Commands;
 /// </summary>
 /// <param name="ngoRepository">The repository used for accessing and persisting NGO data.</param>
 /// <param name="userRepository">The repository used for accessing and updating user domain profiles.</param>
+/// <param name="unitOfWork">The unit of work for managing database transactions.</param>
+/// <param name="timeProvider">The time provider for obtaining the current UTC time.</param>
 /// <param name="logger">The logger instance for tracking command execution.</param>
 public partial class CreateNgoCommandHandler(
     INgoRepository ngoRepository,
     IUserRepository userRepository,
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider,
     ILogger<CreateNgoCommandHandler> logger) : IRequestHandler<CreateNgoCommand, Guid>
 {
     public async Task<Guid> Handle(CreateNgoCommand request, CancellationToken cancellationToken)
@@ -24,26 +30,17 @@ public partial class CreateNgoCommandHandler(
 
         await ngoRepository.EnsureDoesNotExistAsync(cancellationToken);
 
-        var ngo = new Ngo
-        {
-            Name = request.Name,
-            Description = request.Description,
-            LogoUrl = request.LogoUrl,
-            CreatedAt = DateTime.UtcNow,
-        };
+        var ngo = request.Adapt<Ngo>();
+
+        ngo.CreatedAt = timeProvider.GetUtcNow().UtcDateTime;
 
         await ngoRepository.CreateAsync(ngo, cancellationToken);
 
-        var users = await userRepository.GetListAsync(cancellationToken);
-        var unassignedUsers = users.Where(u => u.NgoId == null || u.NgoId == Guid.Empty).ToList();
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        foreach (var user in unassignedUsers)
-        {
-            user.NgoId = ngo.Id;
-            userRepository.Update(user);
-        }
+        var unassignedUsersCount = await userRepository.AssignUnassignedUsersToNgoAsync(ngo.Id, cancellationToken);
 
-        LogNgoCreatedSuccessfully(logger, ngo.Id, unassignedUsers.Count);
+        LogNgoCreatedSuccessfully(logger, ngo.Id, unassignedUsersCount);
 
         return ngo.Id;
     }

@@ -1,5 +1,6 @@
 using Crm.Domain.Consts.Entities;
 using Crm.Domain.Entities;
+using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence.ValueGenerators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -22,5 +23,10 @@ public class AuthUserConfiguration : IEntityTypeConfiguration<AuthUser>
 
         builder.Property(au => au.UserName)
             .HasMaxLength(AuthUserValidationConstants.MaxUserNameLength);
+
+        builder.HasOne(u => u.UserProfile)
+           .WithOne()
+           .HasForeignKey<User>(u => u.Id)
+           .OnDelete(DeleteBehavior.Cascade);
     }
 }

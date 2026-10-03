@@ -1,3 +1,4 @@
+using Crm.Application.Interfaces;
 using MediatR;
 
 namespace Crm.Application.Dtos.Role.Commands;
@@ -6,4 +7,4 @@ namespace Crm.Application.Dtos.Role.Commands;
 /// </summary>
 /// <param name="RoleId">The unique identifier of the role.</param>
 /// <param name="ClaimValue">The value of the permission claim to remove (e.g., "Permissions.CreateUser").</param>
-public record RemoveClaimFromRoleCommand(Guid RoleId, string ClaimValue) : IRequest;
+public record RemoveClaimFromRoleCommand(Guid RoleId, string ClaimValue) : IRequest, ITransactionalCommand;

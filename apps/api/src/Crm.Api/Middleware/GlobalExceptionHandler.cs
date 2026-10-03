@@ -1,6 +1,6 @@
-using System.Security.Authentication;
+using Crm.Api.Consts;
+using Crm.Api.Extensions;
 using Crm.Application.Common.Consts;
-using Crm.Domain.Exceptions;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +21,7 @@ public sealed partial class GlobalExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
-        int statusCode = DetermineStatusCode(exception);
+        int statusCode = exception.MapToStatusCode();
         bool isClientError = statusCode < StatusCodes.Status500InternalServerError;
 
         httpContext.Response.StatusCode = statusCode;
@@ -35,9 +35,9 @@ public sealed partial class GlobalExceptionHandler(
             _ => new ProblemDetails
             {
                 Status = statusCode,
-                Title = isClientError ? "Client Error" : "Server Error",
+                Title = isClientError ? ProblemDetailsDefaults.ClientErrorTitle : ProblemDetailsDefaults.ServerErrorTitle,
                 Detail = GetDetailMessage(exception, isClientError, env.IsDevelopment()),
-                Type = exception.GetType().Name,
+                Type = ProblemDetailsDefaults.GetTypeUrl(statusCode),
             },
         };
 
@@ -45,7 +45,7 @@ public sealed partial class GlobalExceptionHandler(
 
         if (env.IsDevelopment() && exception is not ValidationException)
         {
-            problemDetails.Extensions["stackTrace"] = exception.StackTrace;
+            problemDetails.Extensions[ProblemDetailsDefaults.StackTraceExtensionKey] = exception.StackTrace;
         }
 
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
@@ -71,23 +71,11 @@ public sealed partial class GlobalExceptionHandler(
         return new HttpValidationProblemDetails(errors)
         {
             Status = statusCode,
-            Title = "Validation Failed",
-            Detail = "One or more validation errors occurred.",
-            Type = nameof(ValidationException),
+            Title = ProblemDetailsDefaults.ValidationFailedTitle,
+            Detail = ProblemDetailsDefaults.ValidationFailedDetail,
+            Type = ProblemDetailsDefaults.GetTypeUrl(statusCode),
         };
     }
-
-    /// <summary>
-    /// Maps specific exception types to HTTP status codes.
-    /// </summary>
-    private static int DetermineStatusCode(Exception exception) => exception switch
-    {
-        DomainException domainEx => domainEx.StatusCode,
-        InvalidCredentialException => StatusCodes.Status401Unauthorized,
-        UnauthorizedAccessException => StatusCodes.Status403Forbidden,
-        ValidationException or ArgumentException or InvalidOperationException or NotSupportedException => StatusCodes.Status400BadRequest,
-        _ => StatusCodes.Status500InternalServerError,
-    };
 
     /// <summary>
     /// Determines the safest detail message to expose to the client.
@@ -95,7 +83,7 @@ public sealed partial class GlobalExceptionHandler(
     private static string GetDetailMessage(Exception exception, bool isClientError, bool isDev) =>
         isDev || isClientError
             ? exception.Message
-            : "An unexpected error occurred while processing your request. Please try again later.";
+            : ProblemDetailsDefaults.UnexpectedErrorDetail;
 
     /// <summary>
     /// Routes the exception to the appropriate high-performance logger method.

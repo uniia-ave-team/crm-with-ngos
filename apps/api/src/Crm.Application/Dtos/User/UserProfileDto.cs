@@ -1,6 +1,7 @@
 using Crm.Application.Dtos.Role;
 
 namespace Crm.Application.Dtos.User;
+
 /// <summary>
 /// Represents the detailed profile data of a user transferred to the presentation layer.
 /// </summary>
@@ -14,7 +15,10 @@ namespace Crm.Application.Dtos.User;
 /// <param name="Country">The country of residence of the user.</param>
 /// <param name="EmergencyContact">The emergency contact information for the user.</param>
 /// <param name="PreferredLanguage">The preferred interface language of the user.</param>
-/// <param name="Roles">The collection of role names assigned to the user.</param>
+/// <param name="Pronouns">The preferred pronouns of the user.</param>
+/// <param name="AvatarUrl">The URL or file path to the user's avatar.</param>
+/// <param name="Roles">The collection of roles assigned to the user.</param>
+/// <param name="CustomFields">The collection of custom key-value fields associated with the user.</param>
 public record UserProfileDto(
     Guid Id,
     string Email,
@@ -26,4 +30,7 @@ public record UserProfileDto(
     string? Country,
     string? EmergencyContact,
     string? PreferredLanguage,
-    IEnumerable<RoleDto> Roles);
+    string? Pronouns,
+    string? AvatarUrl,
+    IEnumerable<RoleUserDto> Roles,
+    IEnumerable<UserCustomFieldDto> CustomFields);

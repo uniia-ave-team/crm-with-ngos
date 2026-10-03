@@ -1,12 +1,13 @@
 using Asp.Versioning;
+using Crm.Api.Dtos;
 using Crm.Api.Security;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Dtos.User.Queries;
-using Crm.Application.Features.Users.Mappings;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
+using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -42,12 +43,31 @@ public class UsersController(
     }
 
     /// <summary>
+    /// Permanently deletes a specific user and all associated personal data (GDPR hard-delete).
+    /// </summary>
+    /// <param name="id">The unique identifier of the user to delete.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpDelete("{id:guid}")]
+    [HasAccessRight(AccessRight.DeleteUser)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteUser(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        await mediator.Send(new DeleteUserCommand(id), cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// Retrieves the detailed profile of a specific user.
     /// </summary>
     /// <param name="id">The unique identifier of the user.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The detailed profile of the user.</returns>
-    [HttpGet("{id:guid}/profile", Name = nameof(GetUserProfile))]
+    [HttpGet("{id:guid}", Name = nameof(GetUserProfile))]
     [HasAccessRight(AccessRight.ViewUser)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -64,7 +84,7 @@ public class UsersController(
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The detailed profile of the current user.</returns>
-    [HttpGet("me/profile")]
+    [HttpGet("me")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -104,58 +124,84 @@ public class UsersController(
     /// Updates the profile details of an existing user.
     /// </summary>
     /// <param name="id">The unique identifier of the user to update.</param>
-    /// <param name="command">The updated profile details.</param>
+    /// <param name="request">The updated profile details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("{id:guid}/profile")]
+    [HttpPut("{id:guid}")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateUserProfile(
         Guid id,
-        [FromBody] UpdateProfileRequest command,
+        [FromBody] UpdateProfileRequest request,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command.ToUpdateUserProfileCommand(id), cancellationToken);
+        var command = request.Adapt<UpdateUserProfileCommand>() with { UserId = id };
+
+        await mediator.Send(command, cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Permanently deletes the currently authenticated user's account and all associated personal data (GDPR hard-delete).
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpDelete("me")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> DeleteMe(
+        CancellationToken cancellationToken)
+    {
+        await mediator.Send(new DeleteUserCommand(currentUserService.GetUserId()), cancellationToken);
+
         return NoContent();
     }
 
     /// <summary>
     /// Updates the profile details of the currently authenticated user.
     /// </summary>
-    /// <param name="command">The updated profile details.</param>
+    /// <param name="request">The updated profile details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("me/profile")]
+    [HttpPut("me")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateCurrentUserProfile(
-        [FromBody] UpdateProfileRequest command,
+        [FromBody] UpdateProfileRequest request,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command.ToUpdateUserProfileCommand(currentUserService.GetUserId()), cancellationToken);
+        var command = request.Adapt<UpdateUserProfileCommand>() with { UserId = currentUserService.GetUserId() };
+
+        await mediator.Send(command, cancellationToken);
+
         return NoContent();
     }
 
     /// <summary>
     /// Securely changes the password for the currently authenticated user.
     /// </summary>
-    /// <param name="command">The current and new password details.</param>
+    /// <param name="request">The current and new password details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("me/password")]
+    [HttpPost("me/password")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UpdateMyPassword(
-        [FromBody] UpdatePasswordRequest command,
+        [FromBody] UpdatePasswordRequest request,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command.ToUpdatePasswordCommand(currentUserService.GetUserId()), cancellationToken);
+        var command = request.Adapt<UpdatePasswordCommand>() with { UserId = currentUserService.GetUserId() };
+
+        await mediator.Send(command, cancellationToken);
+
         return NoContent();
     }
 
@@ -176,12 +222,82 @@ public class UsersController(
     }
 
     /// <summary>
+    /// Adds a custom key-value field to the currently authenticated user's profile.
+    /// </summary>
+    /// <param name="request">The custom field key and value details.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpPost("me/custom-fields")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> AddMyCustomField(
+        [FromBody] AddCustomFieldRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = request.Adapt<AddUserCustomFieldCommand>() with { UserId = currentUserService.GetUserId() };
+
+        await mediator.Send(command, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Removes a specific custom field from the currently authenticated user's profile.
+    /// </summary>
+    /// <param name="customFieldId">The unique identifier of the custom field to remove.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpDelete("me/custom-fields/{customFieldId:guid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveMyCustomField(
+        Guid customFieldId,
+        CancellationToken cancellationToken)
+    {
+        var command = new RemoveUserCustomFieldCommand(customFieldId, currentUserService.GetUserId());
+
+        await mediator.Send(command, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Updates the value of a specific custom field for the currently authenticated user.
+    /// </summary>
+    /// <param name="customFieldId">The unique identifier of the custom field to update.</param>
+    /// <param name="request">The updated custom field value.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpPut("me/custom-fields/{customFieldId:guid}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateMyCustomField(
+        Guid customFieldId,
+        [FromBody] UpdateCustomFieldRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = request.Adapt<UpdateUserCustomFieldCommand>() with
+        {
+            CustomFieldId = customFieldId,
+            UserId = currentUserService.GetUserId(),
+        };
+
+        await mediator.Send(command, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Activates a previously deactivated user.
     /// </summary>
     /// <param name="id">The unique identifier of the user to activate.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("{id:guid}/activate")]
+    [HttpPost("{id:guid}/activate")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -199,7 +315,7 @@ public class UsersController(
     /// <param name="id">The unique identifier of the user to deactivate.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("{id:guid}/deactivate")]
+    [HttpPost("{id:guid}/deactivate")]
     [HasAccessRight(AccessRight.DisableUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -208,6 +324,80 @@ public class UsersController(
         CancellationToken cancellationToken)
     {
         await mediator.Send(new DeactivateUserCommand(id, currentUserService.GetUserId()), cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Adds a custom key-value field to a specific user's profile.
+    /// </summary>
+    /// <param name="id">The unique identifier of the user.</param>
+    /// <param name="request">The custom field key and value details.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpPost("{id:guid}/custom-fields")]
+    [HasAccessRight(AccessRight.UpdateUser)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AddCustomField(
+        Guid id,
+        [FromBody] AddCustomFieldRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = request.Adapt<AddUserCustomFieldCommand>() with { UserId = id };
+
+        await mediator.Send(command, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Removes a specific custom field from a specific user's profile.
+    /// </summary>
+    /// <param name="id">The unique identifier of the user.</param>
+    /// <param name="customFieldId">The unique identifier of the custom field to remove.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpDelete("{id:guid}/custom-fields/{customFieldId:guid}")]
+    [HasAccessRight(AccessRight.UpdateUser)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveCustomField(
+        Guid id,
+        Guid customFieldId,
+        CancellationToken cancellationToken)
+    {
+        var command = new RemoveUserCustomFieldCommand(customFieldId, id);
+
+        await mediator.Send(command, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Updates the value of a specific custom field for a specific user.
+    /// </summary>
+    /// <param name="id">The unique identifier of the user.</param>
+    /// <param name="customFieldId">The unique identifier of the custom field to update.</param>
+    /// <param name="request">The updated custom field value.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpPut("{id:guid}/custom-fields/{customFieldId:guid}")]
+    [HasAccessRight(AccessRight.UpdateUser)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateCustomField(
+        Guid id,
+        Guid customFieldId,
+        [FromBody] UpdateCustomFieldRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = request.Adapt<UpdateUserCustomFieldCommand>() with
+        {
+            CustomFieldId = customFieldId,
+            UserId = id,
+        };
+
+        await mediator.Send(command, cancellationToken);
         return NoContent();
     }
 

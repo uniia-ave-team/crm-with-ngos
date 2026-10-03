@@ -1,10 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Commands;
-using Crm.Domain.Consts;
-using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -14,7 +11,7 @@ namespace Crm.Application.Features.Users.Commands;
 /// </summary>
 public partial class DeactivateUserCommandHandler(
     IUserRepository userRepository,
-    UserManager<AuthUser> userManager,
+    IAuthRoleRepository roleRepository,
     ILogger<DeactivateUserCommandHandler> logger) : IRequestHandler<DeactivateUserCommand>
 {
     public async Task Handle(DeactivateUserCommand request, CancellationToken cancellationToken)
@@ -35,11 +32,9 @@ public partial class DeactivateUserCommandHandler(
             return;
         }
 
-        await EnsureUserIsNotLastAdminAsync(request.UserId);
+        await EnsureUserIsNotLastAdminAsync(request.UserId, cancellationToken);
 
-        user.IsActive = false;
-
-        userRepository.Update(user);
+        await userRepository.SetUserActivationStatusAsync(user.Id, isActive: false, cancellationToken);
 
         LogUserDeactivatedSuccessfully(logger, request.UserId);
     }
@@ -47,27 +42,12 @@ public partial class DeactivateUserCommandHandler(
     /// <summary>
     /// Ensures that the user being deactivated is not the last remaining system administrator.
     /// </summary>
-    private async Task EnsureUserIsNotLastAdminAsync(Guid userId)
+    private async Task EnsureUserIsNotLastAdminAsync(Guid userId, CancellationToken cancellationToken)
     {
-        // TODO: Resolve N+1 problem here.
-        var authUser = await userManager.FindByIdAsync(userId.ToString());
-
-        if (authUser == null)
+        if (await roleRepository.IsUserLastAdminAsync(userId, cancellationToken))
         {
-            return;
-        }
-
-        bool isAdmin = await userManager.IsInRoleAsync(authUser, RoleConsts.Admin);
-
-        if (isAdmin)
-        {
-            var allAdmins = await userManager.GetUsersInRoleAsync(RoleConsts.Admin);
-
-            if (allAdmins.Count <= 1)
-            {
-                LogCannotDeactivateLastAdmin(logger, userId);
-                throw new InvalidOperationException("Cannot deactivate the user because they are the last system administrator.");
-            }
+            LogCannotDeactivateLastAdmin(logger, userId);
+            throw new InvalidOperationException("Cannot deactivate the user because they are the last system administrator.");
         }
     }
 

@@ -13,11 +13,6 @@ public class Ngo : BaseEntity
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the optional description or mission statement of the NGO.
-    /// </summary>
-    public string? Description { get; set; }
-
-    /// <summary>
     /// Gets or sets the optional URL or storage path pointing to the NGO's logo image.
     /// </summary>
     public string? LogoUrl { get; set; }
@@ -25,7 +20,7 @@ public class Ngo : BaseEntity
     /// <summary>
     /// Gets or sets the UTC timestamp indicating when the NGO instance was initially created.
     /// </summary>
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 
     /// <summary>
     /// Gets or sets the collection of business user profiles belonging to this NGO instance.

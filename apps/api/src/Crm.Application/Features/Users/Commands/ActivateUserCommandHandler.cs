@@ -31,9 +31,7 @@ public partial class ActivateUserCommandHandler(
             return;
         }
 
-        user.IsActive = true;
-
-        userRepository.Update(user);
+        await userRepository.SetUserActivationStatusAsync(user.Id, isActive: true, cancellationToken);
 
         LogUserActivatedSuccessfully(logger, request.UserId);
     }

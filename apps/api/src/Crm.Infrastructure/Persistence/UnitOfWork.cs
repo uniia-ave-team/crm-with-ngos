@@ -76,6 +76,15 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork, IAsyncDispo
         }
     }
 
+    /// <summary>
+    /// Asynchronously saves all pending changes tracked by the database context to the database
+    /// without committing or closing the active transaction.
+    /// </summary>
+    /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the number of state entries written to the database.</returns>
+    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        => context.SaveChangesAsync(cancellationToken);
+
     public async ValueTask DisposeAsync()
     {
         await DisposeTransactionAsync();

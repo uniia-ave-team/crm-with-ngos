@@ -1,10 +1,13 @@
+using System.Collections.Concurrent;
+using System.Linq.Dynamic.Core;
 using System.Linq.Expressions;
-using Crm.Domain.Common;
 using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces;
-using Crm.Domain.Interfaces.Repositories;
-using Crm.Infrastructure.Extensions;
+using Crm.Domain.Interfaces.Repositories.Generic;
+using Crm.Infrastructure.Helpers;
+using Crm.Infrastructure.Persistence;
+using Mapster;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -13,14 +16,24 @@ namespace Crm.Infrastructure.Repositories;
 /// Provides a generic repository implementation for basic CRUD operations on entities.
 /// </summary>
 /// <typeparam name="T">The type of entity managed by the repository. Must implement <see cref="IEntity"/>.</typeparam>
-public class GenericRepository<T>(DbContext context)
+public abstract class GenericRepository<T>(ApplicationDbContext context)
     : IGenericRepository<T>
     where T : class, IEntity
 {
     /// <summary>
-    /// Gets the maximum allowed page size.
+    /// Thread-safe cache mapping DTO properties to their corresponding Entity navigation paths (via Mapster).
+    /// Prevents reflection and expression parsing overhead during runtime.
     /// </summary>
-    protected const int MaxPageSize = 100;
+    private static readonly ConcurrentDictionary<Type, Dictionary<string, string>> _dtoSortMappingCache = new();
+
+    /// <summary>
+    /// Case-insensitive whitelist of allowed sort direction specifiers ("asc" / "desc") for dynamic sorting validation.
+    /// </summary>
+    private static readonly HashSet<string> _allowedSortOrders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        SortOrderConstants.Ascending,
+        SortOrderConstants.Descending,
+    };
 
     /// <summary>
     /// Gets the <see cref="DbSet{TEntity}"/> for the entity type <typeparamref name="T"/>.
@@ -36,63 +49,77 @@ public class GenericRepository<T>(DbContext context)
     /// Asynchronously creates a new entity in the database.
     /// </summary>
     /// <param name="entity">The entity to create.</param>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation. The task result contains the newly created entity.</returns>
-    public async Task<T> CreateAsync(T entity, CancellationToken ct = default)
+    public async Task<T> CreateAsync(T entity, CancellationToken cancellationToken = default)
     {
-        var entry = await DbSet.AddAsync(entity, ct);
+        var entry = await DbSet.AddAsync(entity, cancellationToken);
         return entry.Entity;
     }
 
     /// <summary>
-    /// Asynchronously deletes an entity by its unique identifier.
+    /// Asynchronously deletes an entity by its unique identifier using a bulk delete operation.
     /// </summary>
     /// <param name="id">The unique identifier of the entity to delete.</param>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
-    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var model = await DbSet.FirstOrDefaultAsync(x => x.Id == id, ct)
-            ?? throw new EntityNotFoundException(typeof(T).Name, id);
+        var rowsAffected = await DbSet
+                    .Where(x => x.Id == id)
+                    .ExecuteDeleteAsync(cancellationToken);
 
-        DbSet.Remove(model);
+        if (rowsAffected == 0)
+        {
+            throw new EntityNotFoundException(typeof(T).Name, id);
+        }
     }
 
     /// <summary>
     /// Asynchronously retrieves an entity by its unique identifier.
     /// </summary>
     /// <param name="id">The unique identifier of the entity to retrieve.</param>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The entity with the specified ID.</returns>
     /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
-    public async Task<T> GetAsync(Guid id, CancellationToken ct = default)
+    public async Task<T> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await DbSet
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id, ct)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new EntityNotFoundException(typeof(T).Name, id);
     }
 
     /// <summary>
-    /// Asynchronously retrieves and projects an entity by its unique identifier.
+    /// Asynchronously retrieves and projects an entity by its unique identifier using Mapster.
     /// </summary>
     /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
     /// <param name="id">The unique identifier of the entity to retrieve.</param>
-    /// <param name="selector">Projection expression to transform the entity into a DTO.</param>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The projected entity DTO with the specified ID.</returns>
     /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
-    public async Task<TResult> GetAsync<TResult>(
-        Guid id,
-        Expression<Func<T, TResult>> selector,
-        CancellationToken ct = default)
+    public async Task<TResult> GetAsync<TResult>(Guid id, CancellationToken cancellationToken = default)
     {
         return await DbSet
             .AsNoTracking()
             .Where(x => x.Id == id)
-            .Select(selector)
-            .FirstOrDefaultAsync(ct)
+            .ProjectToType<TResult>()
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new EntityNotFoundException(typeof(T).Name, id);
+    }
+
+    /// <summary>
+    /// Asynchronously retrieves an entity by its unique identifier with change tracking enabled.
+    /// </summary>
+    /// <param name="id">The unique identifier of the entity to retrieve.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The tracked entity with the specified ID.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    public async Task<T> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new EntityNotFoundException(typeof(T).Name, id);
     }
 
@@ -148,32 +175,53 @@ public class GenericRepository<T>(DbContext context)
     /// <summary>
     /// Asynchronously retrieves all entities of type <typeparamref name="T"/>.
     /// </summary>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A list of all entities.</returns>
-    public async Task<List<T>> GetListAsync(CancellationToken ct = default)
-        => await DbSet.ToListAsync(ct);
+    public async Task<List<T>> GetListAsync(CancellationToken cancellationToken = default)
+        => await DbSet.AsNoTracking().ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// Asynchronously retrieves a single random entity from the database and projects it to the specified type using Mapster.
+    /// </summary>
+    /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A random projected entity.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if no entities exist in the database for this type.</exception>
+    public async Task<TResult> GetRandomAsync<TResult>(CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .AsNoTracking()
+            .OrderBy(x => Guid.NewGuid())
+            .ProjectToType<TResult>()
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new EntityNotFoundException(typeof(T).Name);
+    }
 
     /// <summary>
     /// Asynchronously retrieves a paginated, filtered, and sorted list of projected entities.
     /// </summary>
     /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
-    /// <param name="selector">Projection expression to transform entities into DTOs directly in SQL.</param>
-    /// <param name="predicate">Optional expression to filter the entities.</param>
+    /// <param name="predicate">
+    /// Expression that MUST be translatable to SQL by EF Core.
+    /// Non-translatable expressions will cause client-side evaluation.
+    /// </param>
     /// <param name="orderBy">The name of the property to sort by.</param>
     /// <param name="sortOrder">The sort direction ("asc" or "desc").</param>
     /// <param name="pageNumber">The current page number (1-based).</param>
     /// <param name="pageSize">The number of items per page.</param>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A paginated result containing the projected items and metadata.</returns>
-    public async Task<PagedResult<TResult>> GetPagedAsync<TResult>(
-        Expression<Func<T, TResult>> selector,
+    public async Task<Domain.Common.PagedResult<TResult>> GetPagedAsync<TResult>(
         Expression<Func<T, bool>>? predicate = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
-        int pageNumber = 1,
-        int pageSize = 10,
-        CancellationToken ct = default)
+        int pageNumber = PaginationConstants.MinPageNumber,
+        int pageSize = PaginationConstants.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
+        pageSize = Math.Clamp(pageSize, PaginationConstants.MinPageSize, PaginationConstants.MaxPageSize);
+        pageNumber = Math.Max(PaginationConstants.MinPageNumber, pageNumber);
+
         IQueryable<T> query = DbSet.AsNoTracking();
 
         if (predicate is not null)
@@ -181,39 +229,40 @@ public class GenericRepository<T>(DbContext context)
             query = query.Where(predicate);
         }
 
-        int totalCount = await query.CountAsync(ct);
+        int totalCount = await query.CountAsync(cancellationToken);
 
-        // TODO: Email sorting case in User
+        int totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        if (totalCount == 0 || pageNumber > totalPages)
+        {
+            return new([], totalCount, pageNumber, pageSize);
+        }
+
         if (!string.IsNullOrWhiteSpace(orderBy))
         {
-            query = query.OrderByDynamic(orderBy, sortOrder);
+            var sortMapping = GetSortMapping<TResult>();
+
+            if (sortMapping.TryGetValue(orderBy, out string? resolvedEntityPath)
+                && resolvedEntityPath.All(c => char.IsLetterOrDigit(c) || c == '.'))
+            {
+                string safeSortOrder = _allowedSortOrders.Contains(sortOrder ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                                    ? sortOrder
+                                    : SortOrderConstants.Ascending;
+
+                query = query.OrderBy($"{resolvedEntityPath} {safeSortOrder}");
+            }
         }
 
-        if (pageSize > MaxPageSize)
-        {
-            pageSize = MaxPageSize;
-        }
+        IQueryable<TResult> projectedQuery = query.ProjectToType<TResult>();
 
-        var items = await query
+        var items = await projectedQuery
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
-            .Select(selector)
-            .ToListAsync(ct);
+            .ToListAsync(cancellationToken);
 
-        return new PagedResult<TResult>(items, totalCount, pageNumber, pageSize);
+        return new(items, totalCount, pageNumber, pageSize);
     }
 
-    /// <summary>
-    /// Updates an existing entity in the data store's tracking state.
-    /// </summary>
-    /// <param name="entity">
-    /// The entity instance containing updated values.
-    /// The entity must already exist in the data store.
-    /// </param>
-    /// <returns>The updated entity.</returns>
-    public T Update(T entity)
-    {
-        var entry = DbSet.Update(entity);
-        return entry.Entity;
-    }
+    private static Dictionary<string, string> GetSortMapping<TResult>() =>
+        _dtoSortMappingCache.GetOrAdd(typeof(TResult), _ => MapsterSortResolver.GetSortMapping<T, TResult>());
 }

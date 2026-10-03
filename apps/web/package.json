@@ -5,11 +5,18 @@
   "homepage": "https://ionicframework.com/",
   "scripts": {
     "ng": "ng",
+    "generate:api": "ng-openapi-gen",
+    "prestart": "npm run generate:api",
     "start": "ng serve",
+    "prebuild": "npm run generate:api",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
+    "pretest": "npm run generate:api",
     "test": "ng test",
-    "lint": "ng lint"
+    "pretest:ci": "npm run generate:api",
+    "test:ci": "ng test --configuration ci",
+    "lint": "ng lint",
+    "lint:fix": "ng lint --fix"
   },
   "private": true,
   "dependencies": {
@@ -18,7 +25,6 @@
     "@angular/core": "22.1.7",
     "@angular/forms": "22.1.7",
     "@angular/platform-browser": "22.1.7",
-    "@angular/platform-browser-dynamic": "22.1.7",
     "@angular/router": "22.1.7",
     "@capacitor/app": "8.1.1",
     "@capacitor/core": "8.5.2",
@@ -42,6 +48,7 @@
     "angular-eslint": "22.0.0",
     "eslint": "^10.10.0",
     "jsdom": "^26.0.0",
+    "ng-openapi-gen": "1.1.0",
     "typescript": "~6.0.0",
     "typescript-eslint": "^8.61.0",
     "vitest": "~4.0.18"

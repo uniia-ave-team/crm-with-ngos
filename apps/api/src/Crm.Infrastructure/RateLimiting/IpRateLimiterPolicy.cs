@@ -18,6 +18,7 @@ public sealed class IpRateLimiterPolicy(
     IOptions<RateLimitOptions> options,
     ILogger<IpRateLimiterPolicy> logger) : IRateLimiterPolicy<string>
 {
+    private const string UnknownIpAddress = "unknown";
     private readonly RateLimitOptions _options = options.Value;
 
     /// <summary>
@@ -40,7 +41,7 @@ public sealed class IpRateLimiterPolicy(
     /// <returns>A <see cref="RateLimitPartition{TKey}"/> configured with fixed-window options for the target client IP.</returns>
     public RateLimitPartition<string> GetPartition(HttpContext httpContext)
     {
-        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? UnknownIpAddress;
 
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: clientIp,

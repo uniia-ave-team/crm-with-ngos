@@ -16,7 +16,7 @@ public static class DatabaseSeederExtensions
     /// <param name="serviceProvider">The application service provider instance used to create a dependency injection scope.</param>
     /// <returns>A task that represents the asynchronous database seeding operation.</returns>
     /// <exception cref="InvalidOperationException">Thrown if required services (such as <see cref="AdminRoleSeeder"/>) are not registered in the dependency injection container.</exception>
-    public static async Task SeedDatabaseAsync(this IServiceProvider serviceProvider, CancellationToken ct = default)
+    public static async Task SeedDatabaseAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
     {
         using var scope = serviceProvider.CreateScope();
         var services = scope.ServiceProvider;
@@ -25,10 +25,10 @@ public static class DatabaseSeederExtensions
 
         foreach (var seeder in seeders)
         {
-            await seeder.SeedAsync(ct);
+            await seeder.SeedAsync(cancellationToken);
         }
 
         var permissionsCache = services.GetRequiredService<IRolePermissionsCache>();
-        await permissionsCache.SeedAllRolesCacheAsync(ct);
+        await permissionsCache.SeedAllRolesCacheAsync(cancellationToken);
     }
 }

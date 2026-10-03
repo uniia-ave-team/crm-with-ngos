@@ -1,0 +1,50 @@
+---
+title: Головна
+description: Документація CRM з відкритим кодом для громадських організацій.
+template: splash
+hero:
+  title: CRM для громадських організацій
+  tagline: Відкрита система для команд, волонтерів і партнерів вашої організації. Тут — як її розгорнути, налаштувати й щодня нею користуватися.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Швидкий старт
+      link: start/quick-start/
+      icon: right-arrow
+    - text: Розгортання
+      link: deployment/requirements/
+      icon: setting
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Розділи документації
+
+<CardGrid stagger>
+  <Card title="Початок роботи" icon="rocket">
+    Що вміє система і як почати нею користуватися за кілька хвилин.
+  </Card>
+  <Card title="Розгортання" icon="laptop">
+    Встановлення на власний сервер, налаштування, оновлення й резервні копії.
+  </Card>
+  <Card title="Посібник користувача" icon="open-book">
+    Покрокові інструкції: профіль, команда, запрошення, ролі та права.
+  </Card>
+  <Card title="Довідка" icon="information">
+    Відповіді на часті запитання, глосарій і куди звертатися по допомогу.
+  </Card>
+  <Card title="Для розробників" icon="puzzle">
+    Перший запуск, робота з backend і frontend, перевірки, тести й
+    [довідник API](api/).
+  </Card>
+</CardGrid>
+
+## З чого почати
+
+<CardGrid>
+  <LinkCard title="Про систему" description="Для кого CRM і які задачі вона розв'язує." href="start/about/" />
+  <LinkCard title="Швидкий старт" description="Перший вхід і налаштування за кілька кроків." href="start/quick-start/" />
+  <LinkCard title="Встановлення" description="Як запустити CRM на сервері організації." href="deployment/installation/" />
+  <LinkCard title="Часті запитання" description="Короткі відповіді на типові питання." href="help/faq/" />
+</CardGrid>

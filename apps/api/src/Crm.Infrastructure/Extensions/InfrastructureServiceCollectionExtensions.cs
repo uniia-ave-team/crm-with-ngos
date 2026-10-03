@@ -1,18 +1,22 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using Crm.Application.Common.Consts;
 using Crm.Application.Common.Options;
+using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
-using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
+using Crm.Infrastructure.BackgroundServices;
 using Crm.Infrastructure.Consts;
-using Crm.Infrastructure.Identity.Caching;
+using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Options;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Seeders;
 using Crm.Infrastructure.Repositories;
 using Crm.Infrastructure.Services;
+using Mapster;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -20,6 +24,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Net.Http.Headers;
 
 namespace Crm.Infrastructure.Extensions;
 
@@ -49,6 +54,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddCorsSettings(configuration, environment);
         services.AddInfrastructureHealthChecks();
         services.AddAuthorization();
+        services.AddMapsterMappings();
+        services.AddInfrastructureBackgroundServices();
 
         return services;
     }
@@ -58,14 +65,14 @@ public static class InfrastructureServiceCollectionExtensions
     /// ensuring the database schema is fully up-to-date.
     /// </summary>
     /// <param name="app">The application service provider / host.</param>
-    /// <param name="ct">The cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The original <see cref="IServiceProvider"/> instance for chaining.</returns>
-    public static async Task<IServiceProvider> UseInfrastructureDatabaseAsync(this IServiceProvider app, CancellationToken ct = default)
+    public static async Task<IServiceProvider> UseInfrastructureDatabaseAsync(this IServiceProvider app, CancellationToken cancellationToken = default)
     {
         using var scope = app.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        await dbContext.Database.MigrateAsync(ct);
+        await dbContext.Database.MigrateAsync(cancellationToken);
 
         return app;
     }
@@ -85,7 +92,11 @@ public static class InfrastructureServiceCollectionExtensions
     {
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<INgoRepository, NgoRepository>();
+        services.AddScoped<IAuthUserRepository, AuthUserRepository>();
         services.AddScoped<IAuthRoleRepository, AuthRoleRepository>();
+        services.AddScoped<IUserRefreshTokenRepository, UserRefreshTokenRepository>();
+        services.AddScoped<IUserCustomFieldRepository, UserCustomFieldRepository>();
+        services.AddScoped<ILoginPageImageRepository, LoginPageImageRepository>();
 
         return services;
     }
@@ -156,9 +167,14 @@ public static class InfrastructureServiceCollectionExtensions
 
     private static IServiceCollection AddInfrastructureApplicationServices(this IServiceCollection services)
     {
+        services.AddSingleton(TimeProvider.System);
+
         services.AddHttpContextAccessor();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IPermissionService, PermissionService>();
+        services.AddScoped<IIdentityService, IdentityService>();
+        services.AddScoped<IRoleIdentityService, RoleIdentityService>();
 
         return services;
     }
@@ -173,25 +189,25 @@ public static class InfrastructureServiceCollectionExtensions
 
     private static IServiceCollection AddCorsSettings(this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
     {
-        services.AddOptions<CorsOptions>()
-                .Bind(configuration.GetSection(CorsOptions.Position))
+        services.AddOptions<AppCorsOptions>()
+                .Bind(configuration.GetSection(AppCorsOptions.Position))
                 .ValidateDataAnnotations()
                 .ValidateOnStart();
 
         services.AddCors(options =>
         {
-            options.AddPolicy(CorsOptions.PolicyName, policy =>
+            options.AddPolicy(AppCorsOptions.PolicyName, policy =>
             {
                 if (environment.IsDevelopment())
                 {
-                    policy.AllowAnyOrigin();
+                    policy.SetIsOriginAllowed(origin => true);
                 }
                 else
                 {
                     var corsOptions = configuration
-                        .GetSection(CorsOptions.Position)
-                        .Get<CorsOptions>()
-                        ?? throw new InvalidOperationException($"Configuration section '{CorsOptions.Position}' is missing.");
+                        .GetSection(AppCorsOptions.Position)
+                        .Get<AppCorsOptions>()
+                        ?? throw new InvalidOperationException($"Configuration section '{AppCorsOptions.Position}' is missing.");
 
                     if (corsOptions.AllowedOrigins is null || corsOptions.AllowedOrigins.Length == 0)
                     {
@@ -201,7 +217,17 @@ public static class InfrastructureServiceCollectionExtensions
                     policy.WithOrigins(corsOptions.AllowedOrigins);
                 }
 
-                policy.AllowAnyMethod().AllowAnyHeader();
+                policy.WithMethods(
+                          HttpMethods.Get,
+                          HttpMethods.Post,
+                          HttpMethods.Put,
+                          HttpMethods.Delete,
+                          HttpMethods.Options)
+                      .WithHeaders(
+                          HeaderNames.Authorization,
+                          HeaderNames.ContentType,
+                          CustomHttpHeaders.XRequestedWith)
+                      .AllowCredentials();
             });
         });
 
@@ -212,6 +238,28 @@ public static class InfrastructureServiceCollectionExtensions
     {
         services.AddHealthChecks()
             .AddDbContextCheck<ApplicationDbContext>(HealthCheckNames.DbContext);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Scans the application and infrastructure assemblies for <see cref="IRegister"/> implementations
+    /// and configures Mapster global settings.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
+    /// <returns>The original <see cref="IServiceCollection"/> instance for method chaining.</returns>
+    private static IServiceCollection AddMapsterMappings(this IServiceCollection services)
+    {
+        TypeAdapterConfig.GlobalSettings.Scan(
+            typeof(ApplicationServiceCollectionExtensions).Assembly,
+            typeof(InfrastructureServiceCollectionExtensions).Assembly);
+
+        return services;
+    }
+
+    private static IServiceCollection AddInfrastructureBackgroundServices(this IServiceCollection services)
+    {
+        services.AddHostedService<ExpiredTokensCleanupService>();
 
         return services;
     }

@@ -19,11 +19,6 @@ public class UpdateNgoCommandValidator : AbstractValidator<UpdateNgoCommand>
             .MaximumLength(NgoValidationConstants.MaxNameLength)
                 .WithMessage($"NGO name must not exceed {NgoValidationConstants.MaxNameLength} characters.");
 
-        RuleFor(x => x.Description)
-            .MaximumLength(NgoValidationConstants.MaxDescriptionLength)
-                .WithMessage($"NGO description must not exceed {NgoValidationConstants.MaxDescriptionLength} characters.")
-            .When(x => !string.IsNullOrEmpty(x.Description));
-
         RuleFor(x => x.LogoUrl)
             .MaximumLength(NgoValidationConstants.MaxLogoUrlLength)
                 .WithMessage($"Logo URL must not exceed {NgoValidationConstants.MaxLogoUrlLength} characters.")

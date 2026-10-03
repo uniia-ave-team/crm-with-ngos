@@ -1,98 +1,100 @@
 # CRM для громадських організацій
 
-CRM з відкритим кодом для громадських організацій. Розроблена так, щоб її могла
-встановити, оновлювати та обслуговувати людина без технічної підготовки.
+CRM з відкритим кодом для громадських організацій: користувачі та ролі з
+гнучкими правами доступу, профілі організацій, запрошення, власні поля
+профілю.
 
-> **Статус: підготовка.** Структура репозиторію, спосіб постачання та робочі
-> домовленості визначені. Застосунок (`apps/api`, `apps/web`) у розробці.
+> **Статус: у розробці.** Розгортання на сервер ще не підготовлене.
 
-## Принципи
-
-- **Одна дія, щоб встановити, одна — щоб оновити.** На сервері не потрібні ані
-  збірка, ані ручні міграції, ані звірка сумісності версій.
-- **HTTPS без налаштування.** Сертифікат отримується й продовжується
-  автоматично; від адміністратора потрібне лише доменне ім'я.
-- **Одна версія на весь продукт.** API і вебклієнт виходять разом під одним
-  тегом; питання сумісності між ними не існує.
-- **Резервні копії за замовчуванням.** Копія бази робиться щодня автоматично
-  та окремо — перед кожним оновленням.
-- **Низька вартість утримання.** Мінімальна конфігурація працює на найдешевшому
-  VPS або на власному комп'ютері в офісі.
+**Документація:** <https://uniia-ave-team.github.io/crm-with-ngos/>
+— швидкий старт, розгортання, посібник користувача,
+[розділ для розробників](https://uniia-ave-team.github.io/crm-with-ngos/developers/setup/)
+і [довідник API](https://uniia-ave-team.github.io/crm-with-ngos/api/).
 
 ## Стек
 
-| Частина    | Технологія                                              |
-| ---------- | ------------------------------------------------------- |
-| API        | ASP.NET Core (.NET 10), Entity Framework Core 10, PostgreSQL 17 |
-| Вебклієнт  | Ionic Framework, Angular, TypeScript                    |
-| Постачання | Docker-образи в GHCR, Docker Compose, Caddy             |
+| Частина   | Технології                                                        |
+| --------- | ----------------------------------------------------------------- |
+| API       | .NET 10, ASP.NET Core, EF Core 10, PostgreSQL 17, MediatR, FluentValidation, Mapster, Serilog |
+| Вебклієнт | Angular 22, Ionic 9, TypeScript, Vitest                           |
+| Розробка  | just, Docker (лише база даних)                                    |
 
 ## Структура репозиторію
 
 ```
-apps/api/                 ASP.NET Core API
-apps/web/                 Ionic Angular клієнт
-packages/api-contract/    OpenAPI-специфікація — контракт між ними
-deploy/                   Файли, які використовує адміністратор інсталяції
-docs/                     Розгортання, оновлення, архітектурні рішення
+apps/api/                ASP.NET Core API (рішення Crm.slnx)
+apps/web/                Ionic Angular клієнт
+packages/api-contract/   openapi.json — контракт API, генерується з коду
+docs/                    сайт документації (Starlight)
+compose.yaml             PostgreSQL для розробки
+justfile                 усі команди розробки
 ```
 
-API і вебклієнт лежать в одному репозиторії, але не мають спільного
-інструментарію. Спільні в них номер версії, реліз і OpenAPI-контракт.
-Обґрунтування — в [ADR 0001](docs/architecture/adr/0001-monorepo-and-lockstep-versioning.md).
+## Швидкий старт
 
-## Розгортання
-
-Документація з розгортання поділена за рівнем підготовки:
-
-| Рівень | Для кого                                          | Документ                                                   |
-| ------ | ------------------------------------------------- | ---------------------------------------------------------- |
-| 1      | Немає досвіду роботи з серверами: пробна інсталяція на власному комп'ютері або хостинг із панеллю Dokploy, без терміналу | [docs/deployment/quick-start.md](docs/deployment/quick-start.md) |
-| 2      | Є базові навички роботи з терміналом              | [docs/deployment/server.md](docs/deployment/server.md)     |
-| 3      | Власне обладнання, нестандартні мережі, розширені налаштування | [docs/deployment/own-hardware.md](docs/deployment/own-hardware.md) |
-
-Огляд і вибір шляху — [docs/deployment/README.md](docs/deployment/README.md).
-Оновлення — [docs/deployment/upgrading.md](docs/deployment/upgrading.md).
-Резервні копії — [docs/deployment/backups.md](docs/deployment/backups.md).
-
-## Розробка
-
-Команди зібрані в [`justfile`](justfile). Потрібен
-[`just`](https://just.systems):
+Потрібні: [.NET SDK 10](https://dotnet.microsoft.com/download),
+[Node.js 24](https://nodejs.org), [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+і [just](https://just.systems).
 
 ```powershell
-winget install --id Casey.Just --source winget   # Windows
+winget install Casey.Just      # Windows
 ```
 
 ```bash
-brew install just                                 # macOS
+brew install just              # macOS
 ```
+
+Один раз після клонування:
 
 ```bash
-just up          # весь стек у Docker
-just dev-api     # база + опублікований образ клієнта; API запускається локально
-just dev-web     # база + опублікований образ API; клієнт запускається локально
-just contract    # перегенерувати openapi.json і Angular-клієнт
+just setup    # залежності .NET і npm, локальні секрети API
 ```
 
-Розробник однієї частини не збирає іншу — він використовує опублікований образ
-`:edge`. Домовленості — [docs/development.md](docs/development.md).
+Щоразу для роботи — кожна команда в окремому терміналі:
 
-## Версіонування
+```bash
+just db       # PostgreSQL у Docker
+just api      # API з hot reload: http://localhost:5065
+just web      # вебклієнт: http://localhost:4200
+```
 
-Продукт має єдиний номер версії за [SemVer](https://semver.org). Кожен реліз
-збирає обидва образи під одним тегом незалежно від того, яка частина змінилася.
+Інтерактивна документація API (Scalar) доступна в режимі розробки за адресою
+<http://localhost:5065/scalar>.
 
-HTTP API є внутрішньою межею між двома застосунками продукту, а не окремим
-публічним інтерфейсом: він не версіонується окремо й не гарантує сумісності між
-релізами. Публічний стабільний API, якщо він знадобиться, буде впроваджено як
-окрему поверхню.
+## Команди
+
+`just` без аргументів показує всі команди. Основні:
+
+| Команда                   | Дія                                                  |
+| ------------------------- | ---------------------------------------------------- |
+| `just setup`              | Встановити залежності й налаштувати секрети          |
+| `just db` / `just db-down` | Запустити / зупинити базу                           |
+| `just db-reset`           | Видалити локальну базу разом з даними                |
+| `just psql`               | Консоль `psql` до бази розробки                      |
+| `just api` / `just web`   | Запустити API / вебклієнт                            |
+| `just docs`               | Запустити сайт документації локально                 |
+| `just migration-add Name` | Створити міграцію EF Core                            |
+| `just contract`           | Оновити `openapi.json` і Angular-клієнт після зміни API |
+| `just fmt`                | Відформатувати код                                   |
+| `just lint`               | Перевірити форматування й lint                       |
+| `just test`               | Запустити всі тести                                  |
+| `just test-coverage`      | Тести API зі звітом покриття                         |
+| `just ci`                 | Усі перевірки, які виконує CI                        |
+
+## Конфігурація API
+
+`just setup` записує в
+[user-secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets)
+проєкту `Crm.Api` рядок підключення до бази з `compose.yaml` та випадковий
+JWT-секрет. Наявні значення не перезаписуються. Решта налаштувань — у
+`apps/api/src/Crm.Api/appsettings*.json`.
 
 ## Участь у проєкті
 
-Див. [CONTRIBUTING.md](CONTRIBUTING.md).
+Див. [CONTRIBUTING.md](CONTRIBUTING.md) і розділ
+[«Для розробників»](https://uniia-ave-team.github.io/crm-with-ngos/developers/workflow/)
+на сайті документації.
 
 ## Ліцензія
 
-Ще не визначена — див. [відкриті рішення](docs/architecture/adr/README.md#відкриті-рішення).
-До появи файлу `LICENSE` код не має дозволу на використання.
+Ще не визначена. До появи файлу `LICENSE` код не має дозволу на використання.

@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Commands;
-using Crm.Application.Features.Users.Mappings;
 using Crm.Domain.Interfaces.Repositories;
+using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -18,11 +18,9 @@ public partial class UpdateUserProfileCommandHandler(
     {
         LogUpdatingUserProfile(logger, request.UserId);
 
-        var user = await userRepository.GetAsync(request.UserId, cancellationToken);
+        var user = await userRepository.GetForUpdateAsync(request.UserId, cancellationToken);
 
-        user.ApplyUpdate(request);
-
-        userRepository.Update(user);
+        request.Adapt(user);
 
         LogUserProfileUpdatedSuccessfully(logger, request.UserId);
     }

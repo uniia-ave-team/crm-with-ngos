@@ -1,8 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Role.Commands;
-using Crm.Domain.Entities;
+using Crm.Application.Interfaces;
 using MediatR;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Roles.Commands;
@@ -10,34 +9,21 @@ namespace Crm.Application.Features.Roles.Commands;
 /// <summary>
 /// Handles the <see cref="CreateRoleCommand"/> to create a new Identity Role in the system.
 /// </summary>
-/// <param name="roleManager">The ASP.NET Core Identity role manager used for role creation and validation.</param>
+/// <param name="identityService">The service used to interact with the Identity system for role management.</param>
 /// <param name="logger">The logger used to record the lifecycle and outcome of the role creation process.</param>
 public partial class CreateRoleCommandHandler(
-    RoleManager<AuthRole> roleManager,
+    IRoleIdentityService identityService,
     ILogger<CreateRoleCommandHandler> logger) : IRequestHandler<CreateRoleCommand, Guid>
 {
     public async Task<Guid> Handle(CreateRoleCommand request, CancellationToken cancellationToken)
     {
         LogCreatingRole(logger, request.Name);
 
-        var role = new AuthRole()
-        {
-            Name = request.Name,
-        };
+        var roleId = await identityService.CreateRoleAsync(request.Name, request.FeminitiveName, request.PluralName, cancellationToken);
 
-        var result = await roleManager.CreateAsync(role);
+        LogRoleCreatedSuccessfully(logger, request.Name, roleId);
 
-        if (!result.Succeeded)
-        {
-            string errors = string.Join(" | ", result.Errors.Select(e => e.Description));
-            LogRoleCreationFailed(logger, request.Name, errors);
-
-            throw new InvalidOperationException($"Role creation failed: {errors}");
-        }
-
-        LogRoleCreatedSuccessfully(logger, role.Name, role.Id);
-
-        return role.Id;
+        return roleId;
     }
 
     [LoggerMessage(EventId = LogEventIds.CreatingRole, Level = LogLevel.Information, Message = "Initiating creation of role: {RoleName}")]

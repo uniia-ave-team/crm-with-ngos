@@ -1,9 +1,10 @@
-using System.Security.Claims;
 using Crm.Application.Common.Consts;
+using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
-using Crm.Domain.Entities;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
-using Microsoft.AspNetCore.Identity;
+using Crm.Domain.Interfaces.Repositories;
+using Crm.Infrastructure.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Infrastructure.Persistence.Seeders;
@@ -16,21 +17,22 @@ namespace Crm.Infrastructure.Persistence.Seeders;
 /// before applying any modifications, ensuring no duplicate data is created during repeated application startups.
 /// </remarks>
 public partial class AdminRoleSeeder(
-    RoleManager<AuthRole> roleManager,
+    IAuthRoleRepository roleRepository,
+    IRoleIdentityService roleIdentityService,
     ILogger<AdminRoleSeeder> logger) : IDatabaseSeeder
 {
     /// <summary>
     /// Executes the seeding process to orchestrate the creation of the Administrator role and assignment of permissions.
     /// </summary>
-    /// <param name="ct">The cancellation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous seeding operation.</returns>
-    public async Task SeedAsync(CancellationToken ct = default)
+    public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         LogCheckingAdminRole(logger, RoleConsts.Admin);
 
-        var adminRole = await EnsureAdminRoleExistsAsync();
+        var adminRole = await EnsureAdminRoleExistsAsync(cancellationToken);
 
-        await EnsureAdminPermissionsAsync(adminRole, ct);
+        await EnsureAdminPermissionsAsync(adminRole, cancellationToken);
     }
 
     /// <summary>
@@ -38,45 +40,37 @@ public partial class AdminRoleSeeder(
     /// </summary>
     /// <returns>The existing or newly created <see cref="AuthRole"/>.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the role creation process fails due to validation errors.</exception>
-    private async Task<AuthRole> EnsureAdminRoleExistsAsync()
+    private async Task<Guid> EnsureAdminRoleExistsAsync(CancellationToken cancellationToken = default)
     {
-        var adminRole = await roleManager.FindByNameAsync(RoleConsts.Admin);
+        Guid roleId;
 
-        if (adminRole != null)
+        try
         {
+            roleId = await roleRepository.GetRoleIdByNameAsync(RoleConsts.Admin, cancellationToken);
+
             LogAdminRoleAlreadyExists(logger, RoleConsts.Admin);
-            return adminRole;
         }
-
-        adminRole = new AuthRole { Name = RoleConsts.Admin };
-        var createResult = await roleManager.CreateAsync(adminRole);
-
-        if (!createResult.Succeeded)
+        catch (EntityNotFoundException)
         {
-            string errors = string.Join(" | ", createResult.Errors.Select(e => e.Description));
-            LogAdminRoleCreationFailed(logger, RoleConsts.Admin, errors);
+            roleId = await roleIdentityService.CreateRoleAsync(RoleConsts.Admin, cancellationToken: cancellationToken);
 
-            throw new InvalidOperationException($"Failed to seed Admin role: {errors}");
+            LogAdminRoleCreatedSuccessfully(logger, RoleConsts.Admin, roleId);
         }
 
-        LogAdminRoleCreatedSuccessfully(logger, RoleConsts.Admin, adminRole.Id);
-
-        return adminRole;
+        return roleId;
     }
 
     /// <summary>
     /// Synchronizes the claims of the provided role with the complete set of system permissions.
     /// </summary>
-    /// <param name="adminRole">The role to which missing permissions will be assigned.</param>
-    /// <param name="ct">The cancellation token.</param>
-    private async Task EnsureAdminPermissionsAsync(AuthRole adminRole, CancellationToken ct)
+    /// <param name="roleId">The ID of the role to which missing permissions will be assigned.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    private async Task EnsureAdminPermissionsAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        var existingClaims = await roleManager.GetClaimsAsync(adminRole);
+        var existingPermissions = await roleIdentityService.GetRolePermissionsAsync(roleId, cancellationToken);
 
         var missingPermissions = PermissionExtensions.GetAllStringValues()
-            .Where(permissionValue => !existingClaims.Any(c =>
-                c.Type == PermissionExtensions.ClaimType &&
-                c.Value == permissionValue))
+            .Where(permissionValue => !existingPermissions.Contains(permissionValue))
             .ToList();
 
         if (missingPermissions.Count == 0)
@@ -89,20 +83,11 @@ public partial class AdminRoleSeeder(
 
         foreach (string permissionValue in missingPermissions)
         {
-            ct.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
 
-            var claim = new Claim(PermissionExtensions.ClaimType, permissionValue);
-            var addClaimResult = await roleManager.AddClaimAsync(adminRole, claim);
+            await roleIdentityService.AddPermissionToRoleAsync(roleId, permissionValue, cancellationToken);
 
-            if (addClaimResult.Succeeded)
-            {
-                addedCount++;
-            }
-            else
-            {
-                string errors = string.Join(" | ", addClaimResult.Errors.Select(e => e.Description));
-                LogClaimAdditionFailed(logger, permissionValue, RoleConsts.Admin, errors);
-            }
+            addedCount++;
         }
 
         LogClaimsAddedSuccessfully(logger, addedCount, RoleConsts.Admin);
@@ -111,17 +96,11 @@ public partial class AdminRoleSeeder(
     [LoggerMessage(EventId = LogEventIds.CheckingAdminRole, Level = LogLevel.Information, Message = "Checking if default admin role '{RoleName}' exists.")]
     private static partial void LogCheckingAdminRole(ILogger logger, string roleName);
 
-    [LoggerMessage(EventId = LogEventIds.AdminRoleCreationFailed, Level = LogLevel.Error, Message = "Failed to create admin role '{RoleName}'. Reason: {Errors}")]
-    private static partial void LogAdminRoleCreationFailed(ILogger logger, string roleName, string errors);
-
     [LoggerMessage(EventId = LogEventIds.AdminRoleCreatedSuccessfully, Level = LogLevel.Information, Message = "Admin role '{RoleName}' successfully created with ID: {RoleId}")]
     private static partial void LogAdminRoleCreatedSuccessfully(ILogger logger, string roleName, Guid roleId);
 
     [LoggerMessage(EventId = LogEventIds.AdminRoleAlreadyExists, Level = LogLevel.Information, Message = "Admin role '{RoleName}' already exists in the system.")]
     private static partial void LogAdminRoleAlreadyExists(ILogger logger, string roleName);
-
-    [LoggerMessage(EventId = LogEventIds.ClaimAdditionFailed, Level = LogLevel.Warning, Message = "Failed to add permission claim '{ClaimValue}' to role '{RoleName}'. Reason: {Errors}")]
-    private static partial void LogClaimAdditionFailed(ILogger logger, string claimValue, string roleName, string errors);
 
     [LoggerMessage(EventId = LogEventIds.ClaimsAddedSuccessfully, Level = LogLevel.Information, Message = "Successfully added {Count} new permission claim(s) to role '{RoleName}'.")]
     private static partial void LogClaimsAddedSuccessfully(ILogger logger, int count, string roleName);

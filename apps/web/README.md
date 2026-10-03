@@ -36,9 +36,18 @@ npm start                          # ng serve, http://localhost:4200
 npm run build                      # production-збірка у www/
 npm run watch                      # збірка з перезбиранням (development)
 npm test                           # Vitest у режимі спостереження
-npx ng test --configuration ci     # Vitest, один прогін (для CI)
+npm run test:ci                    # Vitest, один прогін (для CI)
 npm run lint                       # ESLint для src/**/*.ts і src/**/*.html
+npm run lint:fix                   # ESLint з автовиправленням
+npm run generate:api               # клієнт API з openapi.json
 ```
+
+З кореня репозиторію те саме доступне через `just`: `just web`,
+`just test-web`, `just web-ci`.
+
+`npm start`, `npm run build` і тести спершу генерують клієнт API з
+`packages/api-contract/openapi.json` у `src/app/api/generated` (каталог
+ігнорується git).
 
 `ng build` кладе результат у `www/`, а не в `dist/`. Саме звідти Dockerfile
 має копіювати статику для nginx. Каталог `www/` ігнорується git.
@@ -81,12 +90,14 @@ npm run lint                       # ESLint для src/**/*.ts і src/**/*.html
   кримськотатарської, окремий — для білоруської.
 - Кольорові токени світлої/темної теми та `ion-toolbar` (`src/theme/`).
 - `environment.ts` / `environment.prod.ts` з єдиним прапорцем `production`.
+- Клієнт API, згенерований з `openapi.json` (`src/app/api/generated`), поки
+  ніде не використовується.
+- `proxy.conf.json`: `ng serve` перенаправляє `/api` на API за адресою
+  `http://localhost:5065`.
 
 Ще не зроблено:
 
-- `proxy.conf.json` і `proxyConfig` в `angular.json` (без цього `just dev-web`
-  не проксує `/api` на `http://localhost:5080`);
-- `Dockerfile` і `nginx.conf` (потрібні для `just build`);
+- `Dockerfile` і `nginx.conf` для розгортання;
 - UI самих сторінок — `calendar`, `planner`, `knowledge-base`, `colleagues`
   поки порожні заглушки;
 - сторінка `settings` — теж порожня заглушка;
@@ -96,7 +107,6 @@ npm run lint                       # ESLint для src/**/*.ts і src/**/*.html
   «Продовжити» нічого не робить, автопошуку сервера немає;
 - переклад вмісту сторінок (лише меню й заголовки перекладені);
 - перемикач мови в інтерфейсі (наразі тільки автовизначення);
-- скрипт `format` (на нього посилається `justfile`);
 - каталог `shared/` (спільні компоненти поза `core/` і сторінками поки не
   виділялись).
 
@@ -106,6 +116,8 @@ npm run lint                       # ESLint для src/**/*.ts і src/**/*.html
 .gitignore
 angular.json                   єдиний проєкт `app`, вихід збірки — www/
 ionic.config.json
+ng-openapi-gen.json            генерація клієнта API з openapi.json
+proxy.conf.json                проксі /api на http://localhost:5065 для ng serve
 package.json
 eslint.config.js
 tsconfig.json                  також tsconfig.app.json, tsconfig.spec.json
@@ -127,6 +139,7 @@ src/
     app.module.ts
     app-routing.module.ts
     app.component.*            оболонка: рейл + друга панель
+    api/generated/             клієнт API (генерується, не комітиться)
     core/
       layout/                  LayoutService, PrimaryNavComponent,
                                 SecondaryPanelComponent
@@ -168,7 +181,6 @@ httpOnly-куці.
 Ionic дає можливість зібрати клієнт як мобільний застосунок через Capacitor.
 Пакети `@capacitor/*` уже є в `package.json` (частина шаблону), але
 `capacitor.config` і нативні проєкти відсутні. Рішення про мобільний застосунок
-не ухвалене. Його наслідок для архітектури описаний у
-[ADR 0001](../../docs/architecture/adr/0001-monorepo-and-lockstep-versioning.md#мобільний-клієнт):
-мобільний застосунок стає другим споживачем API з власним циклом випуску, що
-вимагає політики сумісності API, якої зараз немає.
+не ухвалене. Наслідок для архітектури: мобільний застосунок стає другим
+споживачем API з власним циклом випуску, що вимагає політики сумісності API,
+якої зараз немає.

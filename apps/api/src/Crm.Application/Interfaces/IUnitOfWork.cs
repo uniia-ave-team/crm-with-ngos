@@ -19,4 +19,9 @@ public interface IUnitOfWork
     /// Rolls back the current transaction, discarding all changes.
     /// </summary>
     Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Flushes tracked changes to the database.
+    /// </summary>
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

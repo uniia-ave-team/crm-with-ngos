@@ -1,18 +1,15 @@
-# Відповідальні за рецензування. Команди мають існувати в організації
-# uniia-ave-team і мати доступ на запис до репозиторію, інакше GitHub ігнорує
-# правило без попередження.
+# Review owners. Teams must exist in the uniia-ave-team organization and have
+# write access to the repository, otherwise GitHub silently ignores the rule.
 
-*                                   @uniia-ave-team/maintainers
+*                         @uniia-ave-team/maintainers
 
-/apps/api/                          @uniia-ave-team/backend
-/apps/web/                          @uniia-ave-team/frontend
+/apps/api/                @uniia-ave-team/backend
+/apps/web/                @uniia-ave-team/frontend
 
-# Контракт між застосунками: зміни потребують рецензії обох команд.
-/packages/api-contract/             @uniia-ave-team/backend @uniia-ave-team/frontend
+# API contract between the apps: changes need approval from both teams.
+/packages/api-contract/   @uniia-ave-team/backend @uniia-ave-team/frontend
 
-# Зміни, здатні вплинути на оновлення встановлених інсталяцій.
-/deploy/                            @uniia-ave-team/maintainers @uniia-ave-team/backend
-/docs/deployment/                   @uniia-ave-team/maintainers
-
-/.github/                           @uniia-ave-team/maintainers
-/docs/architecture/adr/             @uniia-ave-team/maintainers
+# Development tooling and CI.
+/.github/                 @uniia-ave-team/maintainers
+/justfile                 @uniia-ave-team/maintainers
+/compose.yaml             @uniia-ave-team/maintainers

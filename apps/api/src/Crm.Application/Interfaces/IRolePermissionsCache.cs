@@ -14,8 +14,8 @@ public interface IRolePermissionsCache
     /// </summary>
     /// <param name="roleId">The unique identifier of the role.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation, containing a <see cref="HashSet{String}"/> of access right values.</returns>
-    Task<HashSet<string>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken = default);
+    /// <returns>A task representing the asynchronous operation, containing a <see cref="IReadOnlySet{String}"/> of access right values.</returns>
+    Task<IReadOnlySet<string>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Overwrites the cached access rights for a specific role with a provided set.

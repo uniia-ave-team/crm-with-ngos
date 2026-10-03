@@ -1,7 +1,9 @@
 using Crm.Application.Interfaces;
+using Crm.Domain.Enums;
 using MediatR;
 
 namespace Crm.Application.Dtos.User.Commands;
+
 /// <summary>
 /// Represents a command to update the profile details of an existing user.
 /// </summary>
@@ -14,13 +16,19 @@ namespace Crm.Application.Dtos.User.Commands;
 /// <param name="Country">The updated country of residence.</param>
 /// <param name="EmergencyContact">The updated emergency contact information.</param>
 /// <param name="PreferredLanguage">The updated preferred interface language.</param>
+/// <param name="Pronouns">The updated preferred pronouns.</param>
+/// <param name="PronounCategory">The updated grammatical category of pronouns.</param>
+/// <param name="AvatarUrl">The updated avatar URL or file path.</param>
 public record UpdateUserProfileCommand(
     Guid UserId,
-    string FirstName,
-    string LastName,
+    string? FirstName,
+    string? LastName,
     string? Patronymic,
     string? InternalPosition,
     string? PhoneNumber,
     string? Country,
     string? EmergencyContact,
-    string? PreferredLanguage) : IRequest, ITransactionalCommand;
+    string? PreferredLanguage,
+    string? Pronouns,
+    PronounCategory? PronounCategory,
+    string? AvatarUrl) : IRequest, ITransactionalCommand;

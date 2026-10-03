@@ -18,11 +18,9 @@ public class UpdateUserProfileCommandValidator : AbstractValidator<UpdateUserPro
             .NotEmpty().WithMessage("User ID is required.");
 
         RuleFor(x => x.FirstName)
-            .NotEmpty().WithMessage("First name is required.")
             .MaximumLength(UserValidationConstants.MaxFirstNameLength);
 
         RuleFor(x => x.LastName)
-            .NotEmpty().WithMessage("Last name is required.")
             .MaximumLength(UserValidationConstants.MaxLastNameLength);
 
         RuleFor(x => x.Patronymic)
@@ -48,5 +46,20 @@ public class UpdateUserProfileCommandValidator : AbstractValidator<UpdateUserPro
         RuleFor(x => x.PreferredLanguage)
             .MaximumLength(UserValidationConstants.MaxPreferredLanguageLength)
             .When(x => !string.IsNullOrEmpty(x.PreferredLanguage));
+
+        RuleFor(x => x.Pronouns)
+            .MaximumLength(UserValidationConstants.MaxPronounsLength)
+            .When(x => !string.IsNullOrEmpty(x.Pronouns));
+
+        RuleFor(x => x.PronounCategory)
+            .IsInEnum().WithMessage("Invalid pronoun category value.")
+            .When(x => x.PronounCategory.HasValue);
+
+        RuleFor(x => x.AvatarUrl)
+            .MaximumLength(UserValidationConstants.MaxAvatarUrlLength)
+            .WithMessage($"Avatar URL must not exceed {UserValidationConstants.MaxAvatarUrlLength} characters.")
+            .Must(uri => Uri.IsWellFormedUriString(uri, UriKind.Absolute))
+            .WithMessage("Avatar URL must be a valid absolute URI.")
+            .When(x => !string.IsNullOrEmpty(x.AvatarUrl));
     }
 }

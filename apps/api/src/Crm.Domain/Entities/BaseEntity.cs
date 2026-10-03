@@ -17,7 +17,7 @@ public abstract class BaseEntity : IEntity
     }
 
     /// <summary>
-    /// Gets or sets the unique identifier for the entity.
+    /// Gets the unique identifier for the entity.
     /// </summary>
-    public Guid Id { get; protected set; }
+    public Guid Id { get; init; }
 }

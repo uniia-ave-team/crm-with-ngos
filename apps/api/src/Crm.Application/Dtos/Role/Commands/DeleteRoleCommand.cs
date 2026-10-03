@@ -1,3 +1,4 @@
+using Crm.Application.Interfaces;
 using MediatR;
 
 namespace Crm.Application.Dtos.Role.Commands;
@@ -5,4 +6,4 @@ namespace Crm.Application.Dtos.Role.Commands;
 /// Represents a command to delete an existing role.
 /// </summary>
 /// <param name="Id">The unique identifier of the role to delete.</param>
-public record DeleteRoleCommand(Guid Id) : IRequest;
+public record DeleteRoleCommand(Guid Id) : IRequest, ITransactionalCommand;

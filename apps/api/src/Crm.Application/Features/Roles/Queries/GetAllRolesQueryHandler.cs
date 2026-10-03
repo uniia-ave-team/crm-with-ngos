@@ -1,10 +1,7 @@
-using System.Linq.Expressions;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Role;
 using Crm.Application.Dtos.Role.Queries;
-using Crm.Application.Features.Roles.Mappings;
 using Crm.Domain.Common;
-using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -22,35 +19,17 @@ public partial class GetAllRolesQueryHandler(
     {
         LogFetchingRoles(logger, request.PageNumber, request.PageSize, request.SearchTerm);
 
-        var filter = BuildRoleFilter(request.SearchTerm);
-
-        var pagedResult = await authRoleRepository.GetPagedAsync(
-            selector: RoleMappingExtensions.ToDtoExpression(),
-            predicate: filter,
+        var pagedResult = await authRoleRepository.GetPagedAsync<RoleDto>(
+            searchTerm: request.SearchTerm,
             orderBy: request.OrderBy,
             sortOrder: request.SortOrder,
             pageNumber: request.PageNumber,
             pageSize: request.PageSize,
-            ct: cancellationToken);
+            cancellationToken: cancellationToken);
 
         LogRolesFetched(logger, pagedResult.Items.Count, pagedResult.TotalCount);
 
         return pagedResult;
-    }
-
-    /// <summary>
-    /// Builds the filter expression for querying roles based on an optional search term.
-    /// </summary>
-    private static Expression<Func<AuthRole, bool>>? BuildRoleFilter(string? searchTerm)
-    {
-        if (string.IsNullOrWhiteSpace(searchTerm))
-        {
-            return null;
-        }
-
-        string term = searchTerm.Trim().ToUpperInvariant();
-
-        return role => role.NormalizedName != null && role.NormalizedName.Contains(term);
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingRoles, Level = LogLevel.Information, Message = "Fetching roles - Page: {PageNumber}, Size: {PageSize}, Search: {SearchTerm}")]

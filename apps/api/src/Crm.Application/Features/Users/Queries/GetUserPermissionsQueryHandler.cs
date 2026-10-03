@@ -24,19 +24,13 @@ public partial class GetUserPermissionsQueryHandler(
 
         LogFetchingPermissions(logger, request.RoleIds.Count);
 
-        var allPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var tasks = request.RoleIds.Select(id => permissionsCache.GetRolePermissionsAsync(id, cancellationToken));
+        var results = await Task.WhenAll(tasks);
 
-        foreach (var roleId in request.RoleIds)
-        {
-            var rolePermissions = await permissionsCache.GetRolePermissionsAsync(roleId, cancellationToken);
-
-            foreach (var permission in rolePermissions)
-            {
-                allPermissions.Add(permission);
-            }
-        }
-
-        var permissionsList = allPermissions.ToList();
+        var permissionsList = results
+            .SelectMany(r => r)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         LogPermissionsFetchedSuccessfully(logger, permissionsList.Count);
 

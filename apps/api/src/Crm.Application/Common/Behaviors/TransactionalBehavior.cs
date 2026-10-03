@@ -11,18 +11,13 @@ namespace Crm.Application.Common.Behaviors;
 public partial class TransactionalBehavior<TRequest, TResponse>(
     IUnitOfWork unitOfWork,
     ILogger<TransactionalBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : notnull
+    where TRequest : ITransactionalCommand
 {
     public async Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        if (request is not ITransactionalCommand)
-        {
-            return await next(cancellationToken);
-        }
-
         LogBeginningTransaction(logger, typeof(TRequest).Name);
 
         await unitOfWork.BeginTransactionAsync(cancellationToken);

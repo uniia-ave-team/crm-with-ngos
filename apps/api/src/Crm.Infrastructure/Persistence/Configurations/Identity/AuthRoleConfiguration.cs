@@ -1,5 +1,5 @@
 using Crm.Domain.Consts.Entities;
-using Crm.Domain.Entities;
+using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence.ValueGenerators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -22,5 +22,11 @@ public class AuthRoleConfiguration : IEntityTypeConfiguration<AuthRole>
 
         builder.Property(r => r.NormalizedName)
             .HasMaxLength(AuthRoleValidationConstants.MaxNameLength);
+
+        builder.Property(r => r.FeminitiveName)
+            .HasMaxLength(AuthRoleValidationConstants.MaxFeminitiveNameLength);
+
+        builder.Property(r => r.PluralName)
+            .HasMaxLength(AuthRoleValidationConstants.MaxPluralNameLength);
     }
 }

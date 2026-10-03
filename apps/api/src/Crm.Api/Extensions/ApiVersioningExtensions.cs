@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
+using Crm.Api.OpenApi.Transformers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
@@ -12,6 +13,9 @@ namespace Crm.Api.Extensions;
 /// </summary>
 public static class ApiVersioningExtensions
 {
+    private const string ApiTitle = "CRM API";
+    private const string ApiDescription = "REST API of the open-source CRM for non-governmental organizations.";
+
     /// <summary>
     /// Configures and registers API versioning services, setting up URL segment versioning,
     /// default versioning rules, and API explorer integration for documentation generation.
@@ -31,7 +35,15 @@ public static class ApiVersioningExtensions
             options.GroupNameFormat = "'v'VVV";
             options.SubstituteApiVersionInUrl = true;
         })
-        .AddOpenApi();
+        .AddOpenApi(options =>
+        {
+            options.Document.AddDocumentTransformer((document, context, cancellationToken) =>
+            {
+                document.Info.Title = ApiTitle;
+                document.Info.Description = ApiDescription;
+                return Task.CompletedTask;
+            });
+        });
 
         services.ConfigureAll<OpenApiOptions>(options =>
         {
@@ -63,6 +75,10 @@ public static class ApiVersioningExtensions
 
                 return Task.CompletedTask;
             });
+
+            options.AddOperationTransformer<AccessRightOperationTransformer>();
+            options.AddOperationTransformer<OperationIdOperationTransformer>();
+            options.AddOperationTransformer<JsonContentTypeOperationTransformer>();
         });
 
         return services;
