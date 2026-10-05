@@ -5,14 +5,19 @@
 // реально потрапляє вміст через <slot>), а не на самому ion-content: у
 // Shadow DOM display:flex на хості не впливає на розкладку розподіленого
 // вмісту, лише на те, як сам хост поводиться в розкладці свого батька.
+//
+// Саме `margin: auto` на .login__wrap, а не align-items/justify-content:
+// auto-відступи центрують, поки вміст вміщається, а коли ні (помилка над
+// формою, низьке вікно) — притискають до початку, і вміст можна прокрутити.
+// Центрування вирівнюванням у такому разі обрізало б верх без прокрутки.
 .login {
   --background: #f7f8f8;
 
   &::part(scroll) {
     display: flex;
-    align-items: center;
-    justify-content: center;
     min-height: 100%;
+    padding: 24px;
+    box-sizing: border-box;
   }
 }
 
@@ -22,10 +27,49 @@
   }
 }
 
-.login__card {
+// Спільна обгортка: помилка над формою й сама картка однієї ширини.
+.login__wrap {
   width: 100%;
   max-width: 420px;
-  margin: 24px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login__error {
+  padding: 12px 16px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid #f1c0bb;
+  background: #fdeceb;
+  color: #a1281f;
+  font-family: var(--font-menu);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .login__error {
+    border-color: #5a2b27;
+    background: #2a1413;
+    color: #ff9b92;
+  }
+}
+
+.login__error-line {
+  margin: 0;
+}
+
+.login__status {
+  margin: 0;
+  font-family: var(--font-login-body);
+  font-weight: 300;
+  font-size: 14px;
+  color: var(--nav-fg-inactive);
+}
+
+.login__card {
   padding: 32px;
   box-sizing: border-box;
   border-radius: 20px;
@@ -67,6 +111,17 @@
   --padding-end: 12px;
   --padding-top: 10px;
   --padding-bottom: 10px;
+  // Підсвітка рамки (фокус, а також «валідно» після торкання) — зелений
+  // кнопки, а не стандартні синій/зелений Ionic.
+  --highlight-color-focused: #32670b;
+  --highlight-color-valid: #32670b;
+}
+
+@media (prefers-color-scheme: dark) {
+  .login__input {
+    --highlight-color-focused: #478a7f;
+    --highlight-color-valid: #478a7f;
+  }
 }
 
 .login__submit {
@@ -87,4 +142,142 @@
     --background-hover: #478a7f;
     --background-activated: #478a7f;
   }
+}
+
+// Форма створення організації.
+.login__field-error {
+  margin: -8px 0 0;
+  font-family: var(--font-menu);
+  font-size: 12px;
+  line-height: 1.4;
+  color: #a1281f;
+}
+
+@media (prefers-color-scheme: dark) {
+  .login__field-error {
+    color: #ff9b92;
+  }
+}
+
+.login__logo {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.login__dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 160px;
+  padding: 16px;
+  box-sizing: border-box;
+  border: 2px dashed var(--nav-border);
+  border-radius: 10px;
+  text-align: center;
+  cursor: pointer;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+
+  &:hover,
+  &:focus-visible,
+  &--active {
+    border-color: #32670b;
+    background: rgba(50, 103, 11, 0.06);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .login__dropzone {
+    &:hover,
+    &:focus-visible,
+    &--active {
+      border-color: #478a7f;
+      background: rgba(71, 138, 127, 0.1);
+    }
+  }
+}
+
+.login__dropzone-text {
+  font-family: var(--font-menu);
+  font-size: 14px;
+  color: var(--nav-fg-active);
+  word-break: break-all;
+}
+
+.login__dropzone-hint {
+  font-family: var(--font-login-body);
+  font-weight: 300;
+  font-size: 13px;
+  color: var(--nav-fg-inactive);
+}
+
+.login__logo-preview {
+  max-width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  margin-bottom: 4px;
+}
+
+// Контейнер для круглої кнопки видалення в правому верхньому куті зони.
+.login__logo-box {
+  position: relative;
+}
+
+.login__logo-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--nav-border);
+  border-radius: 50%;
+  background: #ffffff;
+  color: var(--nav-fg-active);
+  cursor: pointer;
+  outline: none;
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: #32670b;
+    color: #32670b;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .login__logo-remove {
+    background: #000000;
+
+    &:hover,
+    &:focus-visible {
+      border-color: #478a7f;
+      color: #478a7f;
+    }
+  }
+}
+
+.login__file {
+  display: none;
+}
+
+.login__hint {
+  margin: 0;
+  font-family: var(--font-login-body);
+  font-weight: 300;
+  font-size: 13px;
+  color: var(--nav-fg-inactive);
 }

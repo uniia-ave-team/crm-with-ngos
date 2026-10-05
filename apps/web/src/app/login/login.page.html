@@ -1,17 +1,246 @@
 <ion-content [fullscreen]="true" class="login">
-  <div class="login__card">
-    <h1 class="login__title">Крок 1: введіть адресу серверу</h1>
-    <p class="login__description">
-      Будь ласка, введіть адресу серверу, на якій розміщена копія системи вашої організації. Адресу можна дізнатися у відповідальної особи в межах вашої організації.
-    </p>
-    <ion-input
-      class="login__input"
-      fill="outline"
-      type="text"
-      inputmode="url"
-      placeholder="Наприклад, crm.organization.org або 192.168.0.1"
-      aria-label="Адреса серверу"
-    ></ion-input>
-    <ion-button class="login__submit" type="button" expand="block">Продовжити</ion-button>
+  <div class="login__wrap">
+    @switch (view()) {
+      @case ('loading') {
+        <div class="login__card">
+          <p class="login__status">{{ 'login.loading' | translate }}</p>
+        </div>
+      }
+
+      @case ('login') {
+        <!-- Заглушка: форми входу ще нема. -->
+        <div class="login__card">
+          <h1 class="login__title">{{ 'login.title' | translate }}</h1>
+          <p class="login__description">{{ 'login.connected' | translate: { url: connection.serverUrl() } }}</p>
+        </div>
+      }
+
+      @case ('ngo') {
+        @if (ngoBannerErrors().length) {
+          <div class="login__error" role="alert">
+            @for (key of ngoBannerErrors(); track key) {
+              <p class="login__error-line">{{ key | translate }}</p>
+            }
+          </div>
+        }
+
+        <div class="login__card">
+          <h1 class="login__title">{{ 'login.ngo.title' | translate }}</h1>
+          <p class="login__description">{{ 'login.ngo.description' | translate }}</p>
+
+          <ion-input tabindex="0"
+            class="login__input"
+            fill="outline"
+            type="text"
+            maxlength="200"
+            [placeholder]="'login.ngo.namePlaceholder' | translate"
+            [attr.aria-label]="'login.ngo.nameLabel' | translate"
+            [ngModel]="ngoName()"
+            (ngModelChange)="onNgoNameChange($event)"
+            (keyup.enter)="submitNgo()"
+          ></ion-input>
+          @if (ngoNameError(); as nameError) {
+            <p class="login__field-error" role="alert">
+              {{ (nameError === 'required' ? 'login.ngo.nameRequired' : 'login.ngo.nameTooLong') | translate }}
+            </p>
+          }
+
+          <div class="login__logo">
+            <div class="login__logo-box">
+              <div
+                class="login__dropzone"
+                [class.login__dropzone--active]="logoDragOver()"
+                [class.login__dropzone--filled]="ngoLogoPreview()"
+                role="button"
+                tabindex="0"
+                [attr.aria-label]="(ngoLogo() ? 'login.ngo.logoReplaceLabel' : 'login.ngo.logoUploadLabel') | translate"
+                (click)="logoFile.click()"
+                (keydown.enter)="logoFile.click()"
+                (keydown.space)="$event.preventDefault(); logoFile.click()"
+                (dragover)="onLogoDragOver($event)"
+                (dragleave)="onLogoDragLeave($event)"
+                (drop)="onLogoDrop($event)"
+              >
+                @if (ngoLogoPreview(); as preview) {
+                  <img class="login__logo-preview" [src]="preview" [alt]="'login.ngo.logoAlt' | translate" />
+                  <span class="login__dropzone-text">{{ ngoLogo()?.name }}</span>
+                  <span class="login__dropzone-hint">{{ 'login.ngo.dropReplaceHint' | translate }}</span>
+                } @else {
+                  <span class="login__dropzone-text">{{ 'login.ngo.dropText' | translate }}</span>
+                  <span class="login__dropzone-hint">{{ 'login.ngo.dropHint' | translate }}</span>
+                }
+              </div>
+              @if (ngoLogo()) {
+                <button
+                  class="login__logo-remove"
+                  type="button"
+                  tabindex="0"
+                  [attr.aria-label]="'login.ngo.remove' | translate"
+                  [title]="'login.ngo.remove' | translate"
+                  (click)="removeLogo()"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
+                    />
+                  </svg>
+                </button>
+              }
+            </div>
+            <input
+              #logoFile
+              class="login__file"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              [attr.aria-label]="'login.ngo.logoLabel' | translate"
+              (change)="onLogoSelected($event)"
+            />
+            <p class="login__hint">{{ 'login.ngo.formatHint' | translate }}</p>
+            @if (ngoLogoError(); as logoError) {
+              <p class="login__field-error" role="alert">
+                {{ (logoError === 'type' ? 'login.ngo.logoTypeError' : 'login.ngo.logoSizeError') | translate }}
+              </p>
+            }
+          </div>
+
+
+          <ion-button tabindex="0" class="login__submit" type="button" expand="block" [disabled]="ngoSaving()" (click)="submitNgo()">
+            {{ (ngoSaving() ? 'login.ngo.saving' : 'login.ngo.submit') | translate }}
+          </ion-button>
+        </div>
+      }
+
+      @case ('admin') {
+        @if (adminBannerErrors().length) {
+          <div class="login__error" role="alert">
+            @for (key of adminBannerErrors(); track key) {
+              <p class="login__error-line">{{ key | translate }}</p>
+            }
+          </div>
+        }
+
+        <div class="login__card">
+          <h1 class="login__title">{{ 'login.admin.title' | translate }}</h1>
+          <p class="login__description">{{ 'login.admin.description' | translate }}</p>
+
+          <ion-input tabindex="0"
+            class="login__input"
+            fill="outline"
+            type="email"
+            autocomplete="email"
+            [placeholder]="'login.admin.email' | translate"
+            [attr.aria-label]="'login.admin.email' | translate"
+            [ngModel]="adminEmail()"
+            (ngModelChange)="onAdminFieldChange(adminEmail, $event)"
+            (keyup.enter)="submitAdmin()"
+          ></ion-input>
+          @if (adminEmailError(); as fieldError) {
+            <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
+          }
+          <ion-input tabindex="0"
+            class="login__input"
+            fill="outline"
+            type="text"
+            autocomplete="family-name"
+            [placeholder]="'login.admin.lastName' | translate"
+            [attr.aria-label]="'login.admin.lastName' | translate"
+            [ngModel]="adminLastName()"
+            (ngModelChange)="onAdminFieldChange(adminLastName, $event)"
+            (keyup.enter)="submitAdmin()"
+          ></ion-input>
+          <ion-input tabindex="0"
+            class="login__input"
+            fill="outline"
+            type="text"
+            autocomplete="given-name"
+            [placeholder]="'login.admin.firstName' | translate"
+            [attr.aria-label]="'login.admin.firstName' | translate"
+            [ngModel]="adminFirstName()"
+            (ngModelChange)="onAdminFieldChange(adminFirstName, $event)"
+            (keyup.enter)="submitAdmin()"
+          ></ion-input>
+          @if (adminFirstNameError(); as fieldError) {
+            <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
+          }
+          <ion-input tabindex="0"
+            class="login__input"
+            fill="outline"
+            type="password"
+            autocomplete="new-password"
+            [placeholder]="'login.admin.password' | translate"
+            [attr.aria-label]="'login.admin.password' | translate"
+            [ngModel]="adminPassword()"
+            (ngModelChange)="onAdminFieldChange(adminPassword, $event)"
+            (keyup.enter)="submitAdmin()"
+          ></ion-input>
+          @if (adminPasswordError(); as fieldError) {
+            <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
+          }
+          <ion-input tabindex="0"
+            class="login__input"
+            fill="outline"
+            type="password"
+            autocomplete="new-password"
+            [placeholder]="'login.admin.passwordRepeat' | translate"
+            [attr.aria-label]="'login.admin.passwordRepeat' | translate"
+            [ngModel]="adminPasswordRepeat()"
+            (ngModelChange)="onAdminFieldChange(adminPasswordRepeat, $event)"
+            (keyup.enter)="submitAdmin()"
+          ></ion-input>
+          @if (adminPasswordRepeatError(); as fieldError) {
+            <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
+          }
+
+          <ion-button tabindex="0" class="login__submit" type="button" expand="block" (click)="submitAdmin()">
+            {{ 'login.admin.submit' | translate }}
+          </ion-button>
+        </div>
+      }
+
+      @case ('setup-error') {
+        <div class="login__error" role="alert">{{ 'login.setupError' | translate }}</div>
+      }
+
+      @case ('step1') {
+        @if (formError(); as currentError) {
+          <div class="login__error" role="alert">
+            {{
+              ('login.step1.error.' + (currentError === 'no-connection' ? 'noConnection' : currentError))
+                | translate: { url: connection.serverUrl() }
+            }}
+          </div>
+        }
+
+        <div class="login__card">
+          <h1 class="login__title">{{ 'login.step1.title' | translate }}</h1>
+          <p class="login__description">{{ 'login.step1.description' | translate }}</p>
+          <ion-input tabindex="0"
+            class="login__input"
+            fill="outline"
+            type="text"
+            inputmode="url"
+            [placeholder]="'login.step1.placeholder' | translate"
+            [attr.aria-label]="'login.step1.label' | translate"
+            [ngModel]="address()"
+            (ngModelChange)="onAddressChange($event)"
+            (keyup.enter)="submit()"
+          ></ion-input>
+          <ion-button tabindex="0"
+            class="login__submit"
+            type="button"
+            expand="block"
+            [disabled]="connection.apiStatus() === 'checking'"
+            (click)="submit()"
+          >
+            {{ (connection.apiStatus() === 'checking' ? 'login.step1.checking' : 'login.step1.submit') | translate }}
+          </ion-button>
+        </div>
+      }
+    }
   </div>
 </ion-content>

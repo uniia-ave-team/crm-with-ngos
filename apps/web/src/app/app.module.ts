@@ -10,6 +10,7 @@ import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { AppComponent } from './app.component';
 import { AppRoutingModule } from './app-routing.module';
 import { LayoutModule } from './core/layout/layout.module';
+import { ConnectionService } from './core/connection/connection.service';
 import { LanguageService } from './core/i18n/language.service';
 
 @NgModule({
@@ -26,7 +27,7 @@ import { LanguageService } from './core/i18n/language.service';
     // пристрою) у своєму конструкторі.
     provideTranslateService({
       lang: 'en',
-      fallbackLang: 'en',
+      fallbackLang: 'uk',
       loader: provideTranslateHttpLoader({ prefix: './assets/i18n/', suffix: '.json' }),
     }),
     // LanguageService — providedIn: 'root', тобто Angular створює його
@@ -36,8 +37,11 @@ import { LanguageService } from './core/i18n/language.service';
     // створювався, і TranslateService лишався на жорсткому 'en' з опцій
     // вище, ігноруючи збережену мову. Явний ініціалізатор гарантує
     // створення для кожного маршруту, з оболонкою чи без.
+    // Те саме для ConnectionService: на старті він визначає домен і
+    // виводить його в консоль, але нічого сторінкового його не інжектить.
     provideAppInitializer(() => {
       inject(LanguageService);
+      inject(ConnectionService);
     }),
   ],
   bootstrap: [AppComponent],
