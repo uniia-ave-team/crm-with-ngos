@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Signal, computed, inject, signal } from '@angular/core';
-import { Subscription, timeout } from 'rxjs';
+import { Subscription, finalize, firstValueFrom, timeout } from 'rxjs';
 
 const SERVER_ADDRESS_STORAGE_KEY = 'yavir.serverAddress';
 
@@ -165,12 +165,31 @@ export class ConnectionService {
   }
 
   /**
+   * Одноразова перевірка поточного сервера (`GET /health`, відповідь
+   * «Healthy»), що не чіпає стан сервісу (`apiStatus`, статус системи): сторінка
+   * лишається такою, як була, поки триває запит.
+   */
+  async probeApi(): Promise<boolean> {
+    const url = this.apiHealthUrl();
+    console.log(`[ConnectionService] Одноразова перевірка API: ${url}`);
+    try {
+      const body = await firstValueFrom(this.http.get<{ status?: string }>(url).pipe(timeout(API_CHECK_TIMEOUT_MS)));
+      const healthy = body?.status === 'Healthy';
+      console.log(`[ConnectionService] Одноразова перевірка: ${healthy ? 'сервер здоровий' : 'сервер не здоровий'} — ${url}`);
+      return healthy;
+    } catch {
+      console.warn(`[ConnectionService] Одноразова перевірка: відповіді немає або помилка — ${url}`);
+      return false;
+    }
+  }
+
+  /**
    * Запитує стан первинного налаштування системи
    * (`GET <сервер>/api/v1/system/status`); результат — в `systemStatus` і в
-   * консолі. Викликається, коли показується форма входу, тобто підключення
-   * вже є.
+   * консолі. Викликається, коли підключення вже є. Повертає отриманий статус
+   * (`null` — запит не вдався або його скасовано новим).
    */
-  loadSystemStatus(): void {
+  loadSystemStatus(): Promise<SystemStatus | null> {
     this.systemStatusSubscription?.unsubscribe();
 
     const url = `${this.serverUrl()}${API_SYSTEM_STATUS_PATH}`;
@@ -178,22 +197,31 @@ export class ConnectionService {
     this.systemStatusStateSignal.set('loading');
     console.log(`[ConnectionService] Запитую статус системи: ${url}`);
 
-    this.systemStatusSubscription = this.http
-      .get<SystemStatus>(url)
-      .pipe(timeout(API_CHECK_TIMEOUT_MS))
-      .subscribe({
-        next: (status) => {
-          this.systemStatusSignal.set(status);
-          this.systemStatusStateSignal.set('loaded');
-          console.log(`[ConnectionService] Статус системи отримано — ${url}`, status);
-        },
-        error: (error: unknown) => {
-          this.systemStatusSignal.set(null);
-          this.systemStatusStateSignal.set('failed');
-          const reason = error instanceof HttpErrorResponse && error.status > 0 ? `HTTP ${error.status}` : 'відповіді немає';
-          console.warn(`[ConnectionService] Не вдалося отримати статус системи (${reason}) — ${url}`);
-        },
-      });
+    return new Promise((resolve) => {
+      this.systemStatusSubscription = this.http
+        .get<SystemStatus>(url)
+        .pipe(
+          timeout(API_CHECK_TIMEOUT_MS),
+          // Запит скасовано новим (відписка) — не лишаємо виклик висіти.
+          finalize(() => resolve(null)),
+        )
+        .subscribe({
+          next: (status) => {
+            this.systemStatusSignal.set(status);
+            this.systemStatusStateSignal.set('loaded');
+            console.log(`[ConnectionService] Статус системи отримано — ${url}`, status);
+            resolve(status);
+          },
+          error: (error: unknown) => {
+            this.systemStatusSignal.set(null);
+            this.systemStatusStateSignal.set('failed');
+            const reason =
+              error instanceof HttpErrorResponse && error.status > 0 ? `HTTP ${error.status}` : 'відповіді немає';
+            console.warn(`[ConnectionService] Не вдалося отримати статус системи (${reason}) — ${url}`);
+            resolve(null);
+          },
+        });
+    });
   }
 
   /**

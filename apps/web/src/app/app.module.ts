@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { NgModule, inject, provideAppInitializer } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { RouteReuseStrategy } from '@angular/router';
@@ -9,6 +9,7 @@ import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 
 import { AppComponent } from './app.component';
 import { AppRoutingModule } from './app-routing.module';
+import { authInterceptor } from './core/auth/auth.interceptor';
 import { LayoutModule } from './core/layout/layout.module';
 import { ConnectionService } from './core/connection/connection.service';
 import { LanguageService } from './core/i18n/language.service';
@@ -21,7 +22,7 @@ import { LanguageService } from './core/i18n/language.service';
   imports: [BrowserModule, IonicModule.forRoot(), LayoutModule, AppRoutingModule, TranslatePipe],
   providers: [
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
-    provideHttpClient(),
+    provideHttpClient(withInterceptors([authInterceptor])),
     // Мова, з якою «стартує» сервіс, тут не має значення — LanguageService
     // одразу перевизначає її результатом детекції (localStorage/мова
     // пристрою) у своєму конструкторі.

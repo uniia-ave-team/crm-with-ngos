@@ -1,5 +1,20 @@
+<!-- Кнопка «змінити сервер» — праворуч угорі кожної форми (крім самого кроку 1). -->
+<ng-template #serverButton>
+  <button
+    tabindex="0"
+    class="login__server-button"
+    type="button"
+    [disabled]="resettingServer()"
+    [attr.aria-label]="'login.changeServer' | translate"
+    [title]="'login.changeServer' | translate"
+    (click)="resetServer()"
+  >
+    <ion-icon name="server-outline" aria-hidden="true"></ion-icon>
+  </button>
+</ng-template>
+
 <ion-content [fullscreen]="true" class="login">
-  <div class="login__wrap">
+  <div class="login__wrap" [class.login__wrap--wide]="view() === 'login'">
     @switch (view()) {
       @case ('loading') {
         <div class="login__card">
@@ -8,10 +23,91 @@
       }
 
       @case ('login') {
-        <!-- Заглушка: форми входу ще нема. -->
-        <div class="login__card">
-          <h1 class="login__title">{{ 'login.title' | translate }}</h1>
-          <p class="login__description">{{ 'login.connected' | translate: { url: connection.serverUrl() } }}</p>
+        @if (loginBannerError(); as bannerError) {
+          <div class="login__error" role="alert">{{ bannerError | translate }}</div>
+        }
+
+        <div class="login-form">
+          <div class="login-form__media">
+            <img class="login-form__image" src="assets/login_image.jpg" alt="" />
+          </div>
+
+          <div class="login-form__panel">
+            <div class="login-form__content">
+              <img class="login-form__logo theme-light" [src]="'assets/' + logoBase() + '.svg'" [alt]="'login.form.logoAlt' | translate" />
+              <img class="login-form__logo theme-dark" [src]="'assets/' + logoBase() + '_dark.svg'" [alt]="'login.form.logoAlt' | translate" />
+
+              <h1 class="login-form__title">{{ 'login.form.title' | translate }}</h1>
+
+              <label class="login-form__label" for="login-email">{{ 'login.form.email' | translate }}</label>
+              <ion-input
+                tabindex="0"
+                id="login-email"
+                class="login__input"
+                fill="outline"
+                type="email"
+                autocomplete="email"
+                [attr.aria-label]="'login.form.email' | translate"
+                [ngModel]="loginEmail()"
+                (ngModelChange)="onFieldChange(loginEmail, $event)"
+                (keyup.enter)="submitLogin()"
+              ></ion-input>
+              @if (loginEmailError(); as fieldError) {
+                <p class="login__field-error login-form__field-error" role="alert">{{ ('login.form.error.' + fieldError) | translate }}</p>
+              }
+
+              <label class="login-form__label" for="login-password">{{ 'login.form.password' | translate }}</label>
+              <ion-input
+                tabindex="0"
+                id="login-password"
+                class="login__input"
+                fill="outline"
+                type="password"
+                autocomplete="current-password"
+                [attr.aria-label]="'login.form.password' | translate"
+                [ngModel]="loginPassword()"
+                (ngModelChange)="onFieldChange(loginPassword, $event)"
+                (keyup.enter)="submitLogin()"
+              ></ion-input>
+              @if (loginPasswordError(); as fieldError) {
+                <p class="login__field-error login-form__field-error" role="alert">{{ ('login.form.error.' + fieldError) | translate }}</p>
+              }
+
+              <div class="login-form__actions">
+                <ion-button
+                  tabindex="0"
+                  class="login__submit login-form__submit"
+                  type="button"
+                  [disabled]="loginSaving()"
+                  (click)="submitLogin()"
+                >
+                  {{ (loginSaving() ? 'login.form.saving' : 'login.form.submit') | translate }}
+                </ion-button>
+                <button tabindex="0" class="login-form__forgot" type="button">{{ 'login.form.forgot' | translate }}</button>
+              </div>
+
+              <hr class="login-form__divider" />
+
+              <p class="login-form__caption">{{ 'login.form.codeveloped' | translate }}</p>
+              <div class="login-form__logos">
+                <img class="theme-light" [src]="'assets/logos/' + uniiaLogo() + '.svg'" alt="Унія" />
+                <img class="theme-dark" [src]="'assets/logos_white/' + uniiaLogo() + '.svg'" alt="Унія" />
+                <img class="theme-light" src="assets/logos/Ave_Team.svg" alt="Ave Team" />
+                <img class="theme-dark" src="assets/logos_white/Ave_Team.svg" alt="Ave Team" />
+              </div>
+
+              <p class="login-form__caption">{{ 'login.form.supported' | translate }}</p>
+              <div class="login-form__logos">
+                <img class="theme-light" src="assets/logos/NED.png" alt="NED" />
+                <img class="theme-dark" src="assets/logos_white/NED.png" alt="NED" />
+                <img class="theme-light" src="assets/logos/pd.png" alt="PD" />
+                <img class="theme-dark" src="assets/logos_white/PD.png" alt="PD" />
+                <img class="theme-light" src="assets/logos/lets_NGO.png" alt="Let's NGO" />
+                <img class="theme-dark" src="assets/logos_white/lets_NGO.png" alt="Let's NGO" />
+              </div>
+            </div>
+          </div>
+          <ng-container *ngTemplateOutlet="serverButton"></ng-container>
         </div>
       }
 
@@ -112,6 +208,7 @@
           <ion-button tabindex="0" class="login__submit" type="button" expand="block" [disabled]="ngoSaving()" (click)="submitNgo()">
             {{ (ngoSaving() ? 'login.ngo.saving' : 'login.ngo.submit') | translate }}
           </ion-button>
+          <ng-container *ngTemplateOutlet="serverButton"></ng-container>
         </div>
       }
 
@@ -136,7 +233,7 @@
             [placeholder]="'login.admin.email' | translate"
             [attr.aria-label]="'login.admin.email' | translate"
             [ngModel]="adminEmail()"
-            (ngModelChange)="onAdminFieldChange(adminEmail, $event)"
+            (ngModelChange)="onFieldChange(adminEmail, $event)"
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           @if (adminEmailError(); as fieldError) {
@@ -150,7 +247,7 @@
             [placeholder]="'login.admin.lastName' | translate"
             [attr.aria-label]="'login.admin.lastName' | translate"
             [ngModel]="adminLastName()"
-            (ngModelChange)="onAdminFieldChange(adminLastName, $event)"
+            (ngModelChange)="onFieldChange(adminLastName, $event)"
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           <ion-input tabindex="0"
@@ -161,7 +258,7 @@
             [placeholder]="'login.admin.firstName' | translate"
             [attr.aria-label]="'login.admin.firstName' | translate"
             [ngModel]="adminFirstName()"
-            (ngModelChange)="onAdminFieldChange(adminFirstName, $event)"
+            (ngModelChange)="onFieldChange(adminFirstName, $event)"
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           @if (adminFirstNameError(); as fieldError) {
@@ -175,12 +272,20 @@
             [placeholder]="'login.admin.password' | translate"
             [attr.aria-label]="'login.admin.password' | translate"
             [ngModel]="adminPassword()"
-            (ngModelChange)="onAdminFieldChange(adminPassword, $event)"
+            (ngModelChange)="onFieldChange(adminPassword, $event)"
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           @if (adminPasswordError(); as fieldError) {
             <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
           }
+          <ul class="login__requirements">
+            @for (requirement of adminPasswordRequirements(); track requirement.key) {
+              <li class="login__requirement" [class.login__requirement--met]="requirement.met">
+                <span class="login__requirement-icon" aria-hidden="true">{{ requirement.icon }}</span>
+                <span>{{ ('login.admin.requirements.' + requirement.key) | translate }}</span>
+              </li>
+            }
+          </ul>
           <ion-input tabindex="0"
             class="login__input"
             fill="outline"
@@ -189,16 +294,30 @@
             [placeholder]="'login.admin.passwordRepeat' | translate"
             [attr.aria-label]="'login.admin.passwordRepeat' | translate"
             [ngModel]="adminPasswordRepeat()"
-            (ngModelChange)="onAdminFieldChange(adminPasswordRepeat, $event)"
+            (ngModelChange)="onFieldChange(adminPasswordRepeat, $event)"
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           @if (adminPasswordRepeatError(); as fieldError) {
             <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
           }
+          <ul class="login__requirements">
+            <li class="login__requirement" [class.login__requirement--met]="adminPasswordsMatch()">
+              <span class="login__requirement-icon" aria-hidden="true">=</span>
+              <span>{{ 'login.admin.requirements.match' | translate }}</span>
+            </li>
+          </ul>
 
-          <ion-button tabindex="0" class="login__submit" type="button" expand="block" (click)="submitAdmin()">
-            {{ 'login.admin.submit' | translate }}
+          <ion-button
+            tabindex="0"
+            class="login__submit"
+            type="button"
+            expand="block"
+            [disabled]="adminSaving()"
+            (click)="submitAdmin()"
+          >
+            {{ (adminSaving() ? 'login.admin.saving' : 'login.admin.submit') | translate }}
           </ion-button>
+          <ng-container *ngTemplateOutlet="serverButton"></ng-container>
         </div>
       }
 

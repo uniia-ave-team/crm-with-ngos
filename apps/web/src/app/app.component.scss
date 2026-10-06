@@ -57,8 +57,9 @@ ion-menu {
 @media (max-width: 991px) {
   // Резервуємо місце під фіксовані мобільну верхню панель (52px) і нижнє
   // меню (76px) з primary-nav.component.scss. Стосується і router-outlet,
-  // і ion-menu (та сама фіксована мобільна обв'язка навколо обох).
-  ion-router-outlet,
+  // і ion-menu (та сама фіксована мобільна обв'язка навколо обох). Лише в
+  // оболонці: сторінки без неї (/login) займають усю висоту екрана.
+  .shell ion-router-outlet,
   ion-menu {
     top: 52px;
     bottom: 76px;

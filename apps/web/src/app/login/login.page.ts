@@ -1,8 +1,20 @@
 import { Component, computed, effect, inject, input, OnDestroy, signal, untracked, WritableSignal } from '@angular/core';
+import { Router } from '@angular/router';
 
 import { NO_CONNECTION_ERROR } from '../core/connection/connection.guard';
+import { AuthService, LoginResult } from '../core/auth/auth.service';
 import { ConnectionService } from '../core/connection/connection.service';
+import { AppLanguage, LanguageService } from '../core/i18n/language.service';
+import { mobileLogoBase } from '../core/i18n/mobile-logo';
 import { CreateNgoResult, NgoService } from '../core/ngo/ngo.service';
+import { CreateUserResult, UsersService } from '../core/users/users.service';
+
+/**
+ * Куди переходить користувач, коли вхід у систему завершено: після входу (ГО
+ * вже є), після створення ГО й після успішного оновлення сесії. Щоб змінити
+ * цю адресу — міняти лише тут.
+ */
+const REDIRECT_URL = '/planner';
 
 /**
  * Що показує сторінка: перевірку підключення (або запит статусу системи),
@@ -15,9 +27,22 @@ type LoginView = 'loading' | 'step1' | 'ngo' | 'admin' | 'setup-error' | 'login'
 type NgoNameError = 'required' | 'too-long';
 type NgoLogoError = 'type' | 'size';
 
-/** Пароль адміністратора: довше за 5 символів + велика, мала літера й цифра. */
-const ADMIN_PASSWORD_MIN_LENGTH = 6;
+/**
+ * Пароль адміністратора — ті самі умови, що перевіряє сервер (`IdentityOptions`
+ * в налаштуваннях API): від 8 символів, велика й мала латинська літера, цифра
+ * та спецсимвол (будь-що, крім латинських літер і цифр).
+ */
+const ADMIN_PASSWORD_MIN_LENGTH = 8;
+const ADMIN_PASSWORD_REQUIREMENTS = [
+  { key: 'length', icon: '8', test: (password: string) => password.length >= ADMIN_PASSWORD_MIN_LENGTH },
+  { key: 'lowercase', icon: 'a', test: (password: string) => /[a-z]/.test(password) },
+  { key: 'uppercase', icon: 'A', test: (password: string) => /[A-Z]/.test(password) },
+  { key: 'digit', icon: '123', test: (password: string) => /[0-9]/.test(password) },
+  { key: 'special', icon: '#', test: (password: string) => /[^a-zA-Z0-9]/.test(password) },
+] as const;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const UNIIA_UKRAINIAN_LANGUAGES: readonly AppLanguage[] = ['uk', 'crh', 'be'];
 
 const NGO_NAME_MAX_LENGTH = 200;
 /** Логотип: лише растрові/SVG-зображення до 2 МБ. */
@@ -36,6 +61,18 @@ type LoginError = 'invalid' | 'unreachable' | 'unhealthy' | 'no-connection';
 export class LoginPage implements OnDestroy {
   protected readonly connection = inject(ConnectionService);
   private readonly ngoService = inject(NgoService);
+  private readonly usersService = inject(UsersService);
+  private readonly router = inject(Router);
+  private readonly languageService = inject(LanguageService);
+
+  /** Вордмарк «Явір» вгорі форми входу (як мобільне лого меню; `.svg` / `_dark.svg`). */
+  protected readonly logoBase = computed(() => mobileLogoBase(this.languageService.language()));
+
+  /** Лого Унії: для української, кримськотатарської й білоруської — укр., для інших — англ. */
+  protected readonly uniiaLogo = computed(() =>
+    UNIIA_UKRAINIAN_LANGUAGES.includes(this.languageService.language()) ? 'Uniia' : 'Uniia_en',
+  );
+  private readonly auth = inject(AuthService);
 
   /**
    * Query-параметр `?error=…` (прив'язується роутером через
@@ -51,6 +88,10 @@ export class LoginPage implements OnDestroy {
   /** Введене не схоже на адресу сервера (валідація до будь-якого запиту). */
   private readonly invalid = signal(false);
 
+  /** Оновлення токенів уже запускали (для поточної перевірки підключення). */
+  private refreshStarted = false;
+
+
   /**
    * Чи надсилали форму кроку 1. Доки ні, перевірка, що тече при завантаженні
    * сторінки, показується як «завантаження», а не як форма кроку 1, що
@@ -59,7 +100,16 @@ export class LoginPage implements OnDestroy {
    */
   private readonly submitted = signal(false);
 
+  /**
+   * Користувач натиснув кнопку «змінити сервер»: показуємо крок 1, навіть
+   * якщо поточний сервер працює, доки не буде надано нову адресу.
+   */
+  private readonly forceAddressStep = signal(false);
+
   protected readonly view = computed<LoginView>(() => {
+    if (this.forceAddressStep()) {
+      return 'step1';
+    }
     const status = this.connection.apiStatus();
     if (status === 'healthy') {
       // Форму показуємо лише коли відомо, чи є в системі ГО (або запит
@@ -77,22 +127,31 @@ export class LoginPage implements OnDestroy {
   });
 
   /**
-   * Що показати за статусом системи:
-   * - `isSetupComplete` — форма входу;
-   * - немає ГО — форма створення ГО;
-   * - ГО є, адміна нема — форма налаштування адміністратора;
-   * - ГО й адмін є, а налаштування не завершене — помилка.
-   * Якщо статус не вдалося отримати — форма входу.
+   * Що показати за статусом системи й наявністю токенів:
+   * - `isSetupComplete`: без токенів — форма входу; з токенами — оновлюємо їх
+   *   (`refreshSession`) і переходимо на «Планер», а якщо не вдалося — вихід,
+   *   і форма входу;
+   * - немає адміна — форма реєстрації адміністратора;
+   * - адмін є, ГО нема: з токенами — форма створення ГО, без — форма входу;
+   * - адмін і ГО є, а налаштування не завершене — помилка.
+   * Якщо статус отримати не вдалося — форма входу.
    */
   private setupView(): LoginView {
     const status = this.connection.systemStatus();
-    if (!status || status.isSetupComplete) {
+    if (!status) {
       return 'login';
     }
-    if (!status.hasNgo) {
-      return 'ngo';
+    const hasTokens = this.auth.hasTokens();
+    if (status.isSetupComplete) {
+      return hasTokens ? 'loading' : 'login';
     }
-    return status.hasAdmin ? 'setup-error' : 'admin';
+    if (!status.hasAdmin) {
+      return 'admin';
+    }
+    if (!status.hasNgo) {
+      return hasTokens ? 'ngo' : 'login';
+    }
+    return 'setup-error';
   }
 
   /**
@@ -147,6 +206,26 @@ export class LoginPage implements OnDestroy {
     return saveError ? [`login.ngo.saveError.${saveError}`] : [];
   });
 
+  /** Форма входу. */
+  protected readonly loginEmail = signal('');
+  protected readonly loginPassword = signal('');
+  protected readonly loginSaving = signal(false);
+  private readonly loginSubmitted = signal(false);
+  /** Ключ помилки запиту (`login.form.error.<ключ>`) або `null`. */
+  private readonly loginSaveError = signal<string | null>(null);
+
+  protected readonly loginEmailError = computed(() =>
+    this.loginSubmitted() && !this.loginEmail().trim() ? 'emailRequired' : null,
+  );
+  protected readonly loginPasswordError = computed(() =>
+    this.loginSubmitted() && !this.loginPassword() ? 'passwordRequired' : null,
+  );
+  /** Відповідь сервера — блоком над формою (ключ перекладу). */
+  protected readonly loginBannerError = computed(() => {
+    const key = this.loginSaveError();
+    return key ? `login.form.error.${key}` : null;
+  });
+
   /** Форма адміністратора. */
   protected readonly adminEmail = signal('');
   protected readonly adminLastName = signal('');
@@ -154,6 +233,14 @@ export class LoginPage implements OnDestroy {
   protected readonly adminPassword = signal('');
   protected readonly adminPasswordRepeat = signal('');
   private readonly adminSubmitted = signal(false);
+  protected readonly adminSaving = signal(false);
+  /** Ключ помилки запиту (`login.admin.saveError.<ключ>`) або `null`. */
+  private readonly adminSaveError = signal<string | null>(null);
+  /**
+   * Адміністратора вже створено на сервері (але вхід не вдався): повторна
+   * спроба не створює його вдруге, а лише повторює вхід.
+   */
+  private adminCreated = false;
 
   // Помилки показуємо лише після спроби надіслати форму; `null` — все гаразд.
   protected readonly adminEmailError = computed(() => {
@@ -172,11 +259,23 @@ export class LoginPage implements OnDestroy {
   protected readonly adminFirstNameError = computed(() =>
     this.adminSubmitted() && !this.adminFirstName().trim() ? 'firstNameRequired' : null,
   );
-  /** Помилка прізвища — блоком над формою (ключ перекладу). */
+  /** Помилка прізвища й відповідь сервера — блоком над формою (ключі перекладу). */
   protected readonly adminBannerErrors = computed<string[]>(() => {
-    const code = this.adminLastNameError();
-    return code ? [`login.admin.error.${code}`] : [];
+    const lastName = this.adminLastNameError();
+    const save = this.adminSaveError();
+    return [lastName && `login.admin.error.${lastName}`, save && `login.admin.saveError.${save}`].filter(
+      (key): key is string => !!key,
+    );
   });
+  /** Умови до пароля й чи виконано кожну (оновлюється під час введення). */
+  protected readonly adminPasswordRequirements = computed(() => {
+    const password = this.adminPassword();
+    return ADMIN_PASSWORD_REQUIREMENTS.map(({ key, icon, test }) => ({ key, icon, met: test(password) }));
+  });
+  /** Повтор пароля збігається з паролем (порожній повтор не рахується). */
+  protected readonly adminPasswordsMatch = computed(
+    () => !!this.adminPasswordRepeat() && this.adminPasswordRepeat() === this.adminPassword(),
+  );
   protected readonly adminPasswordError = computed(() => {
     if (!this.adminSubmitted()) {
       return null;
@@ -185,12 +284,7 @@ export class LoginPage implements OnDestroy {
     if (!password) {
       return 'passwordRequired';
     }
-    const strong =
-      password.length >= ADMIN_PASSWORD_MIN_LENGTH &&
-      /\p{Lu}/u.test(password) &&
-      /\p{Ll}/u.test(password) &&
-      /\d/.test(password);
-    return strong ? null : 'passwordWeak';
+    return this.adminPasswordRequirements().every((requirement) => requirement.met) ? null : 'passwordWeak';
   });
   protected readonly adminPasswordRepeatError = computed(() => {
     if (!this.adminSubmitted()) {
@@ -209,10 +303,42 @@ export class LoginPage implements OnDestroy {
     // untracked: виклик нічого не читає з сигналів сторінки, тож ефект має
     // реагувати лише на зміну `apiStatus`.
     effect(() => {
-      if (this.connection.apiStatus() === 'healthy') {
-        untracked(() => this.connection.loadSystemStatus());
+      // Нова перевірка підключення (інша адреса тощо) — починаємо спочатку.
+      const healthy = this.connection.apiStatus() === 'healthy';
+      untracked(() => {
+        this.refreshStarted = false;
+        if (healthy) {
+          this.auth.restoreTokens();
+          this.connection.loadSystemStatus();
+        }
+      });
+    });
+
+    // Налаштування завершене й токени є — один раз оновлюємо їх.
+    effect(() => {
+      const complete = this.connection.systemStatus()?.isSetupComplete === true;
+      if (complete && this.auth.hasTokens()) {
+        untracked(() => void this.refreshSession());
       }
     });
+  }
+
+  /**
+   * Оновлює токени (`POST /api/v1/auth/refresh-token`) і переходить на
+   * «Планер». Не вдалося — вихід із системи: токени забуто, і сторінка
+   * показує форму входу.
+   */
+  private async refreshSession(): Promise<void> {
+    if (this.refreshStarted) {
+      return;
+    }
+    this.refreshStarted = true;
+    const result = await this.auth.refresh();
+    if (result === 'ok') {
+      void this.router.navigateByUrl(REDIRECT_URL);
+    } else {
+      this.auth.clearTokens();
+    }
   }
 
   protected onAddressChange(value: string | number | null | undefined): void {
@@ -225,7 +351,65 @@ export class LoginPage implements OnDestroy {
       return;
     }
     this.submitted.set(true);
-    this.invalid.set(!this.connection.setServerAddress(this.address()));
+    const accepted = this.connection.setServerAddress(this.address());
+    this.invalid.set(!accepted);
+    if (accepted) {
+      this.forceAddressStep.set(false);
+    }
+  }
+
+  /** Іде перевірка поточного сервера після натискання «змінити сервер». */
+  protected readonly resettingServer = signal(false);
+
+  /**
+   * Кнопка «змінити сервер» (праворуч угорі кожної форми). Спершу один раз
+   * перевіряє поточний сервер (`/health`); тоді повністю очищає `localStorage`
+   * (адреса сервера, токени, мова тощо), забуває введене у формах і повертає на
+   * крок 1. Якщо сервер був здоровий — його адресу підставлено в поле кроку 1,
+   * щоб її було легко поправити.
+   */
+  protected async resetServer(): Promise<void> {
+    if (this.resettingServer()) {
+      return;
+    }
+    this.resettingServer.set(true);
+    // Беремо до очищення: після нього надана адреса вже забута.
+    const currentAddress = this.connection.serverAddress() ?? this.connection.domain;
+    const healthy = await this.connection.probeApi();
+
+    this.auth.clearTokens();
+    this.connection.clearServerAddress();
+    try {
+      localStorage.clear();
+    } catch {
+      // Сховище недоступне — нічого очищати.
+    }
+    this.resetForms();
+    this.address.set(healthy ? currentAddress : '');
+    this.invalid.set(false);
+    this.submitted.set(false);
+    this.forceAddressStep.set(true);
+    this.resettingServer.set(false);
+  }
+
+  /** Забуває все, що введено й показано у формах входу, адміна та ГО. */
+  private resetForms(): void {
+    this.loginEmail.set('');
+    this.loginPassword.set('');
+    this.loginSubmitted.set(false);
+    this.loginSaveError.set(null);
+    this.adminEmail.set('');
+    this.adminLastName.set('');
+    this.adminFirstName.set('');
+    this.adminPassword.set('');
+    this.adminPasswordRepeat.set('');
+    this.adminSubmitted.set(false);
+    this.adminSaveError.set(null);
+    this.adminCreated = false;
+    this.ngoName.set('');
+    this.removeLogo();
+    this.ngoSubmitted.set(false);
+    this.ngoSaveError.set(null);
   }
 
   ngOnDestroy(): void {
@@ -292,8 +476,9 @@ export class LoginPage implements OnDestroy {
 
   /**
    * Створює організацію з введеною назвою (логотип поки не надсилається:
-   * `logoUrl` завжди `null`). Після успіху перезапитує статус системи —
-   * `hasNgo` стає `true`, і сторінка переходить до форми входу.
+   * `logoUrl` завжди `null`). Після успіху користувач уже зареєстрований і
+   * має токени (вхід виконано після створення адміна), тож його одразу
+   * переадресовано на «Планер».
    */
   protected async submitNgo(): Promise<void> {
     if (this.ngoSaving()) {
@@ -308,13 +493,13 @@ export class LoginPage implements OnDestroy {
     const result = await this.ngoService.create(this.ngoName().trim());
     this.ngoSaving.set(false);
     if (result === 'created') {
-      this.connection.loadSystemStatus();
+      void this.router.navigateByUrl(REDIRECT_URL);
     } else {
       this.ngoSaveError.set(result);
     }
   }
 
-  protected onAdminFieldChange(
+  protected onFieldChange(
     field: WritableSignal<string>,
     value: string | number | null | undefined,
   ): void {
@@ -322,11 +507,89 @@ export class LoginPage implements OnDestroy {
   }
 
   /**
-   * Перевіряє форму адміністратора ще до будь-якого запиту. Сам запит
-   * поки не готуємо: після успішної перевірки нічого не відбувається.
+   * Вхід (`POST /api/v1/auth/login`): токени записуються (`AuthService`), далі
+   * запитується статус системи. Немає ГО — лишаємось на сторінці, і вона
+   * показує форму створення ГО (токени вже є). ГО є — одразу на «Планер».
    */
-  protected submitAdmin(): void {
+  protected async submitLogin(): Promise<void> {
+    if (this.loginSaving()) {
+      return;
+    }
+    this.loginSubmitted.set(true);
+    if (this.loginEmailError() || this.loginPasswordError()) {
+      return;
+    }
+
+    this.loginSaving.set(true);
+    this.loginSaveError.set(null);
+    const login = await this.auth.login(this.loginEmail().trim(), this.loginPassword());
+    if (login !== 'ok') {
+      this.loginSaving.set(false);
+      this.loginSaveError.set(loginFormErrorKey(login));
+      return;
+    }
+
+    // Токени свіжі — оновлювати їх одразу після входу не треба.
+    this.refreshStarted = true;
+    const status = await this.connection.loadSystemStatus();
+    this.loginSaving.set(false);
+    if (!status) {
+      this.loginSaveError.set('statusFailed');
+    } else if (status.hasNgo) {
+      void this.router.navigateByUrl(REDIRECT_URL);
+    }
+    // Немає ГО: view() за статусом і токенами сам покаже форму створення ГО.
+  }
+
+  /**
+   * Перевіряє форму адміністратора; якщо все гаразд — створює користувача
+   * (`POST /api/v1/users`), одразу входить під ним тими самими даними
+   * (`POST /api/v1/auth/login`) і перезапитує статус системи: адмін уже є,
+   * тож сторінка переходить до форми створення ГО.
+   */
+  protected async submitAdmin(): Promise<void> {
+    if (this.adminSaving()) {
+      return;
+    }
     this.adminSubmitted.set(true);
+    if (
+      this.adminEmailError() ||
+      this.adminLastNameError() ||
+      this.adminFirstNameError() ||
+      this.adminPasswordError() ||
+      this.adminPasswordRepeatError()
+    ) {
+      return;
+    }
+
+    this.adminSaving.set(true);
+    this.adminSaveError.set(null);
+    const email = this.adminEmail().trim();
+    const password = this.adminPassword();
+
+    if (!this.adminCreated) {
+      const created = await this.usersService.create({
+        firstName: this.adminFirstName().trim(),
+        lastName: this.adminLastName().trim(),
+        email,
+        password,
+        confirmPassword: this.adminPasswordRepeat(),
+      });
+      if (created !== 'created') {
+        this.adminSaving.set(false);
+        this.adminSaveError.set(createUserErrorKey(created));
+        return;
+      }
+      this.adminCreated = true;
+    }
+
+    const login = await this.auth.login(email, password);
+    this.adminSaving.set(false);
+    if (login === 'ok') {
+      this.connection.loadSystemStatus();
+    } else {
+      this.adminSaveError.set(loginErrorKey(login));
+    }
   }
 
   private revokePreview(): void {
@@ -335,5 +598,42 @@ export class LoginPage implements OnDestroy {
       URL.revokeObjectURL(url);
       this.ngoLogoPreview.set(null);
     }
+  }
+}
+
+function createUserErrorKey(result: Exclude<CreateUserResult, 'created'>): string {
+  switch (result) {
+    case 'invalid':
+      return 'createInvalid';
+    case 'unreachable':
+      return 'createUnreachable';
+    default:
+      return 'createError';
+  }
+}
+
+function loginErrorKey(result: Exclude<LoginResult, 'ok'>): string {
+  switch (result) {
+    case 'invalid':
+      return 'loginInvalid';
+    case 'unauthorized':
+      return 'loginUnauthorized';
+    case 'unreachable':
+      return 'loginUnreachable';
+    default:
+      return 'loginError';
+  }
+}
+
+function loginFormErrorKey(result: Exclude<LoginResult, 'ok'>): string {
+  switch (result) {
+    case 'invalid':
+      return 'invalid';
+    case 'unauthorized':
+      return 'unauthorized';
+    case 'unreachable':
+      return 'unreachable';
+    default:
+      return 'error';
   }
 }

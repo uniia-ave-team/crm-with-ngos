@@ -1,6 +1,7 @@
 import { Component, Signal, computed, inject } from '@angular/core';
 
-import { AppLanguage, LanguageService } from '../../i18n/language.service';
+import { LanguageService } from '../../i18n/language.service';
+import { mobileLogoBase } from '../../i18n/mobile-logo';
 
 interface NavItem {
   readonly labelKey: string;
@@ -8,16 +9,6 @@ interface NavItem {
   readonly icon: string;
   readonly iconActive: string;
 }
-
-/** Яка пара mobile-логотипу (assets/logo_mobile_*.svg) відповідає мові. */
-const MOBILE_LOGO_VARIANT: Record<AppLanguage, string> = {
-  uk: 'ukrainian',
-  en: 'latin',
-  crh: 'latin',
-  // Реальних білоруських файлів лого ще нема — тимчасово дублюють
-  // українські (див. apps/web/src/assets/logo_mobile_be*.svg).
-  be: 'be',
-};
 
 /**
  * Перша (завжди видима) панель бічного меню: лого, основна навігація,
@@ -50,6 +41,6 @@ export class PrimaryNavComponent {
   // файлів — на відміну від іконки в десктопному рейлі (assets/logo.svg),
   // де тексту немає й перемикати мову не треба.
   protected readonly mobileLogoBase: Signal<string> = computed(
-    () => `logo_mobile_${MOBILE_LOGO_VARIANT[this.languageService.language()]}`,
+    () => mobileLogoBase(this.languageService.language()),
   );
 }
