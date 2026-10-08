@@ -10,6 +10,7 @@ namespace Crm.Application.Common.Behaviors;
 /// </summary>
 public partial class TransactionalBehavior<TRequest, TResponse>(
     IUnitOfWork unitOfWork,
+    IFileTransactionTracker fileTracker,
     ILogger<TransactionalBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : ITransactionalCommand
 {
@@ -28,6 +29,8 @@ public partial class TransactionalBehavior<TRequest, TResponse>(
 
             await unitOfWork.CommitTransactionAsync(cancellationToken);
 
+            await fileTracker.CommitPendingDeletionsAsync(cancellationToken);
+
             LogTransactionCommitted(logger, typeof(TRequest).Name);
 
             return response;
@@ -37,6 +40,9 @@ public partial class TransactionalBehavior<TRequest, TResponse>(
             LogTransactionRolledBack(logger, ex, typeof(TRequest).Name);
 
             await unitOfWork.RollbackTransactionAsync(CancellationToken.None);
+
+            await fileTracker.RollbackCreatedFilesAsync(CancellationToken.None);
+
             throw;
         }
     }

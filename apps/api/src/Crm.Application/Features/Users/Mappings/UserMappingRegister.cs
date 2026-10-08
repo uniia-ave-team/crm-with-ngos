@@ -14,6 +14,7 @@ public class UserMappingRegister : IRegister
     {
         config.NewConfig<UpdateUserProfileCommand, User>()
             .IgnoreNullValues(true)
+            .Map(dest => dest.Avatar, src => src.AvatarUrl)
             .Ignore(dest => dest.Id);
     }
 }

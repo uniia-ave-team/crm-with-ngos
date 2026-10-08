@@ -1,5 +1,8 @@
+using System.Net.Mime;
 using Asp.Versioning;
+using Crm.Api.Consts;
 using Crm.Api.Dtos;
+using Crm.Api.Extensions;
 using Crm.Api.Security;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Commands;
@@ -93,7 +96,7 @@ public class UsersController(
     {
         var currentUserId = currentUserService.GetUserId();
 
-        var result = await mediator.Send(new GetUserProfileQuery(currentUserId), cancellationToken);
+        var result = await mediator.Send(new GetUserProfileQuery(currentUserId, IsSelf: true), cancellationToken);
         return Ok(result);
     }
 
@@ -181,6 +184,53 @@ public class UsersController(
         await mediator.Send(command, cancellationToken);
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Retrieves the avatar of the currently authenticated user as a file stream.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A file stream containing the user's avatar image.</returns>
+    [HttpGet("me/avatar")]
+    [Authorize]
+    [ResponseCache(Duration = ResponseCacheConstants.ThirtyDays, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMyAvatar(CancellationToken cancellationToken)
+    {
+        var fileDto = await mediator.Send(new GetUserAvatarQuery(currentUserService.GetUserId()), cancellationToken);
+
+        return File(fileDto.Stream, fileDto.GetContentType(), enableRangeProcessing: true);
+    }
+
+    /// <summary>
+    /// Uploads or updates the avatar for the currently authenticated user.
+    /// </summary>
+    /// <param name="file">The avatar image file to upload.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>An empty OK response indicating successful upload.</returns>
+    [HttpPost("me/avatar")]
+    [Authorize]
+    [Consumes(MediaTypeNames.Multipart.FormData)]
+    [RequestSizeLimit(FileLimitConstants.MaxImageUploadSize)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> UploadMyAvatar(
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest("A file is required.");
+        }
+
+        using var stream = file.OpenReadStream();
+
+        await mediator.Send(new UploadUserAvatarCommand(currentUserService.GetUserId(), stream, file.FileName), cancellationToken);
+
+        return Ok();
     }
 
     /// <summary>
@@ -289,6 +339,59 @@ public class UsersController(
 
         await mediator.Send(command, cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Retrieves the avatar of a specific user as a file stream.
+    /// </summary>
+    /// <param name="id">The unique identifier of the user.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A file stream containing the user's avatar image.</returns>
+    [HttpGet("{id:guid}/avatar")]
+    [HasAccessRight(AccessRight.ViewUser)]
+    [ResponseCache(Duration = ResponseCacheConstants.ThirtyDays, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUserAvatar(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var fileDto = await mediator.Send(new GetUserAvatarQuery(id), cancellationToken);
+
+        return File(fileDto.Stream, fileDto.GetContentType(), enableRangeProcessing: true);
+    }
+
+    /// <summary>
+    /// Uploads or updates the avatar for a specific user.
+    /// </summary>
+    /// <param name="id">The unique identifier of the user.</param>
+    /// <param name="file">The avatar image file to upload.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>An empty OK response indicating successful upload.</returns>
+    [HttpPost("{id:guid}/avatar")]
+    [HasAccessRight(AccessRight.UpdateUser)]
+    [Consumes(MediaTypeNames.Multipart.FormData)]
+    [RequestSizeLimit(FileLimitConstants.MaxImageUploadSize)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadUserAvatar(
+        Guid id,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest("A file is required.");
+        }
+
+        using var stream = file.OpenReadStream();
+
+        await mediator.Send(new UploadUserAvatarCommand(id, stream, file.FileName), cancellationToken);
+
+        return Ok();
     }
 
     /// <summary>

@@ -1,4 +1,7 @@
+using System.Net.Mime;
 using Asp.Versioning;
+using Crm.Api.Consts;
+using Crm.Api.Extensions;
 using Crm.Api.Security;
 using Crm.Application.Dtos.LoginPageImage;
 using Crm.Application.Dtos.LoginPageImage.Commands;
@@ -58,6 +61,60 @@ public class LoginPageImagesController(IMediator mediator) : ControllerBase
         CancellationToken cancellationToken)
     {
         var loginPageImageId = await mediator.Send(command, cancellationToken);
+
+        return CreatedAtRoute(
+            nameof(GetById),
+            new { id = loginPageImageId },
+            new { Id = loginPageImageId });
+    }
+
+    /// <summary>
+    /// Retrieves the file stream of a specific login page image.
+    /// This endpoint is unprotected and intended for public use on the login screen.
+    /// </summary>
+    /// <param name="id">The unique identifier of the image file to retrieve.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A file stream containing the login page image.</returns>
+    [HttpGet("{id:guid}/image")]
+    [AllowAnonymous]
+    [ResponseCache(Duration = ResponseCacheConstants.ThirtyDays, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetImage(
+        [FromRoute] Guid id,
+        CancellationToken cancellationToken)
+    {
+        var fileDto = await mediator.Send(new GetLoginPageImageFileQuery(id), cancellationToken);
+
+        return File(fileDto.Stream, fileDto.GetContentType(), enableRangeProcessing: true);
+    }
+
+    /// <summary>
+    /// Uploads a new login page image file and creates its record in the system.
+    /// </summary>
+    /// <param name="file">The login page image file to upload.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The unique identifier of the newly created image record.</returns>
+    [HttpPost]
+    [HasAccessRight(AccessRight.CreateLoginPageImages)]
+    [Consumes(MediaTypeNames.Multipart.FormData)]
+    [RequestSizeLimit(FileLimitConstants.MaxImageUploadSize)]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<Guid>> Upload(
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest("A file is required.");
+        }
+
+        using var stream = file.OpenReadStream();
+
+        var loginPageImageId = await mediator.Send(new UploadLoginPageImageCommand(stream, file.FileName), cancellationToken);
 
         return CreatedAtRoute(
             nameof(GetById),

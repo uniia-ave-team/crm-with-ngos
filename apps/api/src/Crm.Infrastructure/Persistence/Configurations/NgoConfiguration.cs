@@ -19,7 +19,7 @@ public class NgoConfiguration : IEntityTypeConfiguration<Ngo>
             .IsRequired()
             .HasMaxLength(NgoValidationConstants.MaxNameLength);
 
-        builder.Property(n => n.LogoUrl)
+        builder.Property(n => n.Logo)
             .HasMaxLength(NgoValidationConstants.MaxLogoUrlLength);
     }
 }

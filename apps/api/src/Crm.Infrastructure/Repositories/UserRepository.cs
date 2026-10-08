@@ -15,6 +15,28 @@ public class UserRepository(
     IUserRepository
 {
     /// <summary>
+    /// Asynchronously retrieves only the avatar file name of a specific user.
+    /// Utilizes projection to optimize database querying by selecting only the required field.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the avatar file name.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the user is not found in the database.</exception>
+    /// <exception cref="EntityFieldNotFoundException">Thrown if the user exists but their avatar is not set.</exception>
+    public async Task<string> GetAvatarAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var projection = await DbSet
+            .AsNoTracking()
+            .Where(x => x.Id == userId)
+            .Select(x => new { x.Avatar })
+            .FirstOrDefaultAsync(cancellationToken) ?? throw new EntityNotFoundException(nameof(User));
+
+        return string.IsNullOrWhiteSpace(projection.Avatar)
+            ? throw new EntityFieldNotFoundException(nameof(User), nameof(User.Avatar))
+            : projection.Avatar;
+    }
+
+    /// <summary>
     /// Asynchronously checks if there is at least one user in the system.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

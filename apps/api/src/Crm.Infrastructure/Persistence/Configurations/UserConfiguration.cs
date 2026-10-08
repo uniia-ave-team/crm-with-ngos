@@ -43,7 +43,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Pronouns)
             .HasMaxLength(UserValidationConstants.MaxPronounsLength);
 
-        builder.Property(u => u.AvatarUrl)
+        builder.Property(u => u.Avatar)
             .HasMaxLength(UserValidationConstants.MaxAvatarUrlLength);
 
         builder.HasOne(u => u.Ngo)
