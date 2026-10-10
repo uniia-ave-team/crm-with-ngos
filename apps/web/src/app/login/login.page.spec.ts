@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../assets/i18n/uk.json';
+import { AccountsService } from '../core/accounts/accounts.service';
 import { AuthService } from '../core/auth/auth.service';
 import { ConnectionService } from '../core/connection/connection.service';
 import { LanguageService } from '../core/i18n/language.service';
@@ -19,6 +20,7 @@ interface LoginPageInternals {
 
 describe('LoginPage', () => {
   let http: HttpTestingController;
+  let navigate: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     localStorage.clear();
@@ -34,6 +36,7 @@ describe('LoginPage', () => {
     // Тексти сторінки живуть в uk.json — беремо їх звідти, а не дублюємо.
     TestBed.inject(TranslateService).setTranslation('uk', uk);
     http = TestBed.inject(HttpTestingController);
+    navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -63,11 +66,23 @@ describe('LoginPage', () => {
     fixture.detectChanges();
   }
 
-  /** Токени, збережені для сервера за доменом сторінки (як після попереднього входу). */
-  function storeTokens(): void {
-    const server = `${location.protocol}//${location.hostname}:5065`;
-    localStorage.setItem(`yavir.accessToken.${server}`, 'old-access');
-    localStorage.setItem(`yavir.refreshToken.${server}`, 'old-refresh');
+  /** Адреса підключення за доменом сторінки (як у акаунтів, створених без введеної адреси). */
+  const pageServer = () => `${location.protocol}//${location.hostname}:5065`;
+
+  /** JWT без підпису з терміном дії через `seconds` секунд (від'ємне — уже прострочений). */
+  function jwtAt(seconds: number, subject = 'user-1'): string {
+    const payload = btoa(JSON.stringify({ sub: subject, exp: Math.floor(Date.now() / 1000) + seconds }));
+    return `h.${payload.replace(/=+$/, '')}.s`;
+  }
+
+  /** Користувач увійшов: активний акаунт із токенами (уже після створення сторінки, тож пошук акаунтів не запускається). */
+  function signIn(connection: ConnectionService): void {
+    TestBed.inject(AccountsService).add({
+      server: connection.serverUrl(),
+      accessToken: 'old-access',
+      refreshToken: 'old-refresh',
+      identity: 'user-1',
+    });
   }
 
   function submitAddress(page: LoginPageInternals, address: string): void {
@@ -255,10 +270,10 @@ describe('LoginPage', () => {
     const button = (element: HTMLElement) => element.querySelector<HTMLButtonElement>('.login__server-button');
 
     function createWithStatus(status: { hasAdmin: boolean; hasNgo: boolean; isSetupComplete: boolean }, tokens: boolean) {
-      if (tokens) {
-        storeTokens();
-      }
       const ctx = create();
+      if (tokens) {
+        signIn(ctx.connection);
+      }
       ctx.request.flush({ status: 'Healthy' });
       answerStatus(ctx.connection, ctx.fixture, status);
       return ctx;
@@ -339,10 +354,11 @@ describe('LoginPage', () => {
       expect(input.value).toBe(location.hostname);
     });
 
-    it('puts the saved server address into the field when the server is healthy', async () => {
-      localStorage.setItem('yavir.serverAddress', '192.168.0.9');
+    it('puts the typed server address into the field when the server is healthy', async () => {
       const ctx = create();
-      ctx.request.flush({ status: 'Healthy' });
+      ctx.request.error(new ProgressEvent('error'));
+      ctx.connection.setServerAddress('192.168.0.9');
+      http.expectOne(`${location.protocol}//192.168.0.9:5065/health`).flush({ status: 'Healthy' });
       answerStatus(ctx.connection, ctx.fixture, { hasAdmin: true, hasNgo: true, isSetupComplete: true });
 
       button(ctx.element)!.click();
@@ -353,6 +369,31 @@ describe('LoginPage', () => {
       });
       const input = ctx.element.querySelector('.login__card ion-input') as HTMLIonInputElement;
       expect(input.value).toBe('192.168.0.9');
+    });
+
+    it('puts the connection address of the active account into the field when its server is healthy', async () => {
+      const ctx = create();
+      ctx.request.flush({ status: 'Healthy' });
+      TestBed.inject(AccountsService).add({
+        server: 'http://192.168.0.9:5065',
+        accessToken: 'a',
+        refreshToken: 'r',
+        identity: 'user-1',
+      });
+      answerStatus(ctx.connection, ctx.fixture, { hasAdmin: true, hasNgo: false, isSetupComplete: false });
+
+      button(ctx.element)!.click();
+      http.expectOne('http://192.168.0.9:5065/health').flush({ status: 'Healthy' });
+      // Виходимо саме на крок 1 (а не на форму ГО, що теж має поле вводу).
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(ctx.element.querySelector('.login__title')?.textContent).toContain('Введіть адресу серверу');
+      });
+      const input = ctx.element.querySelector('.login__card ion-input') as HTMLIonInputElement;
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(input.value).toBe('http://192.168.0.9:5065');
+      });
     });
 
     it('leaves the address field empty when the server does not answer', async () => {
@@ -459,7 +500,7 @@ describe('LoginPage', () => {
       await done;
 
       expect(TestBed.inject(AuthService).accessToken()).toBe('access');
-      expect(localStorage.getItem(`yavir.refreshToken.${connection.serverUrl()}`)).toBe('refresh');
+      expect(TestBed.inject(AccountsService).active()?.refreshToken).toBe('refresh');
       expect(navigate).toHaveBeenCalledWith('/planner');
       // Токени щойно видані — окремого оновлення нема.
       http.expectNone(`${connection.serverUrl()}/api/v1/auth/refresh-token`);
@@ -499,7 +540,7 @@ describe('LoginPage', () => {
       ).toBeTruthy();
       expect(navigate).not.toHaveBeenCalled();
       http.expectNone(statusUrl(connection));
-      expect(localStorage.getItem(`yavir.refreshToken.${connection.serverUrl()}`)).toBeNull();
+      expect(TestBed.inject(AccountsService).accounts()).toHaveLength(0);
     });
 
     it('shows an error when the system status cannot be loaded after a successful login', async () => {
@@ -520,10 +561,10 @@ describe('LoginPage', () => {
     type Status = { hasAdmin: boolean; hasNgo: boolean; isSetupComplete: boolean };
 
     function createWith(status: Status, options: { tokens: boolean }) {
-      if (options.tokens) {
-        storeTokens();
-      }
       const ctx = create();
+      if (options.tokens) {
+        signIn(ctx.connection);
+      }
       ctx.request.flush({ status: 'Healthy' });
       answerStatus(ctx.connection, ctx.fixture, status);
       return ctx;
@@ -574,8 +615,8 @@ describe('LoginPage', () => {
     });
 
     it('shows the login form when the system status cannot be loaded, even with tokens', () => {
-      storeTokens();
       const { fixture, connection, element, request } = create();
+      signIn(connection);
       request.flush({ status: 'Healthy' });
       fixture.detectChanges();
       http.expectOne(`${connection.serverUrl()}/api/v1/system/status`).error(new ProgressEvent('error'));
@@ -585,67 +626,204 @@ describe('LoginPage', () => {
     });
   });
 
-  describe('session refresh when the setup is complete and there are tokens', () => {
-    const complete = { hasAdmin: true, hasNgo: true, isSetupComplete: true };
+  describe('search for a valid saved account on start', () => {
+    const profile = { id: 'user-1', email: 'a@b.org', firstName: 'Олена', lastName: 'Іваненко', avatarUrl: null, roles: [], customFields: [] };
 
-    function createWithTokens() {
-      storeTokens();
-      const ctx = create();
-      ctx.request.flush({ status: 'Healthy' });
-      ctx.fixture.detectChanges();
-      http.expectOne(`${ctx.connection.serverUrl()}/api/v1/system/status`).flush(complete);
-      ctx.fixture.detectChanges();
-      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
-      const refresh = http.expectOne(`${ctx.connection.serverUrl()}/api/v1/auth/refresh-token`);
-      return { ...ctx, navigate, refresh };
+    /** Зберігає акаунти (останній стає активним, якщо не вказано інакше) і створює сторінку. */
+    function createWithAccounts(
+      accounts: Array<{ identity: string; access: string; refresh: string; server?: string }>,
+      activeIdentity?: string,
+    ) {
+      const store = TestBed.inject(AccountsService);
+      for (const account of accounts) {
+        store.add({
+          server: account.server ?? pageServer(),
+          accessToken: account.access,
+          refreshToken: account.refresh,
+          identity: account.identity,
+        });
+      }
+      if (activeIdentity) {
+        const id = AccountsService.accountId(pageServer(), activeIdentity);
+        store.setActive(id);
+      }
+      // Перша перевірка підключення йде з конструктора ConnectionService, друга —
+      // від пошуку акаунтів (вона скасовує першу): беремо чинний, не скасований запит.
+      const fixture = TestBed.createComponent(LoginPage);
+      const connection = TestBed.inject(ConnectionService);
+      fixture.detectChanges();
+      const request = http.match(connection.apiHealthUrl()).find((r) => !r.cancelled)!;
+      const element = fixture.nativeElement as HTMLElement;
+      const page = fixture.componentInstance as unknown as LoginPageInternals;
+      return { fixture, connection, element, page, request, store };
     }
 
-    it('sends both stored tokens, keeps the new pair and redirects to the planner', async () => {
-      const { fixture, connection, element, navigate, refresh } = createWithTokens();
-      expect(refresh.request.body).toEqual({ accessToken: 'old-access', refreshToken: 'old-refresh' });
-      // Поки йде оновлення — ні форми входу, ні помилки.
-      expect(element.textContent).not.toContain('Вхід в систему');
+    const healthUrl = (server = pageServer()) => `${server}/health`;
+    const meUrl = (server = pageServer()) => `${server}/api/v1/users/me`;
+    const refreshUrl = (server = pageServer()) => `${server}/api/v1/auth/refresh-token`;
 
-      refresh.flush({ accessToken: 'new-access', refreshToken: 'new-refresh' });
+    it('shows the loading text and no forms while the accounts are being checked', () => {
+      const { element } = createWithAccounts([{ identity: 'u1', access: jwtAt(600), refresh: 'r1' }]);
+      expect(element.textContent).toContain('Перевіряємо підключення');
+      expect(element.querySelector('.login-form, .login__card ion-input')).toBeNull();
+    });
+
+    it('takes the first valid account, makes it active, fills its snapshot and goes to the planner', async () => {
+      const { request, store } = createWithAccounts([{ identity: 'user-1', access: jwtAt(600), refresh: 'r1' }]);
+      request.flush({ status: 'Healthy' });
+
+      const me = await vi.waitFor(() => http.expectOne(meUrl()));
+      expect(me.request.method).toBe('GET');
+      me.flush(profile);
       await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
+
+      expect(store.accounts()).toHaveLength(1);
+      expect(store.active()).toMatchObject({ firstName: 'Олена', lastName: 'Іваненко', userId: 'user-1' });
+      // Назва ГО теж іде у знімок.
+      (await vi.waitFor(() => http.expectOne(`${pageServer()}/api/v1/ngo`))).flush({
+        name: 'Моя ГО',
+        logoUrl: '/files/logo.png',
+      });
+      await vi.waitFor(() => expect(store.active()?.ngoName).toBe('Моя ГО'));
+      // ...і посилання на логотип ГО.
+      expect(store.active()?.ngoLogoUrl).toBe('/files/logo.png');
+    });
+
+    it('refreshes an expired access token first, then confirms the login and goes to the planner', async () => {
+      const { request, store } = createWithAccounts([{ identity: 'user-1', access: jwtAt(-60), refresh: 'r1' }]);
+      request.flush({ status: 'Healthy' });
+
+      const refresh = await vi.waitFor(() => http.expectOne(refreshUrl()));
+      expect(refresh.request.body).toMatchObject({ refreshToken: 'r1' });
+      refresh.flush({ accessToken: jwtAt(600), refreshToken: 'r2' });
+
+      (await vi.waitFor(() => http.expectOne(meUrl()))).flush(profile);
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
+      expect(store.active()?.refreshToken).toBe('r2');
+    });
+
+    it('marks a stale account outdated, clears the memory when it was the only one, and shows the sign-in form', async () => {
+      const { fixture, connection, element, request, store } = createWithAccounts([
+        { identity: 'user-1', access: jwtAt(-60), refresh: 'r1' },
+      ]);
+      request.flush({ status: 'Healthy' });
+      (await vi.waitFor(() => http.expectOne(refreshUrl()))).flush({}, { status: 401, statusText: 'Unauthorized' });
+
+      // Усі акаунти застаріли — памʼять очищено; підключення перевіряється заново для сторінки входу.
+      (await vi.waitFor(() => http.expectOne(healthUrl()))).flush({ status: 'Healthy' });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        http.expectOne(`${connection.serverUrl()}/api/v1/system/status`).flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+      });
       fixture.detectChanges();
 
-      const server = connection.serverUrl();
-      expect(localStorage.getItem(`yavir.accessToken.${server}`)).toBe('new-access');
-      expect(localStorage.getItem(`yavir.refreshToken.${server}`)).toBe('new-refresh');
-      // Токени змінилися, але повторного оновлення нема.
-      http.expectNone(`${server}/api/v1/auth/refresh-token`);
+      expect(store.accounts()).toHaveLength(0);
+      expect(localStorage.length).toBe(0);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(element.querySelector('.login-form')).not.toBeNull();
     });
 
-    it('signs out and shows the login form when the server rejects the tokens', async () => {
-      const { fixture, connection, element, navigate, refresh } = createWithTokens();
-      refresh.flush({}, { status: 401, statusText: 'Unauthorized' });
+    it('marks both a rejected account and one whose server does not answer, and wipes the memory since none is valid', async () => {
+      const { request, store } = createWithAccounts(
+        [
+          { identity: 'stale', access: jwtAt(-60), refresh: 'r1' },
+          { identity: 'down', access: jwtAt(600, 'down'), refresh: 'r2', server: 'http://down.example.org:5065' },
+        ],
+        'stale',
+      );
+      request.flush({ status: 'Healthy' });
+      (await vi.waitFor(() => http.expectOne(refreshUrl()))).flush({}, { status: 401, statusText: 'Unauthorized' });
+      (await vi.waitFor(() => http.expectOne(healthUrl('http://down.example.org:5065')))).error(new ProgressEvent('error'));
+      await vi.waitFor(() => http.expectOne(healthUrl()));
+
+      // Недоступний сервер — теж застарілий акаунт, тож чинних нема: памʼять очищено.
+      expect(store.accounts()).toHaveLength(0);
+      expect(localStorage.length).toBe(0);
+    });
+
+    it('does not check accounts that are already marked outdated', async () => {
+      const store = TestBed.inject(AccountsService);
+      const old = store.add({ server: pageServer(), accessToken: jwtAt(-60), refreshToken: 'r-old', identity: 'old' });
+      store.add({ server: pageServer(), accessToken: jwtAt(600, 'good'), refreshToken: 'r-good', identity: 'good' });
+      store.update(old.id, { outdated: true });
+      store.setActive(old.id);
+
+      const fixture = TestBed.createComponent(LoginPage);
+      const connection = TestBed.inject(ConnectionService);
+      fixture.detectChanges();
+      http.match(connection.apiHealthUrl()).find((r) => !r.cancelled)!.flush({ status: 'Healthy' });
+
+      // Лише чинний: без оновлення токенів застарілого, одразу підтвердження входу.
+      http.expectNone(refreshUrl());
+      (await vi.waitFor(() => http.expectOne(meUrl()))).flush(profile);
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
+      expect(store.activeId()).toBe(AccountsService.accountId(pageServer(), 'good'));
+      expect(store.accounts().find((a) => a.id === old.id)?.outdated).toBe(true);
+    });
+
+    it('moves on to the next account when the first one is stale', async () => {
+      const { request, store } = createWithAccounts(
+        [
+          { identity: 'first', access: jwtAt(-60), refresh: 'r1' },
+          { identity: 'second', access: jwtAt(600, 'second'), refresh: 'r2' },
+        ],
+        'first',
+      );
+      request.flush({ status: 'Healthy' });
+      (await vi.waitFor(() => http.expectOne(refreshUrl()))).flush({}, { status: 401, statusText: 'Unauthorized' });
+
+      (await vi.waitFor(() => http.expectOne(healthUrl()))).flush({ status: 'Healthy' });
+      (await vi.waitFor(() => http.expectOne(meUrl()))).flush({ ...profile, id: 'second' });
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
+
+      // Застарілий не видалено, а позначено.
+      expect(store.accounts().map((a) => [a.userId, a.outdated])).toEqual([
+        ['', true],
+        ['second', false],
+      ]);
+      expect(store.activeId()).toBe(AccountsService.accountId(pageServer(), 'second'));
+    });
+
+    it('treats an account whose server does not answer as outdated and wipes the memory', async () => {
+      const { fixture, element, request, store } = createWithAccounts([
+        { identity: 'user-1', access: jwtAt(600), refresh: 'r1', server: 'http://down.example.org:5065' },
+      ]);
+      request.error(new ProgressEvent('error'));
+
+      // Чинних нема: переходимо до звичайного підключення (за доменом сторінки).
+      (await vi.waitFor(() => http.expectOne(healthUrl()))).error(new ProgressEvent('error'));
       await vi.waitFor(() => {
         fixture.detectChanges();
-        expect(element.querySelector('.login-form')).not.toBeNull();
+        expect(element.textContent).toContain('Введіть адресу серверу');
       });
-      expect(element.querySelector('.login__error')).toBeNull();
+      expect(store.accounts()).toHaveLength(0);
+      expect(store.activeId()).toBeNull();
+      expect(localStorage.length).toBe(0);
       expect(navigate).not.toHaveBeenCalled();
-      expect(localStorage.getItem(`yavir.refreshToken.${connection.serverUrl()}`)).toBeNull();
-      expect(TestBed.inject(AuthService).hasTokens()).toBe(false);
     });
 
-    it('signs out and shows the login form when the server does not answer', async () => {
-      const { fixture, connection, element, navigate, refresh } = createWithTokens();
-      refresh.error(new ProgressEvent('error'));
-      await vi.waitFor(() => {
-        fixture.detectChanges();
-        expect(element.querySelector('.login-form')).not.toBeNull();
-      });
-      expect(navigate).not.toHaveBeenCalled();
-      expect(localStorage.getItem(`yavir.refreshToken.${connection.serverUrl()}`)).toBeNull();
+    it('checks the active account first, then the others in the order they were added', async () => {
+      const { request } = createWithAccounts(
+        [
+          { identity: 'a', access: jwtAt(600, 'a'), refresh: 'ra', server: 'http://a.example.org:5065' },
+          { identity: 'b', access: jwtAt(600, 'b'), refresh: 'rb', server: 'http://b.example.org:5065' },
+        ],
+        undefined,
+      );
+      // Активний — той, що доданий останнім (b): його сервер перевіряється першим.
+      request.error(new ProgressEvent('error'));
+      (await vi.waitFor(() => http.expectOne(healthUrl('http://a.example.org:5065')))).error(new ProgressEvent('error'));
+      await vi.waitFor(() => http.expectOne(healthUrl()));
     });
 
-    it('does not try to refresh without tokens', () => {
-      const ctx = create();
-      ctx.request.flush({ status: 'Healthy' });
-      answerStatus(ctx.connection, ctx.fixture, complete);
-      http.expectNone(`${ctx.connection.serverUrl()}/api/v1/auth/refresh-token`);
+    it('keeps the loading text until the planner is reached, without flashing the forms', async () => {
+      const { fixture, element, request } = createWithAccounts([{ identity: 'user-1', access: jwtAt(600), refresh: 'r1' }]);
+      request.flush({ status: 'Healthy' });
+      (await vi.waitFor(() => http.expectOne(meUrl()))).flush(profile);
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+      fixture.detectChanges();
+      expect(element.textContent).toContain('Перевіряємо підключення');
+      expect(element.querySelector('.login-form')).toBeNull();
     });
   });
 
@@ -887,8 +1065,8 @@ describe('LoginPage', () => {
 
   describe('when the system has no NGO yet', () => {
     function createWithoutNgo() {
-      storeTokens();
       const ctx = create();
+      signIn(ctx.connection);
       ctx.request.flush({ status: 'Healthy' });
       answerStatus(ctx.connection, ctx.fixture, { hasAdmin: true, hasNgo: false, isSetupComplete: false });
       return ctx;

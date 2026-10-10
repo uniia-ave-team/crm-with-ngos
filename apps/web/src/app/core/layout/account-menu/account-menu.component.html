@@ -1,0 +1,87 @@
+<div class="account-menu">
+  <!-- Усі акаунти й кнопка додавання — один flex-контейнер: рядки наповнюються
+       суцільно (без порожніх місць), а максимум акаунтів у рядку обмежує його
+       ширина (5 плиток). -->
+  <div class="account-menu__accounts planned" role="group" [attr.aria-label]="'nav.account.accounts' | translate">
+    @for (account of accounts(); track account.id) {
+      <button
+        tabindex="0"
+        class="account-tile"
+        [class.active]="account.active"
+        type="button"
+        [class.outdated]="account.outdated"
+        [class.unavailable]="account.outdated && account.unavailable"
+        [attr.aria-label]="
+          (account.outdated ? (account.unavailable ? 'nav.account.unavailable' : 'nav.account.outdated') : 'nav.account.account')
+            | translate
+        "
+        [attr.title]="
+          account.outdated
+            ? ((account.unavailable ? 'nav.account.unavailable' : 'nav.account.outdated') | translate)
+            : null
+        "
+        (click)="selectAccount.emit(account)"
+      >
+        <app-avatar
+          class="account-tile__avatar"
+          [firstName]="account.firstName"
+          [lastName]="account.lastName"
+          [avatarUrl]="account.avatarUrl"
+          [ngoName]="account.ngoName"
+          [outdated]="account.outdated ?? false"
+        />
+        <!-- Застарілий акаунт: значок ліворуч унизу (дзеркально до лого ГО
+             справа), контур за альфа-каналом, як у лого. Сервер не відповів —
+             червоний значок помилки, інакше жовтий «потрібна синхронізація». -->
+        @if (account.outdated) {
+          @if (account.unavailable) {
+            <ion-icon
+              class="account-tile__status account-tile__status--unavailable"
+              name="alert-circle"
+              aria-hidden="true"
+              appAlphaOutline="2"
+              outlineColor="var(--nav-avatar-bg)"
+            ></ion-icon>
+          } @else {
+            <ion-icon
+              class="account-tile__status account-tile__status--outdated"
+              name="sync-circle"
+              aria-hidden="true"
+              appAlphaOutline="2"
+              outlineColor="var(--nav-avatar-bg)"
+            ></ion-icon>
+          }
+        }
+        <!-- Логотип ГО цього акаунта (довільна форма, контур за альфа-каналом).
+             Немає посилання на логотип — значка немає взагалі. -->
+        @if (account.logoUrl; as logo) {
+          <span class="account-tile__badge" aria-hidden="true">
+            <img [src]="logo" alt="" appAlphaOutline="2" outlineColor="var(--nav-avatar-bg)" />
+          </span>
+        }
+      </button>
+    }
+    <button
+      tabindex="0"
+      class="account-add"
+      type="button"
+      [attr.aria-label]="'nav.account.add' | translate"
+      [title]="'nav.account.add' | translate"
+      (click)="addAccount.emit()"
+    >
+      <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+    </button>
+  </div>
+
+  <button tabindex="0" class="account-menu__item" type="button" (click)="settings.emit()">
+    <ion-icon name="cog-outline" aria-hidden="true"></ion-icon>
+    <span>{{ 'nav.account.settings' | translate }}</span>
+  </button>
+
+  <hr class="account-menu__divider" />
+
+  <button tabindex="0" class="account-menu__item" type="button" (click)="signOut.emit()">
+    <ion-icon name="log-out-outline" aria-hidden="true"></ion-icon>
+    <span>{{ 'nav.account.signOut' | translate }}</span>
+  </button>
+</div>

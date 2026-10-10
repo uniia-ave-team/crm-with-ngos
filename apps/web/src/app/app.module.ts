@@ -9,7 +9,9 @@ import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 
 import { AppComponent } from './app.component';
 import { AppRoutingModule } from './app-routing.module';
+import { PreloaderModule } from './shared/preloader/preloader.module';
 import { authInterceptor } from './core/auth/auth.interceptor';
+import { SessionService } from './core/auth/session.service';
 import { LayoutModule } from './core/layout/layout.module';
 import { ConnectionService } from './core/connection/connection.service';
 import { LanguageService } from './core/i18n/language.service';
@@ -19,7 +21,7 @@ import { LanguageService } from './core/i18n/language.service';
   // TranslatePipe — стандалонний пайп (потрібен тут для {{ ... | translate }}
   // у app.component.html), а не NgModule; provideTranslateService нижче
   // лише реєструє сам TranslateService.
-  imports: [BrowserModule, IonicModule.forRoot(), LayoutModule, AppRoutingModule, TranslatePipe],
+  imports: [BrowserModule, IonicModule.forRoot(), LayoutModule, AppRoutingModule, TranslatePipe, PreloaderModule],
   providers: [
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
     provideHttpClient(withInterceptors([authInterceptor])),
@@ -43,6 +45,7 @@ import { LanguageService } from './core/i18n/language.service';
     provideAppInitializer(() => {
       inject(LanguageService);
       inject(ConnectionService);
+      inject(SessionService);
     }),
   ],
   bootstrap: [AppComponent],

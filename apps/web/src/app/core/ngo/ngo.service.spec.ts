@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
+import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { NgoService } from './ngo.service';
 
@@ -34,6 +35,49 @@ describe('NgoService', () => {
     expect(request.request.body).toEqual({ name: 'Моя ГО', logoUrl: null });
     request.flush(null, { status: 201, statusText: 'Created' });
     expect(await result).toBe('created');
+  });
+
+  it('stores the name of the created NGO in the active account and clears its logo', async () => {
+    const accounts = TestBed.inject(AccountsService);
+    const account = accounts.add({
+      server: TestBed.inject(ConnectionService).serverUrl(),
+      accessToken: 'a',
+      refreshToken: 'r',
+      identity: 'u',
+      ngoLogoUrl: '/old.png',
+    });
+    const result = service.create('Моя ГО');
+    http.expectOne(url).flush(null, { status: 201, statusText: 'Created' });
+    expect(await result).toBe('created');
+    expect(accounts.accounts().find((a) => a.id === account.id)).toMatchObject({ ngoName: 'Моя ГО', ngoLogoUrl: null });
+  });
+
+  describe('fetch', () => {
+    it('returns the name and the logo link', async () => {
+      const result = service.fetch();
+      const request = http.expectOne(url);
+      expect(request.request.method).toBe('GET');
+      request.flush({ id: 'n', name: ' Моя ГО ', logoUrl: ' /files/logo.png ', createdAt: '2026-01-01T00:00:00Z' });
+      expect(await result).toEqual({ name: 'Моя ГО', logoUrl: '/files/logo.png' });
+    });
+
+    it.each([[null], [''], [undefined]])('treats a missing logo link (%s) as no logo', async (logoUrl) => {
+      const result = service.fetch();
+      http.expectOne(url).flush({ name: 'Моя ГО', logoUrl });
+      expect(await result).toEqual({ name: 'Моя ГО', logoUrl: null });
+    });
+
+    it('returns null without a name', async () => {
+      const result = service.fetch();
+      http.expectOne(url).flush({ name: '  ', logoUrl: '/x.png' });
+      expect(await result).toBeNull();
+    });
+
+    it.each([403, 404, 500])('returns null on HTTP %i', async (status) => {
+      const result = service.fetch();
+      http.expectOne(url).flush({}, { status, statusText: 'x' });
+      expect(await result).toBeNull();
+    });
   });
 
   it.each([

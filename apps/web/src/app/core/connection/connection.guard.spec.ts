@@ -5,6 +5,7 @@ import { ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree, provideRouter } f
 import { Observable } from 'rxjs';
 
 import { connectionGuard } from './connection.guard';
+import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from './connection.service';
 
 describe('connectionGuard', () => {
@@ -67,11 +68,16 @@ describe('connectionGuard', () => {
     expect((results[0] as UrlTree).toString()).toBe('/login?error=no-connection');
   });
 
-  it('judges by the saved server address when there is one', () => {
-    localStorage.setItem('yavir.serverAddress', '192.168.0.7');
+  it('judges by the connection address of the active account when there is one', () => {
+    TestBed.inject(AccountsService).add({
+      server: `${location.protocol}//192.168.0.7:5065`,
+      accessToken: 'a',
+      refreshToken: 'r',
+      identity: 'user-1',
+    });
     const connection = TestBed.inject(ConnectionService);
     const request = http.expectOne(`${location.protocol}//192.168.0.7:5065/health`);
-    expect(connection.serverAddress()).toBe('192.168.0.7');
+    expect(connection.serverUrl()).toBe(`${location.protocol}//192.168.0.7:5065`);
 
     const results: Array<boolean | UrlTree> = [];
     (

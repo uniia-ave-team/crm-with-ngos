@@ -2,9 +2,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
+import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from './connection.service';
 
-const STORAGE_KEY = 'yavir.serverAddress';
 
 describe('ConnectionService', () => {
   let http: HttpTestingController;
@@ -107,7 +107,8 @@ describe('ConnectionService', () => {
       retry.flush({ status: 'Healthy' });
       expect(service.apiStatus()).toBe('healthy');
       expect(service.connected()).toBe(true);
-      expect(localStorage.getItem(STORAGE_KEY)).toBe('crm.example.org');
+      // Надана адреса живе лише в памʼяті: у сховище вона потрапляє разом з акаунтом.
+      expect(localStorage.length).toBe(0);
     });
 
     it('keeps an explicit scheme and port and drops the path', () => {
@@ -135,16 +136,43 @@ describe('ConnectionService', () => {
 
         expect(service.setServerAddress(value)).toBe(false);
         expect(service.serverAddress()).toBeNull();
-        expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+        expect(localStorage.length).toBe(0);
         http.expectNone(() => true);
       },
     );
 
-    it('uses a persisted address from the very first check', () => {
-      localStorage.setItem(STORAGE_KEY, '192.168.0.7');
+    it('uses the connection address of the active account from the very first check', () => {
+      TestBed.inject(AccountsService).add({
+        server: 'http://192.168.0.7:5065',
+        accessToken: 'a',
+        refreshToken: 'r',
+        identity: 'user-1',
+      });
       const service = TestBed.inject(ConnectionService);
-      expect(service.serverAddress()).toBe('192.168.0.7');
-      http.expectOne(`${location.protocol}//192.168.0.7:5065/health`);
+      expect(service.serverUrl()).toBe('http://192.168.0.7:5065');
+      http.expectOne('http://192.168.0.7:5065/health');
+    });
+
+    it('prefers the active account over a typed address, and falls back to the typed one without an account', () => {
+      const service = TestBed.inject(ConnectionService);
+      http.expectOne(`${location.protocol}//${location.hostname}:5065/health`);
+      service.setServerAddress('typed.example.org');
+      expect(service.serverUrl()).toBe(`${location.protocol}//typed.example.org:5065`);
+      http.expectOne(`${location.protocol}//typed.example.org:5065/health`);
+
+      const accounts = TestBed.inject(AccountsService);
+      accounts.add({ server: 'http://account.example.org:5065', accessToken: 'a', refreshToken: 'r', identity: 'u' });
+      expect(service.serverUrl()).toBe('http://account.example.org:5065');
+
+      accounts.setActive(null);
+      expect(service.serverUrl()).toBe(`${location.protocol}//typed.example.org:5065`);
+    });
+
+    it('returns the final status of the check from checkApi()', async () => {
+      const { service } = create();
+      const result = service.checkApi();
+      http.expectOne(`${location.protocol}//${location.hostname}:5065/health`).flush({ status: 'Healthy' });
+      expect(await result).toBe('healthy');
     });
 
     it('cancels a check still in flight when a new address is provided', () => {
@@ -162,7 +190,6 @@ describe('ConnectionService', () => {
 
       service.clearServerAddress();
       expect(service.serverAddress()).toBeNull();
-      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
       http.expectOne(`${location.protocol}//${location.hostname}:5065/health`);
     });
   });

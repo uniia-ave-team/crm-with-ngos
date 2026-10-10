@@ -7,10 +7,13 @@ import { AuthService } from './auth.service';
 
 /**
  * Запити до API, яким токени не потрібні (і які не мають спричиняти оновлення
- * токенів чи вихід): вхід, обмін токенів, статус системи та створення
- * користувача (реєстрація першого адміна).
+ * токенів чи вихід): вхід, вихід, обмін токенів, статус системи та
+ * створення користувача (реєстрація першого адміна).
  */
 const ANONYMOUS_REQUESTS: ReadonlyArray<{ method?: string; path: string }> = [
+  // Вихід: заголовок збирає сам AuthService із токенів, узятих до очищення
+  // сховища; перехоплювач не має ні додавати токен, ні оновлювати його.
+  { path: '/api/v1/auth/logout' },
   { path: '/api/v1/auth/login' },
   { path: '/api/v1/auth/refresh-token' },
   { path: '/api/v1/system/status' },
@@ -77,9 +80,14 @@ function send(req: HttpRequest<unknown>, next: HttpHandlerFn, token: string | nu
 
 /** Токен для запиту: за потреби спершу оновлюємо прострочений; не вдалося — вихід. */
 async function currentToken(auth: AuthService): Promise<string | null> {
-  if (auth.hasTokens() && auth.accessTokenExpired() && (await auth.refresh()) !== 'ok') {
-    auth.signOut();
-    return null;
+  if (auth.hasTokens() && auth.accessTokenExpired()) {
+    // Невдалий обмін позначає акаунт застарілим і передає активність іншому —
+    // забути треба саме той, чия сесія не вдалася.
+    const accountId = auth.sessionId();
+    if ((await auth.refresh()) !== 'ok') {
+      auth.signOut(accountId);
+      return null;
+    }
   }
   return auth.accessToken();
 }
@@ -93,9 +101,10 @@ async function recoverFromUnauthorized(auth: AuthService, usedToken: string): Pr
   if (latest && latest !== usedToken) {
     return latest;
   }
+  const accountId = auth.sessionId();
   if ((await auth.refresh()) === 'ok') {
     return auth.accessToken();
   }
-  auth.signOut();
+  auth.signOut(accountId);
   return null;
 }

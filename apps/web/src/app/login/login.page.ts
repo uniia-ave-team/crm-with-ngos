@@ -2,6 +2,8 @@ import { Component, computed, effect, inject, input, OnDestroy, signal, untracke
 import { Router } from '@angular/router';
 
 import { NO_CONNECTION_ERROR } from '../core/connection/connection.guard';
+import { AccountRestoreService } from '../core/accounts/account-restore.service';
+import { AccountsService } from '../core/accounts/accounts.service';
 import { AuthService, LoginResult } from '../core/auth/auth.service';
 import { ConnectionService } from '../core/connection/connection.service';
 import { AppLanguage, LanguageService } from '../core/i18n/language.service';
@@ -63,6 +65,8 @@ export class LoginPage implements OnDestroy {
   private readonly ngoService = inject(NgoService);
   private readonly usersService = inject(UsersService);
   private readonly router = inject(Router);
+  private readonly accounts = inject(AccountsService);
+  private readonly restoreService = inject(AccountRestoreService);
   private readonly languageService = inject(LanguageService);
 
   /** Вордмарк «Явір» вгорі форми входу (як мобільне лого меню; `.svg` / `_dark.svg`). */
@@ -88,8 +92,6 @@ export class LoginPage implements OnDestroy {
   /** Введене не схоже на адресу сервера (валідація до будь-якого запиту). */
   private readonly invalid = signal(false);
 
-  /** Оновлення токенів уже запускали (для поточної перевірки підключення). */
-  private refreshStarted = false;
 
 
   /**
@@ -106,7 +108,17 @@ export class LoginPage implements OnDestroy {
    */
   private readonly forceAddressStep = signal(false);
 
+  /**
+   * Пошук чинного акаунта на старті завершено, і жодного не знайдено (знайдено —
+   * сторінка переходить на `REDIRECT_URL`, не показуючи форм). Поки триває —
+   * «Перевіряємо підключення…».
+   */
+  private readonly restoreDone = signal(false);
+
   protected readonly view = computed<LoginView>(() => {
+    if (!this.restoreDone()) {
+      return 'loading';
+    }
     if (this.forceAddressStep()) {
       return 'step1';
     }
@@ -128,9 +140,8 @@ export class LoginPage implements OnDestroy {
 
   /**
    * Що показати за статусом системи й наявністю токенів:
-   * - `isSetupComplete`: без токенів — форма входу; з токенами — оновлюємо їх
-   *   (`refreshSession`) і переходимо на «Планер», а якщо не вдалося — вихід,
-   *   і форма входу;
+   * - `isSetupComplete`: без акаунта — форма входу; з активним акаунтом (щойно
+   *   ввійшли) — одразу на «Планер»;
    * - немає адміна — форма реєстрації адміністратора;
    * - адмін є, ГО нема: з токенами — форма створення ГО, без — форма входу;
    * - адмін і ГО є, а налаштування не завершене — помилка.
@@ -298,47 +309,51 @@ export class LoginPage implements OnDestroy {
   });
 
   constructor() {
-    // Щойно підключення є — запитуємо стан первинного налаштування системи
-    // (від нього залежить, що показати: форму організації чи вхід).
-    // untracked: виклик нічого не читає з сигналів сторінки, тож ефект має
-    // реагувати лише на зміну `apiStatus`.
+    // Спершу шукаємо чинний акаунт серед збережених: знайшли — на «Планер»,
+    // ні — показуємо вхід, реєстрацію тощо. Акаунтів нема — шукати нічого,
+    // форми одразу.
+    if (this.accounts.accounts().length === 0) {
+      this.restoreDone.set(true);
+    } else {
+      void this.restoreAccounts();
+    }
+
+    // Щойно пошук завершено й підключення є — запитуємо стан первинного
+    // налаштування системи (від нього залежить, що показати: форму адміна,
+    // організації чи входу). untracked: виклик нічого не читає з сигналів
+    // сторінки, тож ефект має реагувати лише на `restoreDone` і `apiStatus`.
     effect(() => {
-      // Нова перевірка підключення (інша адреса тощо) — починаємо спочатку.
+      const done = this.restoreDone();
       const healthy = this.connection.apiStatus() === 'healthy';
       untracked(() => {
-        this.refreshStarted = false;
-        if (healthy) {
-          this.auth.restoreTokens();
+        if (done && healthy) {
           this.connection.loadSystemStatus();
         }
       });
     });
 
-    // Налаштування завершене й токени є — один раз оновлюємо їх.
+    // Налаштування завершене, а акаунт активний (щойно ввійшли або
+    // зареєстрували адміна) — одразу на `REDIRECT_URL`.
     effect(() => {
       const complete = this.connection.systemStatus()?.isSetupComplete === true;
       if (complete && this.auth.hasTokens()) {
-        untracked(() => void this.refreshSession());
+        untracked(() => void this.router.navigateByUrl(REDIRECT_URL));
       }
     });
   }
 
   /**
-   * Оновлює токени (`POST /api/v1/auth/refresh-token`) і переходить на
-   * «Планер». Не вдалося — вихід із системи: токени забуто, і сторінка
-   * показує форму входу.
+   * Шукає чинний акаунт серед збережених (`AccountRestoreService`; застарілі
+   * чистить). Знайшовся — переходимо на `REDIRECT_URL`; ні — відкриваємо форми.
    */
-  private async refreshSession(): Promise<void> {
-    if (this.refreshStarted) {
+  private async restoreAccounts(): Promise<void> {
+    const result = await this.restoreService.restore();
+    if (result === 'restored') {
+      // `restoreDone` лишається `false`: до переходу сторінка показує «завантаження».
+      void this.router.navigateByUrl(REDIRECT_URL);
       return;
     }
-    this.refreshStarted = true;
-    const result = await this.auth.refresh();
-    if (result === 'ok') {
-      void this.router.navigateByUrl(REDIRECT_URL);
-    } else {
-      this.auth.clearTokens();
-    }
+    this.restoreDone.set(true);
   }
 
   protected onAddressChange(value: string | number | null | undefined): void {
@@ -373,17 +388,12 @@ export class LoginPage implements OnDestroy {
       return;
     }
     this.resettingServer.set(true);
-    // Беремо до очищення: після нього надана адреса вже забута.
-    const currentAddress = this.connection.serverAddress() ?? this.connection.domain;
+    // Беремо до очищення: після нього акаунти й надана адреса вже забуті.
+    const currentAddress = this.accounts.active()?.server ?? this.connection.serverAddress() ?? this.connection.domain;
     const healthy = await this.connection.probeApi();
 
-    this.auth.clearTokens();
+    this.accounts.wipe();
     this.connection.clearServerAddress();
-    try {
-      localStorage.clear();
-    } catch {
-      // Сховище недоступне — нічого очищати.
-    }
     this.resetForms();
     this.address.set(healthy ? currentAddress : '');
     this.invalid.set(false);
@@ -529,8 +539,6 @@ export class LoginPage implements OnDestroy {
       return;
     }
 
-    // Токени свіжі — оновлювати їх одразу після входу не треба.
-    this.refreshStarted = true;
     const status = await this.connection.loadSystemStatus();
     this.loginSaving.set(false);
     if (!status) {

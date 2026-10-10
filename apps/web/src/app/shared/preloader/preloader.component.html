@@ -1,0 +1,8 @@
+@if (visible()) {
+  <div class="preloader" role="status" aria-live="polite" aria-busy="true">
+    <img class="preloader__logo theme-light" [src]="'assets/' + logoBase() + '.svg'" alt="" />
+    <img class="preloader__logo theme-dark" [src]="'assets/' + logoBase() + '_dark.svg'" alt="" />
+    <ion-spinner class="preloader__spinner" name="crescent" aria-hidden="true"></ion-spinner>
+    <p class="preloader__text">{{ 'common.pleaseWait' | translate }}</p>
+  </div>
+}

@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 
+import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { authInterceptor } from './auth.interceptor';
 import { AuthService } from './auth.service';
@@ -21,9 +22,7 @@ describe('authInterceptor', () => {
   let navigate: ReturnType<typeof vi.spyOn>;
 
   function storeTokens(access: string, refresh: string): void {
-    localStorage.setItem(`yavir.accessToken.${server}`, access);
-    localStorage.setItem(`yavir.refreshToken.${server}`, refresh);
-    auth.restoreTokens();
+    TestBed.inject(AccountsService).add({ server, accessToken: access, refreshToken: refresh, identity: 'user-1' });
   }
 
   beforeEach(async () => {
@@ -65,6 +64,7 @@ describe('authInterceptor', () => {
     ['GET', '/api/v1/system/status'],
     ['POST', '/api/v1/auth/login'],
     ['POST', '/api/v1/auth/refresh-token'],
+    ['POST', '/api/v1/auth/logout'],
     ['POST', '/api/v1/users'],
   ])('leaves %s %s anonymous', async (method, path) => {
     storeTokens(jwt(600), 'refresh');
@@ -147,7 +147,27 @@ describe('authInterceptor', () => {
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
     expect(status).toBe(401);
     expect(auth.hasTokens()).toBe(false);
-    expect(localStorage.getItem(`yavir.refreshToken.${server}`)).toBeNull();
+    expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
+  });
+
+  it('forgets only the account whose refresh failed, and keeps another valid account as the active one', async () => {
+    const accounts = TestBed.inject(AccountsService);
+    const other = accounts.add({ server, accessToken: jwt(600), refreshToken: 'refresh-other', identity: 'user-2' });
+    storeTokens(jwt(600), 'refresh');
+    const failed = accounts.activeId()!;
+
+    let status = 0;
+    client.get(`${server}/api/v1/ngo`).subscribe({ error: (e) => (status = e.status) });
+    (await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`))).flush({}, { status: 401, statusText: 'Unauthorized' });
+    (await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`))).flush({}, { status: 401, statusText: 'Unauthorized' });
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
+    expect(status).toBe(401);
+    // Невдалий забуто, а активним лишився інший чинний — його не зачеплено.
+    expect(accounts.accounts().map((a) => a.id)).toEqual([other.id]);
+    expect(accounts.activeId()).toBe(other.id);
+    expect(accounts.accounts().some((a) => a.id === failed)).toBe(false);
+    expect(accounts.active()?.refreshToken).toBe('refresh-other');
   });
 
   it('signs out when the refresh fails because the server does not answer', async () => {
@@ -183,10 +203,8 @@ describe('authInterceptor', () => {
     // Поки відповідь 401 летіла, інший запит уже оновив токени (токен має
     // відрізнятися від попереднього, тож інший `exp`).
     const fresh = jwt(900);
-    localStorage.setItem(`yavir.accessToken.${server}`, fresh);
-    localStorage.setItem(`yavir.refreshToken.${server}`, 'refresh-2');
-    auth.restoreTokens();
-    window.dispatchEvent(new StorageEvent('storage', { key: `yavir.accessToken.${server}` }));
+    const accounts = TestBed.inject(AccountsService);
+    accounts.update(accounts.activeId()!, { accessToken: fresh, refreshToken: 'refresh-2' });
     request.flush({}, { status: 401, statusText: 'Unauthorized' });
 
     const retry = await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`));

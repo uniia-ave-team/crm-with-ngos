@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Signal, computed, inject, signal } from '@angular/core';
 import { Subscription, finalize, firstValueFrom, timeout } from 'rxjs';
 
-const SERVER_ADDRESS_STORAGE_KEY = 'yavir.serverAddress';
+import { AccountsService } from '../accounts/accounts.service';
 
 const API_PORT = 5065;
 const API_HEALTH_PATH = '/health';
@@ -78,24 +78,31 @@ function parseServerAddress(raw: string | null): URL | null {
 @Injectable({ providedIn: 'root' })
 export class ConnectionService {
   private readonly http = inject(HttpClient);
+  private readonly accounts = inject(AccountsService);
 
   /** Домен (hostname, без протоколу й порту), з якого відкрито сторінку. */
   readonly domain: string = location.hostname;
 
   /**
-   * Адреса сервера, надана користувачем (як введена), або `null`, якщо її
-   * не надавали — тоді ціль визначається за доменом сторінки.
+   * Адреса сервера, надана користувачем на кроці 1 (як введена), або `null`, якщо
+   * її не надавали. Діє, поки нема активного акаунта (у акаунта своя адреса
+   * підключення) і лише в памʼяті: у сховище адреса потрапляє разом із
+   * акаунтом після входу.
    */
-  private readonly serverAddressSignal = signal<string | null>(this.readServerAddress());
+  private readonly serverAddressSignal = signal<string | null>(null);
   readonly serverAddress: Signal<string | null> = this.serverAddressSignal.asReadonly();
 
   /**
-   * Ціль перевірки (origin сервера). Протокол сторінки використовується за
-   * замовчуванням: з https-сторінки запит на http браузер заблокує як mixed
-   * content.
+   * Ціль перевірки (origin сервера): адреса підключення активного акаунта; без
+   * нього — надана адреса, а без неї — домен сторінки. Протокол сторінки
+   * використовується за замовчуванням: з https-сторінки запит на http браузер
+   * заблокує як mixed content.
    */
   readonly serverUrl: Signal<string> = computed(
-    () => parseServerAddress(this.serverAddressSignal())?.origin ?? `${location.protocol}//${this.domain}:${API_PORT}`,
+    () =>
+      this.accounts.active()?.server ??
+      parseServerAddress(this.serverAddressSignal())?.origin ??
+      `${location.protocol}//${this.domain}:${API_PORT}`,
   );
   readonly apiHealthUrl: Signal<string> = computed(() => `${this.serverUrl()}${API_HEALTH_PATH}`);
 
@@ -118,11 +125,14 @@ export class ConnectionService {
 
   constructor() {
     console.log(`[ConnectionService] Домен, з якого відкрито сторінку: ${this.domain}`);
-    this.checkApi();
+    void this.checkApi();
   }
 
-  /** Перевіряє API за поточною ціллю; результат — в `apiStatus` і в консолі. */
-  checkApi(): void {
+  /**
+   * Перевіряє API за поточною ціллю; результат — в `apiStatus` і в консолі.
+   * Повертає остаточний стан перевірки (якщо її скасовано новою — поточний).
+   */
+  checkApi(): Promise<ApiStatus> {
     // Відповідь на попередню, ще не завершену перевірку (стару адресу) не
     // має перезаписати результат нової.
     this.checkSubscription?.unsubscribe();
@@ -133,14 +143,23 @@ export class ConnectionService {
     this.systemStatusStateSignal.set('idle');
 
     const url = this.apiHealthUrl();
-    const source = this.serverAddressSignal() ? 'надана адреса сервера' : 'домен сторінки';
+    const source = this.accounts.active()
+      ? 'адреса активного акаунта'
+      : this.serverAddressSignal()
+        ? 'надана адреса сервера'
+        : 'домен сторінки';
     this.apiStatusSignal.set('checking');
     console.log(`[ConnectionService] Перевіряю API (${source}): ${url}`);
 
-    this.checkSubscription = this.http
-      .get<{ status?: string }>(url)
-      .pipe(timeout(API_CHECK_TIMEOUT_MS))
-      .subscribe({
+    return new Promise((resolve) => {
+      this.checkSubscription = this.http
+        .get<{ status?: string }>(url)
+        .pipe(
+          timeout(API_CHECK_TIMEOUT_MS),
+          // Перевірку скасовано новою (відписка) — не лишаємо виклик висіти.
+          finalize(() => resolve(this.apiStatusSignal())),
+        )
+        .subscribe({
         next: (body) => {
           const reported = body?.status;
           if (reported === 'Healthy') {
@@ -162,6 +181,7 @@ export class ConnectionService {
           }
         },
       });
+    });
   }
 
   /**
@@ -235,16 +255,14 @@ export class ConnectionService {
       return false;
     }
     this.serverAddressSignal.set(trimmed);
-    this.persistServerAddress(trimmed);
-    this.checkApi();
+    void this.checkApi();
     return true;
   }
 
   /** Забуває надану адресу й повертається до цілі за доменом сторінки. */
   clearServerAddress(): void {
     this.serverAddressSignal.set(null);
-    this.persistServerAddress('');
-    this.checkApi();
+    void this.checkApi();
   }
 
   private finishCheck(status: ApiStatus, message: string, url: string): void {
@@ -254,26 +272,6 @@ export class ConnectionService {
       console.log(line);
     } else {
       console.warn(line);
-    }
-  }
-
-  private persistServerAddress(value: string): void {
-    try {
-      if (value) {
-        localStorage.setItem(SERVER_ADDRESS_STORAGE_KEY, value);
-      } else {
-        localStorage.removeItem(SERVER_ADDRESS_STORAGE_KEY);
-      }
-    } catch {
-      // Сховище може бути недоступне (приватний режим тощо).
-    }
-  }
-
-  private readServerAddress(): string | null {
-    try {
-      return localStorage.getItem(SERVER_ADDRESS_STORAGE_KEY);
-    } catch {
-      return null;
     }
   }
 }

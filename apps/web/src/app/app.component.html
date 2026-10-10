@@ -51,4 +51,7 @@
       </ion-split-pane>
     </div>
   }
+
+  <!-- Прелоадер на всю сторінку: поки шукаємо чинний акаунт серед збережених. -->
+  <app-preloader [visible]="accountSearch()"></app-preloader>
 </ion-app>

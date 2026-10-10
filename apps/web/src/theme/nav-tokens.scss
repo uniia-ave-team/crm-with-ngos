@@ -8,6 +8,11 @@
   --nav-fg-active: #020b18;
   --nav-active-bg: rgb(2 11 24 / 3%);
   --nav-avatar-bg: #f0f1f1;
+  // Значок застарілого акаунта: помаранчевий, контраст із білим 7:1 (жовтий із
+  // таким контрастом виходить бурим, тому у світлій темі він помаранчевий).
+  --nav-outdated-icon: #914100;
+  // Значок акаунта, чий сервер не відповів: червоний, контраст із білим 7:1.
+  --nav-unavailable-icon: #b40909;
 
   // Тло сторінок (ion-content без власного --background) — стандартна
   // Ionic-змінна, перевизначаємо, щоб не покладатись на дефолт палітри.
@@ -22,6 +27,8 @@
     --nav-fg-active: #f2f3f4;
     --nav-active-bg: rgb(242 243 244 / 6%);
     --nav-avatar-bg: #202226;
+    --nav-outdated-icon: #facc15;
+    --nav-unavailable-icon: #ff6b6b;
     --ion-background-color: #1b1c1f;
   }
 

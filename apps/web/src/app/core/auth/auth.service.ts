@@ -1,27 +1,37 @@
-import { HttpClient } from '@angular/common/http';
-import { Injectable, Signal, computed, inject, signal } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Injectable, Signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom, timeout } from 'rxjs';
 
+import { AccountsService, StoredAccount } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
-
-/** Префікси ключів localStorage; до них дописується адреса сервера. */
-const ACCESS_TOKEN_STORAGE_PREFIX = 'yavir.accessToken.';
-const REFRESH_TOKEN_STORAGE_PREFIX = 'yavir.refreshToken.';
+import { readJwtExpiry, readJwtSubject } from './jwt';
 
 const API_LOGIN_PATH = '/api/v1/auth/login';
 const API_REFRESH_PATH = '/api/v1/auth/refresh-token';
+const API_LOGOUT_PATH = '/api/v1/auth/logout';
 const REQUEST_TIMEOUT_MS = 10000;
 
 /** Куди переходить користувач, коли сесію завершено (вихід). */
-const LOGIN_URL = '/login';
+export const LOGIN_URL = '/login';
 
 /** Імʼя блокування (Web Locks), що не дає двом вкладкам оновлювати токени одночасно. */
 const REFRESH_LOCK_NAME = 'yavir-refresh-tokens';
 
 /** Access-токен вважається простроченим за стільки секунд до справжнього кінця. */
 const EXPIRY_SKEW_SECONDS = 30;
+
+/**
+ * Скільки живе refresh-токен. Це **припущення клієнта**: сервер не віддає термін
+ * (токен непрозорий, відповідь має лише пару токенів), а в налаштуваннях API
+ * (`JwtOptions.RefreshTokenExpiryDays`) він 1–365 днів, за замовчуванням 7.
+ * Якщо в інсталяції термін коротший, неактивні акаунти можуть застаріти раніше,
+ * ніж їх оновлять.
+ */
+const REFRESH_TOKEN_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+/** Токени неактивного акаунта оновлюються, коли минула половина терміну refresh-токена. */
+const REFRESH_DUE_AFTER_MS = REFRESH_TOKEN_LIFETIME_MS / 2;
 
 interface LoginResponse {
   accessToken: string;
@@ -30,77 +40,61 @@ interface LoginResponse {
 
 export type LoginResult = 'ok' | RequestFailure;
 export type RefreshResult = 'ok' | RequestFailure;
+/** `skipped` — токенів уже не було, на сервер запит не йшов. */
+export type LogoutResult = 'ok' | 'skipped' | RequestFailure;
 
 /**
- * Вхід користувача й токени сесії. Обидва токени, крім памʼяті, записуються в
- * `localStorage` (окремі ключі для кожної адреси сервера), щоб пережити
- * перезавантаження сторінки: обмін токенів (`/auth/refresh-token`) вимагає і
- * refresh-токен, і попередній access-токен.
+ * Вхід користувача й токени сесії. Токени належать **активному акаунту**
+ * (`AccountsService`): вони зберігаються в його записі в `localStorage`, щоб
+ * пережити перезавантаження сторінки. Обмін токенів
+ * (`/auth/refresh-token`) вимагає і refresh-токен, і попередній access-токен.
  *
  * Refresh-токен одноразовий (після обміну сервер видаляє старий), тому обмін
  * іде в одному екземплярі: у межах вкладки — один спільний запит, між
- * вкладками — Web Lock, а токени, оновлені іншою вкладкою, підхоплюються зі
- * сховища, а не обмінюються вдруге.
+ * вкладками — Web Lock, а запис, оновлений іншою вкладкою, підхоплюється зі
+ * сховища, а не обмінюється вдруге.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly connection = inject(ConnectionService);
+  private readonly accounts = inject(AccountsService);
   private readonly router = inject(Router);
 
-  private readonly accessTokenSignal = signal<string | null>(null);
-  readonly accessToken: Signal<string | null> = this.accessTokenSignal.asReadonly();
+  readonly accessToken: Signal<string | null> = computed(() => this.accounts.active()?.accessToken ?? null);
+  readonly refreshToken: Signal<string | null> = computed(() => this.accounts.active()?.refreshToken ?? null);
 
-  private readonly refreshTokenSignal = signal<string | null>(null);
-  readonly refreshToken: Signal<string | null> = this.refreshTokenSignal.asReadonly();
+  /** Є обидва токени (в активного акаунта). */
+  readonly hasTokens: Signal<boolean> = computed(() => !!this.accessToken() && !!this.refreshToken());
 
-  /** Є обидва токени (з памʼяті або відновлені зі сховища). */
-  readonly hasTokens: Signal<boolean> = computed(() => !!this.accessTokenSignal() && !!this.refreshTokenSignal());
+  /**
+   * `id` активного акаунта (або `null`): змінюється при вході, виході й
+   * перемиканні. На нього зав'язано все, що належить конкретному акаунту
+   * (наприклад, кеш профілю).
+   */
+  readonly sessionId: Signal<string | null> = this.accounts.activeId;
 
   private refreshInFlight: Promise<RefreshResult> | null = null;
 
-  constructor() {
-    // Інша вкладка оновила токени або вийшла — підхоплюємо її стан.
-    window.addEventListener('storage', (event) => {
-      const server = this.connection.serverUrl();
-      if (
-        event.key === `${ACCESS_TOKEN_STORAGE_PREFIX}${server}` ||
-        event.key === `${REFRESH_TOKEN_STORAGE_PREFIX}${server}`
-      ) {
-        const stored = this.readStoredTokens();
-        this.accessTokenSignal.set(stored?.accessToken ?? null);
-        this.refreshTokenSignal.set(stored?.refreshToken ?? null);
-      }
-    });
-  }
-
-  /**
-   * Підхоплює токени, збережені в `localStorage` для поточної адреси сервера
-   * (якщо в памʼяті їх ще нема). Викликається, коли адреса сервера вже відома.
-   */
-  restoreTokens(): void {
-    if (this.hasTokens()) {
-      return;
-    }
-    const stored = this.readStoredTokens();
-    if (stored) {
-      this.accessTokenSignal.set(stored.accessToken);
-      this.refreshTokenSignal.set(stored.refreshToken);
-    }
-  }
-
   /** Access-токен прострочений або майже (за `exp` у самому JWT; без токена чи при нечитному — `false`). */
   accessTokenExpired(): boolean {
-    const exp = readJwtExpiry(this.accessTokenSignal());
+    const exp = readJwtExpiry(this.accessToken());
     return exp !== null && exp * 1000 - EXPIRY_SKEW_SECONDS * 1000 <= Date.now();
   }
 
+  /** Скільки мілісекунд лишилось до кінця терміну access-токена; `null` — токена нема чи його `exp` нечитний. */
+  accessTokenMsLeft(): number | null {
+    const exp = readJwtExpiry(this.accessToken());
+    return exp === null ? null : exp * 1000 - Date.now();
+  }
+
   /**
-   * `POST <сервер>/api/v1/auth/refresh-token` з обома токенами; при успіху
-   * зберігає нову пару. Виклики, що збіглися в часі, діляться одним запитом,
-   * а між вкладками обмін іде під Web Lock. Якщо сервер відхилив токени
-   * (400/401), а в сховищі вже лежить нова пара від іншої вкладки — беремо її;
-   * інакше токени видаляються. При мережевій помилці токени лишаються.
+   * `POST <сервер>/api/v1/auth/refresh-token` з обома токенами активного
+   * акаунта; при успіху зберігає нову пару. Виклики, що збіглися в часі,
+   * діляться одним запитом, а між вкладками обмін іде під Web Lock. Якщо сервер
+   * відхилив токени (400/401), а в сховищі вже лежить нова пара від іншої
+   * вкладки — беремо її; інакше акаунт позначається застарілим (`outdated`) і
+   * перестає бути активним. При мережевій помилці акаунт лишається.
    */
   refresh(): Promise<RefreshResult> {
     if (!this.refreshInFlight) {
@@ -111,35 +105,92 @@ export class AuthService {
     return this.refreshInFlight;
   }
 
-  /** Забуває токени (памʼять і `localStorage` для поточної адреси сервера). */
-  clearTokens(): void {
-    this.accessTokenSignal.set(null);
-    this.refreshTokenSignal.set(null);
-    const server = this.connection.serverUrl();
-    try {
-      localStorage.removeItem(`${ACCESS_TOKEN_STORAGE_PREFIX}${server}`);
-      localStorage.removeItem(`${REFRESH_TOKEN_STORAGE_PREFIX}${server}`);
-    } catch {
-      // Сховище недоступне — нічого прибирати.
+  /** Забуває акаунт (за замовчуванням активний): його запис і токени видаляються зі сховища. */
+  clearTokens(accountId: string | null = this.accounts.activeId()): void {
+    if (accountId) {
+      this.accounts.remove(accountId);
     }
   }
 
-  /** Вихід із системи: токени забуто, користувача перекинуто на сторінку входу. */
-  signOut(): void {
-    this.clearTokens();
+  /**
+   * Вихід без запиту на сервер (сесія застаріла): акаунт забуто, користувача
+   * перекинуто на сторінку входу. `accountId` — акаунт, чия сесія не вдалася
+   * (за замовчуванням активний). Його треба передавати, коли між невдалим
+   * оновленням і викликом активним міг стати інший акаунт: неуспішний обмін
+   * токенів позначає акаунт застарілим і передає активність іншому чинному, а
+   * забути треба саме невдалий, а не цей новий.
+   */
+  signOut(accountId: string | null = this.accounts.activeId()): void {
+    this.clearTokens(accountId);
     void this.router.navigateByUrl(LOGIN_URL);
   }
 
-  /** `POST <сервер>/api/v1/auth/login`; при успіху зберігає обидва токени (в памʼяті й у `localStorage`). */
+  /**
+   * Вихід: повністю очищає `localStorage` і акаунти, переносить на сторінку входу
+   * й відкликає refresh-токен на сервері (`POST <сервер>/api/v1/auth/logout`).
+   *
+   * Спершу беремо токени (прострочений access-токен тихо оновлюємо — сервер
+   * вимагає авторизований запит), далі очищаємо, і лише потім шлемо запит із
+   * заголовком, зібраним уже з цих токенів: результат запиту ні на що не
+   * впливає, локально користувач вийшов у будь-якому разі.
+   */
+  async logout(): Promise<LogoutResult> {
+    if (this.hasTokens() && this.accessTokenExpired()) {
+      await this.refresh();
+    }
+    const account = this.accounts.active();
+    const url = `${account?.server ?? this.connection.serverUrl()}${API_LOGOUT_PATH}`;
+
+    this.accounts.wipe();
+    void this.router.navigateByUrl(LOGIN_URL);
+
+    if (!account?.accessToken || !account.refreshToken) {
+      return 'skipped';
+    }
+    console.log(`[AuthService] Виходжу: ${url}`);
+    try {
+      await firstValueFrom(
+        this.http
+          .post(
+            url,
+            { refreshToken: account.refreshToken },
+            { headers: new HttpHeaders({ Authorization: `Bearer ${account.accessToken}` }) },
+          )
+          .pipe(timeout(REQUEST_TIMEOUT_MS)),
+      );
+      console.log('[AuthService] Refresh-токен відкликано');
+      return 'ok';
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[AuthService] Не вдалося відкликати refresh-токен на сервері (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
+   * `POST <сервер>/api/v1/auth/login`; при успіху додає акаунт (поточний сервер +
+   * користувач із токена) зі збереженням токенів і робить його активним.
+   */
   async login(email: string, password: string): Promise<LoginResult> {
-    const url = `${this.connection.serverUrl()}${API_LOGIN_PATH}`;
+    const server = this.connection.serverUrl();
+    const url = `${server}${API_LOGIN_PATH}`;
     console.log(`[AuthService] Входжу: ${url}`);
 
     try {
       const tokens = await firstValueFrom(
         this.http.post<LoginResponse>(url, { email, password }).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      this.applyTokens(tokens);
+      const userId = readJwtSubject(tokens.accessToken);
+      this.accounts.add({
+        server,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        userId: userId ?? '',
+        // Без `sub` у токені акаунт впізнаємо за поштою.
+        identity: userId ?? email.trim().toLowerCase(),
+        // Пошту з /users/me не отримати — запамʼятовуємо ту, з якою ввійшли.
+        email: email.trim(),
+      });
       console.log('[AuthService] Вхід виконано, токени отримано');
       return 'ok';
     } catch (error) {
@@ -149,6 +200,40 @@ export class AuthService {
     }
   }
 
+  /**
+   * Оновлює токени **неактивного** акаунта, якщо минула половина терміну
+   * refresh-токена (див. `REFRESH_TOKEN_LIFETIME_MS`). Так акаунт, що давно не
+   * був активним, не застаріває сам по собі. Той самий обмін, що й для активного
+   * (під Web Lock, з підхопленням нової пари від іншої вкладки), але:
+   * - відхилення токенів (400/401) позначає акаунт застарілим;
+   * - мережева помилка нічого не змінює: це не доказ, що вхід недійсний, а
+   *   фонове оновлення повториться при наступному запуску.
+   * Повертає результат обміну або `'skipped'` (не активний/застарілий чи ще не час).
+   */
+  refreshStoredIfDue(accountId: string): Promise<RefreshResult | 'skipped'> {
+    if (!this.isStoredRefreshDue(accountId)) {
+      return Promise.resolve('skipped');
+    }
+    return this.runExclusive(async () => {
+      // Поки чекали на блокування, інша вкладка могла вже оновити цей акаунт.
+      this.accounts.syncFromStorage(accountId);
+      if (!this.isStoredRefreshDue(accountId)) {
+        return 'skipped' as const;
+      }
+      const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
+      return account ? this.exchange(account) : ('skipped' as const);
+    });
+  }
+
+  /** Неактивний чинний акаунт, у якого минула половина терміну refresh-токена. */
+  private isStoredRefreshDue(accountId: string): boolean {
+    if (accountId === this.accounts.activeId()) {
+      return false;
+    }
+    const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
+    return !!account && !account.outdated && Date.now() - account.tokensIssuedAt >= REFRESH_DUE_AFTER_MS;
+  }
+
   private async performRefresh(): Promise<RefreshResult> {
     // Поки чекали на блокування, інша вкладка могла вже оновити токени.
     if (this.adoptNewerStoredTokens() && !this.accessTokenExpired()) {
@@ -156,19 +241,36 @@ export class AuthService {
       return 'ok';
     }
 
-    const accessToken = this.accessTokenSignal();
-    const refreshToken = this.refreshTokenSignal();
-    if (!accessToken || !refreshToken) {
+    const account = this.accounts.active();
+    if (!account?.accessToken || !account.refreshToken) {
       return 'unauthorized';
     }
-    const url = `${this.connection.serverUrl()}${API_REFRESH_PATH}`;
+    return this.exchange(account);
+  }
+
+  /**
+   * `POST /auth/refresh-token` з парою токенів акаунта; при успіху зберігає нову
+   * пару. Відхилення (400/401) — застарілий акаунт, якщо за цей час інша вкладка
+   * не записала нову пару.
+   */
+  private async exchange(account: StoredAccount): Promise<RefreshResult> {
+    const url = `${account.server}${API_REFRESH_PATH}`;
     console.log(`[AuthService] Оновлюю токени: ${url}`);
 
     try {
       const tokens = await firstValueFrom(
-        this.http.post<LoginResponse>(url, { accessToken, refreshToken }).pipe(timeout(REQUEST_TIMEOUT_MS)),
+        this.http
+          .post<LoginResponse>(url, { accessToken: account.accessToken, refreshToken: account.refreshToken })
+          .pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      this.applyTokens(tokens);
+      this.accounts.update(account.id, {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        tokensIssuedAt: Date.now(),
+        // «Востаннє використано» чіпаємо лише для активного: фонове оновлення
+        // неактивного акаунта його не «використовує».
+        ...(account.id === this.accounts.activeId() ? { lastUsedAt: Date.now() } : {}),
+      });
       console.log('[AuthService] Токени оновлено');
       return 'ok';
     } catch (error) {
@@ -176,27 +278,22 @@ export class AuthService {
       console.warn(`[AuthService] Не вдалося оновити токени (${failure})`, error);
       if (failure === 'invalid' || failure === 'unauthorized') {
         // Можливо, наш refresh-токен «спалила» інша вкладка, що встигла першою.
-        if (this.adoptNewerStoredTokens()) {
+        if (this.accounts.syncFromStorage(account.id) !== null) {
           return 'ok';
         }
-        this.clearTokens();
+        this.accounts.markOutdated(account.id);
       }
       return failure;
     }
   }
 
   /**
-   * Якщо у сховищі лежить інша пара, ніж у памʼяті (її записала інша вкладка),
-   * бере її в памʼять. Повертає, чи так було.
+   * Якщо у сховищі запис активного акаунта має іншу пару токенів, ніж у памʼяті
+   * (її записала інша вкладка), бере її в памʼять. Повертає, чи так було.
    */
   private adoptNewerStoredTokens(): boolean {
-    const stored = this.readStoredTokens();
-    if (!stored || stored.refreshToken === this.refreshTokenSignal()) {
-      return false;
-    }
-    this.accessTokenSignal.set(stored.accessToken);
-    this.refreshTokenSignal.set(stored.refreshToken);
-    return true;
+    const id = this.accounts.activeId();
+    return id !== null && this.accounts.syncFromStorage(id) !== null;
   }
 
   private runExclusive<T>(task: () => Promise<T>): Promise<T> {
@@ -204,48 +301,5 @@ export class AuthService {
     return typeof navigator !== 'undefined' && navigator.locks
       ? navigator.locks.request(REFRESH_LOCK_NAME, task)
       : task();
-  }
-
-  private readStoredTokens(): LoginResponse | null {
-    const server = this.connection.serverUrl();
-    try {
-      const accessToken = localStorage.getItem(`${ACCESS_TOKEN_STORAGE_PREFIX}${server}`);
-      const refreshToken = localStorage.getItem(`${REFRESH_TOKEN_STORAGE_PREFIX}${server}`);
-      return accessToken && refreshToken ? { accessToken, refreshToken } : null;
-    } catch {
-      return null;
-    }
-  }
-
-  private applyTokens(tokens: LoginResponse): void {
-    this.accessTokenSignal.set(tokens.accessToken);
-    this.refreshTokenSignal.set(tokens.refreshToken);
-    this.persistTokens(tokens);
-  }
-
-  private persistTokens(tokens: LoginResponse): void {
-    const server = this.connection.serverUrl();
-    try {
-      localStorage.setItem(`${ACCESS_TOKEN_STORAGE_PREFIX}${server}`, tokens.accessToken);
-      localStorage.setItem(`${REFRESH_TOKEN_STORAGE_PREFIX}${server}`, tokens.refreshToken);
-    } catch {
-      // Сховище може бути недоступне (приватний режим тощо) — тоді токени
-      // лишаються лише в памʼяті.
-    }
-  }
-}
-
-/** Поле `exp` (секунди) з payload JWT; `null`, якщо токена нема або він нечитний. */
-function readJwtExpiry(token: string | null): number | null {
-  const payload = token?.split('.')[1];
-  if (!payload) {
-    return null;
-  }
-  try {
-    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    const exp = (JSON.parse(json) as { exp?: unknown }).exp;
-    return typeof exp === 'number' ? exp : null;
-  } catch {
-    return null;
   }
 }
