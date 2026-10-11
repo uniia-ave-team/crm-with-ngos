@@ -25,9 +25,12 @@ class HostComponent {
 class PlainHostComponent {}
 
 describe('AlphaOutlineDirective', () => {
-  afterEach(() => {
+  const removeFilterContainers = () =>
     document.querySelectorAll('svg[aria-hidden="true"]').forEach((svg) => svg.remove());
-  });
+
+  // Spec files share one document, and other specs that render the directive leave their filters behind.
+  beforeEach(removeFilterContainers);
+  afterEach(removeFilterContainers);
 
   const filterIds = () => Array.from(document.querySelectorAll('filter')).map((f) => f.id);
 
