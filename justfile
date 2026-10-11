@@ -60,19 +60,27 @@ _secrets:
            echo 'user-secrets: set JwtOptions:Secret' ;;
     esac
 
-# --- Database ----------------------------------------------------------------
+# --- Docker ------------------------------------------------------------------
 
 # Start PostgreSQL in Docker (localhost:5432).
 db:
     {{compose}} up -d --wait db
 
-# Stop PostgreSQL. Data is kept.
-db-down:
+# Build and start everything in Docker: web http://localhost:8080, API http://localhost:5065.
+up:
+    {{compose}} up -d --build --wait
+
+# Stop all containers. Data and uploaded files are kept.
+down:
     {{compose}} down
 
-# Stop PostgreSQL and delete all local data.
-db-reset:
+# Stop all containers and delete the database, uploaded files and logs.
+reset:
     {{compose}} down -v
+
+# Follow API and web container logs.
+logs:
+    {{compose}} logs -f api web
 
 # Open psql in the development database.
 psql:
