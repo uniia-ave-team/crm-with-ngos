@@ -18,6 +18,10 @@ just api    # http://localhost:5065, hot reload
 Інтерактивна документація локального API —
 [localhost:5065/scalar](http://localhost:5065/scalar).
 
+Перед PR варто перевірити зміну й у Docker (`just up`): там API працює в
+режимі `Production`, без user-secrets і з файлами в томі, як на сервері
+([Перший запуск](../setup/#усе-в-docker)).
+
 ## Шари
 
 ```
@@ -170,9 +174,29 @@ HTTP ─▶ rate limiting ─▶ JWT ─▶ права ─▶ контролер
 | `ConnectionStrings`       | Підключення до PostgreSQL                                |
 | `JwtOptions`              | Ключ підпису, терміни дії токенів                        |
 | `IdentityOptions`         | Вимоги до паролів і користувачів                         |
-| `CorsSettings`            | Дозволені origin                                         |
+| `CorsSettings`            | Дозволені origin (лише поза режимом розробки)            |
 | `RateLimiting`            | Ліміти політики `Global`                                 |
 | `SerilogOptions`          | Шляхи й ротація файлів логів                             |
+| `FileStorage`             | Тека для завантажених файлів і публічна адреса API для посилань на них |
 
 Секрети (`ConnectionStrings:PostgreSqlConnection`, `JwtOptions:Secret`)
 локально зберігаються в user-secrets, їх записує `just setup`.
+
+Будь-який параметр перевизначається змінною середовища: `:` замінюється на
+`__`, елементи масиву нумеруються. Так налаштований API в `compose.yaml`
+і так його налаштовують на сервері
+([Налаштування](../../deployment/configuration/)):
+
+```yaml
+ConnectionStrings__PostgreSqlConnection: Host=db;Port=5432;Database=crm;Username=crm;Password=crm
+FileStorage__BaseUrl: http://localhost:5065
+CorsSettings__AllowedOrigins__0: http://localhost:8080
+```
+
+Нова обов'язкова опція (з `ValidateOnStart`) має отримати робоче значення
+для розробки в `appsettings.json`. Інакше API не запуститься ні в Docker,
+ні під час генерації `openapi.json`, і впадуть джоби `api` та `docker`.
+
+Відносні шляхи `FileStorage:UploadDirectory` і `SerilogOptions:LogPath`
+рахуються від теки збірки (`bin/...`). В образі вони абсолютні: файли —
+`/data/uploads`, логи — `/data/logs`, обидві теки змонтовані як томи.
