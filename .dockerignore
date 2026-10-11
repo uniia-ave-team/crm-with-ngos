@@ -1,0 +1,15 @@
+# Build context for apps/api/Dockerfile and apps/web/Dockerfile is the repository root.
+# Everything is excluded except what the images need.
+*
+!global.json
+!apps/api/
+!apps/web/
+!packages/api-contract/
+
+**/bin/
+**/obj/
+**/TestResults/
+**/node_modules/
+apps/web/.angular/
+apps/web/www/
+apps/web/src/app/api/generated/

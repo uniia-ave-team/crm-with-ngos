@@ -1,6 +1,12 @@
-# PostgreSQL for local development. Use `just db`, `just db-down`, `just db-reset`.
-# The credentials are for local use only and match the connection string
-# written to user-secrets by `just setup`.
+# Local stack: PostgreSQL, the API and the web client.
+#   just db    PostgreSQL only, for running the API and the web client with hot reload
+#   just up    everything in Docker, built from the working tree
+# The credentials and the JWT secret are for local use only.
+#
+# Optional variables (shell or a .env file next to this file):
+#   CRM_HOST     host name or IP the browser uses to reach the stack (default: localhost)
+#   CRM_BIND     interface the API and web ports listen on (default: 127.0.0.1; 0.0.0.0 for the LAN)
+#   CRM_DB_PORT  host port of PostgreSQL (default: 5432); containers always use db:5432
 
 name: crm-dev
 
@@ -12,7 +18,7 @@ services:
       POSTGRES_USER: crm
       POSTGRES_PASSWORD: crm
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${CRM_DB_PORT:-5432}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,5 +27,36 @@ services:
       timeout: 5s
       retries: 15
 
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__PostgreSqlConnection: Host=db;Port=5432;Database=crm;Username=crm;Password=crm
+      JwtOptions__Secret: local-docker-only-jwt-secret-change-me-in-production-0123456789
+      FileStorage__BaseUrl: http://${CRM_HOST:-localhost}:5065
+      CorsSettings__AllowedOrigins__0: http://${CRM_HOST:-localhost}:8080
+      CorsSettings__AllowedOrigins__1: http://localhost:4200
+    ports:
+      - "${CRM_BIND:-127.0.0.1}:5065:8080"
+    volumes:
+      - api_uploads:/data/uploads
+      - api_logs:/data/logs
+      - api_keys:/home/app/.aspnet/DataProtection-Keys
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "${CRM_BIND:-127.0.0.1}:8080:8080"
+
 volumes:
   db_data:
+  api_uploads:
+  api_logs:
+  api_keys:

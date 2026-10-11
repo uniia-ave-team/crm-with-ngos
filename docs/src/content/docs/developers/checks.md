@@ -24,9 +24,20 @@ sidebar:
 | `api`   | змінено `apps/api`, контракт або інструменти | Форматування, збірка Release, тести; відповідність `openapi.json` коду; звіт про ламкі зміни API | `just api-ci`, `just contract-check` |
 | `web`   | змінено `apps/web`, контракт або інструменти | `npm ci`, генерація клієнта, lint, тести, production-збірка        | `just web-ci`         |
 | `docs`  | змінено `docs`, контракт або інструменти     | Збірка цього сайту                                                  | `just docs-build`     |
-| `trivy` | завжди                                       | Вразливі залежності та помилки конфігурації                        | —                     |
+| `docker` | змінено `apps/api`, `apps/web`, контракт, `compose.yaml`, `.dockerignore` або інструменти | Збірка обох образів, запуск стеку, перевірка `/health`, вебклієнта й CORS | `just up` |
+| `trivy` | завжди                                       | Вразливі залежності та помилки конфігурації, зокрема Dockerfile    | —                     |
 
 Зміна `justfile` або `ci.yml` запускає всі джоби.
+
+### Якщо впала джоба `docker`
+
+- **Збірка образу.** Відтворюється локально через `just up`. Найчастіше
+  причина — новий файл, потрібний для збірки, не потрапив у контекст:
+  перевірте `.dockerignore`.
+- **Контейнер не став healthy або впав smoke test.** Логи контейнерів —
+  на останньому кроці джоби; локально — `just logs`. Типова причина —
+  нова обов'язкова опція API без значення в `appsettings.json` або в
+  `compose.yaml`.
 
 ### Якщо впала джоба `api`
 
@@ -60,9 +71,13 @@ GitHub показує як анотації на вкладці змінених
 ## Dependabot
 
 Щопонеділка Dependabot відкриває PR з оновленнями NuGet, npm (вебклієнт і
-цей сайт) і GitHub Actions. Пов'язані пакети згруповані: Angular, Ionic і
-Capacitor, ASP.NET Core та EF Core, тестові пакети, інструменти lint і
-тестування, усі GitHub Actions.
+цей сайт), базових образів Docker, образу PostgreSQL у `compose.yaml` і
+GitHub Actions. Пов'язані пакети згруповані: Angular, Ionic і Capacitor,
+ASP.NET Core та EF Core, тестові пакети, інструменти lint і тестування,
+базові образи Docker, усі GitHub Actions.
+
+Мажорні версії PostgreSQL Dependabot не пропонує: нова мажорна версія не
+відкриває наявний том з даними без `pg_upgrade`.
 
 TypeScript Dependabot оновлює лише в межах патч-версій: Angular підтримує
 вузький діапазон TypeScript, тож мінорні й мажорні оновлення приходять

@@ -17,23 +17,22 @@ CRM з відкритим кодом для громадських органі�
 | --------- | ----------------------------------------------------------------- |
 | API       | .NET 10, ASP.NET Core, EF Core 10, PostgreSQL 17, MediatR, FluentValidation, Mapster, Serilog |
 | Вебклієнт | Angular 22, Ionic 9, TypeScript, Vitest                           |
-| Розробка  | just, Docker (лише база даних)                                    |
+| Розробка  | just, Docker Compose (база, API й вебклієнт)                      |
 
 ## Структура репозиторію
 
 ```
-apps/api/                ASP.NET Core API (рішення Crm.slnx)
-apps/web/                Ionic Angular клієнт
+apps/api/                ASP.NET Core API (рішення Crm.slnx), Dockerfile
+apps/web/                Ionic Angular клієнт, Dockerfile і nginx.conf
 packages/api-contract/   openapi.json — контракт API, генерується з коду
 docs/                    сайт документації (Starlight)
-compose.yaml             PostgreSQL для розробки
+compose.yaml             локальний стек: PostgreSQL, API, вебклієнт
 justfile                 усі команди розробки
 ```
 
 ## Швидкий старт
 
-Потрібні: [.NET SDK 10](https://dotnet.microsoft.com/download),
-[Node.js 24](https://nodejs.org), [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+Потрібні [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 і [just](https://just.systems).
 
 ```powershell
@@ -44,7 +43,18 @@ winget install Casey.Just      # Windows
 brew install just              # macOS
 ```
 
-Один раз після клонування:
+### Усе в Docker
+
+```bash
+just up       # зібрати й запустити: вебклієнт http://localhost:8080, API http://localhost:5065
+just down     # зупинити; дані лишаються
+just reset    # зупинити й видалити всі локальні дані
+```
+
+### Розробка з hot reload
+
+Додатково потрібні [.NET SDK 10](https://dotnet.microsoft.com/download) і
+[Node.js 24](https://nodejs.org). Один раз після клонування:
 
 ```bash
 just setup    # залежності .NET і npm, локальні секрети API
@@ -68,8 +78,10 @@ just web      # вебклієнт: http://localhost:4200
 | Команда                   | Дія                                                  |
 | ------------------------- | ---------------------------------------------------- |
 | `just setup`              | Встановити залежності й налаштувати секрети          |
-| `just db` / `just db-down` | Запустити / зупинити базу                           |
-| `just db-reset`           | Видалити локальну базу разом з даними                |
+| `just up`                 | Зібрати й запустити все в Docker                     |
+| `just down` / `just reset` | Зупинити контейнери / і видалити всі локальні дані  |
+| `just logs`               | Логи API й вебклієнта в Docker                       |
+| `just db`                 | Запустити лише базу в Docker                         |
 | `just psql`               | Консоль `psql` до бази розробки                      |
 | `just api` / `just web`   | Запустити API / вебклієнт                            |
 | `just docs`               | Запустити сайт документації локально                 |

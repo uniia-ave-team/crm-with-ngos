@@ -10,7 +10,10 @@ sidebar:
 ```
 apps/
   api/                  ASP.NET Core API, рішення Crm.slnx
+    Dockerfile          образ API
   web/                  Ionic Angular клієнт
+    Dockerfile          образ вебклієнта (nginx)
+    nginx.conf          роздача статики й кешування
 packages/
   api-contract/
     openapi.json        контракт API, генерується з коду .NET
@@ -20,7 +23,8 @@ docs/                   цей сайт (Starlight)
   workflows/            CI, CodeQL, перевірка назви PR, публікація сайту
   dependabot.yml        оновлення залежностей
   CODEOWNERS            відповідальні за частини репозиторію
-compose.yaml            PostgreSQL для розробки
+compose.yaml            локальний стек: PostgreSQL, API, вебклієнт
+.dockerignore           що потрапляє в контекст збірки образів
 justfile                усі команди розробки
 global.json             версія .NET SDK
 .nvmrc                  версія Node.js
@@ -34,8 +38,11 @@ dotnet-tools.json       локальні інструменти .NET
 | Команда                    | Дія                                                        |
 | -------------------------- | ---------------------------------------------------------- |
 | `just setup`               | Встановити залежності й налаштувати секрети                |
-| `just db` / `just db-down` | Запустити / зупинити базу                                  |
-| `just db-reset`            | Видалити локальну базу разом з даними                      |
+| `just db`                  | Запустити лише базу в Docker                               |
+| `just up`                  | Зібрати й запустити все в Docker                           |
+| `just down`                | Зупинити контейнери, дані лишаються                        |
+| `just reset`               | Зупинити контейнери й видалити всі локальні дані           |
+| `just logs`                | Логи API й вебклієнта в Docker                             |
 | `just psql`                | Консоль `psql` до бази розробки                            |
 | `just api` / `just web`    | Запустити API / вебклієнт                                  |
 | `just docs`                | Запустити цей сайт локально                                |
@@ -49,4 +56,5 @@ dotnet-tools.json       локальні інструменти .NET
 | `just ci`                  | Усі перевірки, які виконує CI                              |
 
 CI викликає ті самі рецепти (`api-ci`, `web-ci`, `contract-check`,
-`docs-build`), тому результат локального `just ci` збігається з CI.
+`docs-build`, `up`), тому результат локального `just ci` збігається з CI.
+Збірку образів `just ci` не запускає: це робить `just up`.
