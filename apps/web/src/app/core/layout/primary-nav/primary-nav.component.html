@@ -24,35 +24,43 @@
   </ul>
 
   <button class="rail__zorya" type="button" [attr.aria-label]="'nav.zorya' | translate">
-    <img class="theme-light" src="assets/zoria.svg" alt="" />
-    <img class="theme-dark" src="assets/zoria_dark.svg" alt="" />
+    <span class="zorya-icon" aria-hidden="true"></span>
     <span>{{ 'nav.zorya' | translate }}</span>
   </button>
 
   <div class="rail__account">
-    <a
+    <button
       class="rail__avatar"
-      routerLink="/settings"
-      routerLinkActive="rail__avatar--active"
+      type="button"
+      aria-haspopup="dialog"
+      [class.rail__avatar--active]="accountPopover.isOpen()"
+      [attr.aria-expanded]="accountPopover.isOpen()"
       [attr.aria-label]="'nav.profile' | translate"
+      (click)="accountPopover.open($event)"
     >
-      <span aria-hidden="true">{{ userInitials }}</span>
-    </a>
+      <app-avatar [firstName]="user()?.firstName" [lastName]="user()?.lastName" [avatarUrl]="user()?.avatarUrl" [ngoName]="ngoName()" />
+    </button>
   </div>
 </nav>
 
 <!-- Телефон: верхня панель з аватаром і нижнє меню навігації -->
 <header class="mobile-topbar">
-  <a class="mobile-topbar__avatar" routerLink="/settings" [attr.aria-label]="'nav.profile' | translate">
-    <span aria-hidden="true">{{ userInitials }}</span>
-  </a>
+  <button
+    class="mobile-topbar__avatar"
+    type="button"
+    aria-haspopup="dialog"
+    [attr.aria-expanded]="accountPopover.isOpen()"
+    [attr.aria-label]="'nav.profile' | translate"
+    (click)="accountPopover.open($event)"
+  >
+    <app-avatar [firstName]="user()?.firstName" [lastName]="user()?.lastName" [avatarUrl]="user()?.avatarUrl" [ngoName]="ngoName()" />
+  </button>
   <a class="mobile-topbar__logo" routerLink="/planner" [attr.aria-label]="'nav.logo' | translate">
     <img class="theme-light" [src]="'assets/' + mobileLogoBase() + '.svg'" alt="" />
     <img class="theme-dark" [src]="'assets/' + mobileLogoBase() + '_dark.svg'" alt="" />
   </a>
   <button class="mobile-topbar__zorya" type="button" [attr.aria-label]="'nav.zorya' | translate">
-    <img class="theme-light" src="assets/zoria.svg" alt="" />
-    <img class="theme-dark" src="assets/zoria_dark.svg" alt="" />
+    <span class="zorya-icon" aria-hidden="true"></span>
   </button>
 </header>
 
@@ -71,3 +79,14 @@
     </a>
   }
 </nav>
+
+<!-- Вікно акаунта: на ПК праворуч від аватара (рейл), на телефоні знизу (шапка). -->
+<app-popover #accountPopover width="300px" compactWidth="min(340px, calc(100vw - 24px))" side="end" alignment="end" compactSide="bottom" compactAlignment="start" [label]="'nav.account.menu' | translate">
+  <app-account-menu
+    [accounts]="accounts()"
+    (settings)="openSettings(accountPopover)"
+    (signOut)="signOut(accountPopover)"
+    (addAccount)="accountPopover.close()"
+    (selectAccount)="accountPopover.close()"
+  />
+</app-popover>

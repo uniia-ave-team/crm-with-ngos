@@ -1,0 +1,25 @@
+<ion-popover
+  class="app-popover"
+  reference="trigger"
+  [trigger]="anchorId()"
+  [isOpen]="isOpen()"
+  [side]="effectiveSide()"
+  [alignment]="effectiveAlignment()"
+  [arrow]="false"
+  [showBackdrop]="false"
+  [keepContentsMounted]="true"
+  [style.--app-popover-width]="effectiveWidth()"
+  [style.--offset-x]="offsetX() + 'px'"
+  [style.--offset-y]="offsetY() + 'px'"
+  (didPresent)="onPresented()"
+  (didDismiss)="onDismissed()"
+>
+  <!-- Angular-обгортка ion-popover показує лише зміст з ng-template. Зміст
+       змонтовано одразу (keepContentsMounted): тоді Ionic вимірює його справжній
+       розмір і правильно утримує вікно в межах екрана. -->
+  <ng-template>
+    <div class="app-popover__content" [class.app-popover__content--compact]="compact()" role="dialog" [attr.aria-label]="label()">
+      <ng-content />
+    </div>
+  </ng-template>
+</ion-popover>

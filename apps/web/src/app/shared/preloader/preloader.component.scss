@@ -1,0 +1,56 @@
+// Оверлей на всю сторінку із заливкою меню; усе вирівняно по центру блоку
+// (і по вертикалі, і по горизонталі).
+:host {
+  display: contents;
+}
+
+.preloader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 10000;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--nav-bg);
+  color: var(--nav-fg-active);
+  text-align: center;
+}
+
+.preloader__logo {
+  height: 50px;
+  width: auto;
+}
+
+.preloader__spinner {
+  width: 22px;
+  height: 22px;
+  color: var(--nav-fg-active);
+}
+
+.preloader__text {
+  margin: 0;
+  font-family: var(--font-menu);
+  font-size: 14px;
+  color: var(--nav-fg-inactive);
+}
+
+// Пара лого для світлої й темної теми: явно, бо display тут заданий вище.
+.preloader__logo.theme-dark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .preloader__logo.theme-light {
+    display: none;
+  }
+
+  .preloader__logo.theme-dark {
+    display: block;
+  }
+}

@@ -112,29 +112,28 @@ $desktop: 992px;
   border-top: 1px solid var(--nav-border);
 }
 
-// Squircle-форма: великий border-radius у відсотках на квадратній коробці
-// дає заокруглений «квадрат із заокругленими кутами», а не коло. Плейсхолдер
-// аватара — фірмовий колір з ініціалами (профілю користувача ще нема, див.
-// apps/web/README.md, розділ «Ще не зроблено»), той самий і в світлій,
-// і в темній темі — це колір самого аватара, а не тема інтерфейсу.
+// Посилання на профіль навколо <app-avatar>: сам аватар (літери, колір,
+// зображення, squircle-форма) — у shared/avatar. Squircle-форма тут потрібна
+// лише для обводки активного стану.
 .rail__avatar {
+  // Розмір і літери задає <app-avatar> (shared/avatar); тут — лише посилання
+  // навколо нього, його форма й обводка активного стану.
+  --avatar-size: 40px;
+  --avatar-font-size: 14px;
   width: 40px;
   height: 40px;
   border-radius: 35%;
-  border: none;
-  background: #146ef4;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+  display: block;
   padding: 0;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 600;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  outline: none;
 
-  &--active {
-    box-shadow: 0 0 0 2px var(--nav-fg-active);
+  // Обводка, поки відкрите вікно акаунта (і при фокусі з клавіатури).
+  &--active,
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--nav-fg-inactive);
   }
 }
 
@@ -151,11 +150,18 @@ $desktop: 992px;
   font-size: 11px;
   cursor: pointer;
   padding: 0;
+}
 
-  img {
-    width: 24px;
-    height: 24px;
-  }
+// Іконка «Зоря»: SVG як маска, а колір — `currentColor`, тож іконка міняється
+// разом із темою так само, як іконки інших пунктів меню (сам SVG однокольоровий,
+// і власним кольором світлого відтінку зникала б на світлому тлі).
+.zorya-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  background-color: currentColor;
+  -webkit-mask: url('/assets/zoria.svg') center / contain no-repeat;
+  mask: url('/assets/zoria.svg') center / contain no-repeat;
 }
 
 // Мобільна верхня панель.
@@ -187,12 +193,16 @@ $desktop: 992px;
 }
 
 .mobile-topbar__avatar {
+  --avatar-size: 32px;
+  --avatar-font-size: 12px;
   border-radius: 35%;
-  background: #146ef4;
-  color: #fff;
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 600;
+  background: none;
+  outline: none;
+
+  &[aria-expanded='true'],
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--nav-fg-inactive);
+  }
 }
 
 // Лого по центру шапки — абсолютне позиціонування відносно .mobile-topbar
@@ -215,11 +225,7 @@ $desktop: 992px;
 .mobile-topbar__zorya {
   border-radius: 50%;
   background: none;
-
-  img {
-    width: 24px;
-    height: 24px;
-  }
+  color: var(--nav-fg-inactive);
 }
 
 // Нижнє меню навігації.
