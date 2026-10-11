@@ -52,8 +52,13 @@ npm run generate:api               # клієнт API з openapi.json
 `packages/api-contract/openapi.json` у `src/app/api/generated` (каталог
 ігнорується git).
 
-`ng build` кладе результат у `www/`, а не в `dist/`. Саме звідти Dockerfile
-має копіювати статику для nginx. Каталог `www/` ігнорується git.
+`ng build` кладе результат у `www/`, а не в `dist/`. Саме звідти `Dockerfile`
+копіює статику для nginx. Каталог `www/` ігнорується git.
+
+Production-образ локально: `just up` з кореня репозиторію, потім
+<http://localhost:8080>. API, яке піднімає `just up`, слухає
+`http://localhost:5065` і приймає запити й з `ng serve` (`:4200`), тож для
+роботи з реальними даними .NET не потрібен: `just up`, потім `npm start`.
 
 Бюджети production-збірки: початковий бандл — попередження від 2 МБ, помилка
 від 5 МБ; стилі компонента — 4 і 8 КБ.
@@ -249,7 +254,6 @@ npm run generate:api               # клієнт API з openapi.json
 
 Ще не зроблено:
 
-- `Dockerfile` і `nginx.conf` для розгортання;
 - UI самих сторінок — `calendar`, `planner`, `knowledge-base`, `colleagues`
   і `settings` поки порожні заглушки;
 - завантаження логотипа ГО на сервер: файл лише обирається й показується в
@@ -285,6 +289,8 @@ npm run generate:api               # клієнт API з openapi.json
 .gitignore
 angular.json                   єдиний проєкт `app`, вихід збірки — www/
 ionic.config.json
+Dockerfile                     образ: збірка в node, роздача в nginx (контекст — корінь репозиторію)
+nginx.conf                     fallback на index.html, кешування, заголовки безпеки
 ng-openapi-gen.json            генерація клієнта API з openapi.json
 proxy.conf.json                проксі /api на http://localhost:5065 для ng serve
 package.json
@@ -337,8 +343,14 @@ src/
 віддає nginx. Образ не містить Node.js. Це знімає потребу в серверному рантаймі
 на боці адміністратора інсталяції.
 
-**Порт.** Контейнер слухає порт 8080 (non-root nginx); саме туди проксує Caddy
-згідно з конфігурацією в `deploy/docker-compose.yml`.
+**Порт.** Контейнер слухає порт 8080 (non-root nginx). Локально його
+публікує `compose.yaml` на `localhost:8080`; на сервері перед ним стоятиме
+зворотний проксі з HTTPS.
+
+**Кешування.** Файли з хешем у назві (`main-*.js`, `chunk-*.js`,
+`styles-*.css`, `media/`) кешуються на рік, усе інше, зокрема `index.html`
+і `assets/i18n/*.json`, браузер перевіряє щоразу. Тому нові переклади й
+зображення в `assets/` підхоплюються без скидання кешу.
 
 **Конфігурація під час виконання.** Один образ працює на всіх інсталяціях, тому
 нічого специфічного для середовища не вбудовується у збірку, зокрема в
