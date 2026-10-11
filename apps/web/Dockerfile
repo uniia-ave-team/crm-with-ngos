@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build from the repository root: docker build -f apps/web/Dockerfile .
 
-FROM node:24-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /src
 
 COPY apps/web/package.json apps/web/package-lock.json apps/web/
@@ -11,7 +11,7 @@ COPY packages/api-contract/openapi.json packages/api-contract/
 COPY apps/web/ apps/web/
 RUN npm --prefix apps/web run build
 
-FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/apps/web/www /usr/share/nginx/html
