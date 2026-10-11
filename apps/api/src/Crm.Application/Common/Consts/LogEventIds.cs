@@ -102,17 +102,35 @@ public static class LogEventIds
     public const int DeletingUser = 2075;
     public const int CannotDeleteLastAdmin = 2076;
     public const int UserDeletedSuccessfully = 2077;
+    public const int UserAvatarNotFound = 2078;
+    public const int UserAvatarDeletedSuccessfully = 2079;
+    public const int UploadingUserAvatar = 2080;
+    public const int UserAvatarUploadedSuccessfully = 2081;
+    public const int FetchingUserAvatar = 2082;
+    public const int UserAvatarFetched = 2083;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;
     public const int NgoCreatedSuccessfully = 3002;
     public const int UpdatingNgo = 3003;
     public const int NgoUpdatedSuccessfully = 3004;
+    public const int UploadingNgoLogo = 3005;
+    public const int NgoLogoUploadedSuccessfully = 3006;
+    public const int FetchingNgoLogo = 3007;
+    public const int NgoLogoFetched = 3008;
+    public const int FetchingNgoDetails = 3009;
+    public const int NgoDetailsFetched = 3010;
 
     // 4000s: Transactions and Unit of Work
     public const int BeginningTransaction = 4001;
     public const int TransactionCommitted = 4002;
     public const int TransactionRolledBack = 4003;
+    public const int FileRegisteredForRollback = 4004;
+    public const int FileRegisteredForDeferredDeletion = 4005;
+    public const int CommittingFileDeletions = 4006;
+    public const int RollingBackCreatedFiles = 4007;
+    public const int FailedToDeleteFile = 4008;
+    public const int FailedToCleanupOrphanedFile = 4009;
 
     // 5000s: Security, Authorization, and Tokens
     public const int MissingRoleIdClaim = 5001;
@@ -140,6 +158,10 @@ public static class LogEventIds
     public const int RandomLoginPageImageFetched = 7008;
     public const int FetchingLoginPageImageById = 7009;
     public const int LoginPageImageByIdFetchedSuccessfully = 7010;
+    public const int UploadingLoginPageImage = 7011;
+    public const int LoginPageImageUploadedSuccessfully = 7012;
+    public const int FetchingLoginPageImageFile = 7013;
+    public const int LogLoginPageImageFileFetched = 7014;
 
     // 8000s: Background Services
     public const int CleanupServiceStarting = 8001;

@@ -29,7 +29,7 @@ public class AuthUserMappingRegister : IRegister
             .Map(dest => dest.PreferredLanguage, src => src.UserProfile.PreferredLanguage)
             .Map(dest => dest.Pronouns, src => src.UserProfile.Pronouns)
             .Map(dest => dest.PronounCategory, src => src.UserProfile.PronounCategory)
-            .Map(dest => dest.AvatarUrl, src => src.UserProfile.AvatarUrl)
+            .Map(dest => dest.AvatarUrl, src => src.UserProfile.Avatar)
             .Map(dest => dest.CustomFields, src => src.UserProfile.CustomFields)
             .Ignore(dest => dest.Roles);
     }

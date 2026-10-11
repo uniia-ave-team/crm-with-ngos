@@ -1,10 +1,22 @@
 using Crm.Domain.Entities;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
 
 namespace Crm.Domain.Interfaces.Repositories;
 
 public interface IUserRepository : IGenericRepository<User>
 {
+    /// <summary>
+    /// Asynchronously retrieves only the avatar file name of a specific user.
+    /// Utilizes projection to optimize database querying by selecting only the required field.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the avatar file name.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the user is not found in the database.</exception>
+    /// <exception cref="EntityFieldNotFoundException">Thrown if the user exists but their avatar is not set.</exception>
+    Task<string> GetAvatarAsync(Guid userId, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Asynchronously checks if there is at least one user in the system.
     /// </summary>

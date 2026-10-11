@@ -33,6 +33,15 @@ public interface INgoRepository : IGenericRepository<Ngo>
     Task<TResult> GetAsync<TResult>(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Asynchronously retrieves only the logo file name of the single NGO entity.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the logo file name.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
+    /// <exception cref="EntityFieldNotFoundException">Thrown if the NGO exists but its logo is not set.</exception>
+    Task<string> GetLogoAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Asynchronously retrieves the single NGO entity with change tracking enabled.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

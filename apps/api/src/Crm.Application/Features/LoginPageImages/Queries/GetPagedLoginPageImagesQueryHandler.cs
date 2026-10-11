@@ -1,6 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.LoginPageImage;
 using Crm.Application.Dtos.LoginPageImage.Queries;
+using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
 using MediatR;
@@ -12,9 +13,11 @@ namespace Crm.Application.Features.LoginPageImages.Queries;
 /// Handles the <see cref="GetPagedLoginPageImagesQuery"/> to retrieve all configured login page images.
 /// </summary>
 /// <param name="repository">The repository used to manage data access operations for login page images.</param>
+/// <param name="fileUrlProvider">The service responsible for generating public URLs for the stored login page images.</param>
 /// <param name="logger">The logger used to record the execution of the image retrieval process.</param>
 public partial class GetPagedLoginPageImagesQueryHandler(
     ILoginPageImageRepository repository,
+    IFileUrlProvider fileUrlProvider,
     ILogger<GetPagedLoginPageImagesQueryHandler> logger) : IRequestHandler<GetPagedLoginPageImagesQuery, PagedResult<LoginPageImageDto>>
 {
     public async Task<PagedResult<LoginPageImageDto>> Handle(GetPagedLoginPageImagesQuery request, CancellationToken cancellationToken)
@@ -29,9 +32,16 @@ public partial class GetPagedLoginPageImagesQueryHandler(
             pageSize: request.PageSize,
             cancellationToken: cancellationToken);
 
+        var updatedItems = pagedResult.Items
+            .Select(item => item with
+            {
+                Url = fileUrlProvider.GetFileUrl(item.Url, ApiRouteLogoConstants.LoginPageImageFile(item.Id)) ?? item.Url,
+            })
+            .ToList();
+
         LogImagesFetched(logger, pagedResult.Items.Count, pagedResult.TotalCount);
 
-        return pagedResult;
+        return new PagedResult<LoginPageImageDto>(updatedItems, pagedResult.TotalCount, pagedResult.PageNumber, pagedResult.PageSize);
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingAllLoginPageImages, Level = LogLevel.Information, Message = "Fetching login page images - Page: {pageNumber}, Size: {pageSize}, Search: {searchTerm}.")]

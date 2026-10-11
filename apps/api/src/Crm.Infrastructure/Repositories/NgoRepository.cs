@@ -78,6 +78,26 @@ public class NgoRepository(
             ?? throw new EntityNotFoundException(nameof(Ngo));
 
     /// <summary>
+    /// Asynchronously retrieves only the logo file name of the single NGO entity.
+    /// Utilizes projection to optimize database querying by selecting only the required field.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the logo file name.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
+    /// <exception cref="EntityFieldNotFoundException">Thrown if the NGO exists but its logo is not set.</exception>
+    public async Task<string> GetLogoAsync(CancellationToken cancellationToken = default)
+    {
+        var projection = await DbSet
+            .AsNoTracking()
+            .Select(x => new { x.Logo })
+            .FirstOrDefaultAsync(cancellationToken) ?? throw new EntityNotFoundException(nameof(Ngo));
+
+        return string.IsNullOrWhiteSpace(projection.Logo)
+            ? throw new EntityFieldNotFoundException(nameof(Ngo), nameof(Ngo.Logo))
+            : projection.Logo;
+    }
+
+    /// <summary>
     /// Asynchronously checks if there is NGO in the system.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

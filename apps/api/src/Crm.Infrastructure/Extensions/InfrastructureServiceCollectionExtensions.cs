@@ -49,6 +49,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddRepositories();
         services.AddCustomIdentity(configuration);
         services.AddJwtAuthentication(configuration);
+        services.AddFileStorageServices(configuration);
         services.AddInfrastructureApplicationServices();
         services.AddCaching();
         services.AddCorsSettings(configuration, environment);
@@ -161,6 +162,20 @@ public static class InfrastructureServiceCollectionExtensions
                 ClockSkew = TimeSpan.Zero,
             };
         });
+
+        return services;
+    }
+
+    private static IServiceCollection AddFileStorageServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<FileStorageOptions>()
+            .Bind(configuration.GetSection(FileStorageOptions.Position))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddScoped<IFileStorageService, LocalFileStorageService>();
+        services.AddSingleton<IFileUrlProvider, LocalFileUrlProvider>();
+        services.AddScoped<IFileTransactionTracker, FileTransactionTracker>();
 
         return services;
     }

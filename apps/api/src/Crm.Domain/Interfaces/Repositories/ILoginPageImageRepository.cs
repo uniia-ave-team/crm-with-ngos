@@ -1,6 +1,7 @@
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
 using Crm.Domain.Entities;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
 
 namespace Crm.Domain.Interfaces.Repositories;
@@ -11,6 +12,17 @@ namespace Crm.Domain.Interfaces.Repositories;
 /// </summary>
 public interface ILoginPageImageRepository : IGenericRepository<LoginPageImage>
 {
+    /// <summary>
+    /// Asynchronously retrieves only the file name (or URL) of a specific login page image by its unique identifier.
+    /// Utilizes projection to optimize database querying by selecting only the required field.
+    /// </summary>
+    /// <param name="id">The unique identifier of the login page image.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the file name or URL.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the login page image is not found in the database.</exception>
+    /// <exception cref="EntityFieldNotFoundException">Thrown if the login page image exists but its file reference is not set.</exception>
+    Task<string> GetUrlAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Asynchronously retrieves a paginated, filtered, and sorted list of projected login page image entities based on the search term.
     /// </summary>
@@ -23,10 +35,10 @@ public interface ILoginPageImageRepository : IGenericRepository<LoginPageImage>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a paginated collection of projected items along with pagination metadata.</returns>
     Task<PagedResult<TResult>> GetPagedAsync<TResult>(
-        string? searchTerm = null,
-        string? orderBy = null,
-        string? sortOrder = SortOrderConstants.Ascending,
-        int pageNumber = PaginationConstants.MinPageNumber,
-        int pageSize = PaginationConstants.DefaultPageSize,
-        CancellationToken cancellationToken = default);
+    string? searchTerm = null,
+    string? orderBy = null,
+    string? sortOrder = SortOrderConstants.Ascending,
+    int pageNumber = PaginationConstants.MinPageNumber,
+    int pageSize = PaginationConstants.DefaultPageSize,
+    CancellationToken cancellationToken = default);
 }

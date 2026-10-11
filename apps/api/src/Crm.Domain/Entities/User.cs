@@ -61,7 +61,7 @@ public class User : BaseEntity
     /// <summary>
     /// Gets or sets the URL or path to the user's avatar image.
     /// </summary>
-    public string? AvatarUrl { get; set; }
+    public string? Avatar { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the user account is active.

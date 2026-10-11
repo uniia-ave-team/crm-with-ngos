@@ -15,7 +15,7 @@ public class Ngo : BaseEntity
     /// <summary>
     /// Gets or sets the optional URL or storage path pointing to the NGO's logo image.
     /// </summary>
-    public string? LogoUrl { get; set; }
+    public string? Logo { get; set; }
 
     /// <summary>
     /// Gets or sets the UTC timestamp indicating when the NGO instance was initially created.

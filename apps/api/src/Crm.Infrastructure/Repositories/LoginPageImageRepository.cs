@@ -3,8 +3,10 @@ using System.Linq.Expressions;
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
 using Crm.Domain.Entities;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
 
@@ -17,6 +19,26 @@ public class LoginPageImageRepository(
     : GenericRepository<LoginPageImage>(appDbContext),
     ILoginPageImageRepository
 {
+    /// <summary>
+    /// Asynchronously retrieves only the file name (or URL) of a specific login page image by its unique identifier.
+    /// Utilizes projection to optimize database querying by selecting only the required field.
+    /// </summary>
+    /// <param name="id">The unique identifier of the login page image.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the file name or URL.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the login page image is not found in the database.</exception>
+    /// <exception cref="EntityFieldNotFoundException">Thrown if the login page image exists but its file reference is not set.</exception>
+    public async Task<string> GetUrlAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var url = await DbSet
+            .AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => x.Url)
+            .FirstOrDefaultAsync(cancellationToken) ?? throw new EntityNotFoundException(nameof(LoginPageImage));
+
+        return url;
+    }
+
     /// <summary>
     /// Asynchronously retrieves a paginated, filtered, and sorted list of projected login page image entities based on the search term.
     /// </summary>

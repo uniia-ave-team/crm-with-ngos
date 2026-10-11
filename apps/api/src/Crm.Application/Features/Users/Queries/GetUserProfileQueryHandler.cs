@@ -20,6 +20,7 @@ public partial class GetUserProfileQueryHandler(
     IAuthRoleRepository authRoleRepository,
     ICurrentUserService currentUserService,
     IPermissionService permissionService,
+    IFileUrlProvider fileUrlProvider,
     ILogger<GetUserProfileQueryHandler> logger) : IRequestHandler<GetUserProfileQuery, UserProfileDto>
 {
     public async Task<UserProfileDto> Handle(GetUserProfileQuery request, CancellationToken cancellationToken)
@@ -47,9 +48,24 @@ public partial class GetUserProfileQueryHandler(
             Roles = roles.Select(r => r.ResolveNameForUser(user.PronounCategory)),
             EmergencyContact = canViewEmergencyContact ? user.EmergencyContact : null,
             CustomFields = canViewCustomFields ? user.CustomFields : user.CustomFields.Where(cf => cf.IsPublic),
+            AvatarUrl = ResolveAvatarUrl(user, request.IsSelf),
         };
 
         return securedUserResult.Adapt<UserProfileDto>();
+    }
+
+    private string? ResolveAvatarUrl(UserProfileResult user, bool isSelf)
+    {
+        if (string.IsNullOrWhiteSpace(user.AvatarUrl))
+        {
+            return null;
+        }
+
+        string routeTemplate = isSelf
+            ? ApiRouteLogoConstants.UserSelfAvatar
+            : ApiRouteLogoConstants.UserAvatar(user.Id);
+
+        return fileUrlProvider.GetFileUrl(user.AvatarUrl, routeTemplate);
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingUserProfile, Level = LogLevel.Information, Message = "Fetching profile for user ID: {UserId}")]
