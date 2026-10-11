@@ -1,0 +1,12 @@
+<span
+  class="avatar"
+  [class.avatar--outdated]="outdated()"
+  [class.avatar--photo]="image()"
+  [style.background-color]="outdated() ? null : image() ? 'transparent' : background()"
+>
+  @if (image(); as src) {
+    <img class="avatar__image" [src]="src" alt="" (error)="onImageError()" />
+  } @else {
+    <span aria-hidden="true">{{ initials() }}</span>
+  }
+</span>

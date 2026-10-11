@@ -1,0 +1,48 @@
+// Розмір: --avatar-size (за замовчуванням 40px), шрифт: --avatar-font-size
+// (за замовчуванням 35% розміру). Літери білі: колір тла підбирається так, щоб
+// контраст із білим був щонайменше 4.5:1 (див. avatar-color.ts).
+:host {
+  display: block;
+  width: var(--avatar-size, 40px);
+  height: var(--avatar-size, 40px);
+}
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  // Squircle: великий border-radius у відсотках на квадратній коробці.
+  border-radius: 35%;
+  // Стандартний синій — доки немає даних про користувача.
+  background: #146ef4;
+  color: #fff;
+  font-size: var(--avatar-font-size, calc(var(--avatar-size, 40px) * 0.35));
+  font-weight: 600;
+  overflow: hidden;
+  user-select: none;
+  position: relative;
+
+  // Застарілий акаунт: сіра заливка (#767676 — контраст 4.5:1 і з білим, і з
+  // чорним, як і в усіх кольорів аватара).
+  &--outdated {
+    background: #767676;
+  }
+
+  // Зображення застарілого акаунта: поверх нього напівпрозорий сірий шар.
+  &--outdated.avatar--photo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgb(118 118 118 / 65%);
+  }
+}
+
+// Зображення замість літер: заповнює аватар і повторює його форму.
+.avatar__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

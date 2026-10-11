@@ -9,15 +9,10 @@ const STORAGE_KEY = 'yavir.language';
 
 /**
  * "Запасна" мова на випадок, якщо рядка немає у файлі обраної мови.
- * Для кримськотатарської — українська (а не англійська): це ближче до
- * реалій навчального контенту, ніж наскрізний фолбек на en.
+ * Українська — основна мова інтерфейсу: у ній є всі рядки, а в інших файлах
+ * їх може ще не бути (наприклад, тексти сторінки входу).
  */
-const FALLBACK_LANGUAGE: Record<AppLanguage, 'uk' | 'en'> = {
-  uk: 'en',
-  en: 'en',
-  be: 'en',
-  crh: 'uk',
-};
+const FALLBACK_LANGUAGE = 'uk';
 
 /**
  * Визначення й перемикання мови інтерфейсу. На відміну від
@@ -67,7 +62,7 @@ export class LanguageService {
   private applyLanguage(language: AppLanguage): void {
     // ngx-translate 18 повертає Observable з обох викликів і не виконує
     // запит, доки на нього не підписались.
-    this.translate.setFallbackLang(FALLBACK_LANGUAGE[language]).subscribe();
+    this.translate.setFallbackLang(FALLBACK_LANGUAGE).subscribe();
     this.translate.use(language).subscribe();
   }
 

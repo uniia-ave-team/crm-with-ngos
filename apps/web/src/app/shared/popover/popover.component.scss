@@ -1,0 +1,38 @@
+// Вигляд вікна: тло й текст — токени меню (світла/темна тема), великі
+// заокруглення, м'яка тінь. Те саме тло, що в «підкладки» аватара в меню.
+:host {
+  display: contents;
+}
+
+ion-popover.app-popover {
+  // Ширину задаємо власною змінною, а не `--width` у style: після кожного
+  // закриття Ionic знімає з вікна inline `--width` (md.leave.js:
+  // removeProperty('--width')), і наступне відкриття було б із його типовими 250px.
+  --width: var(--app-popover-width, fit-content);
+  --background: var(--nav-avatar-bg);
+  --color: var(--nav-fg-active);
+  --box-shadow: 0 4px 16px rgb(2 11 24 / 7%);
+  --min-width: 0;
+  --max-width: calc(100vw - 8px);
+  font-family: var(--font-menu);
+}
+
+ion-popover.app-popover::part(content) {
+  border-radius: 20px;
+  border: 1px solid var(--nav-border);
+}
+
+.app-popover__content {
+  padding: 16px;
+
+  // На вузьких екранах менше повітря по краях — більше місця змісту.
+  &--compact {
+    padding: 12px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  ion-popover.app-popover {
+    --box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+  }
+}
