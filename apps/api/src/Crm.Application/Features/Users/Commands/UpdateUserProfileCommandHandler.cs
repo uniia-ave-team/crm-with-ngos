@@ -1,5 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Interfaces;
+using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using MediatR;
@@ -12,6 +14,7 @@ namespace Crm.Application.Features.Users.Commands;
 /// </summary>
 public partial class UpdateUserProfileCommandHandler(
     IUserRepository userRepository,
+    IFileTransactionTracker fileTransactionTracker,
     ILogger<UpdateUserProfileCommandHandler> logger) : IRequestHandler<UpdateUserProfileCommand>
 {
     public async Task Handle(UpdateUserProfileCommand request, CancellationToken cancellationToken)
@@ -19,6 +22,11 @@ public partial class UpdateUserProfileCommandHandler(
         LogUpdatingUserProfile(logger, request.UserId);
 
         var user = await userRepository.GetForUpdateAsync(request.UserId, cancellationToken);
+
+        if (request.AvatarUrl is not null && user.Avatar is not null)
+        {
+            fileTransactionTracker.RegisterFileForDeletion(user.Avatar, FileStorageConstants.UsersFolder);
+        }
 
         request.Adapt(user);
 

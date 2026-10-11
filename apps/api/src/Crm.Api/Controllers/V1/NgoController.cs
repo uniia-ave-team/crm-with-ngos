@@ -1,4 +1,7 @@
+using System.Net.Mime;
 using Asp.Versioning;
+using Crm.Api.Consts;
+using Crm.Api.Extensions;
 using Crm.Api.Security;
 using Crm.Application.Dtos.Ngo;
 using Crm.Application.Dtos.Ngo.Commands;
@@ -35,6 +38,23 @@ public class NgoController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves the NGO's logo as a file stream.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A file stream containing the logo image.</returns>
+    [HttpGet("logo")]
+    [HasAccessRight(AccessRight.ViewNgo)]
+    [ResponseCache(Duration = ResponseCacheConstants.ThirtyDays, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLogo(CancellationToken cancellationToken)
+    {
+        var fileDto = await mediator.Send(new GetNgoLogoQuery(), cancellationToken);
+
+        return File(fileDto.Stream, fileDto.GetContentType(), enableRangeProcessing: true);
+    }
+
+    /// <summary>
     /// Creates a new NGO in the system.
     /// </summary>
     /// <param name="command">The command containing the NGO creation data.</param>
@@ -50,6 +70,34 @@ public class NgoController(IMediator mediator) : ControllerBase
     {
         await mediator.Send(command, cancellationToken);
         return CreatedAtRoute(nameof(Get), null, null);
+    }
+
+    /// <summary>
+    /// Uploads a new logo for the NGO.
+    /// </summary>
+    /// <param name="file">The logo file to upload.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The URL of the uploaded logo.</returns>
+    [HttpPost("logo")]
+    [HasAccessRight(AccessRight.UpdateNgo)]
+    [RequestSizeLimit(FileLimitConstants.MaxImageUploadSize)]
+    [Consumes(MediaTypeNames.Multipart.FormData)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadLogo(
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest("A file is required.");
+        }
+
+        using var stream = file.OpenReadStream();
+
+        await mediator.Send(new UploadNgoLogoCommand(stream, file.FileName), cancellationToken);
+
+        return Ok();
     }
 
     /// <summary>

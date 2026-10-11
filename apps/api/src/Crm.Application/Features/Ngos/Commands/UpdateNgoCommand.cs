@@ -1,5 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Ngo.Commands;
+using Crm.Application.Interfaces;
+using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using MediatR;
@@ -11,8 +13,11 @@ namespace Crm.Application.Features.Ngos.Commands;
 /// Handles the <see cref="UpdateNgoCommand"/> to update details of an existing NGO.
 /// </summary>
 /// <param name="repository">The repository used for accessing and persisting NGO data.</param>
+/// <param name="fileTransactionTracker">The service used to track file storage transactions for consistency and rollback.</param>
+/// <param name="logger">The logger instance for tracking command execution.</param>
 public partial class UpdateNgoCommandHandler(
     INgoRepository repository,
+    IFileTransactionTracker fileTransactionTracker,
     ILogger<UpdateNgoCommandHandler> logger) : IRequestHandler<UpdateNgoCommand>
 {
     public async Task Handle(UpdateNgoCommand request, CancellationToken cancellationToken)
@@ -20,6 +25,11 @@ public partial class UpdateNgoCommandHandler(
         var ngo = await repository.GetForUpdateAsync(cancellationToken);
 
         LogUpdatingNgo(logger, ngo.Id);
+
+        if (request.LogoUrl is not null && ngo.Logo is not null)
+        {
+            fileTransactionTracker.RegisterFileForDeletion(ngo.Logo, FileStorageConstants.NgosFolder);
+        }
 
         request.Adapt(ngo);
 

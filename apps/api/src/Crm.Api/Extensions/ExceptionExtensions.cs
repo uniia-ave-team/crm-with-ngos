@@ -18,11 +18,13 @@ public static class ExceptionExtensions
     public static int MapToStatusCode(this Exception exception) => exception switch
     {
         EntityNotFoundException => StatusCodes.Status404NotFound,
+        EntityFieldNotFoundException => StatusCodes.Status404NotFound,
         EntitiesNotFoundException => StatusCodes.Status404NotFound,
         EntityAlreadyExistsException => StatusCodes.Status409Conflict,
         UserOperationException => StatusCodes.Status400BadRequest,
         InvalidCredentialException => StatusCodes.Status401Unauthorized,
         UnauthorizedAccessException => StatusCodes.Status403Forbidden,
+        FileNotFoundException => StatusCodes.Status404NotFound,
         ValidationException or ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
         _ => StatusCodes.Status500InternalServerError,
     };
