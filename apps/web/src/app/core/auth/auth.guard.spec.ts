@@ -48,7 +48,7 @@ describe('authGuard', () => {
   /** Відповідає на першу перевірку підключення, що її запускає пошук. */
   const answerHealth = async (answer: 'healthy' | 'down', accountServer = server) => {
     const request = await vi.waitFor(() => {
-      const open = http.match(`${accountServer}/health`).filter((r) => !r.cancelled);
+      const open = http.match({ url: `${accountServer}/health` }).filter((r) => !r.cancelled);
       if (open.length === 0) {
         throw new Error('no health request');
       }

@@ -150,7 +150,7 @@ describe('SessionService', () => {
       TestBed.tick();
       await vi.advanceTimersByTimeAsync(10);
       // Старт уже міг оновити його; інакше це робить повернення у фокус.
-      const open = http.match(otherRefreshUrl);
+      const open = http.match({ url: otherRefreshUrl });
       if (open.length === 0) {
         becomeVisible();
         await vi.advanceTimersByTimeAsync(10);
