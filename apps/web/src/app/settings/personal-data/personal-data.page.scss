@@ -1,0 +1,105 @@
+// Блок аватара: велика мініатюра зліва, вибір файлу й підказка справа.
+.settings-avatar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-avatar__image {
+  --avatar-size: 120px;
+  --avatar-font-size: 44px;
+  flex: none;
+}
+
+.settings-avatar__upload {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-avatar__file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+// Рідний input[type=file] прихований: кнопку й напис малюємо самі, щоб тексти
+// брались із мовного файлу, а не з мови браузера.
+.settings-avatar__input {
+  display: none;
+}
+
+.settings-avatar__choose {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  background: var(--nav-bg);
+  color: var(--nav-fg-active);
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+
+  &:focus-visible {
+    border-color: var(--settings-accent);
+    outline: none;
+  }
+}
+
+.settings-avatar__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nav-fg-inactive);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-avatar__hint {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+
+  // Місце лишається, поки примітки не видно: блок аватара не міняє висоту.
+  &--hidden {
+    visibility: hidden;
+  }
+}
+
+// «Інше» з полем власних займенників: поле стоїть поруч із чекбоксом.
+.settings-check-other {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+// Невелике поле: вміщує кілька слів, не розтягується на всю ширину.
+.settings-input--small {
+  width: 180px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+// Поки «Інше» не вибрано, поле приховане, але місце під нього лишається
+// (visibility не прибирає елемент з потоку, а ще й виводить його з табуляції та
+// з дерева доступності).
+.settings-input--hidden {
+  visibility: hidden;
+}
+
+// fieldset без рамки й відступів: лише семантика групи для допоміжних технологій.
+.settings-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  legend {
+    padding: 0;
+    margin-bottom: 14px;
+  }
+}

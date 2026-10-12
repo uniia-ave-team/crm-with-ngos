@@ -37,9 +37,15 @@ const routes: Routes = [
     canActivate: [authGuard, connectionGuard],
   },
   {
+    path: 'admin-panel',
+    loadChildren: () => import('./admin-panel/admin-panel.module').then((m) => m.AdminPanelPageModule),
+    canActivate: [authGuard, connectionGuard],
+  },
+  {
     path: 'settings',
     loadChildren: () => import('./settings/settings.module').then((m) => m.SettingsPageModule),
     canActivate: [authGuard, connectionGuard],
+    data: { layoutSection: 'settings' },
   },
   {
     path: 'login',

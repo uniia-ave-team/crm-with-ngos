@@ -1,0 +1,20 @@
+<h2 class="settings-section__title">{{ 'settings.notifications.title' | translate }}</h2>
+
+<!-- Поки лише вигляд: збереження запитів на сервер не робить. -->
+<form class="settings-form" novalidate (submit)="$event.preventDefault()">
+  @for (field of fields; track field.id) {
+    <div class="settings-field">
+      <label class="settings-field__label" [attr.for]="'settings-' + field.id">{{ field.labelKey | translate }}</label>
+      <span class="settings-select-wrap">
+        <select class="settings-select" tabindex="0" [id]="'settings-' + field.id">
+          @for (option of options; track option.value) {
+            <option [value]="option.value" [selected]="option.value === field.initial">{{ option.labelKey | translate }}</option>
+          }
+        </select>
+        <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+      </span>
+    </div>
+  }
+
+  <button type="submit" class="settings-submit" tabindex="0">{{ 'settings.notifications.submit' | translate }}</button>
+</form>

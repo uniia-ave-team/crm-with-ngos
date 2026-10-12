@@ -41,6 +41,15 @@ ion-menu {
     font-family: var(--font-secondary-title);
   }
 
+  // Довга назва (наприклад, «Мої налаштування») переноситься на другий рядок
+  // замість обрізання трикрапкою: тіла ion-title в shadow DOM задають
+  // white-space: nowrap, а вкладений span його перевизначає.
+  .shell__menu-title {
+    display: block;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
   ion-content {
     --background: var(--nav-bg);
   }

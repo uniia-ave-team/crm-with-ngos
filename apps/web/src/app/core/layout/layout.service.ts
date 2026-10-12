@@ -7,7 +7,7 @@ import { filter } from 'rxjs/operators';
  * Прив'язується до маршруту через `data: { layoutSection: ... }`
  * у app-routing.module.ts.
  */
-export type LayoutSection = 'knowledge-base' | 'planner';
+export type LayoutSection = 'knowledge-base' | 'planner' | 'settings';
 
 const COLLAPSE_STORAGE_KEY = 'yavir.secondaryPanelCollapsed';
 
@@ -74,7 +74,7 @@ export class LayoutService {
     let section: LayoutSection | null = null;
     while (route) {
       const value = route.snapshot.data['layoutSection'];
-      if (value === 'knowledge-base' || value === 'planner') {
+      if (value === 'knowledge-base' || value === 'planner' || value === 'settings') {
         section = value;
       }
       route = route.firstChild;

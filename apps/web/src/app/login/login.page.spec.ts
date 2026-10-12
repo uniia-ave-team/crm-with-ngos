@@ -18,6 +18,10 @@ interface LoginPageInternals {
   submit(): void;
 }
 
+// Тексти з параметром `{{url}}`: частина до нього й частина після нього.
+const beforeUrl = (text: string) => text.split('{{url}}')[0].trim();
+const afterUrl = (text: string) => text.split('{{url}}')[1].trim();
+
 describe('LoginPage', () => {
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.spyOn>;
@@ -97,8 +101,8 @@ describe('LoginPage', () => {
 
   it('shows a loading state while the connection is being checked', () => {
     const { element } = create();
-    expect(element.textContent).toContain('Перевіряємо підключення');
-    expect(element.textContent).not.toContain('Введіть адресу серверу');
+    expect(element.textContent).toContain(uk.login.loading);
+    expect(element.textContent).not.toContain(uk.login.step1.title);
   });
 
   it('shows step 1 without an error when no API is found at the page domain', () => {
@@ -106,7 +110,7 @@ describe('LoginPage', () => {
     request.error(new ProgressEvent('error'));
     fixture.detectChanges();
 
-    expect(element.textContent).toContain('Введіть адресу серверу');
+    expect(element.textContent).toContain(uk.login.step1.title);
     expect(element.querySelector('.login__error')).toBeNull();
   });
 
@@ -115,8 +119,8 @@ describe('LoginPage', () => {
     request.flush({ status: 'Healthy' });
     answerStatus(connection, fixture);
 
-    expect(element.textContent).toContain('Вхід в систему');
-    expect(element.textContent).not.toContain('Введіть адресу серверу');
+    expect(element.textContent).toContain(uk.login.form.title);
+    expect(element.textContent).not.toContain(uk.login.step1.title);
   });
 
   it('re-runs the check with the provided address and shows an error above the form if no API is found', () => {
@@ -131,9 +135,9 @@ describe('LoginPage', () => {
 
     const error = element.querySelector('.login__error');
     const card = element.querySelector('.login__card');
-    expect(error?.textContent).toContain('не знайдено');
+    expect(error?.textContent).toContain(afterUrl(uk.login.step1.error.unreachable));
     expect(error?.textContent).toContain(`${location.protocol}//192.168.0.9:5065`);
-    expect(card?.textContent).toContain('Введіть адресу серверу');
+    expect(card?.textContent).toContain(uk.login.step1.title);
     // Помилка стоїть саме над формою.
     expect(error!.compareDocumentPosition(card!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -149,7 +153,7 @@ describe('LoginPage', () => {
       .flush({ status: 'Unhealthy' }, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
 
-    expect(element.querySelector('.login__error')?.textContent).toContain('невідома нам система');
+    expect(element.querySelector('.login__error')?.textContent).toContain(afterUrl(uk.login.step1.error.unhealthy));
   });
 
   it('rejects an address that does not look like a server without any request', () => {
@@ -160,7 +164,7 @@ describe('LoginPage', () => {
     submitAddress(page, 'http://');
     fixture.detectChanges();
 
-    expect(element.querySelector('.login__error')?.textContent).toContain('Це не схоже на адресу сервера');
+    expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.step1.error.invalid);
     http.expectNone(() => true);
   });
 
@@ -204,8 +208,8 @@ describe('LoginPage', () => {
     fixture.detectChanges();
 
     const error = element.querySelector('.login__error');
-    expect(error?.textContent).toContain('Немає підключення до сервера');
-    expect(element.querySelector('.login__card')?.textContent).toContain('Введіть адресу серверу');
+    expect(error?.textContent).toContain(beforeUrl(uk.login.step1.error.noConnection));
+    expect(element.querySelector('.login__card')?.textContent).toContain(uk.login.step1.title);
   });
 
   it('shows no redirect error when /login was simply opened and no API was found', () => {
@@ -229,11 +233,11 @@ describe('LoginPage', () => {
     it('shows the side image, the title, the fields, the button and the forgot-password link', () => {
       const { element } = createLoginForm();
       expect(srcs(element)).toContain('assets/login_image.jpg');
-      expect(element.querySelector('.login-form__title')?.textContent).toContain('Вхід в систему');
-      expect(element.textContent).toContain('Електронна пошта');
+      expect(element.querySelector('.login-form__title')?.textContent).toContain(uk.login.form.title);
+      expect(element.textContent).toContain(uk.login.form.email);
       expect(element.querySelectorAll('.login-form ion-input')).toHaveLength(2);
-      expect(element.querySelector('.login-form__submit')?.textContent).toContain('Ввійти');
-      expect(element.querySelector('.login-form__forgot')?.textContent).toContain('Забули пароль?');
+      expect(element.querySelector('.login-form__submit')?.textContent).toContain(uk.login.form.submit);
+      expect(element.querySelector('.login-form__forgot')?.textContent).toContain(uk.login.form.forgot);
     });
 
     it('uses the mobile menu logo of the language for both themes', () => {
@@ -288,8 +292,8 @@ describe('LoginPage', () => {
       const server = button(element)!;
       expect(server).not.toBeNull();
       expect(server.querySelector('ion-icon')?.getAttribute('name')).toBe('server-outline');
-      expect(server.getAttribute('aria-label')).toBe('Змінити адресу сервера');
-      expect(server.title).toBe('Змінити адресу сервера');
+      expect(server.getAttribute('aria-label')).toBe(uk.login.changeServer);
+      expect(server.title).toBe(uk.login.changeServer);
       expect(server.getAttribute('tabindex')).toBe('0');
     });
 
@@ -314,7 +318,7 @@ describe('LoginPage', () => {
       }
       await vi.waitFor(() => {
         ctx.fixture.detectChanges();
-        expect(ctx.element.querySelector('.login__card')?.textContent).toContain('Введіть адресу серверу');
+        expect(ctx.element.querySelector('.login__card')?.textContent).toContain(uk.login.step1.title);
       });
     }
 
@@ -331,7 +335,7 @@ describe('LoginPage', () => {
       expect(localStorage.length).toBeGreaterThan(1);
       expect(button(ctx.element)!.disabled).toBe(true);
       // Сторінка лишається такою, як була, доки йде перевірка.
-      expect(ctx.element.querySelector('.login__card')?.textContent).toContain('Створіть свою організацію');
+      expect(ctx.element.querySelector('.login__card')?.textContent).toContain(uk.login.ngo.title);
       probe.flush({ status: 'Healthy' });
     });
 
@@ -343,7 +347,7 @@ describe('LoginPage', () => {
 
       expect(localStorage.length).toBe(0);
       expect(TestBed.inject(AuthService).hasTokens()).toBe(false);
-      expect(ctx.element.querySelector('.login__card')?.textContent).toContain('Введіть адресу серверу');
+      expect(ctx.element.querySelector('.login__card')?.textContent).toContain(uk.login.step1.title);
       expect(button(ctx.element)).toBeNull();
     });
 
@@ -387,7 +391,7 @@ describe('LoginPage', () => {
       // Виходимо саме на крок 1 (а не на форму ГО, що теж має поле вводу).
       await vi.waitFor(() => {
         ctx.fixture.detectChanges();
-        expect(ctx.element.querySelector('.login__title')?.textContent).toContain('Введіть адресу серверу');
+        expect(ctx.element.querySelector('.login__title')?.textContent).toContain(uk.login.step1.title);
       });
       const input = ctx.element.querySelector('.login__card ion-input') as HTMLIonInputElement;
       await vi.waitFor(() => {
@@ -423,7 +427,7 @@ describe('LoginPage', () => {
       // Скидання адреси запускає нову перевірку за доменом сторінки.
       http.expectOne(healthUrl()).flush({ status: 'Healthy' });
       ctx.fixture.detectChanges();
-      expect(ctx.element.querySelector('.login__card')?.textContent).toContain('Введіть адресу серверу');
+      expect(ctx.element.querySelector('.login__card')?.textContent).toContain(uk.login.step1.title);
 
       const page = ctx.fixture.componentInstance as unknown as LoginPageInternals;
       page.onAddressChange('192.168.0.9');
@@ -447,7 +451,7 @@ describe('LoginPage', () => {
       page.onAddressChange('http://');
       page.submit();
       ctx.fixture.detectChanges();
-      expect(ctx.element.querySelector('.login__error')?.textContent).toContain('Це не схоже на адресу сервера');
+      expect(ctx.element.querySelector('.login__error')?.textContent).toContain(uk.login.step1.error.invalid);
       expect(ctx.element.querySelector('.login-form')).toBeNull();
     });
   });
@@ -482,7 +486,7 @@ describe('LoginPage', () => {
       void form.submitLogin();
       fixture.detectChanges();
       const errors = Array.from(element.querySelectorAll('.login-form__field-error')).map((e) => e.textContent?.trim());
-      expect(errors).toEqual(['Введіть пошту.', 'Введіть пароль.']);
+      expect(errors).toEqual([uk.login.form.error.emailRequired, uk.login.form.error.passwordRequired]);
       http.expectNone(() => true);
     });
 
@@ -517,14 +521,14 @@ describe('LoginPage', () => {
       await done;
       fixture.detectChanges();
 
-      expect(element.textContent).toContain('Створіть свою організацію');
+      expect(element.textContent).toContain(uk.login.ngo.title);
       expect(navigate).not.toHaveBeenCalled();
     });
 
     it.each([
-      [401, 'Невірна пошта або пароль.'],
-      [400, 'Сервер не прийняв дані для входу'],
-      [500, 'Не вдалося увійти'],
+      [401, uk.login.form.error.unauthorized],
+      [400, uk.login.form.error.invalid],
+      [500, uk.login.form.error.error],
     ])('shows a block above the form for HTTP %i and requests no status', async (status, text) => {
       const { fixture, connection, element, form, navigate, fill } = createLoginForm();
       fill('a@b.org', 'wrong');
@@ -553,7 +557,7 @@ describe('LoginPage', () => {
       fixture.detectChanges();
 
       expect(navigate).not.toHaveBeenCalled();
-      expect(element.querySelector('.login__error')?.textContent).toContain('Не вдалося отримати стан системи');
+      expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.form.error.statusFailed);
     });
   });
 
@@ -576,12 +580,12 @@ describe('LoginPage', () => {
 
     it('shows the login form when the setup is complete and there are no tokens', () => {
       const { element } = createWith(complete, { tokens: false });
-      expect(element.textContent).toContain('Вхід в систему');
+      expect(element.textContent).toContain(uk.login.form.title);
     });
 
     it('shows the login form when the setup is complete even if flags disagree and there are no tokens', () => {
       const { element } = createWith({ hasAdmin: false, hasNgo: false, isSetupComplete: true }, { tokens: false });
-      expect(element.textContent).toContain('Вхід в систему');
+      expect(element.textContent).toContain(uk.login.form.title);
     });
 
     it.each([
@@ -589,28 +593,28 @@ describe('LoginPage', () => {
       ['with tokens', true],
     ])('shows the admin form when there is no admin, %s', (_name, tokens) => {
       const { element } = createWith(noAdmin, { tokens });
-      expect(element.textContent).toContain('Налаштуйте адміністратора');
+      expect(element.textContent).toContain(uk.login.admin.title);
     });
 
     it('shows the admin form when the NGO exists but the admin does not', () => {
       const { element } = createWith({ hasAdmin: false, hasNgo: true, isSetupComplete: false }, { tokens: false });
-      expect(element.textContent).toContain('Налаштуйте адміністратора');
+      expect(element.textContent).toContain(uk.login.admin.title);
     });
 
     it('shows the NGO form when there is an admin but no NGO and there are tokens', () => {
       const { element } = createWith(noNgo, { tokens: true });
-      expect(element.textContent).toContain('Створіть свою організацію');
+      expect(element.textContent).toContain(uk.login.ngo.title);
     });
 
     it('shows the login form when there is an admin but no NGO and there are no tokens', () => {
       const { element } = createWith(noNgo, { tokens: false });
-      expect(element.textContent).toContain('Вхід в систему');
-      expect(element.textContent).not.toContain('Створіть свою організацію');
+      expect(element.textContent).toContain(uk.login.form.title);
+      expect(element.textContent).not.toContain(uk.login.ngo.title);
     });
 
     it('shows the setup error when both exist but the setup is not complete', () => {
       const { element } = createWith({ hasAdmin: true, hasNgo: true, isSetupComplete: false }, { tokens: true });
-      expect(element.textContent).toContain('Сталася помилка при налаштуванні системи.');
+      expect(element.textContent).toContain(uk.login.setupError);
       expect(element.querySelector('.login__card')).toBeNull();
     });
 
@@ -621,13 +625,13 @@ describe('LoginPage', () => {
       fixture.detectChanges();
       http.expectOne(`${connection.serverUrl()}/api/v1/system/status`).error(new ProgressEvent('error'));
       fixture.detectChanges();
-      expect(element.textContent).toContain('Вхід в систему');
+      expect(element.textContent).toContain(uk.login.form.title);
       http.expectNone(`${connection.serverUrl()}/api/v1/auth/refresh-token`);
     });
   });
 
   describe('search for a valid saved account on start', () => {
-    const profile = { id: 'user-1', email: 'a@b.org', firstName: 'Олена', lastName: 'Іваненко', avatarUrl: null, roles: [], customFields: [] };
+    const profile = { id: 'user-1', email: 'a@b.org', firstName: ' ', lastName: ' ', avatarUrl: null, roles: [], customFields: [] };
 
     /** Зберігає акаунти (останній стає активним, якщо не вказано інакше) і створює сторінку. */
     function createWithAccounts(
@@ -664,7 +668,7 @@ describe('LoginPage', () => {
 
     it('shows the loading text and no forms while the accounts are being checked', () => {
       const { element } = createWithAccounts([{ identity: 'u1', access: jwtAt(600), refresh: 'r1' }]);
-      expect(element.textContent).toContain('Перевіряємо підключення');
+      expect(element.textContent).toContain(uk.login.loading);
       expect(element.querySelector('.login-form, .login__card ion-input')).toBeNull();
     });
 
@@ -678,7 +682,7 @@ describe('LoginPage', () => {
       await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
 
       expect(store.accounts()).toHaveLength(1);
-      expect(store.active()).toMatchObject({ firstName: 'Олена', lastName: 'Іваненко', userId: 'user-1' });
+      expect(store.active()).toMatchObject({ firstName: profile.firstName, lastName: profile.lastName, userId: 'user-1' });
       // Назва ГО теж іде у знімок.
       (await vi.waitFor(() => http.expectOne(`${pageServer()}/api/v1/ngo`))).flush({
         name: 'Моя ГО',
@@ -794,7 +798,7 @@ describe('LoginPage', () => {
       (await vi.waitFor(() => http.expectOne(healthUrl()))).error(new ProgressEvent('error'));
       await vi.waitFor(() => {
         fixture.detectChanges();
-        expect(element.textContent).toContain('Введіть адресу серверу');
+        expect(element.textContent).toContain(uk.login.step1.title);
       });
       expect(store.accounts()).toHaveLength(0);
       expect(store.activeId()).toBeNull();
@@ -822,7 +826,7 @@ describe('LoginPage', () => {
       (await vi.waitFor(() => http.expectOne(meUrl()))).flush(profile);
       await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
       fixture.detectChanges();
-      expect(element.textContent).toContain('Перевіряємо підключення');
+      expect(element.textContent).toContain(uk.login.loading);
       expect(element.querySelector('.login-form')).toBeNull();
     });
   });
@@ -858,18 +862,32 @@ describe('LoginPage', () => {
       const submit = () => {
         form.submitAdmin();
         ctx.fixture.detectChanges();
-        return Array.from(ctx.element.querySelectorAll('.login__error-line, .login__field-error')).map((e) => e.textContent?.trim());
+        return Array.from(ctx.element.querySelectorAll('.login__error-line, .login__field-error, .password-fields__error')).map((e) => e.textContent?.trim());
       };
       return { ...ctx, fill, submit };
     }
 
-    const valid = { email: 'a@b.org', last: 'Іваненко', first: 'Олена', pw: 'Abcde1!x', repeat: 'Abcde1!x' };
+    const valid = { email: 'a@b.org', last: 'Last', first: 'First', pw: 'Abcde1!x', repeat: 'Abcde1!x' };
 
     it('shows the five fields', () => {
       const { element } = createAdmin();
       expect(element.querySelectorAll('ion-input')).toHaveLength(5);
       const placeholders = Array.from(element.querySelectorAll('ion-input')).map((i) => (i as HTMLIonInputElement).placeholder);
-      expect(placeholders).toEqual(['Пошта', 'Прізвище', 'Імʼя', 'Пароль', 'Повторіть пароль']);
+      // Обовʼязкові поля реєстрації позначено зірочкою в підказці.
+      const admin = uk.login.admin;
+      expect(placeholders).toEqual(
+        [admin.email, admin.lastName, admin.firstName, admin.password, admin.passwordRepeat].map((label) => `${label} *`),
+      );
+    });
+
+    it('marks every field of the registration as required, for the browser and for screen readers', () => {
+      const { element } = createAdmin();
+      const inputs = Array.from(element.querySelectorAll('ion-input')) as HTMLIonInputElement[];
+      expect(inputs).toHaveLength(5);
+      // Поля адміністратора, пароль і повтор — з власним `required`; пошта, прізвище й імʼя — статичним атрибутом
+      // (у jsdom елемент Ionic не оновлюється, тож перевіряємо саме атрибут/властивість).
+      const isRequired = (input: HTMLIonInputElement) => input.hasAttribute('required') || input.required === true;
+      expect(inputs.every(isRequired)).toBe(true);
     });
 
     it('shows no errors before the first submit', () => {
@@ -881,11 +899,11 @@ describe('LoginPage', () => {
       const { submit } = createAdmin();
       // Прізвище — блоком над формою, решта — під полями.
       expect(submit()).toEqual([
-        'Введіть прізвище.',
-        'Введіть пошту.',
-        'Введіть імʼя.',
-        'Введіть пароль.',
-        'Повторіть пароль.',
+        uk.login.admin.error.lastNameRequired,
+        uk.login.admin.error.emailRequired,
+        uk.login.admin.error.firstNameRequired,
+        uk.login.admin.error.passwordRequired,
+        uk.login.admin.error.passwordRepeatRequired,
       ]);
     });
 
@@ -894,13 +912,13 @@ describe('LoginPage', () => {
       submit();
       const card = element.querySelector('.login__card')!;
       const banner = element.querySelector('.login__error')!;
-      expect(banner.textContent).toContain('Введіть прізвище.');
-      expect(banner.textContent).not.toContain('імʼя');
-      expect(banner.textContent).not.toContain('пошту');
+      expect(banner.textContent).toContain(uk.login.admin.error.lastNameRequired);
+      expect(banner.textContent).not.toContain(uk.login.admin.error.firstNameRequired);
+      expect(banner.textContent).not.toContain(uk.login.admin.error.emailRequired);
       expect(banner.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(card.querySelectorAll('.login__field-error')).toHaveLength(4);
-      expect(card.textContent).toContain('Введіть імʼя.');
-      expect(card.textContent).not.toContain('Введіть прізвище.');
+      expect(card.querySelectorAll('.login__field-error, .password-fields__error')).toHaveLength(4);
+      expect(card.textContent).toContain(uk.login.admin.error.firstNameRequired);
+      expect(card.textContent).not.toContain(uk.login.admin.error.lastNameRequired);
     });
 
     it('accepts a valid form without validation errors', () => {
@@ -923,8 +941,8 @@ describe('LoginPage', () => {
 
       const create = http.expectOne(`${connection.serverUrl()}/api/v1/users`);
       expect(create.request.body).toEqual({
-        firstName: 'Олена',
-        lastName: 'Іваненко',
+        firstName: valid.first,
+        lastName: valid.last,
         email: 'a@b.org',
         password: 'Abcde1!x',
         confirmPassword: 'Abcde1!x',
@@ -948,7 +966,7 @@ describe('LoginPage', () => {
         status.flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false }),
       );
       fixture.detectChanges();
-      expect(element.textContent).toContain('Створіть свою організацію');
+      expect(element.textContent).toContain(uk.login.ngo.title);
       expect(TestBed.inject(AuthService).accessToken()).toBe('access');
     });
 
@@ -959,10 +977,10 @@ describe('LoginPage', () => {
       http.expectOne(`${connection.serverUrl()}/api/v1/users`).flush({}, { status: 400, statusText: 'Bad Request' });
       await vi.waitFor(() => {
         fixture.detectChanges();
-        expect(element.querySelector('.login__error')?.textContent).toContain('Сервер не прийняв дані адміністратора');
+        expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.admin.saveError.createInvalid);
       });
       http.expectNone(`${connection.serverUrl()}/api/v1/auth/login`);
-      expect(element.textContent).toContain('Налаштуйте адміністратора');
+      expect(element.textContent).toContain(uk.login.admin.title);
     });
 
     it('does not create the admin twice when only the login failed', async () => {
@@ -974,7 +992,7 @@ describe('LoginPage', () => {
       login.flush({}, { status: 401, statusText: 'Unauthorized' });
       await vi.waitFor(() => {
         fixture.detectChanges();
-        expect(element.querySelector('.login__error')?.textContent).toContain('Адміністратора створено, але увійти не вдалося');
+        expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.admin.saveError.loginUnauthorized);
       });
 
       submit();
@@ -985,7 +1003,7 @@ describe('LoginPage', () => {
     it('rejects a malformed email', () => {
       const { fill, submit } = createAdmin();
       fill({ ...valid, email: 'not-an-email' });
-      expect(submit()).toEqual(['Це не схоже на адресу пошти.']);
+      expect(submit()).toEqual([uk.login.admin.error.emailInvalid]);
     });
 
     it.each([
@@ -998,7 +1016,7 @@ describe('LoginPage', () => {
     ])('rejects a password with %s', (_name, password) => {
       const { fill, submit } = createAdmin();
       fill({ ...valid, pw: password, repeat: password });
-      expect(submit()).toEqual([expect.stringContaining('Пароль занадто простий')]);
+      expect(submit()).toEqual([expect.stringContaining(uk.login.admin.error.passwordWeak)]);
     });
 
     it('accepts a password of exactly eight characters with all required kinds', () => {
@@ -1009,22 +1027,22 @@ describe('LoginPage', () => {
 
     it('lists the password requirements and ticks them off while typing', () => {
       const { fixture, element, fill } = createAdmin();
-      const items = () => Array.from(element.querySelectorAll('.login__requirements')[0].querySelectorAll('.login__requirement'));
-      const met = () => items().filter((i) => i.classList.contains('login__requirement--met')).length;
+      const items = () => Array.from(element.querySelectorAll('.password-fields__requirements')[0].querySelectorAll('.password-fields__requirement'));
+      const met = () => items().filter((i) => i.classList.contains('password-fields__requirement--met')).length;
 
-      expect(items().map((i) => i.querySelector('.login__requirement-icon')?.textContent?.trim())).toEqual([
+      expect(items().map((i) => i.querySelector('.password-fields__requirement-icon')?.textContent?.trim())).toEqual([
         '8',
         'a',
         'A',
         '123',
         '#',
       ]);
-      expect(items().map((i) => i.querySelector('span:not(.login__requirement-icon)')?.textContent?.trim())).toEqual([
-        'Мінімум 8 символів',
-        'Принаймні одна мала латинська літера',
-        'Принаймні одна велика латинська літера',
-        'Принаймні одна цифра',
-        'Принаймні один спецсимвол (не літера й не цифра)',
+      expect(items().map((i) => i.querySelector('span:not(.password-fields__requirement-icon)')?.textContent?.trim())).toEqual([
+        uk.common.passwordRequirements.length,
+        uk.common.passwordRequirements.lowercase,
+        uk.common.passwordRequirements.uppercase,
+        uk.common.passwordRequirements.digit,
+        uk.common.passwordRequirements.special,
       ]);
       expect(met()).toBe(0);
 
@@ -1040,26 +1058,26 @@ describe('LoginPage', () => {
     it('ticks off the match item under the repeat field only when the passwords are equal', () => {
       const { fixture, element, fill } = createAdmin();
       const item = () => {
-        const lists = element.querySelectorAll('.login__requirements');
-        return lists[lists.length - 1].querySelector('.login__requirement')!;
+        const lists = element.querySelectorAll('.password-fields__requirements');
+        return lists[lists.length - 1].querySelector('.password-fields__requirement')!;
       };
-      expect(item().textContent).toContain('Паролі збігаються');
-      expect(item().querySelector('.login__requirement-icon')?.textContent?.trim()).toBe('=');
-      expect(item().classList).not.toContain('login__requirement--met');
+      expect(item().textContent).toContain(uk.common.passwordRequirements.match);
+      expect(item().querySelector('.password-fields__requirement-icon')?.textContent?.trim()).toBe('=');
+      expect(item().classList).not.toContain('password-fields__requirement--met');
 
       fill({ pw: 'Abcdef1!', repeat: 'Abcdef1' });
       fixture.detectChanges();
-      expect(item().classList).not.toContain('login__requirement--met');
+      expect(item().classList).not.toContain('password-fields__requirement--met');
 
       fill({ repeat: 'Abcdef1!' });
       fixture.detectChanges();
-      expect(item().classList).toContain('login__requirement--met');
+      expect(item().classList).toContain('password-fields__requirement--met');
     });
 
     it('rejects passwords that do not match', () => {
       const { fill, submit } = createAdmin();
       fill({ ...valid, repeat: 'Abcde2!x' });
-      expect(submit()).toEqual(['Паролі не збігаються.']);
+      expect(submit()).toEqual([uk.login.admin.error.passwordMismatch]);
     });
   });
 
@@ -1080,18 +1098,29 @@ describe('LoginPage', () => {
 
     it('shows the organization form instead of the login stub', () => {
       const { element } = createWithoutNgo();
-      expect(element.textContent).toContain('Створіть свою організацію');
-      expect(element.textContent).not.toContain('Вхід в систему');
+      expect(element.textContent).toContain(uk.login.ngo.title);
+      expect(element.textContent).not.toContain(uk.login.form.title);
       expect(element.querySelector('ion-input')).not.toBeNull();
       expect(element.querySelector('input[type=file]')).not.toBeNull();
+    });
+
+    it('marks the organization name as required, and the logo as optional', () => {
+      const { element } = createWithoutNgo();
+      const name = element.querySelector('ion-input') as HTMLIonInputElement;
+      expect(name.hasAttribute('required')).toBe(true);
+      expect(name.placeholder?.endsWith(' *')).toBe(true);
+      // Логотип необовʼязковий: поле вибору файлу без `required`, підказка без зірочки.
+      const file = element.querySelector('input[type=file]') as HTMLInputElement;
+      expect(file.required).toBe(false);
+      expect(element.querySelector('.login__dropzone-text')?.textContent).not.toContain('*');
     });
 
     it('keeps showing the loading state until the system status arrives', () => {
       const { fixture, connection, element, request } = create();
       request.flush({ status: 'Healthy' });
       fixture.detectChanges();
-      expect(element.textContent).toContain('Перевіряємо підключення');
-      expect(element.textContent).not.toContain('Вхід в систему');
+      expect(element.textContent).toContain(uk.login.loading);
+      expect(element.textContent).not.toContain(uk.login.form.title);
       http.expectOne(`${connection.serverUrl()}/api/v1/system/status`);
     });
 
@@ -1101,7 +1130,7 @@ describe('LoginPage', () => {
       fixture.detectChanges();
       http.expectOne(`${connection.serverUrl()}/api/v1/system/status`).error(new ProgressEvent('error'));
       fixture.detectChanges();
-      expect(element.textContent).toContain('Вхід в систему');
+      expect(element.textContent).toContain(uk.login.form.title);
     });
 
     it('creates the organization with a null logoUrl, then redirects to the planner', async () => {
@@ -1137,8 +1166,8 @@ describe('LoginPage', () => {
       await done;
       fixture.detectChanges();
 
-      expect(element.textContent).toContain('потрібна авторизація');
-      expect(element.textContent).toContain('Створіть свою організацію');
+      expect(element.textContent).toContain(uk.login.ngo.saveError.unauthorized);
+      expect(element.textContent).toContain(uk.login.ngo.title);
       http.expectNone(`${connection.serverUrl()}/api/v1/system/status`);
     });
 
@@ -1155,13 +1184,13 @@ describe('LoginPage', () => {
       void form.submitNgo();
       fixture.detectChanges();
       const nameError = element.querySelector('.login__card > .login__field-error');
-      expect(nameError?.textContent).toContain('Введіть назву організації');
+      expect(nameError?.textContent).toContain(uk.login.ngo.nameRequired);
       expect(element.querySelector('.login__error')).toBeNull();
 
       pickLogo(element, new File(['x'], 'doc.pdf', { type: 'application/pdf' }));
       fixture.detectChanges();
       const logoError = element.querySelector('.login__logo .login__field-error');
-      expect(logoError?.textContent).toContain('Підтримуються лише зображення');
+      expect(logoError?.textContent).toContain(uk.login.ngo.logoTypeError);
       expect(element.querySelector('.login__error')).toBeNull();
 
       form.onNgoNameChange('Моя ГО');
@@ -1172,7 +1201,7 @@ describe('LoginPage', () => {
       fixture.detectChanges();
       const banner = element.querySelector('.login__error')!;
       const card = element.querySelector('.login__card')!;
-      expect(banner.textContent).toContain('Недостатньо прав');
+      expect(banner.textContent).toContain(uk.login.ngo.saveError.forbidden);
       expect(banner.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
@@ -1180,14 +1209,14 @@ describe('LoginPage', () => {
       const { fixture, element, page } = createWithoutNgo();
       (page as unknown as { submitNgo(): void }).submitNgo();
       fixture.detectChanges();
-      expect(element.textContent).toContain('Введіть назву організації');
+      expect(element.textContent).toContain(uk.login.ngo.nameRequired);
     });
 
     it('rejects a logo that is not an image', () => {
       const { fixture, element } = createWithoutNgo();
       pickLogo(element, new File(['x'], 'doc.pdf', { type: 'application/pdf' }));
       fixture.detectChanges();
-      expect(element.textContent).toContain('Підтримуються лише зображення');
+      expect(element.textContent).toContain(uk.login.ngo.logoTypeError);
       expect(element.querySelector('.login__logo-preview')).toBeNull();
     });
 
@@ -1195,7 +1224,7 @@ describe('LoginPage', () => {
       const { fixture, element } = createWithoutNgo();
       pickLogo(element, new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' }));
       fixture.detectChanges();
-      expect(element.textContent).toContain('Файл завеликий');
+      expect(element.textContent).toContain(uk.login.ngo.logoSizeError);
     });
 
     it('accepts a logo dropped onto the drop zone and highlights it while dragging', () => {
@@ -1227,7 +1256,7 @@ describe('LoginPage', () => {
       });
       zone.dispatchEvent(drop);
       fixture.detectChanges();
-      expect(element.textContent).toContain('Підтримуються лише зображення');
+      expect(element.textContent).toContain(uk.login.ngo.logoTypeError);
     });
 
     it('previews a valid logo and lets it be removed', () => {
@@ -1241,8 +1270,8 @@ describe('LoginPage', () => {
       expect(element.querySelector('.login__logo-preview')?.getAttribute('src')).toBe('blob:logo');
 
       const remove = element.querySelector<HTMLButtonElement>('.login__logo-remove')!;
-      expect(remove.getAttribute('aria-label')).toBe('Видалити логотип');
-      expect(remove.title).toBe('Видалити логотип');
+      expect(remove.getAttribute('aria-label')).toBe(uk.login.ngo.remove);
+      expect(remove.title).toBe(uk.login.ngo.remove);
       remove.click();
       fixture.detectChanges();
       expect(element.querySelector('.login__logo-preview')).toBeNull();

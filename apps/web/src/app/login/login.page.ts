@@ -10,6 +10,7 @@ import { AppLanguage, LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
 import { CreateNgoResult, NgoService } from '../core/ngo/ngo.service';
 import { CreateUserResult, UsersService } from '../core/users/users.service';
+import { isStrongPassword } from '../shared/password-fields/password-rules';
 
 /**
  * Куди переходить користувач, коли вхід у систему завершено: після входу (ГО
@@ -29,19 +30,6 @@ type LoginView = 'loading' | 'step1' | 'ngo' | 'admin' | 'setup-error' | 'login'
 type NgoNameError = 'required' | 'too-long';
 type NgoLogoError = 'type' | 'size';
 
-/**
- * Пароль адміністратора — ті самі умови, що перевіряє сервер (`IdentityOptions`
- * в налаштуваннях API): від 8 символів, велика й мала латинська літера, цифра
- * та спецсимвол (будь-що, крім латинських літер і цифр).
- */
-const ADMIN_PASSWORD_MIN_LENGTH = 8;
-const ADMIN_PASSWORD_REQUIREMENTS = [
-  { key: 'length', icon: '8', test: (password: string) => password.length >= ADMIN_PASSWORD_MIN_LENGTH },
-  { key: 'lowercase', icon: 'a', test: (password: string) => /[a-z]/.test(password) },
-  { key: 'uppercase', icon: 'A', test: (password: string) => /[A-Z]/.test(password) },
-  { key: 'digit', icon: '123', test: (password: string) => /[0-9]/.test(password) },
-  { key: 'special', icon: '#', test: (password: string) => /[^a-zA-Z0-9]/.test(password) },
-] as const;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const UNIIA_UKRAINIAN_LANGUAGES: readonly AppLanguage[] = ['uk', 'crh', 'be'];
@@ -278,15 +266,6 @@ export class LoginPage implements OnDestroy {
       (key): key is string => !!key,
     );
   });
-  /** Умови до пароля й чи виконано кожну (оновлюється під час введення). */
-  protected readonly adminPasswordRequirements = computed(() => {
-    const password = this.adminPassword();
-    return ADMIN_PASSWORD_REQUIREMENTS.map(({ key, icon, test }) => ({ key, icon, met: test(password) }));
-  });
-  /** Повтор пароля збігається з паролем (порожній повтор не рахується). */
-  protected readonly adminPasswordsMatch = computed(
-    () => !!this.adminPasswordRepeat() && this.adminPasswordRepeat() === this.adminPassword(),
-  );
   protected readonly adminPasswordError = computed(() => {
     if (!this.adminSubmitted()) {
       return null;
@@ -295,7 +274,7 @@ export class LoginPage implements OnDestroy {
     if (!password) {
       return 'passwordRequired';
     }
-    return this.adminPasswordRequirements().every((requirement) => requirement.met) ? null : 'passwordWeak';
+    return isStrongPassword(password) ? null : 'passwordWeak';
   });
   protected readonly adminPasswordRepeatError = computed(() => {
     if (!this.adminSubmitted()) {

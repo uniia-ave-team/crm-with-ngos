@@ -106,6 +106,10 @@
 }
 
 .login__input {
+  // Шрифт і розмір тексту в полях — як у решти застосунку (e-Ukraine, 15px),
+  // а не стандартні Roboto 16px з Ionic.
+  font-family: var(--font-menu);
+  font-size: 15px;
   --border-radius: 8px;
   --border-color: var(--nav-border);
   --padding-start: 12px;
@@ -281,51 +285,6 @@
   font-weight: 300;
   font-size: 13px;
   color: var(--nav-fg-inactive);
-}
-
-// Умови до пароля: сірі, поки не виконані, зелені — коли виконано.
-.login__requirements {
-  margin: -4px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.login__requirement {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-menu);
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--nav-fg-inactive);
-
-  &--met {
-    color: #32670b;
-  }
-}
-
-// Позначка умови: символ, який вона вимагає (8, a, A, 123, #).
-.login__requirement-icon {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 32px;
-  height: 20px;
-  border: 1px solid currentColor;
-  border-radius: 6px;
-  font-size: 11px;
-  line-height: 1;
-}
-
-@media (prefers-color-scheme: dark) {
-  .login__requirement--met {
-    color: #478a7f;
-  }
 }
 
 // Форма входу: зображення зліва, форма справа (на вузьких екранах — лише форма).

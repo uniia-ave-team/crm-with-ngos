@@ -2,6 +2,7 @@ import { CUSTOM_ELEMENTS_SCHEMA, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
+import uk from '../../../assets/i18n/uk.json';
 import { LanguageService } from '../../core/i18n/language.service';
 import { PreloaderModule } from './preloader.module';
 
@@ -18,7 +19,7 @@ describe('PreloaderComponent', () => {
   beforeEach(() => {
     localStorage.clear();
     TestBed.configureTestingModule({ providers: [provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })] });
-    TestBed.inject(TranslateService).setTranslation('uk', { common: { pleaseWait: 'Будь ласка, зачекайте...' } });
+    TestBed.inject(TranslateService).setTranslation('uk', uk);
   });
 
   afterEach(() => localStorage.clear());
@@ -50,7 +51,7 @@ describe('PreloaderComponent', () => {
     const children = Array.from(overlay()!.children);
     expect(children.map((c) => c.tagName.toLowerCase())).toEqual(['img', 'img', 'ion-spinner', 'p']);
     expect(children[2].getAttribute('name')).toBe('crescent');
-    expect(children[3].textContent?.trim()).toBe('Будь ласка, зачекайте...');
+    expect(children[3].textContent?.trim()).toBe(uk.common.pleaseWait);
   });
 
   it('uses the mobile logo of the language for both themes', () => {

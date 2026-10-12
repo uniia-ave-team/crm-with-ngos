@@ -41,6 +41,7 @@ export class PrimaryNavComponent {
     { labelKey: 'nav.planner', url: '/planner', icon: 'checkbox-outline', iconActive: 'checkbox' },
     { labelKey: 'nav.knowledgeBase', url: '/knowledge-base', icon: 'bulb-outline', iconActive: 'bulb' },
     { labelKey: 'nav.colleagues', url: '/colleagues', icon: 'people-outline', iconActive: 'people' },
+    { labelKey: 'nav.adminPanel', url: '/admin-panel', icon: 'hammer-outline', iconActive: 'hammer' },
   ];
 
   /** Поточний користувач (профіль із `GET /api/v1/users/me`) для аватара; `null`, доки не завантажено. */

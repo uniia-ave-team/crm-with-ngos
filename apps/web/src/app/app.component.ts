@@ -20,5 +20,6 @@ export class AppComponent {
   protected readonly titleKeys: Record<LayoutSection, string> = {
     'knowledge-base': 'page.knowledgeBase',
     planner: 'page.planner',
+    settings: 'settings.menu.title',
   };
 }
