@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build from the repository root: docker build -f apps/web/Dockerfile .
 
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /src
 
 COPY apps/web/package.json apps/web/package-lock.json apps/web/
