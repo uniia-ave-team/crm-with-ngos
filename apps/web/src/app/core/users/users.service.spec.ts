@@ -87,6 +87,46 @@ describe('UsersService', () => {
     });
   });
 
+  describe('getMyPermissions', () => {
+    const permissionsUrl = () => `${url}/me/permissions`;
+
+    it('requests the permissions of the current user and returns the list', async () => {
+      const result = service.getMyPermissions();
+      const request = http.expectOne(permissionsUrl());
+      expect(request.request.method).toBe('GET');
+      request.flush(['ViewUser', 'UpdateUser']);
+      expect(await result).toEqual(['ViewUser', 'UpdateUser']);
+    });
+
+    it('takes only the strings of the list', async () => {
+      const result = service.getMyPermissions();
+      http.expectOne(permissionsUrl()).flush(['ViewUser', 1, null, 'UpdateUser']);
+      expect(await result).toEqual(['ViewUser', 'UpdateUser']);
+    });
+
+    it('treats an answer that is not a list as an error', async () => {
+      const result = service.getMyPermissions();
+      http.expectOne(permissionsUrl()).flush({ permissions: [] });
+      expect(await result).toBe('error');
+    });
+
+    it.each([
+      [401, 'unauthorized'],
+      [403, 'forbidden'],
+      [500, 'error'],
+    ])('returns the failure for HTTP %i (%s)', async (status, expected) => {
+      const result = service.getMyPermissions();
+      http.expectOne(permissionsUrl()).flush({}, { status, statusText: 'x' });
+      expect(await result).toBe(expected);
+    });
+
+    it('reports an unreachable server', async () => {
+      const result = service.getMyPermissions();
+      http.expectOne(permissionsUrl()).error(new ProgressEvent('error'));
+      expect(await result).toBe('unreachable');
+    });
+  });
+
   describe('updateProfile', () => {
     const profileUrl = (id: string) => `${url}/${id}`;
     const body = {

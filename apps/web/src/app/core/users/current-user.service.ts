@@ -1,5 +1,5 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Injectable, Injector, Signal, effect, inject, signal, untracked } from '@angular/core';
+import { Injectable, Injector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
 import { AccountsService } from '../accounts/accounts.service';
@@ -47,7 +47,12 @@ export class CurrentUserService {
   private readonly userSignal = signal<CurrentUser | null>(null);
   readonly user: Signal<CurrentUser | null> = this.userSignal.asReadonly();
 
+  /** Права активного акаунта (з його знімка в `localStorage`); порожньо, доки не отримано. */
+  readonly permissions: Signal<readonly string[]> = computed(() => this.accounts.active()?.permissions ?? []);
+
   private inFlight: Promise<CurrentUserResult> | null = null;
+  /** Останнє оновлення прав у знімку акаунта (завершене, якщо його не було). */
+  private permissionsPromise: Promise<void> = Promise.resolve();
   /** Акаунт (`AuthService.sessionId`), для якого завантажено `user`. */
   private loadedForSession: string | null = null;
 
@@ -70,6 +75,35 @@ export class CurrentUserService {
     if (this.userSignal() && this.auth.hasTokens()) {
       return Promise.resolve('ok');
     }
+    return this.request();
+  }
+
+  /**
+   * Перепитує профіль (`GET /users/me`) попри те, що він уже в памʼяті: так
+   * зміни в БД (дані профілю, назва й логотип ГО) потрапляють в інтерфейс без
+   * перезавантаження. Викликається при кожній зміні сторінки (`authGuard`).
+   * Невдалий запит нічого не скидає: профіль лишається попереднім, а
+   * недійсні токени обробляє `authInterceptor` (оновлення або вихід). Запити,
+   * що збіглися в часі, діляться одним.
+   */
+  reload(): Promise<CurrentUserResult> {
+    if (!this.auth.hasTokens()) {
+      return Promise.resolve('unauthorized');
+    }
+    return this.request();
+  }
+
+  /**
+   * Завершується, коли права з останнього запиту профілю вже у знімку акаунта
+   * (або їх не вдалося отримати). Права підтягуються після відповіді `/users/me`
+   * й не блокують його, тож той, кому потрібні саме актуальні права (страж
+   * сторінки за правами), чекає тут.
+   */
+  permissionsSettled(): Promise<void> {
+    return this.permissionsPromise;
+  }
+
+  private request(): Promise<CurrentUserResult> {
     if (!this.inFlight) {
       this.inFlight = this.load().finally(() => {
         this.inFlight = null;
@@ -93,6 +127,7 @@ export class CurrentUserService {
       this.loadedForSession = session;
       this.applyProfile(session, user);
       void this.syncNgo(session);
+      this.permissionsPromise = this.syncPermissions(session);
       console.log('[CurrentUserService] Вхід підтверджено', user);
       return 'ok';
     } catch (error) {
@@ -164,6 +199,27 @@ export class CurrentUserService {
       userId: user.id,
       ...(user.email ? { email: user.email } : {}),
     });
+  }
+
+  /**
+   * Підтягує права користувача (`GET /users/me/permissions`) у знімок акаунта.
+   * Іде разом із кожним запитом профілю, тож права оновлюються при кожній зміні
+   * сторінки. Не блокує перевірку входу; невдача лишає попередній список.
+   */
+  private async syncPermissions(session: string): Promise<void> {
+    const permissions = await this.users.getMyPermissions();
+    if (typeof permissions === 'string') {
+      return;
+    }
+    // Поки йшов запит, акаунт змінився — права чужого акаунта не записуємо.
+    if (session !== this.auth.sessionId()) {
+      return;
+    }
+    const current = this.accounts.active()?.permissions ?? [];
+    const same = current.length === permissions.length && current.every((permission, index) => permission === permissions[index]);
+    if (!same) {
+      this.accounts.update(session, { permissions });
+    }
   }
 
   /** Підтягує назву й логотип ГО в знімок акаунта (не блокує перевірку входу). */

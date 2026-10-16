@@ -33,7 +33,7 @@ const PRONOUN_LABELS = { she: 'pronounShe', he: 'pronounHe', they: 'pronounThey'
 @Component({
   selector: 'app-settings-personal-data',
   templateUrl: './personal-data.page.html',
-  styleUrls: ['../settings-section.scss', './personal-data.page.scss'],
+  styleUrls: ['../settings-section.scss', '../avatar-block.scss', './personal-data.page.scss'],
   standalone: false,
 })
 export class PersonalDataPage {

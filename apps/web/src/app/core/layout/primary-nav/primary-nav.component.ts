@@ -5,6 +5,7 @@ import { PopoverComponent } from '../../../shared/popover/popover.component';
 import { AccountTile } from '../account-menu/account-menu.component';
 import { AccountsService } from '../../accounts/accounts.service';
 import { AuthService } from '../../auth/auth.service';
+import { ADMIN_PANEL_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
 import { mobileLogoBase } from '../../i18n/mobile-logo';
 import { CurrentUserService } from '../../users/current-user.service';
@@ -14,6 +15,8 @@ interface NavItem {
   readonly url: string;
   readonly icon: string;
   readonly iconActive: string;
+  /** Пункт показується, лише коли є хоча б одне з цих прав; без поля — видно всім. */
+  readonly requiresAny?: readonly string[];
 }
 
 /**
@@ -36,13 +39,29 @@ export class PrimaryNavComponent {
   private readonly auth = inject(AuthService);
   private readonly accountsStore = inject(AccountsService);
 
-  protected readonly navItems: readonly NavItem[] = [
+  private static readonly ITEMS: readonly NavItem[] = [
     { labelKey: 'nav.calendar', url: '/calendar', icon: 'calendar-outline', iconActive: 'calendar' },
     { labelKey: 'nav.planner', url: '/planner', icon: 'checkbox-outline', iconActive: 'checkbox' },
     { labelKey: 'nav.knowledgeBase', url: '/knowledge-base', icon: 'bulb-outline', iconActive: 'bulb' },
     { labelKey: 'nav.colleagues', url: '/colleagues', icon: 'people-outline', iconActive: 'people' },
-    { labelKey: 'nav.adminPanel', url: '/admin-panel', icon: 'hammer-outline', iconActive: 'hammer' },
+    {
+      labelKey: 'nav.adminPanel',
+      url: '/admin-panel',
+      icon: 'hammer-outline',
+      iconActive: 'hammer',
+      requiresAny: ADMIN_PANEL_PERMISSIONS,
+    },
   ];
+
+  /**
+   * Пункти меню, доступні користувачеві: ті, для яких є хоча б одне з потрібних прав
+   * (права активного акаунта, оновлюються при кожній зміні сторінки). Поки прав
+   * не отримано, пункти з вимогою не показуються.
+   */
+  protected readonly navItems: Signal<readonly NavItem[]> = computed(() => {
+    const granted = this.currentUser.permissions();
+    return PrimaryNavComponent.ITEMS.filter((item) => !item.requiresAny || hasAnyPermission(granted, item.requiresAny));
+  });
 
   /** Поточний користувач (профіль із `GET /api/v1/users/me`) для аватара; `null`, доки не завантажено. */
   protected readonly user = this.currentUser.user;

@@ -8,6 +8,8 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { AdminPanelPageRoutingModule } from './admin-panel-routing.module';
 
 import { AdminPanelPage } from './admin-panel.page';
+import { AdminImagesGalleryComponent } from './images-gallery/images-gallery.component';
+import { AdminNgoFormComponent } from './ngo-form/ngo-form.component';
 
 @NgModule({
   imports: [
@@ -17,6 +19,6 @@ import { AdminPanelPage } from './admin-panel.page';
     TranslatePipe,
     AdminPanelPageRoutingModule
   ],
-  declarations: [AdminPanelPage]
+  declarations: [AdminPanelPage, AdminNgoFormComponent, AdminImagesGalleryComponent]
 })
 export class AdminPanelPageModule {}

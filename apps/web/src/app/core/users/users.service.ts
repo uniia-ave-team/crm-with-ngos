@@ -78,6 +78,30 @@ export class UsersService {
   }
 
   /**
+   * `GET <сервер>/api/v1/users/me/permissions` — унікальні права поточного
+   * користувача, за якими будується інтерфейс. Повертає список або причину
+   * невдачі; відповідь не масивом вважається помилкою. Токен додає
+   * `authInterceptor`.
+   */
+  async getMyPermissions(): Promise<string[] | RequestFailure> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/permissions`;
+    console.log(`[UsersService] Запитую права поточного користувача: ${url}`);
+
+    try {
+      const body = await firstValueFrom(this.http.get<unknown>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      if (!Array.isArray(body)) {
+        console.warn('[UsersService] Права прийшли не списком', body);
+        return 'error';
+      }
+      return body.filter((permission): permission is string => typeof permission === 'string');
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося отримати права (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
    * `PUT <сервер>/api/v1/users/{id}` — оновлення профілю (потрібне право
    * `UpdateUser`; 204 без тіла). Токен додає `authInterceptor`.
    */

@@ -240,6 +240,68 @@ describe('LoginPage', () => {
       expect(element.querySelector('.login-form__forgot')?.textContent).toContain(uk.login.form.forgot);
     });
 
+    describe('the image of the form (GET /api/v1/loginpageimages/random)', () => {
+      const randomUrl = (connection: ConnectionService) => `${connection.serverUrl()}/api/v1/loginpageimages/random`;
+      const sideImage = (element: HTMLElement) =>
+        (element.querySelector('.login-form__image') as HTMLImageElement).getAttribute('src');
+
+      it('asks for it once the login form is shown, and shows the default one meanwhile', () => {
+        const { connection, element } = createLoginForm();
+        const request = http.expectOne(randomUrl(connection));
+        expect(request.request.method).toBe('GET');
+        expect(sideImage(element)).toBe('assets/login_image.jpg');
+        request.flush({ id: 'a', url: '/files/login/a.jpg' });
+      });
+
+      it('shows the image the server returned', async () => {
+        const { connection, fixture, element } = createLoginForm();
+        http.expectOne(randomUrl(connection)).flush({ id: 'a', url: '/files/login/a.jpg' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(sideImage(element)).toBe(`${connection.serverUrl()}/files/login/a.jpg`);
+        });
+      });
+
+      it.each([
+        ['there are none (404)', { status: 404, statusText: 'Not Found' }],
+        ['the server fails', { status: 500, statusText: 'x' }],
+      ])('keeps the default image when %s', async (_name, status) => {
+        const { connection, fixture, element } = createLoginForm();
+        http.expectOne(randomUrl(connection)).flush({}, status);
+        await Promise.resolve();
+        fixture.detectChanges();
+        expect(sideImage(element)).toBe('assets/login_image.jpg');
+      });
+
+      it('goes back to the default image when the received one cannot be loaded', async () => {
+        const { connection, fixture, element } = createLoginForm();
+        http.expectOne(randomUrl(connection)).flush({ id: 'a', url: '/files/login/broken.jpg' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(sideImage(element)).toContain('broken.jpg');
+        });
+
+        element.querySelector('.login-form__image')!.dispatchEvent(new Event('error'));
+        fixture.detectChanges();
+        expect(sideImage(element)).toBe('assets/login_image.jpg');
+      });
+
+      it('asks only once while the form stays on the screen', async () => {
+        const { connection, fixture } = createLoginForm();
+        http.expectOne(randomUrl(connection)).flush({ id: 'a', url: '/files/login/a.jpg' });
+        await Promise.resolve();
+        fixture.detectChanges();
+        http.expectNone(randomUrl(connection));
+      });
+
+      it('does not ask while another step is shown (the address of the server is not known yet)', () => {
+        const { request, fixture } = create();
+        request.error(new ProgressEvent('error'));
+        fixture.detectChanges();
+        http.expectNone((r) => r.url.endsWith('/loginpageimages/random'));
+      });
+    });
+
     it('uses the mobile menu logo of the language for both themes', () => {
       TestBed.inject(LanguageService).setLanguage('uk');
       const { element } = createLoginForm();
@@ -487,7 +549,8 @@ describe('LoginPage', () => {
       fixture.detectChanges();
       const errors = Array.from(element.querySelectorAll('.login-form__field-error')).map((e) => e.textContent?.trim());
       expect(errors).toEqual([uk.login.form.error.emailRequired, uk.login.form.error.passwordRequired]);
-      http.expectNone(() => true);
+      // Крім запиту зображення форми, жодних запитів.
+      http.expectNone((r) => !r.url.endsWith('/loginpageimages/random'));
     });
 
     it('logs in, keeps the tokens and goes to the planner when the NGO exists', async () => {

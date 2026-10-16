@@ -29,7 +29,7 @@
 
         <div class="login-form">
           <div class="login-form__media">
-            <img class="login-form__image" src="assets/login_image.jpg" alt="" />
+            <img class="login-form__image" [src]="loginImage()" alt="" (error)="onLoginImageError()" />
           </div>
 
           <div class="login-form__panel">

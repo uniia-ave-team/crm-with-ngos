@@ -124,6 +124,111 @@ describe('CurrentUserService', () => {
     expect(fresh.user()).toEqual(profile);
   });
 
+  describe('permissions (GET /users/me/permissions together with /users/me)', () => {
+    const permissionsUrl = () => `${TestBed.inject(ConnectionService).serverUrl()}/api/v1/users/me/permissions`;
+    const stored = () => JSON.parse(localStorage.getItem(`yavir.account.${TestBed.inject(AccountsService).activeId()}`)!);
+
+    async function loaded(permissions: string[] = ['ViewUser']): Promise<void> {
+      const first = service.ensure();
+      http.expectOne(url).flush(profile);
+      await first;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+      http.expectOne(permissionsUrl()).flush(permissions);
+      await vi.waitFor(() => expect(service.permissions()).toEqual(permissions));
+    }
+
+    it('asks for the permissions after the profile and writes them to the account record in localStorage', async () => {
+      await loaded(['ViewUser', 'UpdateUser']);
+      expect(stored().permissions).toEqual(['ViewUser', 'UpdateUser']);
+    });
+
+    it('asks again on every request of the profile and replaces the list', async () => {
+      await loaded(['ViewUser', 'UpdateUser']);
+
+      const result = service.reload();
+      http.expectOne(url).flush(profile);
+      await result;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+      http.expectOne(permissionsUrl()).flush(['ViewUser']);
+
+      await vi.waitFor(() => expect(service.permissions()).toEqual(['ViewUser']));
+      expect(stored().permissions).toEqual(['ViewUser']);
+    });
+
+    it('keeps the saved permissions when they could not be received', async () => {
+      await loaded(['ViewUser']);
+
+      const result = service.reload();
+      http.expectOne(url).flush(profile);
+      await result;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+      http.expectOne(permissionsUrl()).flush({}, { status: 500, statusText: 'x' });
+
+      await vi.waitFor(() => expect(console.warn).toHaveBeenCalled());
+      expect(service.permissions()).toEqual(['ViewUser']);
+      expect(stored().permissions).toEqual(['ViewUser']);
+    });
+
+    it('does not write the permissions to an account that is not the current one any more', async () => {
+      const first = service.ensure();
+      http.expectOne(url).flush(profile);
+      await first;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+      const request = http.expectOne(permissionsUrl());
+      const id = TestBed.inject(AccountsService).activeId()!;
+
+      auth.clearTokens();
+      request.flush(['ViewUser']);
+      await Promise.resolve();
+      expect(JSON.parse(localStorage.getItem(`yavir.account.${id}`) ?? 'null')?.permissions ?? []).toEqual([]);
+    });
+  });
+
+  describe('reload (GET /users/me on every page change)', () => {
+    async function loaded(): Promise<void> {
+      const first = service.ensure();
+      http.expectOne(url).flush(profile);
+      await first;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+    }
+
+    it('asks again although the profile is already known, and replaces it with the answer', async () => {
+      await loaded();
+      const result = service.reload();
+      const request = http.expectOne(url);
+      expect(request.request.method).toBe('GET');
+      request.flush({ ...profile, firstName: '  ', lastName: '  ' });
+
+      expect(await result).toBe('ok');
+      expect(service.user()).toMatchObject({ id: 'u1', firstName: '  ', lastName: '  ' });
+      const record = JSON.parse(localStorage.getItem(`yavir.account.${TestBed.inject(AccountsService).activeId()}`)!);
+      expect(record).toMatchObject({ firstName: '  ', lastName: '  ' });
+    });
+
+    it('shares one request between simultaneous calls', async () => {
+      await loaded();
+      const first = service.reload();
+      const second = service.reload();
+      http.expectOne(url).flush(profile);
+      expect(await first).toBe('ok');
+      expect(await second).toBe('ok');
+    });
+
+    it.each([500, 404])('keeps the profile when the server answers %i', async (status) => {
+      await loaded();
+      const result = service.reload();
+      http.expectOne(url).flush({}, { status, statusText: 'x' });
+      expect(await result).toBe('unavailable');
+      expect(service.user()).toEqual(profile);
+    });
+
+    it('sends nothing without tokens', async () => {
+      auth.clearTokens();
+      expect(await service.reload()).toBe('unauthorized');
+      http.expectNone(url);
+    });
+  });
+
   describe('refresh (GET /users/{id})', () => {
     const detailsUrl = () => `${TestBed.inject(ConnectionService).serverUrl()}/api/v1/users/u1`;
     const fullProfile = {

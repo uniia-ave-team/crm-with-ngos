@@ -4,20 +4,15 @@ import { Router } from '@angular/router';
 import { NO_CONNECTION_ERROR } from '../core/connection/connection.guard';
 import { AccountRestoreService } from '../core/accounts/account-restore.service';
 import { AccountsService } from '../core/accounts/accounts.service';
-import { AuthService, LoginResult } from '../core/auth/auth.service';
+import { AuthService, LoginResult, REDIRECT_URL } from '../core/auth/auth.service';
 import { ConnectionService } from '../core/connection/connection.service';
 import { AppLanguage, LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
+import { NGO_LOGO_MAX_BYTES, NGO_LOGO_TYPES, NGO_NAME_MAX_LENGTH } from '../core/ngo/logo-rules';
+import { LoginPageImagesService } from '../core/login-page-images/login-page-images.service';
 import { CreateNgoResult, NgoService } from '../core/ngo/ngo.service';
 import { CreateUserResult, UsersService } from '../core/users/users.service';
 import { isStrongPassword } from '../shared/password-fields/password-rules';
-
-/**
- * Куди переходить користувач, коли вхід у систему завершено: після входу (ГО
- * вже є), після створення ГО й після успішного оновлення сесії. Щоб змінити
- * цю адресу — міняти лише тут.
- */
-const REDIRECT_URL = '/planner';
 
 /**
  * Що показує сторінка: перевірку підключення (або запит статусу системи),
@@ -25,6 +20,9 @@ const REDIRECT_URL = '/planner';
  * форму налаштування адміністратора, помилку налаштування або форму входу.
  */
 type LoginView = 'loading' | 'step1' | 'ngo' | 'admin' | 'setup-error' | 'login';
+
+/** Зображення форми входу за замовчуванням: його лишаємо, коли в системі нема власних. */
+const DEFAULT_LOGIN_IMAGE = 'assets/login_image.jpg';
 
 /** Помилка поля назви або логотипа у формі організації. */
 type NgoNameError = 'required' | 'too-long';
@@ -34,10 +32,6 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const UNIIA_UKRAINIAN_LANGUAGES: readonly AppLanguage[] = ['uk', 'crh', 'be'];
 
-const NGO_NAME_MAX_LENGTH = 200;
-/** Логотип: лише растрові/SVG-зображення до 2 МБ. */
-const NGO_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
-const NGO_LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
 /** Помилка над формою кроку 1. */
 type LoginError = 'invalid' | 'unreachable' | 'unhealthy' | 'no-connection';
@@ -56,6 +50,7 @@ export class LoginPage implements OnDestroy {
   private readonly accounts = inject(AccountsService);
   private readonly restoreService = inject(AccountRestoreService);
   private readonly languageService = inject(LanguageService);
+  private readonly loginPageImages = inject(LoginPageImagesService);
 
   /** Вордмарк «Явір» вгорі форми входу (як мобільне лого меню; `.svg` / `_dark.svg`). */
   protected readonly logoBase = computed(() => mobileLogoBase(this.languageService.language()));
@@ -102,6 +97,15 @@ export class LoginPage implements OnDestroy {
    * «Перевіряємо підключення…».
    */
   private readonly restoreDone = signal(false);
+
+  /**
+   * Зображення збоку форми входу: випадкове з тих, що завантажені в системі
+   * (`GET /api/v1/loginpageimages/random`); поки запит іде, а також коли зображень
+   * нема чи отримати його не вдалося — зображення за замовчуванням.
+   */
+  protected readonly loginImage = signal(DEFAULT_LOGIN_IMAGE);
+  /** Сервер, для якого вже запитували випадкове зображення (на один сервер — один запит). */
+  private loginImageRequestedFor: string | null = null;
 
   protected readonly view = computed<LoginView>(() => {
     if (!this.restoreDone()) {
@@ -311,6 +315,18 @@ export class LoginPage implements OnDestroy {
       });
     });
 
+    // Показано форму входу — підтягуємо її зображення з сервера (раз на сервер).
+    effect(() => {
+      const showingForm = this.view() === 'login';
+      const server = this.connection.serverUrl();
+      untracked(() => {
+        if (showingForm && this.loginImageRequestedFor !== server) {
+          this.loginImageRequestedFor = server;
+          void this.loadLoginImage();
+        }
+      });
+    });
+
     // Налаштування завершене, а акаунт активний (щойно ввійшли або
     // зареєстрували адміна) — одразу на `REDIRECT_URL`.
     effect(() => {
@@ -319,6 +335,19 @@ export class LoginPage implements OnDestroy {
         untracked(() => void this.router.navigateByUrl(REDIRECT_URL));
       }
     });
+  }
+
+  private async loadLoginImage(): Promise<void> {
+    const image = await this.loginPageImages.random();
+    // Для іншого сервера зображення вже не те (змінили адресу, поки йшов запит).
+    this.loginImage.set(image?.url ?? DEFAULT_LOGIN_IMAGE);
+  }
+
+  /** Зображення форми не завантажилося (битий файл, посилання) — повертаємо стандартне. */
+  protected onLoginImageError(): void {
+    if (this.loginImage() !== DEFAULT_LOGIN_IMAGE) {
+      this.loginImage.set(DEFAULT_LOGIN_IMAGE);
+    }
   }
 
   /**

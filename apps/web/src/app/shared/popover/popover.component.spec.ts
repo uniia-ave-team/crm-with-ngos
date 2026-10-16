@@ -105,6 +105,11 @@ describe('PopoverComponent', () => {
     await Promise.resolve();
     expect(done).toBe(false);
 
+    // Елемент зʼявляється асинхронно; під навантаженням (весь набір тестів) це не завжди одразу.
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(ion()).not.toBeNull();
+    });
     (ion() as unknown as HTMLElement).dispatchEvent(new CustomEvent('didDismiss'));
     await closing;
     expect(done).toBe(true);
