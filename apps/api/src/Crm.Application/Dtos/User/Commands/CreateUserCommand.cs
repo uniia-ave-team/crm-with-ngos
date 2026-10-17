@@ -9,6 +9,7 @@ namespace Crm.Application.Dtos.User.Commands;
 public record CreateUserCommand(
     string FirstName,
     string LastName,
+    string? Patronymic,
     string Email,
     string Password,
     string ConfirmPassword) : IRequest<Guid>, ITransactionalCommand;
