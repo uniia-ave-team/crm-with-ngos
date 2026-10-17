@@ -23,7 +23,6 @@ public class NgoMappingRegister : IRegister
 
         config.NewConfig<UpdateNgoCommand, Ngo>()
             .Map(dest => dest.Logo, src => src.LogoUrl)
-            .IgnoreNullValues(true)
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.Users)
             .Ignore(dest => dest.CreatedAt);
