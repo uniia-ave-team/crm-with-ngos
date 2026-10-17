@@ -2792,6 +2792,7 @@
           "token",
           "firstName",
           "lastName",
+          "patronymic",
           "password",
           "confirmPassword"
         ],
@@ -2805,6 +2806,12 @@
           },
           "lastName": {
             "type": "string"
+          },
+          "patronymic": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "password": {
             "type": "string"
@@ -2872,6 +2879,7 @@
         "required": [
           "firstName",
           "lastName",
+          "patronymic",
           "email",
           "password",
           "confirmPassword"
@@ -2883,6 +2891,12 @@
           },
           "lastName": {
             "type": "string"
+          },
+          "patronymic": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "email": {
             "type": "string"
@@ -3406,17 +3420,11 @@
         "type": "object",
         "properties": {
           "firstName": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": "string",
             "description": "The updated first name."
           },
           "lastName": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": "string",
             "description": "The updated last name."
           },
           "patronymic": {
