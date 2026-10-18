@@ -22,14 +22,19 @@ public sealed partial class TokenService : ITokenService
 {
     private static readonly JwtSecurityTokenHandler TokenHandler = new();
     private readonly JwtOptions _jwtOptions;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<TokenService> _logger;
     private readonly SymmetricSecurityKey _signingKey;
     private readonly SigningCredentials _signingCredentials;
 
-    public TokenService(IOptions<JwtOptions> jwtOptions, ILogger<TokenService> logger)
+    public TokenService(
+        IOptions<JwtOptions> jwtOptions,
+        ILogger<TokenService> logger,
+        TimeProvider timeProvider)
     {
         _jwtOptions = jwtOptions.Value;
         _logger = logger;
+        _timeProvider = timeProvider;
         _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Secret));
         _signingCredentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
     }
@@ -50,7 +55,7 @@ public sealed partial class TokenService : ITokenService
 
         claims.AddRange(roleIds.Select(roleId => new Claim(CustomClaimTypes.RoleId, roleId.ToString())));
 
-        var expiresAt = DateTime.UtcNow.AddMinutes(_jwtOptions.AccessTokenExpiryMinutes);
+        var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddMinutes(_jwtOptions.AccessTokenExpiryMinutes);
         var tokenString = GenerateTokenString(claims, expiresAt);
 
         LogAccessTokenGenerated(_logger, user.Id);
@@ -63,7 +68,7 @@ public sealed partial class TokenService : ITokenService
     {
         byte[] randomNumber = RandomNumberGenerator.GetBytes(TokenConstants.RefreshTokenBytesLength);
         string token = WebEncoders.Base64UrlEncode(randomNumber);
-        var expiresAt = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenExpiryDays);
+        var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddDays(_jwtOptions.RefreshTokenExpiryDays);
 
         LogRefreshTokenGenerated(_logger);
 
@@ -107,7 +112,7 @@ public sealed partial class TokenService : ITokenService
 
         claims.AddRange(dto.RoleIds.Select(roleId => new Claim(CustomClaimTypes.RoleId, roleId.ToString())));
 
-        var expiresAt = DateTime.UtcNow.AddHours(_jwtOptions.InvitationTokenExpiryHours);
+        var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(_jwtOptions.InvitationTokenExpiryHours);
         var tokenString = GenerateTokenString(claims, expiresAt);
 
         LogInvitationTokenGenerated(_logger, dto.Email);
@@ -131,7 +136,7 @@ public sealed partial class TokenService : ITokenService
             new Claim(CustomClaimTypes.PasswordResetToken, dto.PasswordResetToken),
         };
 
-        var expiresAt = DateTime.UtcNow.AddHours(_jwtOptions.ResetPasswordTokenExpiryHours);
+        var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(_jwtOptions.ResetPasswordTokenExpiryHours);
         var tokenString = GenerateTokenString(claims, expiresAt);
 
         LogPasswordResetTokenGenerated(_logger, dto.UserId);
@@ -152,7 +157,7 @@ public sealed partial class TokenService : ITokenService
             issuer: _jwtOptions.Issuer,
             audience: _jwtOptions.Audience,
             claims: claims,
-            notBefore: DateTime.UtcNow,
+            notBefore: _timeProvider.GetUtcNow().UtcDateTime,
             expires: expiresAt,
             signingCredentials: _signingCredentials);
 
