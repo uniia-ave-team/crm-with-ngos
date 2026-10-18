@@ -185,7 +185,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InvitationTokenResultDto"
+                  "$ref": "#/components/schemas/TokenResultDto"
                 }
               }
             }
@@ -1498,11 +1498,35 @@
         "operationId": "SystemGetSystemStatus",
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "The setup and onboarding status of the CRM.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SystemSetupStatusDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/system/identity-options": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Retrieves system identity configuration settings and password complexity requirements.\nUsed by the frontend to dynamically validate password inputs during registration and password reset.",
+        "operationId": "SystemGetIdentityOptions",
+        "responses": {
+          "200": {
+            "description": "The system identity settings and password requirements.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityOptionsDto"
                 }
               }
             }
@@ -1894,6 +1918,43 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/users/reset-password": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Resets a user's password using a valid restore token and sets a new password.",
+        "operationId": "UsersResetPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
@@ -2445,6 +2506,63 @@
         ]
       }
     },
+    "/api/v1/users/{id}/password-reset-token": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Generates a secure password reset token for a specific user.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.CanResetPassword`",
+        "operationId": "UsersGeneratePasswordResetToken",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the user.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResultDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
     "/api/v1/users/{id}/custom-fields": {
       "post": {
         "tags": [
@@ -2909,6 +3027,42 @@
           }
         }
       },
+      "IdentityOptionsDto": {
+        "required": [
+          "requiredLength",
+          "requireDigit",
+          "requireNonAlphanumeric",
+          "requireUppercase",
+          "requireLowercase",
+          "requireUniqueEmail"
+        ],
+        "type": "object",
+        "properties": {
+          "requiredLength": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "requireDigit": {
+            "type": "boolean"
+          },
+          "requireNonAlphanumeric": {
+            "type": "boolean"
+          },
+          "requireUppercase": {
+            "type": "boolean"
+          },
+          "requireLowercase": {
+            "type": "boolean"
+          },
+          "requireUniqueEmail": {
+            "type": "boolean"
+          }
+        }
+      },
       "IFormFile": {
         "type": "string",
         "format": "binary"
@@ -2931,22 +3085,6 @@
           "roleId": {
             "type": "string",
             "format": "uuid"
-          }
-        }
-      },
-      "InvitationTokenResultDto": {
-        "required": [
-          "token",
-          "expiresAt"
-        ],
-        "type": "object",
-        "properties": {
-          "token": {
-            "type": "string"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
           }
         }
       },
@@ -3247,6 +3385,21 @@
           }
         }
       },
+      "ResetPasswordCommand": {
+        "required": [
+          "token",
+          "newPassword"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string"
+          }
+        }
+      },
       "RoleDetailsDto": {
         "required": [
           "id",
@@ -3346,6 +3499,22 @@
           },
           "isSetupComplete": {
             "type": "boolean"
+          }
+        }
+      },
+      "TokenResultDto": {
+        "required": [
+          "token",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

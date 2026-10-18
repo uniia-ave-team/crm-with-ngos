@@ -1,22 +1,23 @@
-using Crm.Application.Common.Options;
 using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Interfaces;
 using Crm.Domain.Consts.Entities;
 using FluentValidation;
-using Microsoft.Extensions.Options;
 
 namespace Crm.Application.Features.Users.Validators;
 
 /// <summary>
 /// Provides validation rules for the <see cref="CreateUserCommand"/>.
+/// Validates user personal details, email format, and enforces configured password complexity policies.
 /// </summary>
 public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="CreateUserCommandValidator"/> class.
     /// </summary>
-    public CreateUserCommandValidator(IOptions<CustomIdentityOptions> identityOptions)
+    /// <param name="optionService">The service used to retrieve application configuration options and password requirements.</param>
+    public CreateUserCommandValidator(IOptionService optionService)
     {
-        var options = identityOptions.Value;
+        var options = optionService.GetIdentityOptions();
 
         RuleFor(x => x.FirstName)
             .NotEmpty().WithMessage("First name is required.")
@@ -25,6 +26,10 @@ public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
         RuleFor(x => x.LastName)
             .NotEmpty().WithMessage("Last name is required.")
             .MaximumLength(UserValidationConstants.MaxLastNameLength);
+
+        RuleFor(x => x.Patronymic)
+            .MaximumLength(UserValidationConstants.MaxPatronymicLength)
+            .When(x => !string.IsNullOrEmpty(x.Patronymic));
 
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email address is required.")

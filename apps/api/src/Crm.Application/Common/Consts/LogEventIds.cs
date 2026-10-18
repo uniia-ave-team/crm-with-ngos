@@ -108,6 +108,13 @@ public static class LogEventIds
     public const int UserAvatarUploadedSuccessfully = 2081;
     public const int FetchingUserAvatar = 2082;
     public const int UserAvatarFetched = 2083;
+    public const int GeneratingPasswordResetToken = 2084;
+    public const int PasswordResetTokenGeneratedSuccessfully = 2085;
+    public const int ResettingPassword = 2086;
+    public const int InvalidPasswordResetTokenAttempt = 2087;
+    public const int PasswordResetSuccessfully = 2088;
+    public const int RetrievingIdentityOptions = 2089;
+    public const int IdentityOptionsRetrieved = 2090;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;
@@ -137,11 +144,11 @@ public static class LogEventIds
     public const int AccessDenied = 5002;
     public const int AccessTokenGenerated = 5003;
     public const int InvitationTokenGenerated = 5004;
-    public const int InvalidInvitationToken = 5005;
-    public const int TokenValidationFailed = 5006;
-    public const int RefreshTokenGenerated = 5007;
-    public const int InvalidExpiredToken = 5008;
-    public const int ExpiredTokenValidationFailed = 5009;
+    public const int TokenValidationFailed = 5005;
+    public const int RefreshTokenGenerated = 5006;
+    public const int InvalidExpiredToken = 5007;
+    public const int ExpiredTokenValidationFailed = 5008;
+    public const int PasswordResetTokenGenerated = 5009;
 
     // 6000s: Global Errors and Middlewares
     public const int ClientError = 6001;
