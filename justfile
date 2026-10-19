@@ -7,6 +7,7 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 solution := "apps/api/Crm.slnx"
 api_project := "apps/api/src/Crm.Api"
 infrastructure_project := "apps/api/src/Crm.Infrastructure"
+cli_project := "apps/api/src/Crm.Cli"
 web_dir := "apps/web"
 docs_dir := "docs"
 test_results := "apps/api/TestResults"
@@ -103,6 +104,16 @@ api:
 # Run the web client on http://localhost:4200; /api is proxied to the API.
 web:
     npm --prefix {{web_dir}} start
+
+# The launch profile only supplies DOTNET_ENVIRONMENT=Development, so user-secrets are read; the arguments replace its own.
+
+# Run the admin CLI against the local database, e.g. `just cli reset-password -e admin@example.org`.
+cli *args:
+    dotnet run --project {{cli_project}} --launch-profile "CLI: Help" -- {{args}}
+
+# Run the admin CLI inside the Docker API container, e.g. `just cli-docker reset-password -e admin@example.org`.
+cli-docker *args:
+    {{compose}} exec api crm {{args}}
 
 # Run the documentation site on http://localhost:4321/crm-with-ngos/.
 docs:

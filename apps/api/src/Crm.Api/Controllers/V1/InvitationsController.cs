@@ -30,7 +30,7 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<ActionResult<InvitationTokenResultDto>> InviteUser(
+    public async Task<ActionResult<TokenResultDto>> InviteUser(
         [FromBody] InviteUserCommand command,
         CancellationToken cancellationToken)
     {

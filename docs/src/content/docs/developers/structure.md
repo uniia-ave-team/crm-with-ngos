@@ -10,7 +10,8 @@ sidebar:
 ```
 apps/
   api/                  ASP.NET Core API, рішення Crm.slnx
-    Dockerfile          образ API
+    src/Crm.Cli/        адмін-утиліта (скидання пароля)
+    Dockerfile          образ API разом з адмін-утилітою
   web/                  Ionic Angular клієнт
     Dockerfile          образ вебклієнта (nginx)
     nginx.conf          роздача статики й кешування
@@ -44,6 +45,8 @@ dotnet-tools.json       локальні інструменти .NET
 | `just reset`               | Зупинити контейнери й видалити всі локальні дані           |
 | `just logs`                | Логи API й вебклієнта в Docker                             |
 | `just psql`                | Консоль `psql` до бази розробки                            |
+| `just cli <аргументи>`     | Адмін-утиліта `Crm.Cli` з локальною базою                  |
+| `just cli-docker <аргументи>` | Адмін-утиліта в контейнері API                          |
 | `just api` / `just web`    | Запустити API / вебклієнт                                  |
 | `just docs`                | Запустити цей сайт локально                                |
 | `just migration-add Name`  | Створити міграцію EF Core                                  |

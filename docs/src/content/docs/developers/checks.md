@@ -24,7 +24,7 @@ sidebar:
 | `api`   | змінено `apps/api`, контракт або інструменти | Форматування, збірка Release, тести; відповідність `openapi.json` коду; звіт про ламкі зміни API | `just api-ci`, `just contract-check` |
 | `web`   | змінено `apps/web`, контракт або інструменти | `npm ci`, генерація клієнта, lint, тести, production-збірка        | `just web-ci`         |
 | `docs`  | змінено `docs`, контракт або інструменти     | Збірка цього сайту                                                  | `just docs-build`     |
-| `docker` | змінено `apps/api`, `apps/web`, контракт, `compose.yaml`, `.dockerignore` або інструменти | Збірка обох образів, запуск стеку, перевірка `/health`, вебклієнта й CORS | `just up` |
+| `docker` | змінено `apps/api`, `apps/web`, контракт, `compose.yaml`, `.dockerignore` або інструменти | Збірка обох образів, запуск стеку, перевірка `/health`, вебклієнта й CORS; скидання пароля через `crm reset-password` і вхід з новим паролем | `just up` |
 | `trivy` | завжди                                       | Вразливі залежності та помилки конфігурації, зокрема Dockerfile    | —                     |
 
 Зміна `justfile` або `ci.yml` запускає всі джоби.
@@ -38,6 +38,11 @@ sidebar:
   на останньому кроці джоби; локально — `just logs`. Типова причина —
   нова обов'язкова опція API без значення в `appsettings.json` або в
   `compose.yaml`.
+- **Впав smoke test CLI.** Крок реєструє користувача, скидає йому пароль
+  через `docker compose exec -T api crm reset-password` і входить з новим
+  паролем. Локально: `just up`, потім ті самі команди з кроку
+  `Smoke test the admin CLI` у `ci.yml`. Типові причини — CLI не
+  потрапив в образ або не читає пароль зі stdin.
 
 ### Якщо впала джоба `api`
 

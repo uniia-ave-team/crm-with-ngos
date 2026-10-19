@@ -18,9 +18,11 @@ public class UpdateUserProfileCommandValidator : AbstractValidator<UpdateUserPro
             .NotEmpty().WithMessage("User ID is required.");
 
         RuleFor(x => x.FirstName)
+            .NotEmpty()
             .MaximumLength(UserValidationConstants.MaxFirstNameLength);
 
         RuleFor(x => x.LastName)
+            .NotEmpty()
             .MaximumLength(UserValidationConstants.MaxLastNameLength);
 
         RuleFor(x => x.Patronymic)

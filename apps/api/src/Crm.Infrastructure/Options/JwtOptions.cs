@@ -36,4 +36,10 @@ public class JwtOptions
     /// </summary>
     [Range(1, 8760, ErrorMessage = "InvitationTokenExpiryHours must be between 1 and 8760.")]
     public int InvitationTokenExpiryHours { get; set; } = 48;
+
+    /// <summary>
+    /// Gets or sets expiry time for Reset Password Token in hours (e.g., 72 hours).
+    /// </summary>
+    [Range(1, 8760, ErrorMessage = "ResetPasswordTokenExpiryHours must be between 1 and 8760.")]
+    public int ResetPasswordTokenExpiryHours { get; set; } = 72;
 }

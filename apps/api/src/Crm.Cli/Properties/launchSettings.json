@@ -1,0 +1,32 @@
+{
+  "profiles": {
+    "CLI: Reset Password": {
+      "commandName": "Project",
+      "commandLineArgs": "reset-password -e user@example.com",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      },
+      "distributionName": ""
+    },
+    "CLI: Help": {
+      "commandName": "Project",
+      "commandLineArgs": "--help",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    },
+    "CLI: Invalid Command": {
+      "commandName": "Project",
+      "commandLineArgs": "unknown-cmd",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

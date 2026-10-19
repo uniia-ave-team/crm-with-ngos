@@ -15,17 +15,18 @@ public enum AccessRight
     AssignRoleToUser = 5,
     ViewEmergencyContact = 6,
     ViewCustomFields = 7,
+    CanResetPassword = 8,
 
     // --- Role ---
-    ManageRole = 8,
+    ManageRole = 9,
 
     // --- Ngo ---
-    ViewNgo = 9,
-    CreateNgo = 10,
-    UpdateNgo = 11,
+    ViewNgo = 10,
+    CreateNgo = 11,
+    UpdateNgo = 12,
 
     // --- Login Page Images ---
-    ViewLoginPageImages = 12,
-    CreateLoginPageImages = 13,
-    DeleteLoginPageImages = 14,
+    ViewLoginPageImages = 13,
+    CreateLoginPageImages = 14,
+    DeleteLoginPageImages = 15,
 }
