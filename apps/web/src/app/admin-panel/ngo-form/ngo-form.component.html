@@ -1,0 +1,85 @@
+<h2 class="settings-section__title">{{ 'admin.title' | translate }}</h2>
+
+<!-- Результат останнього збереження: рядок на кожну частину, що змінилась або не
+     вдалася; зелений блок, якщо все вдалося, червоний — якщо є невдача. -->
+@if (resultLines().length > 0) {
+  <div
+    class="settings-result"
+    [class.settings-result--success]="resultOk()"
+    [attr.role]="resultOk() ? 'status' : 'alert'"
+  >
+    @for (line of resultLines(); track line.key) {
+      <p class="settings-result__line" [class.settings-result__line--failed]="!line.ok">{{ line.key | translate }}</p>
+    }
+  </div>
+}
+
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <!-- Посилання на логотип, що вже є в системі (з GET /api/v1/ngo): його бере збереження,
+       коли новий логотип не обирали. -->
+  <input type="hidden" name="logoUrl" id="admin-ngo-logo-url" [value]="existingLogoUrl()" />
+
+  @if (canEditNgo()) {
+    <div class="settings-field">
+      <label class="settings-field__label" for="admin-ngo-name">{{ 'admin.name' | translate }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span></label>
+      <input
+        id="admin-ngo-name"
+        class="settings-input"
+        type="text"
+        tabindex="0"
+        required
+        autocomplete="organization"
+        [attr.maxlength]="nameMaxLength"
+        [value]="name()"
+        (input)="onNameChange($event)"
+      />
+      @if (nameError(); as errorKey) {
+        <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+      }
+    </div>
+
+    <div class="settings-avatar">
+      <!-- Мініатюра логотипа показується, лише коли логотип є й завантажується;
+           без нього — порожній блок із пунктирною рамкою (як плитка додавання в
+           галереї). Літер замість логотипа не буває. -->
+      @if (logoSrc(); as src) {
+        <img class="settings-avatar__image logo-image" [src]="src" alt="" (error)="onLogoError()" />
+      } @else {
+        <div class="settings-avatar__image logo-empty" aria-hidden="true"></div>
+      }
+      <div class="settings-avatar__upload">
+        <span class="settings-field__label" id="admin-logo-label">{{ 'admin.logo' | translate }}</span>
+        <div class="settings-avatar__file">
+          <button
+            type="button"
+            class="settings-avatar__choose"
+            tabindex="0"
+            aria-describedby="admin-logo-label"
+            (click)="logoFile.click()"
+          >
+            {{ 'admin.chooseFile' | translate }}
+          </button>
+          <span class="settings-avatar__name">{{ fileName() ?? ('admin.noFile' | translate) }}</span>
+          <input #logoFile class="settings-avatar__input" type="file" [accept]="logoTypes" tabindex="-1" aria-hidden="true" (change)="onFileChosen($event)" />
+        </div>
+        <p class="settings-avatar__hint">{{ 'admin.logoHint' | translate }}</p>
+        @if (logoError(); as error) {
+          <p class="settings-field__error" role="alert">{{ 'admin.error.' + error | translate }}</p>
+        }
+        <!-- Рядок є завжди (лише прихований до вибору), щоб блок не міняв висоту. -->
+        <p class="settings-avatar__hint" [class.settings-avatar__hint--hidden]="!previewUrl()">
+          {{ 'admin.logoSaveHint' | translate }}
+        </p>
+      </div>
+    </div>
+  }
+
+  <!-- Галерея зображень сторінки входу — частина цієї форми, «Зберегти» одна на все. -->
+  @if (canSeeGallery()) {
+    <app-admin-images-gallery></app-admin-images-gallery>
+  }
+
+  <button type="submit" class="settings-submit" tabindex="0" [disabled]="saving()">
+    {{ (saving() ? 'admin.saving' : 'admin.save') | translate }}
+  </button>
+</form>

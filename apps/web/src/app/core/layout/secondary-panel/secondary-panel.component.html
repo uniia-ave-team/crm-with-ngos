@@ -57,4 +57,17 @@
     </ul>
     <p class="hint">Структуру розділу ще не визначено.</p>
   }
+
+  @case ('settings') {
+    <ul class="tree">
+      @for (item of settingsItems; track item.labelKey) {
+        <li [class.planned]="item.planned">
+          <a class="tree__link" [routerLink]="item.url" routerLinkActive="tree__link--active">
+            <ion-icon [name]="item.icon" aria-hidden="true"></ion-icon>
+            <span>{{ item.labelKey | translate }}</span>
+          </a>
+        </li>
+      }
+    </ul>
+  }
 }

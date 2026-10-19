@@ -6,6 +6,16 @@ interface TreeLink {
   readonly icon: string;
 }
 
+interface MenuItem {
+  /** Ключ перекладу напису. */
+  readonly labelKey: string;
+  readonly icon: string;
+  /** Адреса, на яку веде пункт. */
+  readonly url: string;
+  /** Функція запланована, але ще не готова: пункт у розмітці, проте прихований класом `planned`. */
+  readonly planned?: boolean;
+}
+
 interface TreeGroup {
   readonly label: string;
   readonly icon: string;
@@ -20,6 +30,9 @@ interface TreeGroup {
  * Дерево «Бази знань» — статичний макет для дизайну; бекенду документів ще
  * немає (див. apps/web/README.md, розділ «Ще не зроблено»), тому пункти,
  * крім «Головна», поки не є посиланнями.
+ *
+ * Меню «Мої налаштування» — пункти з мовних файлів, кожен веде на власну
+ * адресу всередині сторінки налаштувань (`/settings/<вкладка>`).
  */
 @Component({
   selector: 'app-secondary-panel',
@@ -29,6 +42,12 @@ interface TreeGroup {
 })
 export class SecondaryPanelComponent {
   @Input({ required: true }) section!: LayoutSection;
+
+  protected readonly settingsItems: readonly MenuItem[] = [
+    { labelKey: 'settings.menu.personal', icon: 'person-outline', url: '/settings/personal-data' },
+    { labelKey: 'settings.menu.password', icon: 'key-outline', url: '/settings/password' },
+    { labelKey: 'settings.menu.notifications', icon: 'notifications-outline', url: '/settings/notifications', planned: true },
+  ];
 
   protected readonly knowledgeBaseGroups: readonly TreeGroup[] = [
     {

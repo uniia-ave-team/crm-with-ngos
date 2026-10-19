@@ -1,5 +1,10 @@
+<!-- Шапка лише на телефоні: там у ній кнопка відкриття бічного меню (на десктопі
+     меню завжди видно, тож шапка прихована — див. settings.page.scss). -->
 <ion-header [translucent]="true">
   <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button menu="secondary"></ion-menu-button>
+    </ion-buttons>
     <ion-title>{{ 'page.settings' | translate }}</ion-title>
   </ion-toolbar>
 </ion-header>
@@ -10,4 +15,7 @@
       <ion-title size="large">{{ 'page.settings' | translate }}</ion-title>
     </ion-toolbar>
   </ion-header>
+
+  <!-- Вкладка за адресою /settings/<вкладка>; пункти бокового меню ведуть сюди. -->
+  <router-outlet></router-outlet>
 </ion-content>

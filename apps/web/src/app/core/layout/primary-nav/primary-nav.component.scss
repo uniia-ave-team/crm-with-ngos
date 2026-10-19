@@ -260,6 +260,16 @@ $desktop: 992px;
   }
 }
 
+// П'ять пунктів ділять ширину екрана, і на вузьких телефонах (320–400px) підпис
+// у 11px («База знань») вже не вміщається й переноситься на другий рядок,
+// збиваючи вирівнювання: тут підпис менший і ніколи не переноситься.
+@media (max-width: 400px) {
+  .bottom-tabs__item {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+}
+
 .bottom-tabs__item-icon {
   display: flex;
   align-items: center;

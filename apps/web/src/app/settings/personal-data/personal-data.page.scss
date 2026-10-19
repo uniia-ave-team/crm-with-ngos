@@ -1,0 +1,34 @@
+// «Інше» з полем власних займенників: поле стоїть поруч із чекбоксом.
+.settings-check-other {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+// Невелике поле: вміщує кілька слів, не розтягується на всю ширину.
+.settings-input--small {
+  width: 180px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+// Поки «Інше» не вибрано, поле приховане, але місце під нього лишається
+// (visibility не прибирає елемент з потоку, а ще й виводить його з табуляції та
+// з дерева доступності).
+.settings-input--hidden {
+  visibility: hidden;
+}
+
+// fieldset без рамки й відступів: лише семантика групи для допоміжних технологій.
+.settings-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  legend {
+    padding: 0;
+    margin-bottom: 14px;
+  }
+}

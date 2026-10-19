@@ -182,3 +182,88 @@ describe('PrimaryNavComponent avatar initials', () => {
     expect(logout).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('PrimaryNavComponent admin item', () => {
+  let http: HttpTestingController;
+  let server: string;
+  const ALL = ['Permissions.UpdateNgo', 'Permissions.CreateLoginPageImages', 'Permissions.DeleteLoginPageImages'];
+
+  beforeEach(async () => {
+    localStorage.clear();
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await TestBed.configureTestingModule({
+      schemas: [CUSTOM_ELEMENTS_SCHEMA],
+      imports: [IonicModule.forRoot(), LayoutModule],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
+      ],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+    const connection = TestBed.inject(ConnectionService);
+    http.expectOne(connection.apiHealthUrl());
+    server = connection.serverUrl();
+    TestBed.inject(AccountsService).add({ server, accessToken: 'a', refreshToken: 'r', identity: 'u1' });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  const urls = (element: HTMLElement, selector: string) =>
+    Array.from(element.querySelectorAll(selector)).map((a) => a.getAttribute('href'));
+
+  function render(permissions: string[]) {
+    TestBed.inject(AccountsService).update(TestBed.inject(AccountsService).activeId()!, { permissions });
+    const fixture = TestBed.createComponent(PrimaryNavComponent);
+    fixture.detectChanges();
+    return { fixture, element: fixture.nativeElement as HTMLElement };
+  }
+
+  it('shows the item in the rail and in the bottom tabs when the user has all three rights', () => {
+    const { element } = render(ALL);
+    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues', '/admin-panel']);
+    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues', '/admin-panel']);
+  });
+
+  it('hides the item when there are no rights at all (also until they are received)', () => {
+    const { element } = render([]);
+    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues']);
+    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues']);
+  });
+
+  it.each(ALL)('shows the item when the user has only the right %s', (right) => {
+    const { element } = render([right]);
+    expect(urls(element, '.rail__item')).toContain('/admin-panel');
+    expect(urls(element, '.bottom-tabs__item')).toContain('/admin-panel');
+  });
+
+  it('hides the item when the user has only other rights', () => {
+    const { element } = render(['Permissions.ViewUser', 'Permissions.UpdateUser', 'Permissions.ViewNgo']);
+    expect(urls(element, '.rail__item')).not.toContain('/admin-panel');
+    expect(urls(element, '.bottom-tabs__item')).not.toContain('/admin-panel');
+  });
+
+  it('shows the item when the rights arrive later, and hides it again when they are taken away', () => {
+    const accounts = TestBed.inject(AccountsService);
+    const { fixture, element } = render([]);
+    expect(urls(element, '.rail__item')).not.toContain('/admin-panel');
+
+    accounts.update(accounts.activeId()!, { permissions: ALL });
+    fixture.detectChanges();
+    expect(urls(element, '.rail__item')).toContain('/admin-panel');
+
+    // Лишилось одне з прав — пункт ще є.
+    accounts.update(accounts.activeId()!, { permissions: ['Permissions.UpdateNgo'] });
+    fixture.detectChanges();
+    expect(urls(element, '.rail__item')).toContain('/admin-panel');
+
+    accounts.update(accounts.activeId()!, { permissions: ['Permissions.ViewUser'] });
+    fixture.detectChanges();
+    expect(urls(element, '.rail__item')).not.toContain('/admin-panel');
+  });
+});

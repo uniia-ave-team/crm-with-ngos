@@ -122,6 +122,19 @@ describe('AccountsService', () => {
       expect(record(first.id).ngoLogoUrl).toBeNull();
     });
 
+    it('stores the permissions in the record, keeps them when the account is added again and starts with none', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      expect(first.permissions).toEqual([]);
+
+      service.update(first.id, { permissions: ['ViewUser', 'UpdateUser'] });
+      expect(service.active()?.permissions).toEqual(['ViewUser', 'UpdateUser']);
+      expect(record(first.id).permissions).toEqual(['ViewUser', 'UpdateUser']);
+
+      service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'a' });
+      expect(service.active()?.permissions).toEqual(['ViewUser', 'UpdateUser']);
+      expect(reopen().active()?.permissions).toEqual(['ViewUser', 'UpdateUser']);
+    });
+
     it('ignores an update of an unknown account', () => {
       service.update('nope', { firstName: 'X' });
       expect(service.accounts()).toHaveLength(0);
@@ -346,8 +359,22 @@ describe('AccountsService', () => {
         avatarUrl: null,
         ngoName: null,
         ngoLogoUrl: null,
+        permissions: [],
         userId: '',
       });
+    });
+
+    it('ignores a damaged list of permissions in a record', () => {
+      localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
+      localStorage.setItem(
+        'yavir.account.x',
+        JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r', permissions: ['ViewUser', 7, null] }),
+      );
+      localStorage.setItem('yavir.activeAccount', 'x');
+      expect(reopen().active()?.permissions).toEqual(['ViewUser']);
+
+      localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r', permissions: 'ViewUser' }));
+      expect(reopen().active()?.permissions).toEqual([]);
     });
 
     it('copes with a broken index', () => {

@@ -17,3 +17,6 @@ npm-debug.log*
 
 # Згенерований клієнт API: відтворюється з packages/api-contract/openapi.json.
 src/app/api/generated/
+
+# Список мов застосунку: складається з src/assets/i18n/*.json (scripts/generate-languages.mjs).
+src/app/core/i18n/languages.generated.ts

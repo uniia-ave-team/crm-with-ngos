@@ -1,0 +1,194 @@
+// Спільний вигляд вкладок сторінки налаштувань: заголовок, поля й кнопка.
+// Кольори — токени меню (світла/темна тема), акцент — зелений із форми входу.
+:host {
+  --settings-accent: #32670b;
+  display: block;
+  padding: 32px 28px 40px;
+  font-family: var(--font-menu);
+  color: var(--nav-fg-active);
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --settings-accent: #478a7f;
+  }
+}
+
+.settings-section__title {
+  margin: 0 0 28px;
+  font-family: var(--font-login-title);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 30px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.settings-field__label {
+  font-family: var(--font-login-title);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+// Зірочка біля обовʼязкового поля.
+.settings-field__required {
+  margin-left: 4px;
+  color: #a1281f;
+}
+
+@media (prefers-color-scheme: dark) {
+  .settings-field__required {
+    color: #ff9b92;
+  }
+}
+
+.settings-input,
+.settings-select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 280px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--nav-bg);
+  color: var(--nav-fg-active);
+  font-family: inherit;
+  font-size: 15px;
+  outline: none;
+
+  &:focus-visible {
+    border-color: var(--settings-accent);
+  }
+}
+
+// Список з власною стрілкою: рідна прибрана, щоб вигляд не залежав від браузера.
+.settings-select-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 280px;
+
+  .settings-select {
+    max-width: none;
+  }
+
+  ion-icon {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    font-size: 16px;
+    pointer-events: none;
+  }
+}
+
+.settings-select {
+  appearance: none;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+.settings-checks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  // Висота рядка з запасом під невелике поле (30px): коли воно з'являється,
+  // рядок і все, що нижче, не зсуваються.
+  min-height: 30px;
+}
+
+.settings-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  cursor: pointer;
+
+  input {
+    margin: 0;
+    accent-color: var(--settings-accent);
+  }
+}
+
+.settings-submit {
+  min-height: 46px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--settings-accent);
+  color: #fff;
+  font-family: var(--font-login-title);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+// Помилка під полем: менший шрифт, колір помилок застосунку.
+.settings-field__error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #a1281f;
+}
+
+@media (prefers-color-scheme: dark) {
+  .settings-field__error {
+    color: #ff9b92;
+  }
+}
+
+// Результат збереження над формою (зміна пароля, дані профілю): червоний за
+// замовчуванням, зелений — успіх (кольори Явору за темою). Той самий вигляд, що
+// в блока помилок на сторінці входу.
+.settings-result {
+  box-sizing: border-box;
+  max-width: 560px;
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  border: 1px solid #f1c0bb;
+  border-radius: 10px;
+  background: #fdeceb;
+  color: #a1281f;
+  font-family: var(--font-menu);
+  font-size: 14px;
+  line-height: 1.4;
+
+  &--success {
+    border-color: #c5dcb3;
+    background: #eef6e8;
+    color: #32670b;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .settings-result {
+    border-color: #5a2b27;
+    background: #2a1413;
+    color: #ff9b92;
+
+    &--success {
+      border-color: #2c4a44;
+      background: #0f1f1c;
+      color: #6fb3a5;
+    }
+  }
+}

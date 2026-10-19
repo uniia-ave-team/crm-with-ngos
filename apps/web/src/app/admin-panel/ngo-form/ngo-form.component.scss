@@ -1,0 +1,27 @@
+// Порожній логотип: просто блок із пунктирною рамкою (штрих і колір — як у плитки
+// додавання в галереї), розміром із мініатюру логотипа, без заокруглення кутів.
+.logo-empty {
+  width: 120px;
+  height: 120px;
+  box-sizing: border-box;
+  border: 2px dashed var(--nav-fg-inactive);
+  border-radius: 0;
+}
+
+// Логотип у мініатюрі: тієї ж форми, що й аватар людини (squircle).
+.logo-image {
+  display: block;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 35%;
+}
+
+// Рядки результату збереження: один під одним, без зайвих відступів абзаців.
+.settings-result__line {
+  margin: 0;
+
+  & + & {
+    margin-top: 4px;
+  }
+}
