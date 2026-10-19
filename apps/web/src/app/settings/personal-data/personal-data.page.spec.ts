@@ -197,7 +197,7 @@ describe('PersonalDataPage', () => {
     expect(element.querySelector('.settings-section__title')?.textContent).toContain(uk.settings.personal.title);
     // Зірочка обовʼязкового поля — не частина тексту підпису.
     const labels = Array.from(element.querySelectorAll('.settings-field__label')).map((l) =>
-      l.textContent?.replace('*', '').trim(),
+      l.textContent?.replaceAll('*', '').trim(),
     );
     expect(labels).toEqual([
       uk.settings.personal.lastName,

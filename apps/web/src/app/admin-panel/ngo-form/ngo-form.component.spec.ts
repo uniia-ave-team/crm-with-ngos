@@ -86,7 +86,7 @@ describe('AdminNgoFormComponent', () => {
   it('shows the title, the name and the logo block with texts from the language file', () => {
     const { element } = render();
     expect(element.querySelector('.settings-section__title')?.textContent).toContain(text.title);
-    expect(element.querySelector('label[for=admin-ngo-name]')?.textContent?.replace('*', '').trim()).toBe(text.name);
+    expect(element.querySelector('label[for=admin-ngo-name]')?.textContent?.replaceAll('*', '').trim()).toBe(text.name);
     expect(element.querySelector('#admin-logo-label')?.textContent?.trim()).toBe(text.logo);
     expect(element.querySelector('.settings-avatar__choose')?.textContent?.trim()).toBe(text.chooseFile);
     expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(text.noFile);

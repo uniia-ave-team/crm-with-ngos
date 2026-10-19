@@ -72,7 +72,7 @@ describe('PasswordPage', () => {
       expect(element.querySelector('.settings-section__title')?.textContent).toContain(text.title);
       expect(
         Array.from(element.querySelectorAll('.settings-field__label, .password-fields__label')).map((l) =>
-          l.textContent?.replace('*', '').trim(),
+          l.textContent?.replaceAll('*', '').trim(),
         ),
       ).toEqual([text.current, text.new, text.repeat]);
       expect((element.querySelector('#settings-current-password') as HTMLInputElement).type).toBe('password');
