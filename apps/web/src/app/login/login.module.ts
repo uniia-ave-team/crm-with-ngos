@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { IonicModule } from '@ionic/angular/lazy';
 import { TranslatePipe } from '@ngx-translate/core';
 
+import { PasswordFieldsModule } from '../shared/password-fields/password-fields.module';
 import { LoginPageRoutingModule } from './login-routing.module';
 
 import { LoginPage } from './login.page';
@@ -15,6 +16,7 @@ import { LoginPage } from './login.page';
     FormsModule,
     IonicModule,
     TranslatePipe,
+    PasswordFieldsModule,
     LoginPageRoutingModule
   ],
   declarations: [LoginPage]

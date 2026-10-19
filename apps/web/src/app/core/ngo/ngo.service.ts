@@ -10,6 +10,7 @@ const API_NGO_PATH = '/api/v1/ngo';
 const REQUEST_TIMEOUT_MS = 10000;
 
 export type CreateNgoResult = 'created' | RequestFailure;
+export type UpdateNgoResult = 'updated' | RequestFailure;
 
 /** Організація (`GET /api/v1/ngo`): лише те, що потрібно знімку акаунта. */
 export interface NgoProfile {
@@ -47,6 +48,33 @@ export class NgoService {
       const result = toRequestFailure(error);
       console.warn(`[NgoService] Не вдалося створити організацію (${result})`, error);
       return result;
+    }
+  }
+
+  /**
+   * Оновлює організацію (`PUT <сервер>/api/v1/ngo`, потрібне право
+   * `Permissions.UpdateNgo`; 204 без тіла). Обидва поля обовʼязкові в запиті:
+   * `logoUrl` — посилання на логотип або `null`. Токен додає `authInterceptor`.
+   * Успіх одразу потрапляє в знімок організації в записі акаунта (`localStorage`):
+   * в той акаунт, від імені якого йшов запит, навіть якщо за час запиту активним
+   * став інший.
+   */
+  async update(name: string, logoUrl: string | null): Promise<UpdateNgoResult> {
+    const url = `${this.connection.serverUrl()}${API_NGO_PATH}`;
+    const accountId = this.accounts.activeId();
+    console.log(`[NgoService] Оновлюю організацію: ${url}`);
+
+    try {
+      await firstValueFrom(this.http.put(url, { name, logoUrl }).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      console.log('[NgoService] Організацію оновлено');
+      if (accountId) {
+        this.accounts.update(accountId, { ngoName: name, ngoLogoUrl: logoUrl });
+      }
+      return 'updated';
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[NgoService] Не вдалося оновити організацію (${failure})`, error);
+      return failure;
     }
   }
 

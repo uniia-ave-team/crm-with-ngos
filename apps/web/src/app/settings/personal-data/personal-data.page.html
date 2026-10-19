@@ -1,0 +1,247 @@
+<h2 class="settings-section__title">{{ 'settings.personal.title' | translate }}</h2>
+
+<!-- Результат останнього збереження: червоний (невдача) або зелений (успіх) блок,
+     як на вкладці зміни пароля. -->
+@if (resultKey(); as key) {
+  <div
+    class="settings-result"
+    [class.settings-result--success]="result() === 'success'"
+    [attr.role]="result() === 'success' ? 'status' : 'alert'"
+  >
+    {{ key | translate }}
+  </div>
+}
+
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <div class="settings-field">
+    <label class="settings-field__label" for="settings-last-name">{{ 'settings.personal.lastName' | translate }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span></label>
+    <input
+      id="settings-last-name"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      required
+      autocomplete="family-name"
+      [value]="lastName()"
+      (input)="onFieldChange(lastName, $event)"
+    />
+    @if (lastNameError(); as errorKey) {
+      <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="settings-first-name">{{ 'settings.personal.firstName' | translate }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span></label>
+    <input
+      id="settings-first-name"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      required
+      autocomplete="given-name"
+      [value]="firstName()"
+      (input)="onFieldChange(firstName, $event)"
+    />
+    @if (firstNameError(); as errorKey) {
+      <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="settings-patronymic">{{ 'settings.personal.patronymic' | translate }}</label>
+    <input
+      id="settings-patronymic"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      autocomplete="additional-name"
+      [value]="patronymic()"
+      (input)="onFieldChange(patronymic, $event)"
+    />
+  </div>
+
+  <div class="settings-avatar">
+    <!-- Той самий аватар, що в бічному меню й списку акаунтів: літери й колір за
+         імʼям, прізвищем і назвою ГО, а за наявності — зображення. -->
+    <app-avatar
+      class="settings-avatar__image"
+      [firstName]="user()?.firstName"
+      [lastName]="user()?.lastName"
+      [avatarUrl]="avatarUrl()"
+      [ngoName]="ngoName()"
+    />
+    <div class="settings-avatar__upload">
+      <span class="settings-field__label" id="settings-avatar-label">{{ 'settings.personal.newAvatar' | translate }}</span>
+      <div class="settings-avatar__file">
+        <button
+          type="button"
+          class="settings-avatar__choose"
+          tabindex="0"
+          aria-describedby="settings-avatar-label"
+          (click)="avatarFile.click()"
+        >
+          {{ 'settings.personal.chooseFile' | translate }}
+        </button>
+        <span class="settings-avatar__name">{{ fileName() ?? ('settings.personal.noFile' | translate) }}</span>
+        <input #avatarFile class="settings-avatar__input" type="file" accept="image/*" tabindex="-1" aria-hidden="true" (change)="onFileChosen($event)" />
+      </div>
+      <p class="settings-avatar__hint">{{ 'settings.personal.avatarHint' | translate }}</p>
+      <!-- Після вибору фото: нагадування, що змінити його можна лише кнопкою «Зберегти».
+           Рядок є завжди (лише прихований до вибору), щоб блок не міняв висоту. -->
+      <p class="settings-avatar__hint" [class.settings-avatar__hint--hidden]="!previewUrl()">
+        {{ 'settings.personal.avatarSaveHint' | translate }}
+      </p>
+    </div>
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="settings-position">{{ 'settings.personal.position' | translate }}</label>
+    <input
+      id="settings-position"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      autocomplete="organization-title"
+      [value]="position()"
+      (input)="onFieldChange(position, $event)"
+    />
+  </div>
+
+  <fieldset class="settings-field settings-fieldset">
+    <legend class="settings-field__label">
+      {{ 'settings.personal.pronouns' | translate }}<span
+        class="settings-field__required"
+        role="img"
+        [attr.aria-label]="'common.required' | translate"
+        [attr.title]="'common.required' | translate"
+        >*</span
+      >
+    </legend>
+    <!-- Радіокнопки: можна обрати лише один варіант. -->
+    <div class="settings-checks" role="radiogroup" [attr.aria-label]="'settings.personal.pronouns' | translate">
+      <label class="settings-check">
+        <input type="radio" name="pronouns" value="she" tabindex="0" [checked]="pronounChoice() === 'she'" (change)="onPronounChange('she', $event)" />
+        <span>{{ 'settings.personal.pronounShe' | translate }}</span>
+      </label>
+      <label class="settings-check">
+        <input type="radio" name="pronouns" value="he" tabindex="0" [checked]="pronounChoice() === 'he'" (change)="onPronounChange('he', $event)" />
+        <span>{{ 'settings.personal.pronounHe' | translate }}</span>
+      </label>
+      <label class="settings-check">
+        <input type="radio" name="pronouns" value="they" tabindex="0" [checked]="pronounChoice() === 'they'" (change)="onPronounChange('they', $event)" />
+        <span>{{ 'settings.personal.pronounThey' | translate }}</span>
+      </label>
+      <!-- «Інше»: при виборі поруч зʼявляється невелике поле для власних займенників.
+           Поле є в розмітці завжди (лише приховане візуально): блок займає свою повну
+           ширину одразу, тож на вузькому екрані він із самого початку стоїть на
+           окремому рядку, а поява поля нічого не пересуває. -->
+      <span class="settings-check-other">
+        <label class="settings-check">
+          <input type="radio" name="pronouns" value="other" tabindex="0" [checked]="pronounChoice() === 'other'" (change)="onPronounChange('other', $event)" />
+          <span>{{ 'settings.personal.pronounOther' | translate }}</span>
+        </label>
+        <input
+          class="settings-input settings-input--small"
+          [class.settings-input--hidden]="!otherPronouns()"
+          type="text"
+          tabindex="0"
+          autocomplete="off"
+          [attr.aria-label]="'settings.personal.pronounOtherInput' | translate"
+          [placeholder]="'settings.personal.pronounOtherInput' | translate"
+          [value]="otherPronounsText()"
+          (input)="onFieldChange(otherPronounsText, $event)"
+        />
+      </span>
+    </div>
+    @if (pronounsError(); as errorKey) {
+      <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+    @if (otherPronounsError(); as errorKey) {
+      <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </fieldset>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="settings-email">{{ 'settings.personal.email' | translate }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span></label>
+    <input
+      id="settings-email"
+      class="settings-input"
+      type="email"
+      tabindex="0"
+      required
+      autocomplete="email"
+      [value]="email()"
+      (input)="onFieldChange(email, $event)"
+    />
+    @if (emailError(); as errorKey) {
+      <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="settings-phone">{{ 'settings.personal.phone' | translate }}</label>
+    <input
+      id="settings-phone"
+      class="settings-input"
+      type="tel"
+      tabindex="0"
+      autocomplete="tel"
+      [value]="phone()"
+      (input)="onFieldChange(phone, $event)"
+    />
+    @if (phoneError(); as errorKey) {
+      <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="settings-emergency-contact">{{ 'settings.personal.emergencyContact' | translate }}</label>
+    <input
+      id="settings-emergency-contact"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      autocomplete="off"
+      [value]="emergencyContact()"
+      (input)="onFieldChange(emergencyContact, $event)"
+    />
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="settings-country">{{ 'settings.personal.country' | translate }}</label>
+    <input
+      id="settings-country"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      autocomplete="country-name"
+      [value]="country()"
+      (input)="onFieldChange(country, $event)"
+    />
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="settings-language">{{ 'settings.personal.preferredLanguage' | translate }}</label>
+    <!-- Список мов складається зі файлів перекладів: значення — код (імʼя файлу),
+         підпис — ключ `name` у файлі (без нього — код). -->
+    <span class="settings-select-wrap">
+      <select
+        id="settings-language"
+        class="settings-select"
+        tabindex="0"
+        [value]="preferredLanguage()"
+        (change)="onFieldChange(preferredLanguage, $event)"
+      >
+        <option value="" [selected]="!preferredLanguage()">{{ 'settings.personal.languageNone' | translate }}</option>
+        @for (language of languageOptions(); track language.code) {
+          <option [value]="language.code" [selected]="language.code === preferredLanguage()">{{ language.name }}</option>
+        }
+      </select>
+      <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+    </span>
+  </div>
+
+  <button type="submit" class="settings-submit" tabindex="0" [disabled]="saving()">
+    {{ (saving() ? 'settings.personal.saving' : 'settings.personal.save') | translate }}
+  </button>
+</form>

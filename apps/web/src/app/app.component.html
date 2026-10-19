@@ -18,7 +18,9 @@
           >
             <ion-header>
               <ion-toolbar>
-                <ion-title>{{ titleKeys[section] | translate }}</ion-title>
+                <!-- span потрібен, щоб довга назва переносилась на другий рядок: ion-title сам
+                     обрізає її трикрапкою (white-space: nowrap у його shadow DOM). -->
+                <ion-title><span class="shell__menu-title">{{ titleKeys[section] | translate }}</span></ion-title>
                 <ion-buttons slot="end">
                   <ion-button
                     (click)="layout.toggleCollapsed()"

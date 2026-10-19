@@ -8,10 +8,18 @@
   list-style: none;
   margin: 0;
   padding: 0;
+  // Між пунктами будь-якого розділу 8px (спільне налаштування другої панелі).
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
+// Пункти всередині групи — з тим самим проміжком; сама група відступає від
+// сусідів проміжком батьківського списку.
 .tree__group {
-  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .tree__group-label {
@@ -32,6 +40,9 @@
   list-style: none;
   margin: 0;
   padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .tree__link {

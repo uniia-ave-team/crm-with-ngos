@@ -1,0 +1,84 @@
+<h3 class="gallery__title">{{ 'admin.images.title' | translate }}</h3>
+
+<!-- Один рядок із прокруткою по X; кожне зображення 8:10 заввишки 200px. На краях,
+     за якими ще є зображення, градієнт у колір тла приховує жорсткий зріз. -->
+<div class="gallery__scroller">
+  <div #track class="gallery__track" role="list" (scroll)="onScroll()">
+    @for (tile of tiles(); track tile.key; let index = $index) {
+      <div class="gallery__item" role="listitem">
+        <img
+          class="gallery__image"
+          [src]="tile.url"
+          [alt]="'admin.images.alt' | translate: { number: index + 1 }"
+          draggable="false"
+        />
+        <!-- Кнопка видалення зʼявляється при наведенні (і при фокусі з клавіатури). -->
+        @if (canRemove()) {
+          <button
+            type="button"
+            class="gallery__remove"
+            tabindex="0"
+            [attr.aria-label]="'admin.images.remove' | translate"
+            [title]="'admin.images.remove' | translate"
+            (click)="remove(tile)"
+          >
+            <ion-icon name="trash-outline" aria-hidden="true"></ion-icon>
+          </button>
+        }
+      </div>
+    }
+
+    <!-- Іде запит наступної сторінки: прелоадер за останнім із завантажених зображень. -->
+    @if (loading()) {
+      <div class="gallery__loading" role="status" [attr.aria-label]="'admin.images.loading' | translate">
+        <ion-spinner name="crescent" aria-hidden="true"></ion-spinner>
+      </div>
+    }
+
+    <!-- Немає зображень, а додавати не можна: замість плитки додавання — текст. -->
+    @if (showEmpty()) {
+      <div class="gallery__empty" role="status">{{ 'admin.images.empty' | translate }}</div>
+    }
+
+    <!-- Остання плитка: додавання (лише для того, хто має право додавати), як кнопка
+         додавання акаунта в меню акаунтів. -->
+    @if (canAdd()) {
+      <button
+        type="button"
+        class="gallery__add"
+        tabindex="0"
+        [attr.aria-label]="'admin.images.add' | translate"
+        [title]="'admin.images.add' | translate"
+        (click)="openFileDialog()"
+      >
+        <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+      </button>
+      <input #imageFile class="gallery__input" type="file" [accept]="accept" tabindex="-1" aria-hidden="true" (change)="onFileChosen($event)" />
+    }
+  </div>
+
+  <span class="gallery__fade gallery__fade--start" [class.gallery__fade--visible]="fadeStart()" aria-hidden="true"></span>
+  <span class="gallery__fade gallery__fade--end" [class.gallery__fade--visible]="fadeEnd()" aria-hidden="true"></span>
+
+  <!-- Плитки додавання (вона в кінці рядка) не видно: маленька кнопка «+» на правому
+       краї рядка. -->
+  @if (showQuickAdd()) {
+    <button
+      type="button"
+      class="gallery__quick-add"
+      tabindex="0"
+      [attr.aria-label]="'admin.images.add' | translate"
+      [title]="'admin.images.add' | translate"
+      (click)="openFileDialog()"
+    >
+      <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+    </button>
+  }
+</div>
+
+@if (typeError()) {
+  <p class="settings-field__error" role="alert">{{ 'admin.images.error.type' | translate }}</p>
+}
+@if (loadFailed()) {
+  <p class="settings-field__error" role="alert">{{ 'admin.images.error.load' | translate }}</p>
+}

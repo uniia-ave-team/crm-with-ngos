@@ -59,6 +59,21 @@ export class LanguageService {
     this.persistLanguage(language);
   }
 
+  /**
+   * Перемикає інтерфейс на мову, яку користувач обрав у профілі
+   * (`preferredLanguage`). Нічого не робить, якщо мови нема, вона не
+   * підтримується (немає файлу перекладів) або вже діє. Повертає, чи мову
+   * змінено.
+   */
+  applyPreferred(code: string | null | undefined): boolean {
+    const language = code?.trim();
+    if (!language || !this.isSupported(language) || language === this.languageSignal()) {
+      return false;
+    }
+    this.setLanguage(language);
+    return true;
+  }
+
   private applyLanguage(language: AppLanguage): void {
     // ngx-translate 18 повертає Observable з обох викликів і не виконує
     // запит, доки на нього не підписались.

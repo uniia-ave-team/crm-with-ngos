@@ -1,0 +1,219 @@
+// Галерея — частина форми організації: відступи дає сама форма, а на всю
+// ширину колонки вона розтягується, щоб рядок зображень прокручувався всередині,
+// а не розпирав сторінку.
+:host {
+  --gallery-height: 200px;
+  --gallery-radius: 16px;
+  // Тло сторінки, у яке згасає край рядка зображень.
+  --gallery-fade-color: var(--ion-background-color, #fff);
+  --gallery-fade-width: 56px;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+
+.gallery__scroller {
+  position: relative;
+}
+
+.gallery__title {
+  margin: 0 0 14px;
+  font-family: var(--font-login-title);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+// Один рядок; якщо зображення не вміщаються — прокрутка по X.
+.gallery__track {
+  // Позиціонована: `offsetLeft` плитки рахується від початку рядка.
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  overflow-x: auto;
+  // Місце під смугу прокрутки, щоб вона не налізала на зображення.
+  padding-bottom: 12px;
+}
+
+// Зображення й кнопка додавання однакових пропорцій 8:10.
+.gallery__item,
+.gallery__add,
+.gallery__empty,
+.gallery__loading {
+  flex: none;
+  box-sizing: border-box;
+  height: var(--gallery-height);
+  aspect-ratio: 8 / 10;
+  border-radius: var(--gallery-radius);
+}
+
+.gallery__item {
+  position: relative;
+  overflow: hidden;
+  background: var(--nav-active-bg);
+}
+
+.gallery__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+
+// Кругла кнопка видалення у правому верхньому куті; видима при наведенні.
+.gallery__remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--nav-border);
+  border-radius: 50%;
+  background: var(--nav-bg);
+  color: var(--nav-fg-active);
+  cursor: pointer;
+  outline: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+
+  ion-icon {
+    font-size: 18px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--settings-accent);
+    color: var(--settings-accent);
+  }
+}
+
+.gallery__item:hover .gallery__remove,
+.gallery__item:focus-within .gallery__remove {
+  opacity: 1;
+}
+
+// Пристрої без наведення (телефон): кнопка завжди на виду.
+@media (hover: none) {
+  .gallery__remove {
+    opacity: 1;
+  }
+}
+
+// Прелоадер в кінці рядка: плитка тих самих пропорцій зі спінером посередині.
+.gallery__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nav-fg-inactive);
+
+  ion-spinner {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+// Немає зображень і додавати не можна: блок тих самих пропорцій із текстом.
+.gallery__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border: 1px solid var(--nav-border);
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+// Кнопка додавання: штрихова рамка, як у кнопки додавання акаунта.
+.gallery__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 2px dashed var(--nav-fg-inactive);
+  background: none;
+  color: var(--nav-fg-active);
+  cursor: pointer;
+  outline: none;
+
+  ion-icon {
+    font-size: 32px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--nav-fg-active);
+  }
+}
+
+.gallery__input {
+  display: none;
+}
+
+// Маленька кнопка «+» на правому краї рядка, коли плитки додавання не видно: така
+// сама, як кнопка «Розгорнути» бічного меню (виступ з краю з заокругленням у
+// бік вмісту), але віддзеркалена до правого краю; по вертикалі — посередині
+// рядка зображень.
+.gallery__quick-add {
+  position: absolute;
+  top: calc(var(--gallery-height) / 2);
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--nav-border);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  background: var(--nav-bg);
+  color: var(--nav-fg-inactive);
+  cursor: pointer;
+  outline: none;
+
+  ion-icon {
+    font-size: 16px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: var(--nav-fg-active);
+  }
+}
+
+// Градієнт у колір тла на краю рядка (лише над зображеннями, смугу прокрутки не
+// закриває): зʼявляється, коли за цим краєм ще є зображення.
+.gallery__fade {
+  position: absolute;
+  top: 0;
+  width: var(--gallery-fade-width);
+  height: var(--gallery-height);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+
+  &--start {
+    left: 0;
+    background: linear-gradient(to right, var(--gallery-fade-color), transparent);
+  }
+
+  &--end {
+    right: 0;
+    background: linear-gradient(to left, var(--gallery-fade-color), transparent);
+  }
+
+  &--visible {
+    opacity: 1;
+  }
+}
+

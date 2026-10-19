@@ -17,6 +17,8 @@ const ANONYMOUS_REQUESTS: ReadonlyArray<{ method?: string; path: string }> = [
   { path: '/api/v1/auth/login' },
   { path: '/api/v1/auth/refresh-token' },
   { path: '/api/v1/system/status' },
+  // Випадкове зображення форми входу: публічне, на сторінці входу токена може й не бути.
+  { method: 'GET', path: '/api/v1/loginpageimages/random' },
   { method: 'POST', path: '/api/v1/users' },
 ];
 
