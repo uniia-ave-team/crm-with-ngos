@@ -17,8 +17,8 @@ namespace Crm.Api.Dtos;
 /// <param name="PronounCategory">The updated grammatical category of pronouns.</param>
 /// <param name="AvatarUrl">The updated avatar URL or file path.</param>
 public record UpdateProfileRequest(
-    string? FirstName,
-    string? LastName,
+    string FirstName,
+    string LastName,
     string? Patronymic,
     string? InternalPosition,
     string? PhoneNumber,

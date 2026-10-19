@@ -148,6 +148,25 @@ public class UsersController(
     }
 
     /// <summary>
+    /// Resets a user's password using a valid restore token and sets a new password.
+    /// </summary>
+    /// <param name="command">The command containing the reset token and the new password.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword(
+        [FromBody] ResetPasswordCommand command,
+        CancellationToken cancellationToken)
+    {
+        await mediator.Send(command, cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// Permanently deletes the currently authenticated user's account and all associated personal data (GDPR hard-delete).
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
@@ -428,6 +447,26 @@ public class UsersController(
     {
         await mediator.Send(new DeactivateUserCommand(id, currentUserService.GetUserId()), cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Generates a secure password reset token for a specific user.
+    /// </summary>
+    /// <param name="id">The unique identifier of the user.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The generated password restore token and its expiration timestamp.</returns>
+    [HttpPost("{id:guid}/password-reset-token")]
+    [HasAccessRight(AccessRight.CanResetPassword)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TokenResultDto>> GeneratePasswordResetToken(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GenerateRestorePasswordTokenCommand(id), cancellationToken);
+
+        return Ok(result);
     }
 
     /// <summary>

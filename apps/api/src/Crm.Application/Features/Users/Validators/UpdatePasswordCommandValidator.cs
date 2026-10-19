@@ -1,21 +1,22 @@
-using Crm.Application.Common.Options;
 using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Interfaces;
 using FluentValidation;
-using Microsoft.Extensions.Options;
 
 namespace Crm.Application.Features.Users.Validators;
 
 /// <summary>
 /// Provides validation rules for the <see cref="UpdatePasswordCommand"/>.
+/// Validates user identification, current password presence, and enforces new password requirements.
 /// </summary>
 public class UpdatePasswordCommandValidator : AbstractValidator<UpdatePasswordCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UpdatePasswordCommandValidator"/> class.
     /// </summary>
-    public UpdatePasswordCommandValidator(IOptions<CustomIdentityOptions> identityOptions)
+    /// <param name="optionService">The service used to retrieve application configuration options and password requirements.</param>
+    public UpdatePasswordCommandValidator(IOptionService optionService)
     {
-        var options = identityOptions.Value;
+        var options = optionService.GetIdentityOptions();
 
         RuleFor(x => x.UserId)
             .NotEmpty().WithMessage("User ID is required.");

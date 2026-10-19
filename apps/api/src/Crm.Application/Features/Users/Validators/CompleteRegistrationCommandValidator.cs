@@ -1,23 +1,23 @@
-using Crm.Application.Common.Options;
 using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Interfaces;
 using Crm.Domain.Consts.Entities;
 using FluentValidation;
-using Microsoft.Extensions.Options;
 
 namespace Crm.Application.Features.Users.Validators;
 
 /// <summary>
 /// Provides validation rules for the <see cref="CompleteRegistrationCommand"/>.
+/// Validates user profile fields, invitation token presence, and enforces configured password complexity policies.
 /// </summary>
 public class CompleteRegistrationCommandValidator : AbstractValidator<CompleteRegistrationCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="CompleteRegistrationCommandValidator"/> class.
     /// </summary>
-    /// <param name="identityOptions">The configuration options for identity and password rules.</param>
-    public CompleteRegistrationCommandValidator(IOptions<CustomIdentityOptions> identityOptions)
+    /// <param name="optionService">The service used to retrieve application configuration options and password requirements.</param>
+    public CompleteRegistrationCommandValidator(IOptionService optionService)
     {
-        var options = identityOptions.Value;
+        var options = optionService.GetIdentityOptions();
 
         RuleFor(x => x.Token)
             .NotEmpty().WithMessage("Registration token is required.");
@@ -31,6 +31,10 @@ public class CompleteRegistrationCommandValidator : AbstractValidator<CompleteRe
             .NotEmpty().WithMessage("Last name is required.")
             .MaximumLength(UserValidationConstants.MaxLastNameLength)
                 .WithMessage($"Last name must not exceed {UserValidationConstants.MaxLastNameLength} characters.");
+
+        RuleFor(x => x.Patronymic)
+            .MaximumLength(UserValidationConstants.MaxPatronymicLength)
+            .When(x => !string.IsNullOrEmpty(x.Patronymic));
 
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required.")

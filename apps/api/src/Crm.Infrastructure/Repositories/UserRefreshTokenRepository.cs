@@ -81,6 +81,20 @@ public class UserRefreshTokenRepository(
             .ExecuteDeleteAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Asynchronously removes all refresh tokens associated with a specific user.
+    /// This is typically used during password resets, security revocations, or global logouts.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user whose tokens are to be revoked.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous remove operation.</returns>
+    public Task RevokeAllUserTokensAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return DbSet
+            .Where(rt => rt.UserId == userId)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     private static string HashToken(string token)
         => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }

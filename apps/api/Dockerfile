@@ -10,11 +10,16 @@ COPY apps/api/src/Crm.Api/Crm.Api.csproj apps/api/src/Crm.Api/
 COPY apps/api/src/Crm.Application/Crm.Application.csproj apps/api/src/Crm.Application/
 COPY apps/api/src/Crm.Domain/Crm.Domain.csproj apps/api/src/Crm.Domain/
 COPY apps/api/src/Crm.Infrastructure/Crm.Infrastructure.csproj apps/api/src/Crm.Infrastructure/
-RUN dotnet restore apps/api/src/Crm.Api/Crm.Api.csproj
+COPY apps/api/src/Crm.Cli/Crm.Cli.csproj apps/api/src/Crm.Cli/
+RUN dotnet restore apps/api/src/Crm.Api/Crm.Api.csproj \
+    && dotnet restore apps/api/src/Crm.Cli/Crm.Cli.csproj
 
 COPY apps/api/ apps/api/
 RUN dotnet publish apps/api/src/Crm.Api/Crm.Api.csproj \
     --configuration Release --no-restore --output /app -p:UseAppHost=false
+# Separate folder: both projects ship their own appsettings.json.
+RUN dotnet publish apps/api/src/Crm.Cli/Crm.Cli.csproj \
+    --configuration Release --no-restore --output /app/cli -p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 
@@ -29,6 +34,10 @@ ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
 # ASP.NET Core keeps Data Protection keys in ~/.aspnet; they must outlive the container.
 RUN mkdir -p /data/uploads /data/logs /home/app/.aspnet/DataProtection-Keys \
     && chown -R "$APP_UID" /data /home/app/.aspnet
+
+# Admin CLI: `docker compose exec api crm reset-password -e <email>`.
+RUN printf '#!/bin/sh\nexec dotnet /app/cli/Crm.Cli.dll "$@"\n' > /usr/local/bin/crm \
+    && chmod +x /usr/local/bin/crm
 
 WORKDIR /app
 COPY --from=build /app ./

@@ -10,4 +10,5 @@ public static class CustomClaimTypes
     public const string NgoId = "ngo_id";
     public const string RoleId = "role_id";
     public const string RegistrationInviteValue = "registration";
+    public const string PasswordResetToken = "password_reset";
 }

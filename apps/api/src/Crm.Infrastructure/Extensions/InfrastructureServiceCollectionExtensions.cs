@@ -1,7 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using Crm.Application.Common.Consts;
-using Crm.Application.Common.Options;
 using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
@@ -78,7 +77,7 @@ public static class InfrastructureServiceCollectionExtensions
         return app;
     }
 
-    private static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString(ConfigurationKeys.PostgreSqlConnection)));
@@ -89,7 +88,7 @@ public static class InfrastructureServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddRepositories(this IServiceCollection services)
+    public static IServiceCollection AddRepositories(this IServiceCollection services)
     {
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<INgoRepository, NgoRepository>();
@@ -102,7 +101,7 @@ public static class InfrastructureServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddCustomIdentity(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddCustomIdentity(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<CustomIdentityOptions>()
             .Bind(configuration.GetSection(CustomIdentityOptions.Position))
@@ -127,6 +126,9 @@ public static class InfrastructureServiceCollectionExtensions
                 options.User.RequireUniqueEmail = identityOptions.RequireUniqueEmail;
             });
         });
+
+        services.AddScoped<IIdentityService, IdentityService>();
+        services.AddScoped<IRoleIdentityService, RoleIdentityService>();
 
         return services;
     }
@@ -188,8 +190,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IPermissionService, PermissionService>();
-        services.AddScoped<IIdentityService, IdentityService>();
-        services.AddScoped<IRoleIdentityService, RoleIdentityService>();
+        services.AddScoped<IOptionService, OptionService>();
 
         return services;
     }

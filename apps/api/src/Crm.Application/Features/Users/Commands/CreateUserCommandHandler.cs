@@ -6,6 +6,7 @@ using Crm.Domain.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
+using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -56,13 +57,10 @@ public partial class CreateUserCommandHandler(
 
     private async Task<UserBasicDto> CreateUserAsync(CreateUserCommand request, CancellationToken cancellationToken = default)
     {
-        var user = new User
-        {
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            IsActive = true,
-            CreatedAt = timeProvider.GetUtcNow().UtcDateTime,
-        };
+        var user = request.Adapt<User>();
+
+        user.IsActive = true;
+        user.CreatedAt = timeProvider.GetUtcNow().UtcDateTime;
 
         return await identityService.CreateUserAsync(request.Email, request.Password, user, cancellationToken);
     }

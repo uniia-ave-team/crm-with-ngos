@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Crm.Application.Common.Options;
+namespace Crm.Infrastructure.Options;
 
 public class CustomIdentityOptions
 {

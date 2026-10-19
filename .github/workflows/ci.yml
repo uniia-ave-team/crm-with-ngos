@@ -130,6 +130,14 @@ jobs:
           curl -fsS -o /dev/null -D - -H 'Origin: http://localhost:8080' http://localhost:5065/health \
             | grep -i '^access-control-allow-origin: http://localhost:8080'
 
+      - name: Smoke test the admin CLI
+        run: |
+          curl -fsS -o /dev/null -X POST http://localhost:5065/api/v1/users -H 'Content-Type: application/json' \
+            -d '{"firstName":"Smoke","lastName":"Test","email":"smoke@example.org","password":"Initial-1a","confirmPassword":"Initial-1a"}'
+          printf 'Changed-2b\nChanged-2b\n' | docker compose exec -T api crm reset-password -e smoke@example.org
+          curl -fsS -o /dev/null -X POST http://localhost:5065/api/v1/auth/login -H 'Content-Type: application/json' \
+            -d '{"email":"smoke@example.org","password":"Changed-2b"}'
+
       - name: Container logs
         if: failure()
         run: docker compose logs

@@ -22,7 +22,7 @@ public partial class InviteUserCommandHandler(
     INgoRepository ngoRepository,
     IAuthRoleRepository roleRepository,
     ITokenService tokenService,
-    ILogger<InviteUserCommandHandler> logger) : IRequestHandler<InviteUserCommand, InvitationTokenResultDto>
+    ILogger<InviteUserCommandHandler> logger) : IRequestHandler<InviteUserCommand, TokenResultDto>
 {
     /// <summary>
     /// Executes the user invitation process asynchronously.
@@ -33,7 +33,7 @@ public partial class InviteUserCommandHandler(
     /// <exception cref="EntitiesNotFoundException">Thrown when any requested role is not found.</exception>
     /// <exception cref="EntityNotFoundException">Thrown when the NGO is not found.</exception>
     /// <exception cref="EntityAlreadyExistsException">Thrown when a user with the specified email already exists.</exception>
-    public async Task<InvitationTokenResultDto> Handle(InviteUserCommand request, CancellationToken cancellationToken)
+    public async Task<TokenResultDto> Handle(InviteUserCommand request, CancellationToken cancellationToken)
     {
         LogInvitingUser(logger, request.Email, request.RoleIds);
 

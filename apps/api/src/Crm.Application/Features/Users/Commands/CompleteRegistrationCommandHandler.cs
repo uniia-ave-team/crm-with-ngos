@@ -7,6 +7,7 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
+using Mapster;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -82,14 +83,11 @@ public partial class CompleteRegistrationCommandHandler(
 
     private async Task<UserBasicDto> CreateUserAsync(CompleteRegistrationCommand request, string email, Guid ngoId, CancellationToken cancellationToken = default)
     {
-        var user = new User
-        {
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            NgoId = ngoId,
-            IsActive = true,
-            CreatedAt = timeProvider.GetUtcNow().UtcDateTime,
-        };
+        var user = request.Adapt<User>();
+
+        user.NgoId = ngoId;
+        user.IsActive = true;
+        user.CreatedAt = timeProvider.GetUtcNow().UtcDateTime;
 
         return await identityService.CreateUserAsync(email, request.Password, user, cancellationToken);
     }

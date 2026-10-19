@@ -112,6 +112,51 @@ public class IdentityService(
     }
 
     /// <inheritdoc />
+    public async Task<string> GetResetTokenAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString())
+            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+
+        var result = await userManager.GeneratePasswordResetTokenAsync(user);
+
+        return result;
+    }
+
+    /// <inheritdoc />
+    public async Task ResetPasswordAsync(Guid userId, string token, string newPassword, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString())
+            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+
+        var result = await userManager.ResetPasswordAsync(user, token, newPassword);
+
+        if (!result.Succeeded)
+        {
+            throw new UserOperationException(UserOperation.ChangePassword, result.FormatErrors());
+        }
+
+        await userRefreshTokenRepository.RevokeAllUserTokensAsync(userId, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task ResetPasswordAsync(Guid userId, string newPassword, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString())
+            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+
+        var result = await userManager.ResetPasswordAsync(user, token, newPassword);
+
+        if (!result.Succeeded)
+        {
+            throw new UserOperationException(UserOperation.ChangePassword, result.FormatErrors());
+        }
+
+        await userRefreshTokenRepository.RevokeAllUserTokensAsync(userId, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString())
