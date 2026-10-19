@@ -21,8 +21,8 @@ namespace Crm.Application.Dtos.User.Commands;
 /// <param name="AvatarUrl">The updated avatar URL or file path.</param>
 public record UpdateUserProfileCommand(
     Guid UserId,
-    string? FirstName,
-    string? LastName,
+    string FirstName,
+    string LastName,
     string? Patronymic,
     string? InternalPosition,
     string? PhoneNumber,

@@ -42,8 +42,8 @@ public interface ITokenService
     /// Generates a time-limited invitation token along with its expiration time used for secure user onboarding and registration.
     /// </summary>
     /// <param name="dto">The data transfer object containing the email, organization identifier, and role identifiers for the invited user.</param>
-    /// <returns>An <see cref="InvitationTokenResultDto"/> containing the generated JWT token string and its exact expiration timestamp.</returns>
-    InvitationTokenResultDto GenerateInvitationToken(GenerateInvitationDto dto);
+    /// <returns>An <see cref="TokenResultDto"/> containing the generated JWT token string and its exact expiration timestamp.</returns>
+    TokenResultDto GenerateInvitationToken(GenerateInvitationDto dto);
 
     /// <summary>
     /// Asynchronously validates a provided invitation token and extracts its embedded claims.
@@ -54,4 +54,21 @@ public interface ITokenService
     /// otherwise, <c>null</c> if the token is invalid, expired, or lacks the required registration claims.
     /// </returns>
     Task<ClaimsPrincipal?> ValidateInvitationTokenAsync(string token);
+
+    /// <summary>
+    /// Generates a time-limited password restore token along with its expiration time used for securely resetting a user's password.
+    /// </summary>
+    /// <param name="dto">The data transfer object containing the user identifier and the underlying password reset token.</param>
+    /// <returns>A <see cref="TokenResultDto"/> containing the generated JWT token string and its exact expiration timestamp.</returns>
+    TokenResultDto GenerateRestorePasswordToken(PasswordResetTokenDto dto);
+
+    /// <summary>
+    /// Asynchronously validates a provided password restore token and extracts its embedded claims.
+    /// </summary>
+    /// <param name="token">The JWT password restore token to validate.</param>
+    /// <returns>
+    /// A task representing the asynchronous operation, containing a <see cref="ClaimsPrincipal"/> with the token's claims if validation is successful;
+    /// otherwise, <c>null</c> if the token is invalid, expired, or lacks the required password reset claim.
+    /// </returns>
+    Task<ClaimsPrincipal?> ValidateRestorePasswordTokenAsync(string token);
 }
