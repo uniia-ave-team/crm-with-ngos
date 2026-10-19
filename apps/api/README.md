@@ -126,12 +126,9 @@ dotnet user-secrets set "ConnectionStrings:PostgreSqlConnection" \
 
 dotnet user-secrets set "JwtOptions:Secret" "<min-16-char-random-string>" \
     --project src/Crm.Api
-
-# CLI project (uses the same database)
-dotnet user-secrets set "ConnectionStrings:PostgreSqlConnection" \
-    "Host=localhost;Port=5432;Database=crm_db;Username=postgres;Password=<your-password>" \
-    --project src/Crm.Cli
 ```
+
+`Crm.Cli` uses the same `UserSecretsId` as `Crm.Api`, so it reads these secrets too.
 
 ### 3. Start the database
 
@@ -176,6 +173,8 @@ All `dotnet` commands are run from `apps/api/`. `just` commands are run from the
 | `dotnet build Crm.slnx` | Build all projects in the solution | Build |
 | `dotnet publish src/Crm.Api/Crm.Api.csproj -c Release -o ./dist/api` | Publish API release build | Build |
 | `dotnet publish src/Crm.Cli/Crm.Cli.csproj -c Release -o ./dist/cli` | Publish CLI release build | Build |
+| `just cli <args>` | Run the admin CLI against the local database | Admin |
+| `just cli-docker <args>` | Run the admin CLI inside the Docker API container | Admin |
 | `dotnet build src/Crm.Api -p:GenerateOpenApi=true` | Regenerate `openapi.json` contract file | Build / Contract |
 | `just contract-spec` | Regenerate OpenAPI spec via just | Build / Contract |
 | `dotnet test Crm.slnx` | Run all tests in the solution | Test |
@@ -338,6 +337,12 @@ dotnet run --project src/Crm.Cli -- --help
 dotnet run --project src/Crm.Cli -- reset-password -e admin@example.com
 ```
 
+**Development (from the repository root):**
+
+```bash
+just cli reset-password -e admin@example.com
+```
+
 **Published binary:**
 
 ```bash
@@ -347,8 +352,18 @@ dotnet publish src/Crm.Cli/Crm.Cli.csproj -c Release -o ./dist/cli
 
 **Inside a running Docker container:**
 
+The API image ships the CLI in `/app/cli` with a `crm` wrapper on `PATH`. It uses the container's connection string, so it works against the same database as the running API.
+
 ```bash
-docker compose exec -it api dotnet Crm.Cli.dll reset-password -e admin@example.com
+docker compose exec api crm reset-password -e admin@example.com
+# Or via just:
+just cli-docker reset-password -e admin@example.com
+```
+
+When standard input is redirected, the CLI reads the password and its confirmation from two lines of input instead of prompting. CI uses this to smoke-test the command:
+
+```bash
+printf 'New-Passw0rd\nNew-Passw0rd\n' | docker compose exec -T api crm reset-password -e admin@example.com
 ```
 
 ---
@@ -523,8 +538,11 @@ dotnet run --project src/Crm.Cli -- reset-password -e admin@example.com
 
 #### З кореня всього репозиторію:
 ```bash
+just cli reset-password -e admin@example.com
+# або напряму:
 dotnet run --project apps/api/src/Crm.Cli -- reset-password -e admin@example.com
 ```
+`Crm.Cli` має той самий `UserSecretsId`, що й `Crm.Api`, тому бере рядок підключення, який записав `just setup`.
 
 #### Запуск скомпільованого бінарника (Publish):
 ```bash
@@ -538,10 +556,15 @@ dotnet ./dist/cli/Crm.Cli.dll reset-password -e admin@example.com
 ```
 
 #### У середовищі Docker / на сервері:
-Якщо контейнер API запущено через Docker Compose:
+Образ API містить CLI у `/app/cli` і обгортку `crm` у `PATH`. Вона бере рядок підключення контейнера, тобто працює з тією самою базою, що й запущений API:
 ```bash
-# Виконання команди всередині контейнера з доступом до БД
-docker compose exec -it api dotnet Crm.Cli.dll reset-password -e admin@example.com
+docker compose exec api crm reset-password -e admin@example.com
+# або через just:
+just cli-docker reset-password -e admin@example.com
+```
+Якщо стандартний ввід перенаправлено, CLI не питає пароль, а читає його й підтвердження з двох рядків вводу. Так CI перевіряє команду:
+```bash
+printf 'New-Passw0rd\nNew-Passw0rd\n' | docker compose exec -T api crm reset-password -e admin@example.com
 ```
 
 ---

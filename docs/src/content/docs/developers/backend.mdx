@@ -36,6 +36,21 @@ Crm.Api ──────────────▶ Crm.Application ──▶ 
 | `Crm.Application`    | Команди й запити MediatR, обробники, валідатори FluentValidation, DTO, поведінки конвеєра   |
 | `Crm.Infrastructure` | EF Core і PostgreSQL, Identity, міграції й сидинг, репозиторії, JWT, кеш прав               |
 | `Crm.Api`            | Контролери, версіонування, авторизація, обробка винятків, rate limiting, OpenAPI            |
+| `Crm.Cli`            | Адмін-утиліта командного рядка поверх `Crm.Application` і `Crm.Infrastructure`, без HTTP     |
+
+`Crm.Cli` потрібен, коли через вебінтерфейс зробити дію неможливо, наприклад
+адміністратор забув пароль. Він читає ті самі user-secrets, що й API, а в
+Docker входить в образ API:
+
+```bash
+just cli --help                                   # локальна база
+just cli reset-password -e admin@example.org
+just cli-docker reset-password -e admin@example.org  # контейнер API
+```
+
+Нова команда — клас, що реалізує `ICliCommand` у `Crm.Cli/Commands`;
+реєструється автоматично. Якщо команда питає дані інтерактивно, вона має
+вміти читати їх і з перенаправленого stdin, щоб її можна було перевірити в CI.
 
 ## Де шукати
 
