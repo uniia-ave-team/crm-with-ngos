@@ -6,7 +6,8 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<Nullable>enable</Nullable>
-		<UserSecretsId>bb6d019d-e29c-46f8-b1cb-17a7ad55b2fa</UserSecretsId>
+		<!-- Same as Crm.Api: the CLI reads the connection string written by `just setup`. -->
+		<UserSecretsId>2d14e8c8-7049-489d-ad96-40dbd7d901f2</UserSecretsId>
 	</PropertyGroup>
 
 	<ItemGroup>
