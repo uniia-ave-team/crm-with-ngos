@@ -24,7 +24,7 @@ public static class CliServiceCollectionExtensions
         services.AddPersistence(configuration);
         services.AddRepositories();
         services.AddCustomIdentity(configuration);
-        services.AddCliLogging();
+        services.AddCliLogging(configuration);
         services.AddCliCommands();
 
         return services;
@@ -35,12 +35,13 @@ public static class CliServiceCollectionExtensions
     /// and routing log entries at or above <see cref="LogLevel.Error"/> to the standard error stream.
     /// </summary>
     /// <param name="services">The service collection to populate.</param>
+    /// <param name="configuration">The application configuration provider.</param>
     /// <returns>The original service collection instance for method chaining.</returns>
-    public static IServiceCollection AddCliLogging(this IServiceCollection services)
+    public static IServiceCollection AddCliLogging(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddLogging(builder =>
         {
-            builder.ClearProviders();
+            builder.AddConfiguration(configuration.GetSection("Logging"));
 
             builder.AddSimpleConsole(options =>
             {

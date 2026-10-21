@@ -112,6 +112,12 @@ public static class InfrastructureServiceCollectionExtensions
         .AddEntityFrameworkStores<ApplicationDbContext>()
         .AddDefaultTokenProviders();
 
+        services.AddOptions<DataProtectionTokenProviderOptions>()
+            .Configure<IOptions<JwtOptions>>((options, jwtOpts) =>
+            {
+                options.TokenLifespan = TimeSpan.FromHours(jwtOpts.Value.ResetPasswordTokenExpiryHours);
+            });
+
         services.AddSingleton<IConfigureOptions<IdentityOptions>>(sp =>
         {
             var identityOptions = sp.GetRequiredService<IOptions<CustomIdentityOptions>>().Value;
