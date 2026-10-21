@@ -5,6 +5,7 @@ using Crm.Application.Interfaces;
 using Crm.Cli.Abstractions;
 using Crm.Cli.Constants;
 using Crm.Cli.Models;
+using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Entities;
@@ -43,10 +44,11 @@ public partial class ResetAdminPasswordCommand(
 
         var admin = await FindAdminAsync(email, cancellationToken);
 
-        return admin is not null
+        bool ifPasswordResetSuccessful = admin is not null
             && TryReadPasswordSecurely(out var password)
-            && await TryResetPasswordAsync(admin, password, cancellationToken)
-            ? 0 : 1;
+            && await TryResetPasswordAsync(admin, password, cancellationToken);
+
+        return ifPasswordResetSuccessful ? 0 : 1;
     }
 
     private bool TryGetEmail(
@@ -129,7 +131,16 @@ public partial class ResetAdminPasswordCommand(
     {
         try
         {
-            return await authUserRepository.GetAsync<AuthUser>(email, cancellationToken);
+            var user = await authUserRepository.GetAsync<AuthUser>(email, cancellationToken);
+
+            var isAdmin = await identityService.IsInRoleAsync(user.Id, RoleConsts.Admin, cancellationToken);
+            if (!isAdmin)
+            {
+                LogUserNotAdmin(logger, email);
+                return null;
+            }
+
+            return user;
         }
         catch (EntityNotFoundException ex)
         {
@@ -180,4 +191,7 @@ public partial class ResetAdminPasswordCommand(
 
     [LoggerMessage(EventId = CliLogEventIds.PasswordResetSuccess, Level = LogLevel.Information, Message = "Password for user '{UserIdentifier}' was successfully updated.")]
     private static partial void LogPasswordResetSuccess(ILogger logger, string userIdentifier);
+
+    [LoggerMessage(EventId = CliLogEventIds.UserNotAdmin, Level = LogLevel.Warning, Message = "Target user with email '{Email}' is not an administrator.")]
+    private static partial void LogUserNotAdmin(ILogger logger, string email);
 }

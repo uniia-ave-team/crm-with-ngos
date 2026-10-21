@@ -18,12 +18,5 @@ public class UpdateNgoCommandValidator : AbstractValidator<UpdateNgoCommand>
             .NotEmpty().WithMessage("NGO name is required.")
             .MaximumLength(NgoValidationConstants.MaxNameLength)
                 .WithMessage($"NGO name must not exceed {NgoValidationConstants.MaxNameLength} characters.");
-
-        RuleFor(x => x.LogoUrl)
-            .MaximumLength(NgoValidationConstants.MaxLogoUrlLength)
-                .WithMessage($"Logo URL must not exceed {NgoValidationConstants.MaxLogoUrlLength} characters.")
-            .Must(uri => Uri.IsWellFormedUriString(uri, UriKind.Absolute))
-                .WithMessage("Logo URL must be a valid absolute URI.")
-            .When(x => !string.IsNullOrEmpty(x.LogoUrl));
     }
 }
