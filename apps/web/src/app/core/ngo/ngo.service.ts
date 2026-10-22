@@ -8,9 +8,12 @@ import { RequestFailure, toRequestFailure } from '../http/request-failure';
 
 const API_NGO_PATH = '/api/v1/ngo';
 const REQUEST_TIMEOUT_MS = 10000;
+/** Завантаження файлу триває довше за звичайний запит. */
+const UPLOAD_TIMEOUT_MS = 60000;
 
 export type CreateNgoResult = 'created' | RequestFailure;
 export type UpdateNgoResult = 'updated' | RequestFailure;
+export type UploadNgoLogoResult = 'uploaded' | RequestFailure;
 
 /** Організація (`GET /api/v1/ngo`): лише те, що потрібно знімку акаунта. */
 export interface NgoProfile {
@@ -52,9 +55,44 @@ export class NgoService {
   }
 
   /**
+   * Завантажує логотип організації (`POST <сервер>/api/v1/ngo/logo`,
+   * `multipart/form-data`, поле `file`; потрібне право `UpdateNgo`; 200 без
+   * тіла). Саме зображення, а не посилання: посилання на нього призначає
+   * сервер, тож після успіху організація читається заново (`GET /api/v1/ngo`) і
+   * нове посилання потрапляє в знімок активного акаунта.
+   */
+  async uploadLogo(file: File): Promise<UploadNgoLogoResult> {
+    const url = `${this.connection.serverUrl()}${API_NGO_PATH}/logo`;
+    const accountId = this.accounts.activeId();
+    console.log(`[NgoService] Завантажую логотип організації: ${url}`);
+
+    try {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      await firstValueFrom(this.http.post(url, form).pipe(timeout(UPLOAD_TIMEOUT_MS)));
+      console.log('[NgoService] Логотип завантажено');
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[NgoService] Не вдалося завантажити логотип (${failure})`, error);
+      return failure;
+    }
+
+    // Посилання на логотип призначив сервер: читаємо його й оновлюємо знімок.
+    const ngo = await this.fetch();
+    if (ngo && accountId) {
+      this.accounts.update(accountId, { ngoName: ngo.name, ngoLogoUrl: ngo.logoUrl });
+    }
+    return 'uploaded';
+  }
+
+  /**
    * Оновлює організацію (`PUT <сервер>/api/v1/ngo`, потрібне право
    * `Permissions.UpdateNgo`; 204 без тіла). Обидва поля обовʼязкові в запиті:
    * `logoUrl` — посилання на логотип або `null`. Токен додає `authInterceptor`.
+   * Увага (так працює сервер): `null` **скидає** логотип організації, а не-null
+   * значення записується як є й видаляє наявний файл логотипа; тож змінити
+   * лише назву, не чіпаючи логотип, цим запитом не можна, а новий логотип
+   * надсилається окремим `uploadLogo`.
    * Успіх одразу потрапляє в знімок організації в записі акаунта (`localStorage`):
    * в той акаунт, від імені якого йшов запит, навіть якщо за час запиту активним
    * став інший.

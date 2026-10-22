@@ -8,10 +8,14 @@ import { UserProfile } from './user-profile';
 
 const API_USERS_PATH = '/api/v1/users';
 const REQUEST_TIMEOUT_MS = 10000;
+/** Завантаження файлу триває довше за звичайний запит. */
+const UPLOAD_TIMEOUT_MS = 60000;
 
 export interface NewUser {
   firstName: string;
   lastName: string;
+  /** По батькові; необовʼязкове (`null` — не вказано), але поле в запиті обовʼязкове. */
+  patronymic: string | null;
   email: string;
   password: string;
   confirmPassword: string;
@@ -20,6 +24,7 @@ export interface NewUser {
 export type CreateUserResult = 'created' | RequestFailure;
 export type ChangePasswordResult = 'changed' | RequestFailure;
 export type UpdateProfileResult = 'updated' | RequestFailure;
+export type UploadAvatarResult = 'uploaded' | RequestFailure;
 
 /**
  * Тіло `PUT /api/v1/users/{id}`: сервер вимагає всі поля (кожне — рядок або
@@ -116,6 +121,29 @@ export class UsersService {
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[UsersService] Не вдалося оновити профіль (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
+   * `POST <сервер>/api/v1/users/{id}/avatar` — завантаження аватара
+   * (`multipart/form-data`, поле `file`; потрібне право `UpdateUser`; 200 без
+   * тіла). Передається саме зображення, а не посилання: посилання на нього
+   * призначає сервер, тож новий `avatarUrl` читається з профілю (`GET /users/{id}`).
+   */
+  async uploadAvatar(id: string, file: File): Promise<UploadAvatarResult> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}/avatar`;
+    console.log(`[UsersService] Завантажую аватар: ${url}`);
+
+    try {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      await firstValueFrom(this.http.post(url, form).pipe(timeout(UPLOAD_TIMEOUT_MS)));
+      console.log('[UsersService] Аватар завантажено');
+      return 'uploaded';
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося завантажити аватар (${failure})`, error);
       return failure;
     }
   }

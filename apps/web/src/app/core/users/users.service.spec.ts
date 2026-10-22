@@ -9,7 +9,7 @@ describe('UsersService', () => {
   let http: HttpTestingController;
   let service: UsersService;
   let url: string;
-  const user = { firstName: ' ', lastName: ' ', email: 'a@b.org', password: 'Abcde1', confirmPassword: 'Abcde1' };
+  const user = { firstName: ' ', lastName: ' ', patronymic: null, email: 'a@b.org', password: 'Abcde1', confirmPassword: 'Abcde1' };
 
   beforeEach(() => {
     localStorage.clear();
@@ -167,6 +167,40 @@ describe('UsersService', () => {
     it('reports an unreachable server', async () => {
       const result = service.updateProfile('u-1', body);
       http.expectOne(profileUrl('u-1')).error(new ProgressEvent('error'));
+      expect(await result).toBe('unreachable');
+    });
+  });
+
+  describe('uploadAvatar', () => {
+    const avatarUrl = (id: string) => `${url}/${id}/avatar`;
+    const file = new File(['image'], 'photo.png', { type: 'image/png' });
+
+    it('posts the image as multipart/form-data in the field "file" and treats 200 as uploaded', async () => {
+      const result = service.uploadAvatar('u-1', file);
+      const request = http.expectOne(avatarUrl('u-1'));
+      expect(request.request.method).toBe('POST');
+      const form = request.request.body as FormData;
+      expect(form).toBeInstanceOf(FormData);
+      expect((form.get('file') as File).name).toBe('photo.png');
+      request.flush(null);
+      expect(await result).toBe('uploaded');
+    });
+
+    it.each([
+      [400, 'invalid'],
+      [401, 'unauthorized'],
+      [403, 'forbidden'],
+      [404, 'error'],
+      [500, 'error'],
+    ])('maps HTTP %i to %s', async (status, expected) => {
+      const result = service.uploadAvatar('u-1', file);
+      http.expectOne(avatarUrl('u-1')).flush({}, { status, statusText: 'x' });
+      expect(await result).toBe(expected);
+    });
+
+    it('reports an unreachable server', async () => {
+      const result = service.uploadAvatar('u-1', file);
+      http.expectOne(avatarUrl('u-1')).error(new ProgressEvent('error'));
       expect(await result).toBe('unreachable');
     });
   });

@@ -903,6 +903,7 @@ describe('LoginPage', () => {
       adminFirstName: unknown;
       adminPassword: unknown;
       adminPasswordRepeat: unknown;
+      adminPatronymic: unknown;
     }
 
     function createAdmin() {
@@ -910,11 +911,12 @@ describe('LoginPage', () => {
       ctx.request.flush({ status: 'Healthy' });
       answerStatus(ctx.connection, ctx.fixture, { hasAdmin: false, hasNgo: true, isSetupComplete: false });
       const form = ctx.fixture.componentInstance as unknown as AdminForm;
-      const fill = (values: Partial<Record<'email' | 'last' | 'first' | 'pw' | 'repeat', string>>) => {
+      const fill = (values: Partial<Record<'email' | 'last' | 'first' | 'patronymic' | 'pw' | 'repeat', string>>) => {
         const map = {
           email: form.adminEmail,
           last: form.adminLastName,
           first: form.adminFirstName,
+          patronymic: form.adminPatronymic,
           pw: form.adminPassword,
           repeat: form.adminPasswordRepeat,
         };
@@ -932,21 +934,29 @@ describe('LoginPage', () => {
 
     const valid = { email: 'a@b.org', last: 'Last', first: 'First', pw: 'Abcde1!x', repeat: 'Abcde1!x' };
 
-    it('shows the five fields', () => {
+    it('shows the six fields: the patronymic (optional) goes after the first name', () => {
       const { element } = createAdmin();
-      expect(element.querySelectorAll('ion-input')).toHaveLength(5);
+      expect(element.querySelectorAll('ion-input')).toHaveLength(6);
       const placeholders = Array.from(element.querySelectorAll('ion-input')).map((i) => (i as HTMLIonInputElement).placeholder);
-      // Обовʼязкові поля реєстрації позначено зірочкою в підказці.
+      // Обовʼязкові поля реєстрації позначено зірочкою в підказці, по батькові — без неї.
       const admin = uk.login.admin;
-      expect(placeholders).toEqual(
-        [admin.email, admin.lastName, admin.firstName, admin.password, admin.passwordRepeat].map((label) => `${label} *`),
-      );
+      expect(placeholders).toEqual([
+        `${admin.email} *`,
+        `${admin.lastName} *`,
+        `${admin.firstName} *`,
+        admin.patronymic,
+        `${admin.password} *`,
+        `${admin.passwordRepeat} *`,
+      ]);
     });
 
-    it('marks every field of the registration as required, for the browser and for screen readers', () => {
+    it('marks every field of the registration except the patronymic as required, for the browser and for screen readers', () => {
       const { element } = createAdmin();
-      const inputs = Array.from(element.querySelectorAll('ion-input')) as HTMLIonInputElement[];
-      expect(inputs).toHaveLength(5);
+      const all = Array.from(element.querySelectorAll('ion-input')) as HTMLIonInputElement[];
+      expect(all).toHaveLength(6);
+      const patronymic = all[3];
+      expect(patronymic.hasAttribute('required') || patronymic.required === true).toBe(false);
+      const inputs = all.filter((input) => input !== patronymic);
       // Поля адміністратора, пароль і повтор — з власним `required`; пошта, прізвище й імʼя — статичним атрибутом
       // (у jsdom елемент Ionic не оновлюється, тож перевіряємо саме атрибут/властивість).
       const isRequired = (input: HTMLIonInputElement) => input.hasAttribute('required') || input.required === true;
@@ -990,6 +1000,36 @@ describe('LoginPage', () => {
       expect(submit()).toEqual([]);
     });
 
+    describe('the patronymic', () => {
+      const createBody = async (patronymic: string | undefined) => {
+        const { connection, fill, submit } = createAdmin();
+        fill(patronymic === undefined ? valid : { ...valid, patronymic });
+        submit();
+        const request = http.expectOne(`${connection.serverUrl()}/api/v1/users`);
+        const body = request.request.body as Record<string, unknown>;
+        request.flush('id', { status: 201, statusText: 'Created' });
+        return body;
+      };
+
+      it('is optional: an empty one is no error', () => {
+        const { fill, submit } = createAdmin();
+        fill({ ...valid, patronymic: '' });
+        expect(submit()).toEqual([]);
+      });
+
+      it('goes into the request as null when it is not filled', async () => {
+        expect((await createBody(undefined))['patronymic']).toBeNull();
+      });
+
+      it('goes into the request as null when it is only spaces', async () => {
+        expect((await createBody('   '))['patronymic']).toBeNull();
+      });
+
+      it('goes into the request without the spaces around it when it is filled', async () => {
+        expect((await createBody('  Middle '))['patronymic']).toBe('Middle');
+      });
+    });
+
     it('sends no request while the form is invalid', () => {
       const { fill, submit } = createAdmin();
       fill({ ...valid, repeat: 'other' });
@@ -1009,6 +1049,7 @@ describe('LoginPage', () => {
         email: 'a@b.org',
         password: 'Abcde1!x',
         confirmPassword: 'Abcde1!x',
+        patronymic: null,
       });
       // Вхід — лише після відповіді на створення.
       http.expectNone(`${connection.serverUrl()}/api/v1/auth/login`);
@@ -1209,6 +1250,154 @@ describe('LoginPage', () => {
 
       expect(navigate).toHaveBeenCalledWith('/planner');
       http.expectNone(`${connection.serverUrl()}/api/v1/system/status`);
+    });
+
+    describe('the logo of the organization (POST /api/v1/ngo/logo)', () => {
+      const submit = (page: unknown) => (page as { submitNgo(): Promise<void> }).submitNgo();
+      const created = { status: 201, statusText: 'Created' };
+      const ok = { status: 200, statusText: 'OK' };
+      const png = () => new File([new Uint8Array(5)], 'logo.png', { type: 'image/png' });
+
+      function open() {
+        vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:logo', revokeObjectURL: () => undefined }));
+        const ctx = createWithoutNgo();
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        ctx.page.onNgoNameChange('Моя ГО');
+        const ngoUrl = `${ctx.connection.serverUrl()}/api/v1/ngo`;
+        return { ...ctx, navigate, ngoUrl, logoUrl: `${ngoUrl}/logo` };
+      }
+
+      it('sends the image itself after the first request with the data of the organization, then redirects', async () => {
+        const { page, element, fixture, navigate, ngoUrl, logoUrl } = open();
+        pickLogo(element, png());
+        fixture.detectChanges();
+        const done = submit(page);
+
+        // Спершу — дані організації (логотип ще не передається).
+        const create = http.expectOne(ngoUrl);
+        expect(create.request.method).toBe('POST');
+        expect(create.request.body).toEqual({ name: 'Моя ГО', logoUrl: null });
+        http.expectNone(logoUrl);
+        create.flush(null, created);
+
+        // Після нього — саме зображення.
+        const upload = await vi.waitFor(() => http.expectOne(logoUrl));
+        expect(upload.request.method).toBe('POST');
+        expect(upload.request.body).toBeInstanceOf(FormData);
+        const sent = (upload.request.body as FormData).get('file') as File;
+        expect(sent.name).toBe('logo.png');
+        expect(navigate).not.toHaveBeenCalled();
+        upload.flush(null, ok);
+        (await vi.waitFor(() => http.expectOne(ngoUrl))).flush({ name: 'Моя ГО', logoUrl: '/files/logo.png' });
+        await done;
+
+        expect(navigate).toHaveBeenCalledWith('/planner');
+      });
+
+      it('sends no logo request when no logo was chosen', async () => {
+        const { page, navigate, ngoUrl, logoUrl } = open();
+        const done = submit(page);
+        http.expectOne(ngoUrl).flush(null, created);
+        await done;
+        http.expectNone(logoUrl);
+        expect(navigate).toHaveBeenCalledWith('/planner');
+      });
+
+      it('does not send the logo when the organization was not created', async () => {
+        const { page, element, fixture, navigate, ngoUrl, logoUrl } = open();
+        pickLogo(element, png());
+        fixture.detectChanges();
+        const done = submit(page);
+        http.expectOne(ngoUrl).flush({}, { status: 403, statusText: 'Forbidden' });
+        await done;
+        http.expectNone(logoUrl);
+        expect(navigate).not.toHaveBeenCalled();
+      });
+
+      it('stays on the form and tells that the organization is created but the logo is not, when the upload fails', async () => {
+        const { page, element, fixture, navigate, ngoUrl, logoUrl } = open();
+        pickLogo(element, png());
+        fixture.detectChanges();
+        const done = submit(page);
+        http.expectOne(ngoUrl).flush(null, created);
+        (await vi.waitFor(() => http.expectOne(logoUrl))).flush({}, { status: 403, statusText: 'Forbidden' });
+        await done;
+        fixture.detectChanges();
+
+        expect(navigate).not.toHaveBeenCalled();
+        expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.ngo.logoUploadError.forbidden);
+        expect(element.textContent).toContain(uk.login.ngo.title);
+      });
+
+      it.each([
+        [400, 'invalid'],
+        [401, 'unauthorized'],
+        [403, 'forbidden'],
+        [500, 'error'],
+      ] as const)('has its own message for HTTP %i of the upload', async (status, key) => {
+        const { page, element, fixture, ngoUrl, logoUrl } = open();
+        pickLogo(element, png());
+        fixture.detectChanges();
+        const done = submit(page);
+        http.expectOne(ngoUrl).flush(null, created);
+        (await vi.waitFor(() => http.expectOne(logoUrl))).flush({}, { status, statusText: 'x' });
+        await done;
+        fixture.detectChanges();
+        expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.ngo.logoUploadError[key]);
+      });
+
+      it('does not create the organization a second time: the next "Continue" only repeats the logo', async () => {
+        const { page, element, fixture, navigate, ngoUrl, logoUrl } = open();
+        pickLogo(element, png());
+        fixture.detectChanges();
+
+        const first = submit(page);
+        http.expectOne(ngoUrl).flush(null, created);
+        (await vi.waitFor(() => http.expectOne(logoUrl))).flush({}, { status: 500, statusText: 'x' });
+        await first;
+
+        const second = submit(page);
+        // Лише завантаження логотипа, без нового створення.
+        const retry = await vi.waitFor(() => http.expectOne(logoUrl));
+        http.expectNone(ngoUrl);
+        retry.flush(null, ok);
+        (await vi.waitFor(() => http.expectOne(ngoUrl))).flush({ name: 'Моя ГО', logoUrl: '/files/logo.png' });
+        await second;
+
+        expect(navigate).toHaveBeenCalledWith('/planner');
+        fixture.detectChanges();
+        expect(element.querySelector('.login__error')).toBeNull();
+      });
+
+      it('locks the name once the organization is created', async () => {
+        const { page, element, fixture, ngoUrl, logoUrl } = open();
+        pickLogo(element, png());
+        fixture.detectChanges();
+        const done = submit(page);
+        http.expectOne(ngoUrl).flush(null, created);
+        (await vi.waitFor(() => http.expectOne(logoUrl))).flush({}, { status: 500, statusText: 'x' });
+        await done;
+        fixture.detectChanges();
+        expect((element.querySelector('ion-input') as HTMLIonInputElement).readonly).toBe(true);
+      });
+
+      it('lets the user go on without the logo after a failed upload: nothing is sent, just the redirect', async () => {
+        const { page, element, fixture, navigate, ngoUrl, logoUrl } = open();
+        pickLogo(element, png());
+        fixture.detectChanges();
+        const first = submit(page);
+        http.expectOne(ngoUrl).flush(null, created);
+        (await vi.waitFor(() => http.expectOne(logoUrl))).flush({}, { status: 500, statusText: 'x' });
+        await first;
+
+        element.querySelector<HTMLButtonElement>('.login__logo-remove')!.click();
+        fixture.detectChanges();
+        await submit(page);
+
+        http.expectNone(ngoUrl);
+        http.expectNone(logoUrl);
+        expect(navigate).toHaveBeenCalledWith('/planner');
+      });
     });
 
     it('does not redirect when creating the organization fails', async () => {

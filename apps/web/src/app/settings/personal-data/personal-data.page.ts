@@ -1,15 +1,29 @@
-import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 
 import { AccountsService } from '../../core/accounts/accounts.service';
+import { IMAGE_TYPES } from '../../core/images/image-types';
 import { CurrentUserService } from '../../core/users/current-user.service';
 import { UserProfile } from '../../core/users/user-profile';
 import { UsersService } from '../../core/users/users.service';
 import { LANGUAGES, LanguageOption } from '../../core/i18n/languages.generated';
 import { isPhoneNumber } from '../../shared/phone/phone-number';
 
-/** Що показати в блоці над формою за результатом останнього збереження. */
-type SaveResult = 'success' | 'invalid' | 'forbidden' | 'unreachable' | 'error';
+/**
+ * Що показати в блоці над формою за результатом останнього збереження. `avatar.*` —
+ * дані профілю збережено, а аватар завантажити не вдалося.
+ */
+type SaveResult =
+  | 'success'
+  | 'invalid'
+  | 'forbidden'
+  | 'unreachable'
+  | 'error'
+  | 'avatar.invalid'
+  | 'avatar.unauthorized'
+  | 'avatar.forbidden'
+  | 'avatar.unreachable'
+  | 'avatar.error';
 
 const ERROR_PREFIX = 'settings.personal.error.';
 
@@ -27,8 +41,9 @@ const PRONOUN_LABELS = { she: 'pronounShe', he: 'pronounHe', they: 'pronounThey'
  * оновлює профіль із сервера (`GET /users/{id}`) і заповнює з нього поля;
  * «Зберегти» перевіряє обовʼязкові поля й шле `PUT /users/{id}`.
  *
- * Фото поки не зберігається: аватар у запиті завжди `null`, а обране зображення
- * лише показується в прев'ю.
+ * Аватар у `PUT` завжди `null` (посилання призначає сервер): якщо обрано файл,
+ * після збереження даних іде додатковий запит `POST /users/{id}/avatar` із самим
+ * зображенням; не обрано — цього запиту нема.
  */
 @Component({
   selector: 'app-settings-personal-data',
@@ -52,7 +67,6 @@ export class PersonalDataPage {
   protected readonly firstName = signal('');
   protected readonly patronymic = signal('');
   protected readonly position = signal('');
-  protected readonly email = signal('');
   protected readonly phone = signal('');
   protected readonly emergencyContact = signal('');
   protected readonly country = signal('');
@@ -88,7 +102,6 @@ export class PersonalDataPage {
     computed(() => (this.attempted() && !value().trim() ? `${ERROR_PREFIX}required` : null));
   protected readonly lastNameError = this.requiredError(() => this.lastName());
   protected readonly firstNameError = this.requiredError(() => this.firstName());
-  protected readonly emailError = this.requiredError(() => this.email());
 
   /** Телефон необовʼязковий, але якщо вказаний — має бути схожим на номер. */
   protected readonly phoneError = computed(() => {
@@ -116,8 +129,15 @@ export class PersonalDataPage {
   /** Назва ГО активного акаунта: входить у колір аватара, як і в боковому меню. */
   protected readonly ngoName = computed(() => this.accounts.active()?.ngoName ?? '');
 
-  /** Імʼя обраного файлу аватара (завантаження на сервер ще нема). */
+  /** Значення `accept` вибору файлу аватара (типи з `core/images/image-types.ts`). */
+  protected readonly avatarTypes = IMAGE_TYPES.join(',');
+  /** Ключ помилки під блоком аватара (файл не підійшов); `null` — помилки нема. */
+  protected readonly avatarError = signal<string | null>(null);
+  /** Імʼя обраного файлу аватара; `null` — файл не обрано. */
   protected readonly fileName = signal<string | null>(null);
+  /** Обраний файл аватара (його надсилає збереження); `null` — файл не обрано. */
+  private readonly chosenAvatar = signal<File | null>(null);
+  private readonly avatarInput = viewChild<ElementRef<HTMLInputElement>>('avatarFile');
 
   /**
    * Прев'ю обраного зображення (`blob:`-посилання на файл у браузері); `null` —
@@ -160,21 +180,31 @@ export class PersonalDataPage {
     const file = input.files?.[0] ?? null;
     this.releasePreview();
 
-    // Не зображення (фільтр діалогу обійдено) або файл не обрано: лишається
-    // поточний аватар, а напис «Файлу не обрано.».
-    if (!file || !file.type.startsWith('image/')) {
+    this.avatarError.set(null);
+
+    // Файл не обрано або він не з дозволених типів (фільтр діалогу можна обійти):
+    // лишається поточний аватар, а напис «Файлу не обрано.»; для чужого типу —
+    // ще й помилка під блоком.
+    if (!file || !IMAGE_TYPES.includes(file.type)) {
       this.fileName.set(null);
+      this.chosenAvatar.set(null);
+      if (file) {
+        this.avatarError.set(`${ERROR_PREFIX}avatarType`);
+      }
       input.value = '';
       return;
     }
     this.fileName.set(file.name);
+    this.chosenAvatar.set(file);
     this.previewUrl.set(URL.createObjectURL(file));
   }
 
   /**
    * «Зберегти»: перевіряє обовʼязкові поля й, якщо все гаразд, шле `PUT
-   * /users/{id}`. Порожні необовʼязкові поля йдуть як `null`. Пошти в запиті
-   * нема: API не дозволяє змінити її цим запитом.
+   * /users/{id}`. Порожні необовʼязкові поля йдуть як `null`. Якщо після цього обрано файл
+   * аватара — додатковий запит `POST /users/{id}/avatar` із самим зображенням
+   * (файл не обрано — запиту нема); невдача завантаження показується окремим
+   * червоним блоком, а файл лишається обраним для повторної спроби.
    */
   protected async submit(): Promise<void> {
     if (this.saving()) {
@@ -185,7 +215,6 @@ export class PersonalDataPage {
     if (
       this.lastNameError() ||
       this.firstNameError() ||
-      this.emailError() ||
       this.phoneError() ||
       this.pronounsError() ||
       this.otherPronounsError()
@@ -201,12 +230,9 @@ export class PersonalDataPage {
     const body = this.buildBody();
     this.saving.set(true);
     const outcome = await this.users.updateProfile(id, body);
-    this.saving.set(false);
 
     if (outcome === 'updated') {
       this.attempted.set(false);
-      this.result.set('success');
-      this.scrollToTop();
       // Те, що збережено, одразу видно в меню й знімку акаунта, без нового запиту.
       this.currentUser.applyLocal({
         firstName: body.firstName ?? '',
@@ -219,12 +245,48 @@ export class PersonalDataPage {
         preferredLanguage: body.preferredLanguage,
         pronouns: body.pronouns,
       });
+      // Результат показуємо після обох запитів: успіх — лише якщо й аватар (за наявності файлу) завантажено.
+      this.result.set((await this.uploadAvatar(id)) ?? 'success');
+      this.saving.set(false);
+      this.scrollToTop();
       return;
     }
+    this.saving.set(false);
     this.result.set(
       outcome === 'invalid' || outcome === 'forbidden' || outcome === 'unreachable' ? outcome : 'error',
     );
     this.scrollToTop();
+  }
+
+  /**
+   * Другий запит збереження: обраний файл аватара (`POST /users/{id}/avatar`).
+   * Успіх — профіль читається заново (нове посилання на аватар призначив сервер),
+   * обраний файл і його превʼю забуваються. Повертає результат невдачі (червоний
+   * блок із причиною) або `null`, якщо завантажено чи файлу не було.
+   */
+  private async uploadAvatar(id: string): Promise<SaveResult | null> {
+    const file = this.chosenAvatar();
+    if (!file) {
+      return null;
+    }
+    const outcome = await this.users.uploadAvatar(id, file);
+    if (outcome === 'uploaded') {
+      this.clearAvatarSelection();
+      await this.currentUser.refresh();
+      return null;
+    }
+    return `avatar.${outcome}`;
+  }
+
+  /** Аватар завантажено: обраний файл і превʼю більше не потрібні (тепер аватар — з сервера). */
+  private clearAvatarSelection(): void {
+    this.releasePreview();
+    this.fileName.set(null);
+    this.chosenAvatar.set(null);
+    const input = this.avatarInput()?.nativeElement;
+    if (input) {
+      input.value = '';
+    }
   }
 
   /**
@@ -300,7 +362,6 @@ export class PersonalDataPage {
     this.firstName.set(user.firstName ?? '');
     this.patronymic.set(user.patronymic ?? '');
     this.position.set(user.internalPosition ?? '');
-    this.email.set(user.email ?? '');
     this.phone.set(user.phoneNumber ?? '');
     this.emergencyContact.set(user.emergencyContact ?? '');
     this.country.set(user.country ?? '');

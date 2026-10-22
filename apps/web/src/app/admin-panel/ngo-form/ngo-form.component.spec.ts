@@ -228,6 +228,7 @@ describe('AdminNgoFormComponent', () => {
           name: 'T-r-name',
           logo: 'T-r-logo',
           images: 'T-r-images',
+          logoFailed: { invalid: 'T-l-invalid', unauthorized: 'T-l-unauthorized', forbidden: 'T-l-forbidden', unreachable: 'T-l-unreachable', error: 'T-l-error' },
           ngoFailed: { invalid: 'T-n-invalid', unauthorized: 'T-n-unauthorized', forbidden: 'T-n-forbidden', unreachable: 'T-n-unreachable', error: 'T-n-error' },
           imagesFailed: { invalid: 'T-i-invalid', unauthorized: 'T-i-unauthorized', forbidden: 'T-i-forbidden', unreachable: 'T-i-unreachable', error: 'T-i-error' },
         },
@@ -297,6 +298,7 @@ describe('AdminNgoFormComponent', () => {
       expect(element.querySelector('.gallery__item')).not.toBeNull();
     });
     type(element, 'Renamed');
+    choose(element, new File([new Uint8Array(5)], 'logo.png', { type: 'image/png' }));
     element.querySelector<HTMLButtonElement>('.gallery__remove')!.click();
     fixture.detectChanges();
 
@@ -305,6 +307,8 @@ describe('AdminNgoFormComponent', () => {
       status: 204,
       statusText: 'No Content',
     });
+    (await vi.waitFor(() => http.expectOne({ method: 'POST', url: `${server}/api/v1/ngo/logo` }))).flush(null, { status: 200, statusText: 'OK' });
+    (await vi.waitFor(() => http.expectOne({ method: 'GET', url: `${server}/api/v1/ngo` }))).flush({ name: 'Renamed', logoUrl: null });
     (await vi.waitFor(() => http.expectOne({ method: 'DELETE', url: `${listUrl()}/i1` }))).flush(
       {},
       { status: 403, statusText: 'Forbidden' },
@@ -377,24 +381,7 @@ describe('AdminNgoFormComponent', () => {
       Array.from(element.querySelectorAll('.settings-result__line')).map((line) => line.textContent?.trim());
     const noNgoRequests = () => http.expectNone(ngoUrl());
 
-    it('keeps the existing logo link of the system in a hidden input of the form', () => {
-      const { element } = render('Org', '/files/logo.png');
-      const hidden = element.querySelector('form input[type=hidden]') as HTMLInputElement;
-      expect(hidden).not.toBeNull();
-      expect(hidden.value).toBe('/files/logo.png');
-    });
-
-    it('keeps the hidden input empty when the organization has no logo, and follows the saved link', () => {
-      const { fixture, element } = render('Org', null);
-      const hidden = () => element.querySelector('form input[type=hidden]') as HTMLInputElement;
-      expect(hidden().value).toBe('');
-
-      accounts.update(accounts.activeId()!, { ngoLogoUrl: '/files/new.png' });
-      fixture.detectChanges();
-      expect(hidden().value).toBe('/files/new.png');
-    });
-
-    it('puts the name from the form and the received logo link (still null: the upload is not made yet)', async () => {
+    it('puts the changed name with a null logoUrl (the logo goes by its own request, never as a link)', async () => {
       const { fixture, element } = render('Org', '/files/logo.png');
       type(element, '  New name ');
 
@@ -403,39 +390,148 @@ describe('AdminNgoFormComponent', () => {
       expect(request.request.method).toBe('PUT');
       expect(request.request.body).toEqual({ name: 'New name', logoUrl: null });
       request.flush(null, { status: 204, statusText: 'No Content' });
-    });
-
-    it('sends nothing and shows no block when neither the name nor the logo was changed', async () => {
-      const { fixture, element } = render('Org', null);
-      submitForm(fixture, element);
+      // Файл логотипа не обирали — додаткового запиту нема.
       await Promise.resolve();
-      noNgoRequests();
-      expect(block(element)).toBeNull();
+      http.expectNone(`${ngoUrl()}/logo`);
     });
 
-    it('lists the name and the logo separately: only the logo when only the logo changed', async () => {
-      // Логотип в системі є, а отримане посилання поки завжди null — тож логотип змінюється, назва ні.
-      const { fixture, element } = render('Org', '/files/logo.png');
-      submitForm(fixture, element);
-      (await vi.waitFor(() => http.expectOne(ngoUrl()))).flush(null, { status: 204, statusText: 'No Content' });
-      await vi.waitFor(() => {
-        fixture.detectChanges();
-        expect(block(element)).not.toBeNull();
-      });
-      expect(lines(element)).toEqual([text.result.logo]);
-    });
+    describe('the logo (POST /api/v1/ngo/logo)', () => {
+      const logoUrl = () => `${ngoUrl()}/logo`;
+      const png = () => new File([new Uint8Array(5)], 'logo.png', { type: 'image/png' });
+      const ok = { status: 200, statusText: 'OK' };
+      const noContent = { status: 204, statusText: 'No Content' };
 
-    it('lists both lines when the name and the logo changed', async () => {
-      const { fixture, element } = render('Org', '/files/logo.png');
-      type(element, 'Renamed');
-      submitForm(fixture, element);
-      (await vi.waitFor(() => http.expectOne(ngoUrl()))).flush(null, { status: 204, statusText: 'No Content' });
-      await vi.waitFor(() => {
+      it('sends the image itself in an extra request when a file is chosen (after the name, when it was changed)', async () => {
+        const { fixture, element } = render('Org', null);
+        type(element, 'Renamed');
+        choose(element, png());
         fixture.detectChanges();
-        expect(block(element)).not.toBeNull();
+
+        submitForm(fixture, element);
+        // Спершу назва…
+        const put = await vi.waitFor(() => http.expectOne({ method: 'PUT', url: ngoUrl() }));
+        http.expectNone(logoUrl());
+        put.flush(null, noContent);
+        // …і лише потім зображення.
+        const upload = await vi.waitFor(() => http.expectOne({ method: 'POST', url: logoUrl() }));
+        expect(upload.request.body).toBeInstanceOf(FormData);
+        expect(((upload.request.body as FormData).get('file') as File).name).toBe('logo.png');
+        upload.flush(null, ok);
+        (await vi.waitFor(() => http.expectOne({ method: 'GET', url: ngoUrl() }))).flush({ name: 'Renamed', logoUrl: '/files/new.png' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(block(element)).not.toBeNull();
+        });
+
+        expect(lines(element)).toEqual([text.result.name, text.result.logo]);
+        expect(block(element)?.classList).toContain('settings-result--success');
       });
-      expect(lines(element)).toEqual([text.result.name, text.result.logo]);
-      expect(block(element)?.classList).toContain('settings-result--success');
+
+      it('sends only the logo (no PUT) when a file is chosen and the name was not changed', async () => {
+        const { fixture, element } = render('Org', null);
+        choose(element, png());
+        fixture.detectChanges();
+
+        submitForm(fixture, element);
+        (await vi.waitFor(() => http.expectOne({ method: 'POST', url: logoUrl() }))).flush(null, ok);
+        (await vi.waitFor(() => http.expectOne({ method: 'GET', url: ngoUrl() }))).flush({ name: 'Org', logoUrl: '/files/new.png' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(block(element)).not.toBeNull();
+        });
+
+        http.expectNone({ method: 'PUT', url: ngoUrl() });
+        expect(lines(element)).toEqual([text.result.logo]);
+      });
+
+      it('sends no logo request when no file is chosen', async () => {
+        const { fixture, element } = render('Org', '/files/logo.png');
+        type(element, 'Renamed');
+        submitForm(fixture, element);
+        (await vi.waitFor(() => http.expectOne({ method: 'PUT', url: ngoUrl() }))).flush(null, noContent);
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(block(element)).not.toBeNull();
+        });
+        http.expectNone(logoUrl());
+        expect(lines(element)).toEqual([text.result.name]);
+      });
+
+      it('sends nothing when nothing was changed and no file is chosen', async () => {
+        const { fixture, element } = render('Org', '/files/logo.png');
+        submitForm(fixture, element);
+        await Promise.resolve();
+        http.expectNone((r) => r.method !== 'GET');
+        expect(block(element)).toBeNull();
+      });
+
+      it('does not send the logo when the name could not be saved', async () => {
+        const { fixture, element } = render('Org', null);
+        type(element, 'Renamed');
+        choose(element, png());
+        fixture.detectChanges();
+
+        submitForm(fixture, element);
+        (await vi.waitFor(() => http.expectOne({ method: 'PUT', url: ngoUrl() }))).flush({}, { status: 403, statusText: 'Forbidden' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(block(element)).not.toBeNull();
+        });
+        http.expectNone(logoUrl());
+        expect(lines(element)).toEqual([text.result.ngoFailed.forbidden]);
+      });
+
+      it.each([
+        [400, 'invalid'],
+        [401, 'unauthorized'],
+        [403, 'forbidden'],
+        [500, 'error'],
+      ] as const)('shows its own red line for HTTP %i of the logo, and keeps the chosen file for another try', async (status, key) => {
+        const { fixture, element } = render('Org', null);
+        choose(element, png());
+        fixture.detectChanges();
+
+        submitForm(fixture, element);
+        (await vi.waitFor(() => http.expectOne({ method: 'POST', url: logoUrl() }))).flush({}, { status, statusText: 'x' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(block(element)).not.toBeNull();
+        });
+
+        expect(lines(element)).toEqual([text.result.logoFailed[key]]);
+        expect(block(element)?.classList).not.toContain('settings-result--success');
+        // Файл лишається обраним: можна повторити.
+        expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe('logo.png');
+
+        submitForm(fixture, element);
+        (await vi.waitFor(() => http.expectOne({ method: 'POST', url: logoUrl() }))).flush(null, ok);
+        (await vi.waitFor(() => http.expectOne({ method: 'GET', url: ngoUrl() }))).flush({ name: 'Org', logoUrl: '/files/new.png' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(lines(element)).toEqual([text.result.logo]);
+        });
+      });
+
+      it('forgets the chosen file after a successful upload: it is the logo from the server now', async () => {
+        const { fixture, element } = render('Org', null);
+        choose(element, png());
+        fixture.detectChanges();
+        expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe('logo.png');
+
+        submitForm(fixture, element);
+        (await vi.waitFor(() => http.expectOne({ method: 'POST', url: logoUrl() }))).flush(null, ok);
+        (await vi.waitFor(() => http.expectOne({ method: 'GET', url: ngoUrl() }))).flush({ name: 'Org', logoUrl: '/files/new.png' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(block(element)).not.toBeNull();
+        });
+
+        expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(text.noFile);
+        // Повторне збереження вже нічого не шле.
+        submitForm(fixture, element);
+        await Promise.resolve();
+        http.expectNone(logoUrl());
+      });
     });
 
     it('shows a green block with what was changed after a successful update, and writes the name to the account', async () => {
@@ -748,9 +844,25 @@ describe('AdminNgoFormComponent', () => {
   describe('logo', () => {
     const png = (size = 10) => new File([new Uint8Array(size)], 'logo.png', { type: 'image/png' });
 
-    it('only offers the image types the server accepts', () => {
+    it('offers the same types as for an avatar (png, webp, jpeg, jpg, gif) and svg on top', () => {
       const { element } = render();
-      expect(fileInput(element).accept).toBe('image/png,image/jpeg,image/webp,image/svg+xml');
+      expect(fileInput(element).accept).toBe('image/png,image/webp,image/jpeg,image/gif,image/svg+xml');
+    });
+
+    it.each([
+      ['logo.png', 'image/png'],
+      ['logo.webp', 'image/webp'],
+      ['logo.jpeg', 'image/jpeg'],
+      ['logo.jpg', 'image/jpeg'],
+      ['logo.gif', 'image/gif'],
+      ['logo.svg', 'image/svg+xml'],
+    ])('accepts %s as a logo', (name, type) => {
+      const { fixture, element } = render();
+      choose(element, new File([new Uint8Array(5)], name, { type }));
+      fixture.detectChanges();
+
+      expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(name);
+      expect(element.querySelector('.settings-avatar__upload .settings-field__error')).toBeNull();
     });
 
     it('shows the chosen file name and previews it, with the reminder to save', () => {
@@ -777,9 +889,13 @@ describe('AdminNgoFormComponent', () => {
       expect(revokeUrl).toHaveBeenCalledTimes(2);
     });
 
-    it('rejects a file of another type, with the error under the logo', () => {
+    it.each([
+      ['doc.pdf', 'application/pdf'],
+      ['logo.bmp', 'image/bmp'],
+      ['logo.tiff', 'image/tiff'],
+    ])('rejects %s (another type), with the error under the logo', (name, type) => {
       const { fixture, element } = render();
-      choose(element, new File(['x'], 'doc.pdf', { type: 'application/pdf' }));
+      choose(element, new File(['x'], name, { type }));
       fixture.detectChanges();
 
       expect(createUrl).not.toHaveBeenCalled();

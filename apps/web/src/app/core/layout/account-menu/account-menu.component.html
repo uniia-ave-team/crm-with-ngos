@@ -56,7 +56,7 @@
              Немає посилання на логотип — значка немає взагалі. -->
         @if (account.logoUrl; as logo) {
           <span class="account-tile__badge" aria-hidden="true">
-            <img [src]="logo" alt="" appAlphaOutline="2" outlineColor="var(--nav-avatar-bg)" />
+            <img [appProtectedSrc]="logo" alt="" appAlphaOutline="2" outlineColor="var(--nav-avatar-bg)" />
           </span>
         }
       </button>
