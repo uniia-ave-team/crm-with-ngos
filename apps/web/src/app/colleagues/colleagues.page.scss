@@ -1,0 +1,192 @@
+// Шапка: заголовок зліва, кнопки «Ролі» й «Додати» та пошук справа.
+// Акценти кнопок: синій «Ролі» й зелений «Додати» (у темній темі зелений —
+// як на формах налаштувань).
+:host {
+  --colleagues-roles: #146ef4;
+  --colleagues-add: #32670b;
+  --colleagues-dot-green: #32670b;
+  --colleagues-dot-blue: #146ef4;
+  font-family: var(--font-menu);
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --colleagues-add: #478a7f;
+    --colleagues-dot-green: #7bc96f;
+    --colleagues-dot-blue: #6da8ff;
+  }
+}
+
+// Заголовок — стандартний розмір Ionic, як на сторінці «База знань», але жирний
+// (як і на решті основних сторінок); вирівняний зліва по краю таблиці.
+ion-title {
+  padding-inline: 28px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.colleagues__actions {
+  gap: 16px;
+  padding-inline-end: 24px;
+}
+
+.colleagues__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  font-family: var(--font-login-title);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+
+  ion-icon {
+    font-size: 20px;
+  }
+
+  &--roles {
+    background: var(--colleagues-roles);
+  }
+
+  &--add {
+    background: var(--colleagues-add);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+.colleagues__search {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font-size: 30px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+// На телефоні в кнопках лишаються самі іконки.
+@media (max-width: 600px) {
+  .colleagues__btn span {
+    display: none;
+  }
+
+  .colleagues__btn {
+    padding: 0 10px;
+  }
+
+  .colleagues__actions {
+    gap: 8px;
+    padding-inline-end: 12px;
+  }
+
+  ion-title {
+    padding-inline: 16px;
+  }
+}
+
+// Комірка «ПІБ».
+.person {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.person__avatar {
+  --avatar-size: 44px;
+  flex: none;
+}
+
+.person__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.person__name {
+  font-family: var(--font-secondary-title);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.person__pronouns {
+  font-size: 13px;
+  color: var(--nav-fg-inactive);
+}
+
+// Комірка «Посада».
+.position {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+
+  &--green {
+    background: rgb(50 103 11 / 12%);
+    color: var(--colleagues-dot-green);
+  }
+
+  &--teal {
+    background: rgb(71 138 127 / 16%);
+    color: #1f7a6c;
+  }
+
+  &--gray {
+    background: var(--nav-active-bg);
+    color: var(--nav-fg-inactive);
+  }
+}
+
+.position__line {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.position__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+
+  &--green {
+    background: var(--colleagues-dot-green);
+  }
+
+  &--blue {
+    background: var(--colleagues-dot-blue);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge--teal {
+    color: #7fd1c3;
+  }
+}

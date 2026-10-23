@@ -4,6 +4,16 @@
  * за якими клієнт щось показує чи ховає.
  */
 export const PERMISSIONS = {
+  viewUser: 'Permissions.ViewUser',
+  createUser: 'Permissions.CreateUser',
+  updateUser: 'Permissions.UpdateUser',
+  disableUser: 'Permissions.DisableUser',
+  deleteUser: 'Permissions.DeleteUser',
+  assignRoleToUser: 'Permissions.AssignRoleToUser',
+  canResetPassword: 'Permissions.CanResetPassword',
+  manageRole: 'Permissions.ManageRole',
+  viewEmergencyContact: 'Permissions.ViewEmergencyContact',
+  viewCustomFields: 'Permissions.ViewCustomFields',
   updateNgo: 'Permissions.UpdateNgo',
   viewLoginPageImages: 'Permissions.ViewLoginPageImages',
   createLoginPageImages: 'Permissions.CreateLoginPageImages',
@@ -21,6 +31,22 @@ export const ADMIN_PANEL_PERMISSIONS: readonly string[] = [
 export const GALLERY_PERMISSIONS: readonly string[] = [
   PERMISSIONS.createLoginPageImages,
   PERMISSIONS.deleteLoginPageImages,
+];
+
+/** Права вкладки «Колеги»: достатньо `ViewUser` (пункт меню й страж маршруту). */
+export const COLLEAGUES_PERMISSIONS: readonly string[] = [PERMISSIONS.viewUser];
+
+/**
+ * Дії з колегою на вкладці «Колеги»: три крапки в кінці рядка показуються, якщо
+ * є хоча б одне з цих прав.
+ */
+export const COLLEAGUE_ACTIONS_PERMISSIONS: readonly string[] = [
+  PERMISSIONS.updateUser,
+  PERMISSIONS.disableUser,
+  PERMISSIONS.deleteUser,
+  PERMISSIONS.assignRoleToUser,
+  PERMISSIONS.canResetPassword,
+  PERMISSIONS.manageRole,
 ];
 
 /** Чи є в `granted` хоча б одне з прав `required` (порожній `required` — не підходить ніхто). */

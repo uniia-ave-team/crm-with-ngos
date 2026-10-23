@@ -96,6 +96,28 @@
       "logoSize": "Файл завеликий: максимум 2 МБ."
     }
   },
+  "colleagues": {
+    "roles": "Ролі",
+    "add": "Додати",
+    "search": "Пошук",
+    "columns": {
+      "name": "ПІБ",
+      "position": "Посада",
+      "email": "Пошта",
+      "phone": "Телефон"
+    },
+    "sample": {
+      "name": "Прізвище Імʼя",
+      "badge": "Посада",
+      "line": "Проєкт — роль",
+      "email": "mail@example.org",
+      "phone": "+380000000000"
+    }
+  },
+  "table": {
+    "rowMenu": "Дії з рядком",
+    "addColumn": "Додати колонку"
+  },
   "settings": {
     "menu": {
       "title": "Мої налаштування",

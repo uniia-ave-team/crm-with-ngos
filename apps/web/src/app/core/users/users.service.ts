@@ -4,7 +4,6 @@ import { firstValueFrom, timeout } from 'rxjs';
 
 import { ConnectionService } from '../connection/connection.service';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
-import { UserProfile } from './user-profile';
 
 const API_USERS_PATH = '/api/v1/users';
 const REQUEST_TIMEOUT_MS = 10000;
@@ -27,7 +26,7 @@ export type UpdateProfileResult = 'updated' | RequestFailure;
 export type UploadAvatarResult = 'uploaded' | RequestFailure;
 
 /**
- * Тіло `PUT /api/v1/users/{id}`: сервер вимагає всі поля (кожне — рядок або
+ * Тіло `PUT /api/v1/users/me`: сервер вимагає всі поля (кожне — рядок або
  * `null`). Категорія займенників — число з `PronounCategory`.
  */
 export interface ProfileUpdate {
@@ -66,23 +65,6 @@ export class UsersService {
   }
 
   /**
-   * `GET <сервер>/api/v1/users/{id}` — детальний профіль користувача (потрібне
-   * право `ViewUser`). Повертає профіль або причину невдачі (404 — `error`).
-   */
-  async get(id: string): Promise<UserProfile | RequestFailure> {
-    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}`;
-    console.log(`[UsersService] Запитую профіль користувача: ${url}`);
-
-    try {
-      return await firstValueFrom(this.http.get<UserProfile>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
-    } catch (error) {
-      const failure = toRequestFailure(error);
-      console.warn(`[UsersService] Не вдалося отримати профіль (${failure})`, error);
-      return failure;
-    }
-  }
-
-  /**
    * `GET <сервер>/api/v1/users/me/permissions` — унікальні права поточного
    * користувача, за якими будується інтерфейс. Повертає список або причину
    * невдачі; відповідь не масивом вважається помилкою. Токен додає
@@ -107,11 +89,12 @@ export class UsersService {
   }
 
   /**
-   * `PUT <сервер>/api/v1/users/{id}` — оновлення профілю (потрібне право
-   * `UpdateUser`; 204 без тіла). Токен додає `authInterceptor`.
+   * `PUT <сервер>/api/v1/users/me` — оновлення профілю поточного користувача
+   * (лише авторизація, права `UpdateUser` не потрібно; 204 без тіла). Токен
+   * додає `authInterceptor`.
    */
-  async updateProfile(id: string, profile: ProfileUpdate): Promise<UpdateProfileResult> {
-    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}`;
+  async updateProfile(profile: ProfileUpdate): Promise<UpdateProfileResult> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me`;
     console.log(`[UsersService] Оновлюю профіль користувача: ${url}`);
 
     try {
@@ -126,13 +109,13 @@ export class UsersService {
   }
 
   /**
-   * `POST <сервер>/api/v1/users/{id}/avatar` — завантаження аватара
-   * (`multipart/form-data`, поле `file`; потрібне право `UpdateUser`; 200 без
+   * `POST <сервер>/api/v1/users/me/avatar` — завантаження аватара поточного
+   * користувача (`multipart/form-data`, поле `file`; лише авторизація; 200 без
    * тіла). Передається саме зображення, а не посилання: посилання на нього
-   * призначає сервер, тож новий `avatarUrl` читається з профілю (`GET /users/{id}`).
+   * призначає сервер, тож новий `avatarUrl` читається з профілю (`GET /users/me`).
    */
-  async uploadAvatar(id: string, file: File): Promise<UploadAvatarResult> {
-    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}/avatar`;
+  async uploadAvatar(file: File): Promise<UploadAvatarResult> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/avatar`;
     console.log(`[UsersService] Завантажую аватар: ${url}`);
 
     try {

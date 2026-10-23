@@ -3,7 +3,7 @@ import { PreloadAllModules, RouterModule, Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { requireAnyPermission } from './core/auth/permission.guard';
-import { ADMIN_PANEL_PERMISSIONS } from './core/auth/permissions';
+import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS } from './core/auth/permissions';
 import { connectionGuard } from './core/connection/connection.guard';
 
 // Усі сторінки, крім /login, проходять два стражі. authGuard: шукає чинний
@@ -42,7 +42,8 @@ const routes: Routes = [
   {
     path: 'colleagues',
     loadChildren: () => import('./colleagues/colleagues.module').then((m) => m.ColleaguesPageModule),
-    canActivate: [authGuard, connectionGuard],
+    // Без права ViewUser — на REDIRECT_URL (те саме, що ховає пункт меню «Колеги»).
+    canActivate: [authGuard, connectionGuard, requireAnyPermission(COLLEAGUES_PERMISSIONS)],
     runGuardsAndResolvers: 'always',
   },
   {

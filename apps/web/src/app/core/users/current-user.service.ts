@@ -141,32 +141,6 @@ export class CurrentUserService {
   }
 
   /**
-   * Оновлює профіль детальним `GET /api/v1/users/{id}` (для вкладки «Дані
-   * профілю»): нові дані потрапляють і в памʼять (меню, форма), і в знімок
-   * акаунта в `localStorage`. Нічого не змінює, якщо профіль ще не завантажено
-   * (нема `id`), акаунт змінився за час запиту або сервер відмовив (наприклад,
-   * нема права `ViewUser`): тоді лишаються дані з `/users/me`.
-   */
-  async refresh(): Promise<'ok' | 'skipped' | 'failed'> {
-    const session = this.auth.sessionId();
-    const id = this.userSignal()?.id ?? this.accounts.active()?.userId;
-    if (!session || !id) {
-      return 'skipped';
-    }
-
-    const result = await this.users.get(id);
-    if (typeof result === 'string') {
-      return 'failed';
-    }
-    // Поки йшов запит, акаунт змінився (вихід, перемикання) — результат не береться.
-    if (session !== this.auth.sessionId()) {
-      return 'skipped';
-    }
-    this.applyProfile(session, result);
-    return 'ok';
-  }
-
-  /**
    * Вносить у профіль у памʼяті (і в знімок акаунта) зміни, які користувач щойно
    * успішно зберіг на сервері, не перепитуючи його. Профіль не завантажено —
    * нічого не робить.

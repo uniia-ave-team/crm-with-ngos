@@ -52,41 +52,6 @@ describe('UsersService', () => {
     expect(await result).toBe('unreachable');
   });
 
-  describe('get', () => {
-    const profileUrl = (id: string) => `${url}/${id}`;
-
-    it('requests the profile of the given user and returns it', async () => {
-      const body = { id: 'u-1', email: 'a@b.org', firstName: ' ', lastName: ' ', roles: [], customFields: [] };
-      const result = service.get('u-1');
-      const request = http.expectOne(profileUrl('u-1'));
-      expect(request.request.method).toBe('GET');
-      request.flush(body);
-      expect(await result).toEqual(body);
-    });
-
-    it('escapes the id so that it stays one path segment', async () => {
-      const result = service.get('a/b');
-      http.expectOne(profileUrl('a%2Fb')).flush({}, { status: 404, statusText: 'Not Found' });
-      expect(await result).toBe('error');
-    });
-
-    it.each([
-      [401, 'unauthorized'],
-      [403, 'forbidden'],
-      [404, 'error'],
-    ])('returns the failure for HTTP %i (%s)', async (status, expected) => {
-      const result = service.get('u-1');
-      http.expectOne(profileUrl('u-1')).flush({}, { status, statusText: 'x' });
-      expect(await result).toBe(expected);
-    });
-
-    it('reports an unreachable server', async () => {
-      const result = service.get('u-1');
-      http.expectOne(profileUrl('u-1')).error(new ProgressEvent('error'));
-      expect(await result).toBe('unreachable');
-    });
-  });
-
   describe('getMyPermissions', () => {
     const permissionsUrl = () => `${url}/me/permissions`;
 
@@ -128,7 +93,7 @@ describe('UsersService', () => {
   });
 
   describe('updateProfile', () => {
-    const profileUrl = (id: string) => `${url}/${id}`;
+    const meUrl = () => `${url}/me`;
     const body = {
       firstName: ' ',
       lastName: ' ',
@@ -143,9 +108,9 @@ describe('UsersService', () => {
       avatarUrl: null,
     };
 
-    it('puts the whole profile to /users/{id} and treats 204 as updated', async () => {
-      const result = service.updateProfile('u-1', body);
-      const request = http.expectOne(profileUrl('u-1'));
+    it('puts the whole profile to /users/me and treats 204 as updated', async () => {
+      const result = service.updateProfile(body);
+      const request = http.expectOne(meUrl());
       expect(request.request.method).toBe('PUT');
       expect(request.request.body).toEqual(body);
       request.flush(null, { status: 204, statusText: 'No Content' });
@@ -159,25 +124,25 @@ describe('UsersService', () => {
       [404, 'error'],
       [500, 'error'],
     ])('maps HTTP %i to %s', async (status, expected) => {
-      const result = service.updateProfile('u-1', body);
-      http.expectOne(profileUrl('u-1')).flush({}, { status, statusText: 'x' });
+      const result = service.updateProfile(body);
+      http.expectOne(meUrl()).flush({}, { status, statusText: 'x' });
       expect(await result).toBe(expected);
     });
 
     it('reports an unreachable server', async () => {
-      const result = service.updateProfile('u-1', body);
-      http.expectOne(profileUrl('u-1')).error(new ProgressEvent('error'));
+      const result = service.updateProfile(body);
+      http.expectOne(meUrl()).error(new ProgressEvent('error'));
       expect(await result).toBe('unreachable');
     });
   });
 
   describe('uploadAvatar', () => {
-    const avatarUrl = (id: string) => `${url}/${id}/avatar`;
+    const meAvatarUrl = () => `${url}/me/avatar`;
     const file = new File(['image'], 'photo.png', { type: 'image/png' });
 
     it('posts the image as multipart/form-data in the field "file" and treats 200 as uploaded', async () => {
-      const result = service.uploadAvatar('u-1', file);
-      const request = http.expectOne(avatarUrl('u-1'));
+      const result = service.uploadAvatar(file);
+      const request = http.expectOne(meAvatarUrl());
       expect(request.request.method).toBe('POST');
       const form = request.request.body as FormData;
       expect(form).toBeInstanceOf(FormData);
@@ -193,14 +158,14 @@ describe('UsersService', () => {
       [404, 'error'],
       [500, 'error'],
     ])('maps HTTP %i to %s', async (status, expected) => {
-      const result = service.uploadAvatar('u-1', file);
-      http.expectOne(avatarUrl('u-1')).flush({}, { status, statusText: 'x' });
+      const result = service.uploadAvatar(file);
+      http.expectOne(meAvatarUrl()).flush({}, { status, statusText: 'x' });
       expect(await result).toBe(expected);
     });
 
     it('reports an unreachable server', async () => {
-      const result = service.uploadAvatar('u-1', file);
-      http.expectOne(avatarUrl('u-1')).error(new ProgressEvent('error'));
+      const result = service.uploadAvatar(file);
+      http.expectOne(meAvatarUrl()).error(new ProgressEvent('error'));
       expect(await result).toBe('unreachable');
     });
   });

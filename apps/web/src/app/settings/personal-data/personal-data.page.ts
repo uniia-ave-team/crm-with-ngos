@@ -37,12 +37,13 @@ export type PronounChoice = 'she' | 'he' | 'they' | 'other';
 const PRONOUN_LABELS = { she: 'pronounShe', he: 'pronounHe', they: 'pronounThey' } as const;
 
 /**
- * Вкладка «Дані профілю» (`/settings/personal-data`). Під час відкриття
- * оновлює профіль із сервера (`GET /users/{id}`) і заповнює з нього поля;
- * «Зберегти» перевіряє обовʼязкові поля й шле `PUT /users/{id}`.
+ * Вкладка «Дані профілю» (`/settings/personal-data`). Поля заповнюються з
+ * профілю поточного користувача (`GET /users/me`, його перепитує `authGuard` при
+ * кожній зміні сторінки); «Зберегти» перевіряє обовʼязкові поля й шле
+ * `PUT /users/me`. Жодних прав для цього не потрібно.
  *
  * Аватар у `PUT` завжди `null` (посилання призначає сервер): якщо обрано файл,
- * після збереження даних іде додатковий запит `POST /users/{id}/avatar` із самим
+ * після збереження даних іде додатковий запит `POST /users/me/avatar` із самим
  * зображенням; не обрано — цього запиту нема.
  */
 @Component({
@@ -152,15 +153,11 @@ export class PersonalDataPage {
     // Посилання на обране зображення живе, поки відкрита вкладка.
     inject(DestroyRef).onDestroy(() => this.releasePreview());
 
-    // Профіль (з /users/me, з GET /users/{id} чи після збереження) — у поля форми.
+    // Профіль (з /users/me чи після збереження) — у поля форми.
     effect(() => {
       const user = this.user();
       untracked(() => this.fillFrom(user));
     });
-
-    // Відкрили вкладку — підтягуємо детальний профіль (`GET /users/{id}`): поля
-    // форми й знімок акаунта в `localStorage` оновлюються з відповіді.
-    void this.currentUser.refresh();
   }
 
   protected onFieldChange(field: { set(value: string): void }, event: Event): void {
@@ -201,8 +198,8 @@ export class PersonalDataPage {
 
   /**
    * «Зберегти»: перевіряє обовʼязкові поля й, якщо все гаразд, шле `PUT
-   * /users/{id}`. Порожні необовʼязкові поля йдуть як `null`. Якщо після цього обрано файл
-   * аватара — додатковий запит `POST /users/{id}/avatar` із самим зображенням
+   * /users/me`. Порожні необовʼязкові поля йдуть як `null`. Якщо після цього обрано файл
+   * аватара — додатковий запит `POST /users/me/avatar` із самим зображенням
    * (файл не обрано — запиту нема); невдача завантаження показується окремим
    * червоним блоком, а файл лишається обраним для повторної спроби.
    */
@@ -221,15 +218,9 @@ export class PersonalDataPage {
     ) {
       return;
     }
-    const id = this.user()?.id ?? this.accounts.active()?.userId;
-    if (!id) {
-      this.result.set('error');
-      return;
-    }
-
     const body = this.buildBody();
     this.saving.set(true);
-    const outcome = await this.users.updateProfile(id, body);
+    const outcome = await this.users.updateProfile(body);
 
     if (outcome === 'updated') {
       this.attempted.set(false);
@@ -246,7 +237,7 @@ export class PersonalDataPage {
         pronouns: body.pronouns,
       });
       // Результат показуємо після обох запитів: успіх — лише якщо й аватар (за наявності файлу) завантажено.
-      this.result.set((await this.uploadAvatar(id)) ?? 'success');
+      this.result.set((await this.uploadAvatar()) ?? 'success');
       this.saving.set(false);
       this.scrollToTop();
       return;
@@ -259,20 +250,21 @@ export class PersonalDataPage {
   }
 
   /**
-   * Другий запит збереження: обраний файл аватара (`POST /users/{id}/avatar`).
-   * Успіх — профіль читається заново (нове посилання на аватар призначив сервер),
+   * Другий запит збереження: обраний файл аватара (`POST /users/me/avatar`).
+   * Успіх — профіль читається заново (`GET /users/me`: нове посилання на аватар
+   * призначив сервер),
    * обраний файл і його превʼю забуваються. Повертає результат невдачі (червоний
    * блок із причиною) або `null`, якщо завантажено чи файлу не було.
    */
-  private async uploadAvatar(id: string): Promise<SaveResult | null> {
+  private async uploadAvatar(): Promise<SaveResult | null> {
     const file = this.chosenAvatar();
     if (!file) {
       return null;
     }
-    const outcome = await this.users.uploadAvatar(id, file);
+    const outcome = await this.users.uploadAvatar(file);
     if (outcome === 'uploaded') {
       this.clearAvatarSelection();
-      await this.currentUser.refresh();
+      await this.currentUser.reload();
       return null;
     }
     return `avatar.${outcome}`;

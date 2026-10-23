@@ -129,60 +129,12 @@ describe('PersonalDataPage', () => {
   });
 
   describe('opening the tab', () => {
-    const detailsUrl = (id: string) => `${server}/api/v1/users/${id}`;
-
-    it('asks for the detailed profile of the current user', async () => {
+    it('sends no request of its own: the profile comes from /users/me, which the page guard asks for', async () => {
       await signIn({ id: 'user-7', firstName: 'First', lastName: 'Last', email: 'a@b.org' });
+      // Запити входу (організація, права) — не сторінки: відкидаємо їх перед відкриттям.
+      http.match(() => true);
       render();
-      const request = http.expectOne(detailsUrl('user-7'));
-      expect(request.request.method).toBe('GET');
-      request.flush({ id: 'user-7', firstName: 'First', lastName: 'Last', email: 'a@b.org', roles: [], customFields: [] });
-    });
-
-    it('fills the form and the saved account from the answer', async () => {
-      await signIn({ id: 'user-7', firstName: 'Old First', lastName: 'Old Last', email: 'old@b.org' });
-      const { fixture, element } = render();
-      http.expectOne(detailsUrl('user-7')).flush({
-        id: 'user-7',
-        email: 'new@b.org',
-        firstName: 'First',
-        lastName: 'Last',
-        patronymic: 'Middle',
-        internalPosition: 'Position',
-        phoneNumber: '+380123456789',
-        country: 'Country',
-        emergencyContact: 'Contact',
-        avatarUrl: null,
-        roles: [],
-        customFields: [],
-      });
-      await vi.waitFor(() => expect(TestBed.inject(CurrentUserService).user()?.lastName).toBe('Last'));
-      fixture.detectChanges();
-
-      const value = (id: string) => (element.querySelector(`#${id}`) as HTMLInputElement).value;
-      expect(value('settings-last-name')).toBe('Last');
-      expect(value('settings-first-name')).toBe('First');
-      expect(value('settings-patronymic')).toBe('Middle');
-      expect(value('settings-position')).toBe('Position');
-      expect(value('settings-phone')).toBe('+380123456789');
-      expect(value('settings-emergency-contact')).toBe('Contact');
-      expect(value('settings-country')).toBe('Country');
-
-      const account = TestBed.inject(AccountsService).active()!;
-      expect(account).toMatchObject({ firstName: 'First', lastName: 'Last', email: 'new@b.org' });
-      expect(JSON.parse(localStorage.getItem(`yavir.account.${account.id}`)!)).toMatchObject({
-        firstName: 'First',
-        lastName: 'Last',
-      });
-    });
-
-    it('keeps the data from /users/me when the detailed profile is not available', async () => {
-      await signIn({ id: 'user-7', firstName: 'First', lastName: 'Last', email: 'a@b.org' });
-      const { fixture, element } = render();
-      http.expectOne(detailsUrl('user-7')).flush({}, { status: 403, statusText: 'Forbidden' });
-      await new Promise((resolve) => setTimeout(resolve));
-      fixture.detectChanges();
-      expect((element.querySelector('#settings-first-name') as HTMLInputElement).value).toBe('First');
+      http.expectNone(() => true);
     });
 
     it('sends nothing when nobody is signed in', () => {
@@ -250,7 +202,7 @@ describe('PersonalDataPage', () => {
   });
 
   describe('saving', () => {
-    const putUrl = (id = 'user-7') => `${server}/api/v1/users/${id}`;
+    const putUrl = () => `${server}/api/v1/users/me`;
     const profile = {
       id: 'user-7',
       firstName: 'First',
@@ -399,7 +351,7 @@ describe('PersonalDataPage', () => {
     });
 
     describe('the request', () => {
-      it('puts the profile to /users/{id}: the typed values, the current language and a null avatar', async () => {
+      it('puts the profile to /users/me: the typed values, the current language and a null avatar', async () => {
         const { fixture, element } = await open();
         setText(element, 'settings-last-name', ' Other ');
         setText(element, 'settings-position', 'Position B');
@@ -497,7 +449,7 @@ describe('PersonalDataPage', () => {
       });
     });
 
-    describe('the avatar (POST /api/v1/users/{id}/avatar)', () => {
+    describe('the avatar (POST /api/v1/users/me/avatar)', () => {
       const avatarUrl = () => `${putUrl()}/avatar`;
       const choose = (element: HTMLElement, file: File) => {
         const input = element.querySelector('.settings-avatar__input') as HTMLInputElement;
@@ -510,10 +462,8 @@ describe('PersonalDataPage', () => {
         request.flush(null, { status: 204, statusText: 'No Content' });
       };
 
-      it('sends the chosen image as multipart/form-data (field "file") after the PUT, then reads the profile again', async () => {
+      it('sends the chosen image as multipart/form-data (field "file") after the PUT, then reads the profile again (GET /users/me)', async () => {
         const { fixture, element } = await open();
-        // Профіль, який сторінка запросила при відкритті (другий такий запит піде після завантаження аватара).
-        http.expectOne({ method: 'GET', url: putUrl() }).flush({ ...profile, roles: [], customFields: [] });
         choose(element, png());
         save(fixture, element);
         http.expectNone({ method: 'POST', url: avatarUrl() });
@@ -622,16 +572,6 @@ describe('PersonalDataPage', () => {
         save(fixture, element);
         http.expectOne({ method: 'PUT', url: putUrl() }).flush(null, { status: 204, statusText: 'No Content' });
         await vi.waitFor(() => expect(language.language()).toBe('en'));
-      });
-
-      it('switches the interface to the language of the detailed profile when the tab is opened', async () => {
-        await signIn({ ...profile, preferredLanguage: 'uk' });
-        const language = TestBed.inject(LanguageService);
-        render();
-        expect(language.language()).toBe('uk');
-
-        http.expectOne({ method: 'GET', url: putUrl() }).flush({ ...profile, preferredLanguage: 'be', roles: [], customFields: [] });
-        await vi.waitFor(() => expect(language.language()).toBe('be'));
       });
 
       it('sends the chosen code, and null when nothing is chosen', async () => {
@@ -1003,7 +943,8 @@ describe('PersonalDataPage', () => {
       choose(element, png());
       fixture.detectChanges();
 
-      http.expectOne(`${server}/api/v1/users/user-7`).flush({
+      void TestBed.inject(CurrentUserService).reload();
+      http.expectOne(`${server}/api/v1/users/me`).flush({
         id: 'user-7',
         email: 'a@b.org',
         firstName: 'First',
