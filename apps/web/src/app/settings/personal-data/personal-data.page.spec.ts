@@ -370,7 +370,6 @@ describe('PersonalDataPage', () => {
           preferredLanguage: 'uk',
           pronouns: uk.settings.personal.pronounShe,
           pronounCategory: 2,
-          avatarUrl: null,
         });
         request.flush(null, { status: 204, statusText: 'No Content' });
       });
@@ -403,7 +402,7 @@ describe('PersonalDataPage', () => {
         request.flush(null, { status: 204, statusText: 'No Content' });
       });
 
-      it('sends a null avatar in the PUT even when a photo has been chosen: the image goes in its own request', async () => {
+      it('keeps the avatar out of the PUT even when a photo has been chosen: the image goes in its own request', async () => {
         const { fixture, element } = await open();
         const input = element.querySelector('.settings-avatar__input') as HTMLInputElement;
         Object.defineProperty(input, 'files', { value: [new File(['x'], 'photo.png', { type: 'image/png' })], configurable: true });
@@ -411,7 +410,7 @@ describe('PersonalDataPage', () => {
         save(fixture, element);
 
         const request = http.expectOne({ method: 'PUT', url: putUrl() });
-        expect((request.request.body as { avatarUrl: unknown }).avatarUrl).toBeNull();
+        expect(request.request.body).not.toHaveProperty('avatarUrl');
         request.flush(null, { status: 204, statusText: 'No Content' });
         await vi.waitFor(() => http.expectOne({ method: 'POST', url: `${putUrl()}/avatar` }).flush(null));
       });

@@ -32,7 +32,7 @@ describe('NgoService', () => {
     const result = service.create('Моя ГО');
     const request = http.expectOne(url);
     expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual({ name: 'Моя ГО', logoUrl: null });
+    expect(request.request.body).toEqual({ name: 'Моя ГО' });
     request.flush(null, { status: 201, statusText: 'Created' });
     expect(await result).toBe('created');
   });
@@ -122,24 +122,16 @@ describe('NgoService', () => {
   });
 
   describe('update', () => {
-    it('puts the name and the logo link and treats 204 as updated', async () => {
-      const result = service.update('Org', 'https://x/logo.png');
+    it('puts only the name and treats 204 as updated', async () => {
+      const result = service.update('Org');
       const request = http.expectOne(url);
       expect(request.request.method).toBe('PUT');
-      expect(request.request.body).toEqual({ name: 'Org', logoUrl: 'https://x/logo.png' });
+      expect(request.request.body).toEqual({ name: 'Org' });
       request.flush(null, { status: 204, statusText: 'No Content' });
       expect(await result).toBe('updated');
     });
 
-    it('sends a null logo link as it is', async () => {
-      const result = service.update('Org', null);
-      const request = http.expectOne(url);
-      expect(request.request.body).toEqual({ name: 'Org', logoUrl: null });
-      request.flush(null, { status: 204, statusText: 'No Content' });
-      await result;
-    });
-
-    it('writes the new name and logo into the active account', async () => {
+    it('writes the new name into the active account and keeps its logo', async () => {
       const accounts = TestBed.inject(AccountsService);
       const account = accounts.add({
         server: TestBed.inject(ConnectionService).serverUrl(),
@@ -149,27 +141,27 @@ describe('NgoService', () => {
         ngoName: 'Old',
         ngoLogoUrl: '/old.png',
       });
-      const result = service.update('New', '/new.png');
+      const result = service.update('New');
       http.expectOne(url).flush(null, { status: 204, statusText: 'No Content' });
       await result;
-      expect(accounts.accounts().find((a) => a.id === account.id)).toMatchObject({ ngoName: 'New', ngoLogoUrl: '/new.png' });
+      expect(accounts.accounts().find((a) => a.id === account.id)).toMatchObject({ ngoName: 'New', ngoLogoUrl: '/old.png' });
     });
 
-    it('writes the new name and logo into localStorage, in the record of the account that sent the request', async () => {
+    it('writes the new name into localStorage, in the record of the account that sent the request', async () => {
       const accounts = TestBed.inject(AccountsService);
       const server = TestBed.inject(ConnectionService).serverUrl();
       const first = accounts.add({ server, accessToken: 'a', refreshToken: 'r', identity: 'first', ngoName: 'Old', ngoLogoUrl: '/old.png' });
       const second = accounts.add({ server, accessToken: 'a2', refreshToken: 'r2', identity: 'second', ngoName: 'Other' });
       accounts.setActive(first.id);
 
-      const result = service.update('New', '/new.png');
+      const result = service.update('New');
       // Поки йде запит, активним став інший акаунт.
       accounts.setActive(second.id);
       http.expectOne(url).flush(null, { status: 204, statusText: 'No Content' });
       await result;
 
       const record = (id: string) => JSON.parse(localStorage.getItem(`yavir.account.${id}`)!);
-      expect(record(first.id)).toMatchObject({ ngoName: 'New', ngoLogoUrl: '/new.png' });
+      expect(record(first.id)).toMatchObject({ ngoName: 'New', ngoLogoUrl: '/old.png' });
       expect(record(second.id)).toMatchObject({ ngoName: 'Other' });
     });
 
@@ -183,7 +175,7 @@ describe('NgoService', () => {
         ngoName: 'Old',
         ngoLogoUrl: '/old.png',
       });
-      const result = service.update('New', null);
+      const result = service.update('New');
       http.expectOne(url).flush({}, { status: 400, statusText: 'x' });
       await result;
       expect(JSON.parse(localStorage.getItem(`yavir.account.${account.id}`)!)).toMatchObject({
@@ -206,14 +198,14 @@ describe('NgoService', () => {
         identity: 'u',
         ngoName: 'Old',
       });
-      const result = service.update('New', null);
+      const result = service.update('New');
       http.expectOne(url).flush({}, { status, statusText: 'x' });
       expect(await result).toBe(expected);
       expect(accounts.active()?.ngoName).toBe('Old');
     });
 
     it('reports an unreachable server', async () => {
-      const result = service.update('Org', null);
+      const result = service.update('Org');
       http.expectOne(url).error(new ProgressEvent('error'));
       expect(await result).toBe('unreachable');
     });

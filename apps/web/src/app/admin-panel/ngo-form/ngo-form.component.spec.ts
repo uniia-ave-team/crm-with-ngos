@@ -388,7 +388,7 @@ describe('AdminNgoFormComponent', () => {
       submitForm(fixture, element);
       const request = await vi.waitFor(() => http.expectOne(ngoUrl()));
       expect(request.request.method).toBe('PUT');
-      expect(request.request.body).toEqual({ name: 'New name', logoUrl: null });
+      expect(request.request.body).toEqual({ name: 'New name' });
       request.flush(null, { status: 204, statusText: 'No Content' });
       // Файл логотипа не обирали — додаткового запиту нема.
       await Promise.resolve();
@@ -798,7 +798,7 @@ describe('AdminNgoFormComponent', () => {
         type(element, 'Only name');
         submitForm(fixture, element);
         const request = await vi.waitFor(() => http.expectOne({ method: 'PUT', url: ngoUrl() }));
-        expect(request.request.body).toEqual({ name: 'Only name', logoUrl: null });
+        expect(request.request.body).toEqual({ name: 'Only name' });
         request.flush(null, noContent);
         http.expectNone((r) => r.url === imagesUrl());
       });

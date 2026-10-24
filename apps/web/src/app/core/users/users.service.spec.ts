@@ -105,7 +105,6 @@ describe('UsersService', () => {
       preferredLanguage: null,
       pronouns: ' ',
       pronounCategory: 2,
-      avatarUrl: null,
     };
 
     it('puts the whole profile to /users/me and treats 204 as updated', async () => {

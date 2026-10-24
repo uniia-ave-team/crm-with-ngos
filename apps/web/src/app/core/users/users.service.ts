@@ -27,7 +27,8 @@ export type UploadAvatarResult = 'uploaded' | RequestFailure;
 
 /**
  * Тіло `PUT /api/v1/users/me`: сервер вимагає всі поля (кожне — рядок або
- * `null`). Категорія займенників — число з `PronounCategory`.
+ * `null`). Категорія займенників — число з `PronounCategory`. Аватара тут
+ * нема: він завантажується окремо (`uploadAvatar`).
  */
 export interface ProfileUpdate {
   firstName: string | null;
@@ -40,7 +41,6 @@ export interface ProfileUpdate {
   preferredLanguage: string | null;
   pronouns: string | null;
   pronounCategory: number | null;
-  avatarUrl: string | null;
 }
 
 @Injectable({ providedIn: 'root' })

@@ -290,7 +290,7 @@ export class PersonalDataPage {
     void content?.scrollToTop?.(300);
   }
 
-  /** Тіло запиту: порожні рядки — `null`, фото — завжди `null`. */
+  /** Тіло запиту: порожні рядки — `null`; фото йде окремим запитом. */
   private buildBody() {
     const nullable = (value: string) => value.trim() || null;
     return {
@@ -304,7 +304,6 @@ export class PersonalDataPage {
       preferredLanguage: nullable(this.preferredLanguage()),
       pronouns: this.pronounsText(),
       pronounCategory: this.pronounCategory(),
-      avatarUrl: null,
     };
   }
 

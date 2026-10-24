@@ -202,10 +202,7 @@ export class AdminNgoFormComponent {
       let ngoReady = true;
 
       if (nameChanged) {
-        // `logoUrl` у цьому запиті завжди `null`: логотип іде окремим запитом нижче
-        // (а будь-яке не-null значення сервер прийняв би за посилання й видалив
-        // наявний файл логотипа).
-        const outcome = await this.ngo.update(name, null);
+        const outcome = await this.ngo.update(name);
         if (outcome === 'updated') {
           lines.push({ key: 'admin.result.name', ok: true });
         } else {

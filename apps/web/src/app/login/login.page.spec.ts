@@ -1244,7 +1244,7 @@ describe('LoginPage', () => {
       const done = (page as unknown as { submitNgo(): Promise<void> }).submitNgo();
 
       const create = http.expectOne(`${connection.serverUrl()}/api/v1/ngo`);
-      expect(create.request.body).toEqual({ name: 'Моя ГО', logoUrl: null });
+      expect(create.request.body).toEqual({ name: 'Моя ГО' });
       create.flush(null, { status: 201, statusText: 'Created' });
       await done;
 
@@ -1276,7 +1276,7 @@ describe('LoginPage', () => {
         // Спершу — дані організації (логотип ще не передається).
         const create = http.expectOne(ngoUrl);
         expect(create.request.method).toBe('POST');
-        expect(create.request.body).toEqual({ name: 'Моя ГО', logoUrl: null });
+        expect(create.request.body).toEqual({ name: 'Моя ГО' });
         http.expectNone(logoUrl);
         create.flush(null, created);
 
