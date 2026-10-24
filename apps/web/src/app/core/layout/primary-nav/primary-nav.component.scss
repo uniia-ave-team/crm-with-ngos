@@ -46,7 +46,10 @@ $desktop: 992px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 0 16px;
+  // Відступи підібрано так, щоб центр лого (16px відступ рейла + 1px + половина
+  // лого 16px = 33px) майже збігався з центром шапки сторінки (65px → 32.5px,
+  // global.scss).
+  padding: 1px 0 8px;
 
   img {
     width: 32px;

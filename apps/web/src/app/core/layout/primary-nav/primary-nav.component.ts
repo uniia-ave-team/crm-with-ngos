@@ -5,7 +5,7 @@ import { PopoverComponent } from '../../../shared/popover/popover.component';
 import { AccountTile } from '../account-menu/account-menu.component';
 import { AccountsService } from '../../accounts/accounts.service';
 import { AuthService } from '../../auth/auth.service';
-import { ADMIN_PANEL_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
+import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
 import { mobileLogoBase } from '../../i18n/mobile-logo';
 import { CurrentUserService } from '../../users/current-user.service';
@@ -43,7 +43,13 @@ export class PrimaryNavComponent {
     { labelKey: 'nav.calendar', url: '/calendar', icon: 'calendar-outline', iconActive: 'calendar' },
     { labelKey: 'nav.planner', url: '/planner', icon: 'checkbox-outline', iconActive: 'checkbox' },
     { labelKey: 'nav.knowledgeBase', url: '/knowledge-base', icon: 'bulb-outline', iconActive: 'bulb' },
-    { labelKey: 'nav.colleagues', url: '/colleagues', icon: 'people-outline', iconActive: 'people' },
+    {
+      labelKey: 'nav.colleagues',
+      url: '/colleagues',
+      icon: 'people-outline',
+      iconActive: 'people',
+      requiresAny: COLLEAGUES_PERMISSIONS,
+    },
     {
       labelKey: 'nav.adminPanel',
       url: '/admin-panel',

@@ -15,10 +15,6 @@
 }
 
 <form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
-  <!-- Посилання на логотип, що вже є в системі (з GET /api/v1/ngo): його бере збереження,
-       коли новий логотип не обирали. -->
-  <input type="hidden" name="logoUrl" id="admin-ngo-logo-url" [value]="existingLogoUrl()" />
-
   @if (canEditNgo()) {
     <div class="settings-field">
       <label class="settings-field__label" for="admin-ngo-name">{{ 'admin.name' | translate }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span></label>
@@ -43,7 +39,7 @@
            без нього — порожній блок із пунктирною рамкою (як плитка додавання в
            галереї). Літер замість логотипа не буває. -->
       @if (logoSrc(); as src) {
-        <img class="settings-avatar__image logo-image" [src]="src" alt="" (error)="onLogoError()" />
+        <img class="settings-avatar__image logo-image" [appProtectedSrc]="src" alt="" (error)="onLogoError()" />
       } @else {
         <div class="settings-avatar__image logo-empty" aria-hidden="true"></div>
       }

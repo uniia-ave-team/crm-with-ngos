@@ -1,0 +1,118 @@
+// Таблиця з даних. Кольори — токени меню (світла/темна тема): лінії — `--nav-border`,
+// заголовки — `--nav-fg-inactive`, виділення наведеного рядка — `--nav-active-bg`.
+:host {
+  display: block;
+  font-family: var(--font-menu);
+  color: var(--nav-fg-active);
+}
+
+// На вузьких екранах таблиця не стискається, а прокручується по горизонталі.
+.data-table__scroll {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+// Рядок заголовків — того ж кольору, що й шапка сторінки (`--nav-bg`).
+th {
+  padding: 22px 12px;
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--nav-border);
+  font-family: var(--font-login-title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--nav-fg-inactive);
+}
+
+td {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--nav-border);
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+th:first-child,
+td:first-child {
+  padding-inline-start: 28px;
+}
+
+.data-table__menu-col {
+  width: 72px;
+}
+
+.data-table__row:hover td,
+.data-table__row:focus-within td,
+.data-table__row--active td {
+  background: var(--nav-active-bg);
+}
+
+.data-table__menu-cell {
+  text-align: end;
+  padding-inline-end: 24px;
+}
+
+// Кнопка «+» вища за текст заголовків: щоб рядок заголовків не ставав вищим, зменшуємо відступи.
+th.data-table__menu-cell {
+  padding-block: 10px;
+}
+
+// «+» в кінці рядка заголовків і три крапки в кінці рядків: однакові кнопки;
+// «+» видно завжди, а крапки — при наведенні на рядок або фокусі (без наведення,
+// на телефоні, — завжди).
+.data-table__add,
+.data-table__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font-size: 22px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+
+  &:hover {
+    background: var(--nav-active-bg);
+  }
+}
+
+.data-table__add {
+  color: var(--nav-fg-inactive);
+  font-size: 26px;
+}
+
+.data-table__menu {
+  opacity: 0;
+
+  &:focus-visible {
+    opacity: 1;
+  }
+}
+
+.data-table__row:hover .data-table__menu,
+.data-table__row:focus-within .data-table__menu,
+.data-table__row--active .data-table__menu {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .data-table__menu {
+    opacity: 1;
+  }
+}

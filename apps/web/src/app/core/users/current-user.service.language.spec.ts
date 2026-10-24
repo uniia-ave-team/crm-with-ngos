@@ -60,13 +60,13 @@ describe('CurrentUserService and the interface language', () => {
     expect(localStorage.getItem('yavir.language')).toBe('en');
   });
 
-  it('switches the interface when the detailed profile is refreshed', async () => {
+  it('switches the interface when the profile is reloaded', async () => {
     await load('uk');
     expect(language.language()).toBe('uk');
 
-    const refreshing = service.refresh();
-    http.expectOne(`${server}/api/v1/users/u1`).flush(profile('crh'));
-    await refreshing;
+    const reloading = service.reload();
+    http.expectOne(`${server}/api/v1/users/me`).flush(profile('crh'));
+    await reloading;
     expect(language.language()).toBe('crh');
   });
 

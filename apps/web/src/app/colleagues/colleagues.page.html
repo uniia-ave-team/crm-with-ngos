@@ -1,13 +1,76 @@
 <ion-header [translucent]="true">
   <ion-toolbar>
     <ion-title>{{ 'page.colleagues' | translate }}</ion-title>
+    <ion-buttons slot="end" class="colleagues__actions">
+      <button type="button" class="colleagues__btn colleagues__btn--roles" tabindex="0" (click)="openPanel('roles')">
+        <ion-icon name="people" aria-hidden="true"></ion-icon>
+        <span>{{ 'colleagues.roles' | translate }}</span>
+      </button>
+      @if (canAdd()) {
+        <button type="button" class="colleagues__btn colleagues__btn--add" tabindex="0" (click)="openPanel('add')">
+          <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+          <span>{{ 'colleagues.add' | translate }}</span>
+        </button>
+      }
+      <button type="button" class="colleagues__search" tabindex="0" [attr.aria-label]="'colleagues.search' | translate">
+        <ion-icon name="search" aria-hidden="true"></ion-icon>
+      </button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">{{ 'page.colleagues' | translate }}</ion-title>
-    </ion-toolbar>
-  </ion-header>
+  <app-data-table
+    [columns]="columns()"
+    [rows]="rows()"
+    [showRowMenu]="canOpenRowMenu()"
+    [showAddColumn]="canViewCustomFields()"
+    [highlightedRowId]="menuRowId()"
+    labelKey="page.colleagues"
+    (rowMenu)="openRowMenu($event)"
+  />
 </ion-content>
+
+<!-- Меню дій з колегою: відкривається кнопкою з трьома крапками під нею. -->
+<app-popover
+  width="240px"
+  side="bottom"
+  alignment="end"
+  compactSide="bottom"
+  compactAlignment="end"
+  [label]="'table.rowMenu' | translate"
+  (closed)="menuRowId.set(null)"
+>
+  <app-colleague-actions [items]="actions()" (choose)="onActionChosen($event)" />
+</app-popover>
+
+<!-- Бічне вікно: його відкривають «Ролі», «Додати» та дії з меню; зміст ще не зроблено. -->
+<app-side-panel [label]="'page.colleagues' | translate" (closed)="panel.set(null)"></app-side-panel>
+
+<!-- ПІБ: аватар, імʼя й займенники. -->
+<ng-template #personCell let-row>
+  @let colleague = asColleague(row);
+  <div class="person">
+    <app-avatar class="person__avatar" [firstName]="null" [lastName]="null" [avatarUrl]="null" />
+    <div class="person__text">
+      <span class="person__name">{{ colleague.name }}</span>
+      <span class="person__pronouns">{{ colleague.pronouns }}</span>
+    </div>
+  </div>
+</ng-template>
+
+<!-- Посада: бейдж і рядки з кольоровою крапкою. -->
+<ng-template #positionCell let-row>
+  @let colleague = asColleague(row);
+  <div class="position">
+    @if (colleague.badge; as badge) {
+      <span class="badge" [class]="'badge badge--' + badge.tone">{{ badge.text }}</span>
+    }
+    @for (line of colleague.lines; track $index) {
+      <span class="position__line">
+        <span class="position__dot" [class]="'position__dot position__dot--' + line.color" aria-hidden="true"></span>
+        {{ line.text }}
+      </span>
+    }
+  </div>
+</ng-template>

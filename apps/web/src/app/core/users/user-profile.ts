@@ -1,5 +1,5 @@
 /**
- * Профіль користувача (`GET /api/v1/users/me` і `GET /api/v1/users/{id}`).
+ * Профіль поточного користувача (`GET /api/v1/users/me`).
  * Поля, які ще не потрібні, не описано.
  */
 export interface UserProfile {

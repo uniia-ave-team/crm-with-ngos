@@ -83,9 +83,12 @@
           {{ 'settings.personal.chooseFile' | translate }}
         </button>
         <span class="settings-avatar__name">{{ fileName() ?? ('settings.personal.noFile' | translate) }}</span>
-        <input #avatarFile class="settings-avatar__input" type="file" accept="image/*" tabindex="-1" aria-hidden="true" (change)="onFileChosen($event)" />
+        <input #avatarFile class="settings-avatar__input" type="file" [accept]="avatarTypes" tabindex="-1" aria-hidden="true" (change)="onFileChosen($event)" />
       </div>
       <p class="settings-avatar__hint">{{ 'settings.personal.avatarHint' | translate }}</p>
+      @if (avatarError(); as errorKey) {
+        <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+      }
       <!-- Після вибору фото: нагадування, що змінити його можна лише кнопкою «Зберегти».
            Рядок є завжди (лише прихований до вибору), щоб блок не міняв висоту. -->
       <p class="settings-avatar__hint" [class.settings-avatar__hint--hidden]="!previewUrl()">
@@ -160,23 +163,6 @@
       <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
     }
   </fieldset>
-
-  <div class="settings-field">
-    <label class="settings-field__label" for="settings-email">{{ 'settings.personal.email' | translate }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span></label>
-    <input
-      id="settings-email"
-      class="settings-input"
-      type="email"
-      tabindex="0"
-      required
-      autocomplete="email"
-      [value]="email()"
-      (input)="onFieldChange(email, $event)"
-    />
-    @if (emailError(); as errorKey) {
-      <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
-    }
-  </div>
 
   <div class="settings-field">
     <label class="settings-field__label" for="settings-phone">{{ 'settings.personal.phone' | translate }}</label>

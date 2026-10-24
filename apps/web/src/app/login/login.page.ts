@@ -10,7 +10,7 @@ import { AppLanguage, LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
 import { NGO_LOGO_MAX_BYTES, NGO_LOGO_TYPES, NGO_NAME_MAX_LENGTH } from '../core/ngo/logo-rules';
 import { LoginPageImagesService } from '../core/login-page-images/login-page-images.service';
-import { CreateNgoResult, NgoService } from '../core/ngo/ngo.service';
+import { CreateNgoResult, NgoService, UploadNgoLogoResult } from '../core/ngo/ngo.service';
 import { CreateUserResult, UsersService } from '../core/users/users.service';
 import { isStrongPassword } from '../shared/password-fields/password-rules';
 
@@ -184,11 +184,21 @@ export class LoginPage implements OnDestroy {
   protected readonly ngoName = signal('');
   protected readonly ngoLogo = signal<File | null>(null);
   protected readonly ngoLogoPreview = signal<string | null>(null);
+  /** Значення `accept` вибору файлу логотипа (типи з `core/images/image-types.ts`). */
+  protected readonly logoTypes = NGO_LOGO_TYPES.join(',');
   /** Файл тягнуть над зоною завантаження логотипа. */
   protected readonly logoDragOver = signal(false);
   protected readonly ngoSaving = signal(false);
   /** Чим закінчилася остання спроба створити організацію (не `created`). */
   protected readonly ngoSaveError = signal<Exclude<CreateNgoResult, 'created'> | null>(null);
+  /**
+   * Організацію вже створено (перший запит вдався), але логотип не завантажився:
+   * повторне «Продовжити» не створює її вдруге, а лише повторює логотип. Назва
+   * в цей час не змінюється (її вже збережено).
+   */
+  protected readonly ngoCreated = signal(false);
+  /** Чим закінчилася остання спроба завантажити логотип (не `uploaded`). */
+  protected readonly ngoLogoUploadError = signal<Exclude<UploadNgoLogoResult, 'uploaded'> | null>(null);
   private readonly ngoSubmitted = signal(false);
   protected readonly ngoLogoError = signal<NgoLogoError | null>(null);
 
@@ -201,12 +211,17 @@ export class LoginPage implements OnDestroy {
   });
 
   /**
-   * Помилки форми ГО для блоку над формою (ключі перекладу): лише відповідь
-   * сервера на створення; помилки назви й логотипа — під своїми полями.
+   * Помилки форми ГО для блоку над формою (ключі перекладу): відповіді сервера
+   * на створення й на завантаження логотипа; помилки назви й файлу — під своїми
+   * полями.
    */
   protected readonly ngoBannerErrors = computed<string[]>(() => {
     const saveError = this.ngoSaveError();
-    return saveError ? [`login.ngo.saveError.${saveError}`] : [];
+    const uploadError = this.ngoLogoUploadError();
+    return [
+      ...(saveError ? [`login.ngo.saveError.${saveError}`] : []),
+      ...(uploadError ? [`login.ngo.logoUploadError.${uploadError}`] : []),
+    ];
   });
 
   /** Форма входу. */
@@ -233,6 +248,8 @@ export class LoginPage implements OnDestroy {
   protected readonly adminEmail = signal('');
   protected readonly adminLastName = signal('');
   protected readonly adminFirstName = signal('');
+  /** По батькові: необовʼязкове, перевірки нема; порожнє йде в запит як `null`. */
+  protected readonly adminPatronymic = signal('');
   protected readonly adminPassword = signal('');
   protected readonly adminPasswordRepeat = signal('');
   private readonly adminSubmitted = signal(false);
@@ -419,6 +436,7 @@ export class LoginPage implements OnDestroy {
     this.adminEmail.set('');
     this.adminLastName.set('');
     this.adminFirstName.set('');
+    this.adminPatronymic.set('');
     this.adminPassword.set('');
     this.adminPasswordRepeat.set('');
     this.adminSubmitted.set(false);
@@ -428,6 +446,8 @@ export class LoginPage implements OnDestroy {
     this.removeLogo();
     this.ngoSubmitted.set(false);
     this.ngoSaveError.set(null);
+    this.ngoCreated.set(false);
+    this.ngoLogoUploadError.set(null);
   }
 
   ngOnDestroy(): void {
@@ -493,10 +513,15 @@ export class LoginPage implements OnDestroy {
   }
 
   /**
-   * Створює організацію з введеною назвою (логотип поки не надсилається:
-   * `logoUrl` завжди `null`). Після успіху користувач уже зареєстрований і
-   * має токени (вхід виконано після створення адміна), тож його одразу
-   * переадресовано на «Планер».
+   * Створює організацію з введеною назвою (`POST /api/v1/ngo`; `logoUrl` у ньому
+   * завжди `null`), а якщо обрано логотип — після цього першого запиту
+   * завантажує саме зображення (`POST /api/v1/ngo/logo`). Після успіху
+   * користувач уже зареєстрований і має токени (вхід виконано після створення
+   * адміна), тож його одразу переадресовано на «Планер».
+   *
+   * Організація створюється один раз: якщо логотип не завантажився, вона вже є,
+   * і повторне «Продовжити» повторює лише завантаження (або, коли логотип
+   * прибрали, одразу веде далі).
    */
   protected async submitNgo(): Promise<void> {
     if (this.ngoSaving()) {
@@ -508,13 +533,30 @@ export class LoginPage implements OnDestroy {
     }
     this.ngoSaving.set(true);
     this.ngoSaveError.set(null);
-    const result = await this.ngoService.create(this.ngoName().trim());
-    this.ngoSaving.set(false);
-    if (result === 'created') {
-      void this.router.navigateByUrl(REDIRECT_URL);
-    } else {
-      this.ngoSaveError.set(result);
+    this.ngoLogoUploadError.set(null);
+
+    if (!this.ngoCreated()) {
+      const created = await this.ngoService.create(this.ngoName().trim());
+      if (created !== 'created') {
+        this.ngoSaving.set(false);
+        this.ngoSaveError.set(created);
+        return;
+      }
+      this.ngoCreated.set(true);
     }
+
+    const logo = this.ngoLogo();
+    if (logo) {
+      const uploaded = await this.ngoService.uploadLogo(logo);
+      if (uploaded !== 'uploaded') {
+        this.ngoSaving.set(false);
+        this.ngoLogoUploadError.set(uploaded);
+        return;
+      }
+    }
+
+    this.ngoSaving.set(false);
+    void this.router.navigateByUrl(REDIRECT_URL);
   }
 
   protected onFieldChange(
@@ -587,6 +629,7 @@ export class LoginPage implements OnDestroy {
       const created = await this.usersService.create({
         firstName: this.adminFirstName().trim(),
         lastName: this.adminLastName().trim(),
+        patronymic: this.adminPatronymic().trim() || null,
         email,
         password,
         confirmPassword: this.adminPasswordRepeat(),

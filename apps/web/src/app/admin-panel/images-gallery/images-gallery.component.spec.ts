@@ -518,7 +518,7 @@ describe('AdminImagesGalleryComponent', () => {
 
   it('only offers the image types the server accepts', async () => {
     const { element } = await render();
-    expect(fileInput(element).accept).toBe('image/jpeg,image/png,image/webp,image/gif');
+    expect(fileInput(element).accept).toBe('image/png,image/webp,image/jpeg,image/gif');
   });
 
   it('appends a chosen image to the end of the images', async () => {

@@ -226,14 +226,14 @@ describe('PrimaryNavComponent admin item', () => {
 
   it('shows the item in the rail and in the bottom tabs when the user has all three rights', () => {
     const { element } = render(ALL);
-    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues', '/admin-panel']);
-    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues', '/admin-panel']);
+    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/admin-panel']);
+    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/admin-panel']);
   });
 
   it('hides the item when there are no rights at all (also until they are received)', () => {
     const { element } = render([]);
-    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues']);
-    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues']);
+    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner', '/knowledge-base']);
+    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner', '/knowledge-base']);
   });
 
   it.each(ALL)('shows the item when the user has only the right %s', (right) => {
@@ -265,5 +265,70 @@ describe('PrimaryNavComponent admin item', () => {
     accounts.update(accounts.activeId()!, { permissions: ['Permissions.ViewUser'] });
     fixture.detectChanges();
     expect(urls(element, '.rail__item')).not.toContain('/admin-panel');
+  });
+});
+
+describe('PrimaryNavComponent colleagues item', () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await TestBed.configureTestingModule({
+      schemas: [CUSTOM_ELEMENTS_SCHEMA],
+      imports: [IonicModule.forRoot(), LayoutModule],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
+      ],
+    }).compileComponents();
+    const connection = TestBed.inject(ConnectionService);
+    TestBed.inject(HttpTestingController).expectOne(connection.apiHealthUrl());
+    TestBed.inject(AccountsService).add({ server: connection.serverUrl(), accessToken: 'a', refreshToken: 'r', identity: 'u1' });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  const urls = (element: HTMLElement, selector: string) =>
+    Array.from(element.querySelectorAll(selector)).map((a) => a.getAttribute('href'));
+
+  function render(permissions: string[]) {
+    const accounts = TestBed.inject(AccountsService);
+    accounts.update(accounts.activeId()!, { permissions });
+    const fixture = TestBed.createComponent(PrimaryNavComponent);
+    fixture.detectChanges();
+    return { fixture, element: fixture.nativeElement as HTMLElement };
+  }
+
+  it('is shown in the rail and in the bottom tabs with Permissions.ViewUser, in its place after the knowledge base', () => {
+    const { element } = render(['Permissions.ViewUser']);
+    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues']);
+    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues']);
+  });
+
+  it('is hidden without it (also until the rights are received), whatever other rights there are', () => {
+    for (const rights of [[], ['Permissions.CreateUser', 'Permissions.UpdateUser', 'Permissions.ViewCustomFields']]) {
+      const { element } = render(rights);
+      expect(urls(element, '.rail__item')).not.toContain('/colleagues');
+      expect(urls(element, '.bottom-tabs__item')).not.toContain('/colleagues');
+    }
+  });
+
+  it('appears and disappears together with the right', () => {
+    const accounts = TestBed.inject(AccountsService);
+    const { fixture, element } = render([]);
+    expect(urls(element, '.rail__item')).not.toContain('/colleagues');
+
+    accounts.update(accounts.activeId()!, { permissions: ['Permissions.ViewUser'] });
+    fixture.detectChanges();
+    expect(urls(element, '.rail__item')).toContain('/colleagues');
+
+    accounts.update(accounts.activeId()!, { permissions: [] });
+    fixture.detectChanges();
+    expect(urls(element, '.rail__item')).not.toContain('/colleagues');
   });
 });

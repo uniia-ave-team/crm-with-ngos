@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { IonicModule } from '@ionic/angular/lazy';
 import { TranslatePipe } from '@ngx-translate/core';
 
+import { ProtectedSrcModule } from '../shared/protected-src/protected-src.module';
 import { AdminPanelPageRoutingModule } from './admin-panel-routing.module';
 
 import { AdminPanelPage } from './admin-panel.page';
@@ -17,6 +18,7 @@ import { AdminNgoFormComponent } from './ngo-form/ngo-form.component';
     FormsModule,
     IonicModule,
     TranslatePipe,
+    ProtectedSrcModule,
     AdminPanelPageRoutingModule
   ],
   declarations: [AdminPanelPage, AdminNgoFormComponent, AdminImagesGalleryComponent]

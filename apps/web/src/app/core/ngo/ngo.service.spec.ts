@@ -32,7 +32,7 @@ describe('NgoService', () => {
     const result = service.create('Моя ГО');
     const request = http.expectOne(url);
     expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual({ name: 'Моя ГО', logoUrl: null });
+    expect(request.request.body).toEqual({ name: 'Моя ГО' });
     request.flush(null, { status: 201, statusText: 'Created' });
     expect(await result).toBe('created');
   });
@@ -52,25 +52,86 @@ describe('NgoService', () => {
     expect(accounts.accounts().find((a) => a.id === account.id)).toMatchObject({ ngoName: 'Моя ГО', ngoLogoUrl: null });
   });
 
+  describe('uploadLogo', () => {
+    const logoUrl = () => `${url}/logo`;
+    const png = () => new File([new Uint8Array(5)], 'logo.png', { type: 'image/png' });
+    const ok = { status: 200, statusText: 'OK' };
+
+    it('posts the image itself as multipart/form-data in the field "file"', async () => {
+      const result = service.uploadLogo(png());
+      const request = http.expectOne(logoUrl());
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toBeInstanceOf(FormData);
+      const sent = (request.request.body as FormData).get('file') as File;
+      expect(sent).toBeInstanceOf(File);
+      expect(sent.name).toBe('logo.png');
+      expect(sent.type).toBe('image/png');
+      // Content-Type ставить браузер (разом із boundary).
+      expect(request.request.headers.has('Content-Type')).toBe(false);
+      request.flush(null, ok);
+      (await vi.waitFor(() => http.expectOne(url))).flush({ name: 'Org', logoUrl: '/files/logo.png' });
+      expect(await result).toBe('uploaded');
+    });
+
+    it('reads the organization again after the upload and writes the new logo link into the active account', async () => {
+      const accounts = TestBed.inject(AccountsService);
+      const account = accounts.add({
+        server: TestBed.inject(ConnectionService).serverUrl(),
+        accessToken: 'a',
+        refreshToken: 'r',
+        identity: 'u',
+        ngoName: 'Org',
+        ngoLogoUrl: null,
+      });
+      const result = service.uploadLogo(png());
+      http.expectOne(logoUrl()).flush(null, ok);
+      const read = await vi.waitFor(() => http.expectOne(url));
+      expect(read.request.method).toBe('GET');
+      read.flush({ name: 'Org', logoUrl: '/files/new.png' });
+      expect(await result).toBe('uploaded');
+      expect(JSON.parse(localStorage.getItem(`yavir.account.${account.id}`)!)).toMatchObject({
+        ngoName: 'Org',
+        ngoLogoUrl: '/files/new.png',
+      });
+    });
+
+    it('still counts as uploaded when the organization cannot be read afterwards', async () => {
+      const result = service.uploadLogo(png());
+      http.expectOne(logoUrl()).flush(null, ok);
+      (await vi.waitFor(() => http.expectOne(url))).flush({}, { status: 500, statusText: 'x' });
+      expect(await result).toBe('uploaded');
+    });
+
+    it.each([
+      [400, 'invalid'],
+      [401, 'unauthorized'],
+      [403, 'forbidden'],
+      [500, 'error'],
+    ])('returns the failure for HTTP %i (%s) and does not read the organization', async (status, expected) => {
+      const result = service.uploadLogo(png());
+      http.expectOne(logoUrl()).flush({}, { status, statusText: 'x' });
+      expect(await result).toBe(expected);
+      http.expectNone(url);
+    });
+
+    it('reports an unreachable server', async () => {
+      const result = service.uploadLogo(png());
+      http.expectOne(logoUrl()).error(new ProgressEvent('error'));
+      expect(await result).toBe('unreachable');
+    });
+  });
+
   describe('update', () => {
-    it('puts the name and the logo link and treats 204 as updated', async () => {
-      const result = service.update('Org', 'https://x/logo.png');
+    it('puts only the name and treats 204 as updated', async () => {
+      const result = service.update('Org');
       const request = http.expectOne(url);
       expect(request.request.method).toBe('PUT');
-      expect(request.request.body).toEqual({ name: 'Org', logoUrl: 'https://x/logo.png' });
+      expect(request.request.body).toEqual({ name: 'Org' });
       request.flush(null, { status: 204, statusText: 'No Content' });
       expect(await result).toBe('updated');
     });
 
-    it('sends a null logo link as it is', async () => {
-      const result = service.update('Org', null);
-      const request = http.expectOne(url);
-      expect(request.request.body).toEqual({ name: 'Org', logoUrl: null });
-      request.flush(null, { status: 204, statusText: 'No Content' });
-      await result;
-    });
-
-    it('writes the new name and logo into the active account', async () => {
+    it('writes the new name into the active account and keeps its logo', async () => {
       const accounts = TestBed.inject(AccountsService);
       const account = accounts.add({
         server: TestBed.inject(ConnectionService).serverUrl(),
@@ -80,27 +141,27 @@ describe('NgoService', () => {
         ngoName: 'Old',
         ngoLogoUrl: '/old.png',
       });
-      const result = service.update('New', '/new.png');
+      const result = service.update('New');
       http.expectOne(url).flush(null, { status: 204, statusText: 'No Content' });
       await result;
-      expect(accounts.accounts().find((a) => a.id === account.id)).toMatchObject({ ngoName: 'New', ngoLogoUrl: '/new.png' });
+      expect(accounts.accounts().find((a) => a.id === account.id)).toMatchObject({ ngoName: 'New', ngoLogoUrl: '/old.png' });
     });
 
-    it('writes the new name and logo into localStorage, in the record of the account that sent the request', async () => {
+    it('writes the new name into localStorage, in the record of the account that sent the request', async () => {
       const accounts = TestBed.inject(AccountsService);
       const server = TestBed.inject(ConnectionService).serverUrl();
       const first = accounts.add({ server, accessToken: 'a', refreshToken: 'r', identity: 'first', ngoName: 'Old', ngoLogoUrl: '/old.png' });
       const second = accounts.add({ server, accessToken: 'a2', refreshToken: 'r2', identity: 'second', ngoName: 'Other' });
       accounts.setActive(first.id);
 
-      const result = service.update('New', '/new.png');
+      const result = service.update('New');
       // Поки йде запит, активним став інший акаунт.
       accounts.setActive(second.id);
       http.expectOne(url).flush(null, { status: 204, statusText: 'No Content' });
       await result;
 
       const record = (id: string) => JSON.parse(localStorage.getItem(`yavir.account.${id}`)!);
-      expect(record(first.id)).toMatchObject({ ngoName: 'New', ngoLogoUrl: '/new.png' });
+      expect(record(first.id)).toMatchObject({ ngoName: 'New', ngoLogoUrl: '/old.png' });
       expect(record(second.id)).toMatchObject({ ngoName: 'Other' });
     });
 
@@ -114,7 +175,7 @@ describe('NgoService', () => {
         ngoName: 'Old',
         ngoLogoUrl: '/old.png',
       });
-      const result = service.update('New', null);
+      const result = service.update('New');
       http.expectOne(url).flush({}, { status: 400, statusText: 'x' });
       await result;
       expect(JSON.parse(localStorage.getItem(`yavir.account.${account.id}`)!)).toMatchObject({
@@ -137,14 +198,14 @@ describe('NgoService', () => {
         identity: 'u',
         ngoName: 'Old',
       });
-      const result = service.update('New', null);
+      const result = service.update('New');
       http.expectOne(url).flush({}, { status, statusText: 'x' });
       expect(await result).toBe(expected);
       expect(accounts.active()?.ngoName).toBe('Old');
     });
 
     it('reports an unreachable server', async () => {
-      const result = service.update('Org', null);
+      const result = service.update('Org');
       http.expectOne(url).error(new ProgressEvent('error'));
       expect(await result).toBe('unreachable');
     });

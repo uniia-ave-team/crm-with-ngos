@@ -1,0 +1,97 @@
+// Вікно сидить усередині сторінки (`.ion-page` — позиціонований контейнер з
+// `contain`), тож `absolute` рахується від сторінки, а не від екрана. Кольори —
+// токени меню (світла/темна тема).
+:host {
+  display: contents;
+}
+
+.side-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: var(--side-panel-width, 280px);
+  max-width: 100%;
+  box-sizing: border-box;
+  background: var(--ion-background-color);
+  color: var(--nav-fg-active);
+  font-family: var(--font-menu);
+  border-left: 1px solid var(--nav-border);
+  box-shadow: -4px 0 16px rgb(2 11 24 / 7%);
+  // Закрите: зсунуте за правий край і невидиме (після анімації).
+  transform: translateX(100%);
+  visibility: hidden;
+  transition:
+    transform 0.25s ease,
+    visibility 0s linear 0.25s;
+
+  &--open {
+    transform: translateX(0);
+    visibility: visible;
+    transition:
+      transform 0.25s ease,
+      visibility 0s;
+  }
+}
+
+.side-panel__header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 16px 0;
+}
+
+.side-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-inactive);
+  font-size: 24px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--nav-fg-active);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+.side-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 16px 16px;
+  overflow-y: auto;
+}
+
+// На телефоні вікно займає всю сторінку (між верхньою панеллю з лого й нижнім меню).
+@media (max-width: 991px) {
+  .side-panel {
+    width: 100%;
+    border-left: 0;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .side-panel {
+    box-shadow: -4px 0 16px rgb(0 0 0 / 30%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-panel,
+  .side-panel--open {
+    transition: none;
+  }
+}

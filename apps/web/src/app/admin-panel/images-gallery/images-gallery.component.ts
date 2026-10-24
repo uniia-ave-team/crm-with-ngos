@@ -14,6 +14,7 @@ import {
 
 import { PERMISSIONS } from '../../core/auth/permissions';
 import { RequestFailure } from '../../core/http/request-failure';
+import { IMAGE_TYPES } from '../../core/images/image-types';
 import { LoginPageImagesService } from '../../core/login-page-images/login-page-images.service';
 import { CurrentUserService } from '../../core/users/current-user.service';
 
@@ -45,8 +46,6 @@ interface Tile {
  */
 export type GallerySaveResult = 'saved' | 'nothing' | RequestFailure;
 
-/** Яке зображення можна додати: так само, як приймає сервер (`.jpg/.jpeg/.png/.webp/.gif`). */
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 /** Скільки зображень просимо в сервера за один запит. */
 const PAGE_SIZE = 20;

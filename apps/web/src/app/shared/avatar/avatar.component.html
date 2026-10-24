@@ -5,7 +5,7 @@
   [style.background-color]="outdated() ? null : image() ? 'transparent' : background()"
 >
   @if (image(); as src) {
-    <img class="avatar__image" [src]="src" alt="" (error)="onImageError()" />
+    <img class="avatar__image" [appProtectedSrc]="src" alt="" (error)="onImageError()" />
   } @else {
     <span aria-hidden="true">{{ initials() }}</span>
   }
