@@ -306,7 +306,7 @@ git diff --exit-code -- ../../packages/api-contract/openapi.json
 
 #### `reset-password` — Reset a user's password
 
-Resets the password for the specified email address, rotates the security stamp, and **invalidates all active refresh tokens** for that account.
+Resets the password for the administrator with the specified email address (users without the `Admin` role are refused), rotates the security stamp, and **invalidates all active refresh tokens** for that account.
 
 ```bash
 dotnet run --project src/Crm.Cli -- reset-password --email <email>
@@ -365,6 +365,24 @@ When standard input is redirected, the CLI reads the password and its confirmati
 ```bash
 printf 'New-Passw0rd\nNew-Passw0rd\n' | docker compose exec -T api crm reset-password -e admin@example.com
 ```
+
+### CLI output and configuration
+
+The CLI logs only to the console; nothing is written to files. By default it prints its own messages (`Information` and above) and only warnings and errors from `Microsoft.*` and `System.*`. Errors go to standard error. Colors are used only in an interactive terminal. Expected failures (unknown email, not an administrator, password rejected by the policy) are printed as one line; unexpected ones include the exception details.
+
+Settings come from `appsettings.json`, then environment variables, then variables prefixed with `CRM_CLI_`. The prefixed ones apply to the CLI only, even inside the API container, which shares its environment with the API:
+
+```bash
+# Show EF Core and other framework logs while diagnosing a failure
+docker compose exec -e CRM_CLI_Logging__LogLevel__Microsoft=Information api crm reset-password -e admin@example.com
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CRM_CLI_Logging__LogLevel__Default` | `Information` | Level for the CLI's own messages |
+| `CRM_CLI_Logging__LogLevel__Microsoft` | `Warning` | Level for EF Core, Identity, Data Protection |
+| `CRM_CLI_Logging__Console__FormatterOptions__ColorBehavior` | `Default` | `Enabled` / `Disabled` to force colors on or off |
+| `CRM_CLI_ConnectionStrings__PostgreSqlConnection` | from the container | Point the CLI at a different database |
 
 ---
 
@@ -499,7 +517,7 @@ API доступне за адресою: `http://localhost:5065`
 ### Доступні команди CLI
 
 #### 1. Скидання пароля адміністратора (`reset-password`)
-Скидає пароль користувача з указаною електронною поштою, оновлює security stamp та **інвалідує всі активні refresh-токени**.
+Скидає пароль адміністратора з указаною електронною поштою (користувачам без ролі `Admin` відмовляє), оновлює security stamp та **інвалідує всі активні refresh-токени**.
 
 * **Синтаксис:**
   ```bash
@@ -566,6 +584,22 @@ just cli-docker reset-password -e admin@example.com
 ```bash
 printf 'New-Passw0rd\nNew-Passw0rd\n' | docker compose exec -T api crm reset-password -e admin@example.com
 ```
+
+#### Вивід і налаштування CLI
+CLI пише логи лише в консоль, у файли нічого не потрапляє. За замовчуванням видно власні повідомлення утиліти (`Information` і вище) та лише попередження й помилки `Microsoft.*` і `System.*`. Помилки йдуть у stderr. Кольори вмикаються тільки в інтерактивному терміналі. Очікувані невдачі (невідомий email, користувач не адміністратор, пароль не відповідає політиці) займають один рядок, неочікувані — з деталями винятку.
+
+Налаштування читаються з `appsettings.json`, потім зі змінних середовища, потім зі змінних з префіксом `CRM_CLI_`. Префіксні діють лише на CLI, навіть у контейнері API, який ділить з API змінні середовища:
+```bash
+# Показати логи EF Core та інших бібліотек, коли треба розібратися з помилкою
+docker compose exec -e CRM_CLI_Logging__LogLevel__Microsoft=Information api crm reset-password -e admin@example.com
+```
+
+| Змінна | За замовчуванням | Призначення |
+|---|---|---|
+| `CRM_CLI_Logging__LogLevel__Default` | `Information` | Рівень власних повідомлень CLI |
+| `CRM_CLI_Logging__LogLevel__Microsoft` | `Warning` | Рівень EF Core, Identity, Data Protection |
+| `CRM_CLI_Logging__Console__FormatterOptions__ColorBehavior` | `Default` | `Enabled` / `Disabled` — примусово ввімкнути чи вимкнути кольори |
+| `CRM_CLI_ConnectionStrings__PostgreSqlConnection` | з контейнера | Підключити CLI до іншої бази |
 
 ---
 
