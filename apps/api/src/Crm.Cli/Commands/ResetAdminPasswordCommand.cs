@@ -92,12 +92,12 @@ public partial class ResetAdminPasswordCommand(
 
     private static string ReadHiddenPassword(string prompt)
     {
-        Console.Write(prompt);
-
         if (Console.IsInputRedirected)
         {
             return Console.ReadLine() ?? string.Empty;
         }
+
+        Console.Write(prompt);
 
         var password = new StringBuilder();
 
@@ -142,9 +142,9 @@ public partial class ResetAdminPasswordCommand(
 
             return user;
         }
-        catch (EntityNotFoundException ex)
+        catch (EntityNotFoundException)
         {
-            LogAdminNotFound(logger, email, ex);
+            LogAdminNotFound(logger, email);
             return null;
         }
         catch (Exception ex)
@@ -166,7 +166,7 @@ public partial class ResetAdminPasswordCommand(
         }
         catch (UserOperationException ex)
         {
-            LogPasswordResetFailed(logger, identifier, ex);
+            LogPasswordResetRejected(logger, identifier, ex.Message);
             return false;
         }
     }
@@ -181,13 +181,13 @@ public partial class ResetAdminPasswordCommand(
     private static partial void LogEmailMissing(ILogger logger);
 
     [LoggerMessage(EventId = CliLogEventIds.AdminUserNotFound, Level = LogLevel.Error, Message = "Target administrator user with email '{Email}' could not be found in the database.")]
-    private static partial void LogAdminNotFound(ILogger logger, string email, Exception exception);
+    private static partial void LogAdminNotFound(ILogger logger, string email);
 
     [LoggerMessage(EventId = CliLogEventIds.UserRetrievalFailed, Level = LogLevel.Error, Message = "An unexpected error occurred while retrieving administrator user '{Email}'.")]
     private static partial void LogUserRetrievalFailed(ILogger logger, string email, Exception exception);
 
-    [LoggerMessage(EventId = CliLogEventIds.PasswordResetFailed, Level = LogLevel.Error, Message = "An unexpected error occurred while resetting the administrator password for user '{UserIdentifier}'.")]
-    private static partial void LogPasswordResetFailed(ILogger logger, string userIdentifier, Exception exception);
+    [LoggerMessage(EventId = CliLogEventIds.PasswordResetFailed, Level = LogLevel.Error, Message = "Password for user '{UserIdentifier}' was not changed. {Reason}")]
+    private static partial void LogPasswordResetRejected(ILogger logger, string userIdentifier, string reason);
 
     [LoggerMessage(EventId = CliLogEventIds.PasswordResetSuccess, Level = LogLevel.Information, Message = "Password for user '{UserIdentifier}' was successfully updated.")]
     private static partial void LogPasswordResetSuccess(ILogger logger, string userIdentifier);
