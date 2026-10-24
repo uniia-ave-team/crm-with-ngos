@@ -46,6 +46,13 @@ const ACTION_RULES: readonly ColleagueActionRule[] = [
     requiresAny: [PERMISSIONS.canResetPassword],
   },
   { id: 'disable', labelKey: 'colleagues.actions.disable', icon: 'ban-outline', requiresAny: [PERMISSIONS.disableUser] },
+  // Як і на сервері (`POST /users/{id}/activate`), вмикання вимагає `UpdateUser`, а не `DisableUser`.
+  {
+    id: 'enable',
+    labelKey: 'colleagues.actions.enable',
+    icon: 'checkmark-circle-outline',
+    requiresAny: [PERMISSIONS.updateUser],
+  },
   { id: 'delete', labelKey: 'colleagues.actions.delete', icon: 'trash-outline', requiresAny: [PERMISSIONS.deleteUser] },
 ];
 
@@ -72,8 +79,8 @@ interface ColleagueRow extends DataTableRow {
  * знімка в `localStorage`): кнопка «Додати» — з `Permissions.CreateUser`; три
  * крапки в кінці рядків відкривають меню дій, у якому кожен пункт має своє
  * право («Змінити права» — `AssignRoleToUser` або `ManageRole`, «Редагувати» —
- * `UpdateUser`, «Скинути пароль» — `CanResetPassword`, «Вимкнути» —
- * `DisableUser`, «Видалити» — `DeleteUser`), а без жодного з них крапок нема; «+» в
+ * `UpdateUser`, «Скинути пароль» — `CanResetPassword`, «Вимкнути акаунт» —
+ * `DisableUser`, «Ввімкнути акаунт» — `UpdateUser`, «Видалити» — `DeleteUser`), а без жодного з них крапок нема; «+» в
  * кінці рядка заголовків — з `Permissions.ViewCustomFields`. Саму вкладку
  * в бічному меню показують лише з `Permissions.ViewUser` (`PrimaryNavComponent`).
  *
@@ -175,6 +182,9 @@ export class ColleaguesPage {
       case 'disable':
         this.disableColleague(id);
         break;
+      case 'enable':
+        this.enableColleague(id);
+        break;
       case 'delete':
         this.deleteColleague(id);
         break;
@@ -208,10 +218,16 @@ export class ColleaguesPage {
     this.openPanel('resetPassword', userId);
   }
 
-  /** «Вимкнути» (`DisableUser`). Заглушка. */
+  /** «Вимкнути акаунт» (`DisableUser`). Заглушка. */
   protected disableColleague(userId: string): void {
     console.log(`[ColleaguesPage] Вимкнути користувача: ${userId} (поки не реалізовано)`);
     this.openPanel('disable', userId);
+  }
+
+  /** «Ввімкнути акаунт» (`UpdateUser`). Заглушка. */
+  protected enableColleague(userId: string): void {
+    console.log(`[ColleaguesPage] Ввімкнути користувача: ${userId} (поки не реалізовано)`);
+    this.openPanel('enable', userId);
   }
 
   /** «Видалити» (`DeleteUser`). Заглушка. */

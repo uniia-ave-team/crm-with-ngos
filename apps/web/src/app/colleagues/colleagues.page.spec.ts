@@ -229,19 +229,19 @@ describe('ColleaguesPage', () => {
       return page.actions().map((a) => a.id);
     };
 
-    it('has all five items, in this order, for a user with all the rights', () => {
-      expect(actionIds(ROW_ACTIONS)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'delete']);
+    it('has all six items, in this order, for a user with all the rights', () => {
+      expect(actionIds(ROW_ACTIONS)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'enable', 'delete']);
     });
 
     it.each([
       [['Permissions.AssignRoleToUser'], ['permissions']],
       [['Permissions.ManageRole'], ['permissions']],
       [['Permissions.AssignRoleToUser', 'Permissions.ManageRole'], ['permissions']],
-      [['Permissions.UpdateUser'], ['edit']],
+      [['Permissions.UpdateUser'], ['edit', 'enable']],
       [['Permissions.CanResetPassword'], ['resetPassword']],
       [['Permissions.DisableUser'], ['disable']],
       [['Permissions.DeleteUser'], ['delete']],
-      [['Permissions.UpdateUser', 'Permissions.DeleteUser'], ['edit', 'delete']],
+      [['Permissions.UpdateUser', 'Permissions.DeleteUser'], ['edit', 'enable', 'delete']],
     ])('for the rights %j shows only %j', (rights, expected) => {
       expect(actionIds(rights)).toEqual(expected);
     });
@@ -257,6 +257,7 @@ describe('ColleaguesPage', () => {
         'colleagues.actions.edit',
         'colleagues.actions.resetPassword',
         'colleagues.actions.disable',
+        'colleagues.actions.enable',
         'colleagues.actions.delete',
       ]);
       expect(page.actions().map((a) => a.icon)).toEqual([
@@ -264,9 +265,10 @@ describe('ColleaguesPage', () => {
         'create-outline',
         'key-outline',
         'ban-outline',
+        'checkmark-circle-outline',
         'trash-outline',
       ]);
-      expect(Object.keys(uk.colleagues.actions)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'delete']);
+      expect(Object.keys(uk.colleagues.actions)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'enable', 'delete']);
     });
 
     describe('the popover', () => {
@@ -308,11 +310,12 @@ describe('ColleaguesPage', () => {
         ['edit', 'editColleague'],
         ['resetPassword', 'resetPassword'],
         ['disable', 'disableColleague'],
+        ['enable', 'enableColleague'],
         ['delete', 'deleteColleague'],
       ])('calls the function of the action "%s" (%s) with the id of the colleague of that row', (action, method) => {
         const { fixture, element } = render(ROW_ACTIONS);
         const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
-        const spies = ['changePermissions', 'editColleague', 'resetPassword', 'disableColleague', 'deleteColleague'].map(
+        const spies = ['changePermissions', 'editColleague', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague'].map(
           (name) => [name, vi.spyOn(page, name)] as const,
         );
         rowDots(element, 2).click();
@@ -394,6 +397,7 @@ describe('ColleaguesPage', () => {
       ['edit', 'editColleague'],
       ['resetPassword', 'resetPassword'],
       ['disable', 'disableColleague'],
+      ['enable', 'enableColleague'],
       ['delete', 'deleteColleague'],
     ])('is called by every action of the menu: "%s" opens it for the colleague of that row', (action, method) => {
       const { fixture, element } = render(FULL_RIGHTS);
@@ -410,7 +414,7 @@ describe('ColleaguesPage', () => {
       expect(state(fixture)).toEqual({ kind: action, userId: 'sample-4' });
     });
 
-    it('opens by each of the five stubs themselves, with the id that was given to them', () => {
+    it('opens by each of the six stubs themselves, with the id that was given to them', () => {
       const { fixture } = render(FULL_RIGHTS);
       const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
       const cases: [string, string][] = [
@@ -418,6 +422,7 @@ describe('ColleaguesPage', () => {
         ['editColleague', 'edit'],
         ['resetPassword', 'resetPassword'],
         ['disableColleague', 'disable'],
+        ['enableColleague', 'enable'],
         ['deleteColleague', 'delete'],
       ];
       for (const [method, kind] of cases) {
