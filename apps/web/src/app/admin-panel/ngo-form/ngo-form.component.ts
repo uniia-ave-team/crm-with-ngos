@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { GALLERY_PERMISSIONS, PERMISSIONS, hasAnyPermission } from '../../core/auth/permissions';
@@ -35,10 +35,11 @@ interface ResultLine {
  * `Permissions.DeleteLoginPageImages` (які саме кнопки в ній, вирішує сама
  * галерея).
  *
- * «Зберегти»: з правом `UpdateNgo` перевіряє назву, отримує посилання на
- * логотип (`resolveLogoUrl`, поки порожня функція) і шле `PUT /api/v1/ngo` з
- * назвою й посиланням. Результат — зелений блок (успіх) або червоний (помилка).
- * Збереження галереї поки лише вигляд.
+ * «Зберегти» (докладно — в `submit()`): з правом `UpdateNgo` назва йде
+ * `PUT /api/v1/ngo`, а якщо обрано файл логотипа — ще й додатковим запитом
+ * `POST /api/v1/ngo/logo` із самим зображенням; не обрано — цього запиту нема.
+ * Галерея зберігає свої зміни окремо. Результат — блок із рядками про те, що
+ * змінено й що не вдалося.
  */
 @Component({
   selector: 'app-admin-ngo-form',
@@ -51,13 +52,6 @@ export class AdminNgoFormComponent {
   private readonly connection = inject(ConnectionService);
   private readonly ngo = inject(NgoService);
   private readonly permissions = inject(CurrentUserService).permissions;
-
-  /**
-   * Посилання на логотип, який уже є в системі (`logoUrl` з `GET /api/v1/ngo`,
-   * що його знімок акаунта отримує при відкритті сторінки). Лежить у прихованому
-   * полі форми — звідти його бере збереження, коли новий логотип не обирали.
-   */
-  protected readonly existingLogoUrl = computed(() => this.accounts.active()?.ngoLogoUrl ?? '');
 
   /** Іде збереження: кнопка заблокована. */
   protected readonly saving = signal(false);
@@ -88,6 +82,9 @@ export class AdminNgoFormComponent {
 
   /** Імʼя обраного файлу логотипа; `null` — файл не обрано. */
   protected readonly fileName = signal<string | null>(null);
+  /** Обраний файл логотипа (його надсилає збереження); `null` — файл не обрано. */
+  private readonly chosenLogo = signal<File | null>(null);
+  private readonly logoInput = viewChild<ElementRef<HTMLInputElement>>('logoFile');
   /** Мініатюра обраного файлу (`blob:`-посилання); `null` — файл не обрано. */
   protected readonly previewUrl = signal<string | null>(null);
   protected readonly logoError = signal<LogoError | null>(null);
@@ -148,6 +145,7 @@ export class AdminNgoFormComponent {
     const file = input.files?.[0] ?? null;
     this.releasePreview();
     this.fileName.set(null);
+    this.chosenLogo.set(null);
     this.logoError.set(null);
 
     if (!file) {
@@ -165,6 +163,7 @@ export class AdminNgoFormComponent {
       return;
     }
     this.fileName.set(file.name);
+    this.chosenLogo.set(file);
     this.previewUrl.set(URL.createObjectURL(file));
     this.resultLines.set([]);
   }
@@ -172,8 +171,9 @@ export class AdminNgoFormComponent {
   /**
    * «Зберегти» — одна на всю форму, але частини незалежні, кожну веде своє право:
    * - назва й логотип — лише `UpdateNgo`: перевіряється назва (порожня — помилка
-   *   під полем і без запиту), отримується посилання на логотип, і якщо назва чи
-   *   логотип змінилися — `PUT /api/v1/ngo`;
+   *   під полем і без запиту); якщо назва змінилася — `PUT /api/v1/ngo`; а якщо
+   *   обрано файл логотипа — після цього додатковий запит
+   *   `POST /api/v1/ngo/logo` із самим зображенням (файл не обрано — запиту нема);
    * - галерея — лише `CreateLoginPageImages` (завантаження) і
    *   `DeleteLoginPageImages` (видалення): свої запити, не залежні ні від назви,
    *   ні від `UpdateNgo`.
@@ -198,21 +198,28 @@ export class AdminNgoFormComponent {
 
     if (saveNgo) {
       const name = this.name().trim();
-      const logoUrl = await this.resolveLogoUrl();
       const nameChanged = name !== (this.accounts.active()?.ngoName ?? '');
-      const logoChanged = (logoUrl ?? '') !== this.existingLogoUrl();
-      // Нічого не змінилося — нічого й слати.
-      if (nameChanged || logoChanged) {
-        const outcome = await this.ngo.update(name, logoUrl);
+      let ngoReady = true;
+
+      if (nameChanged) {
+        const outcome = await this.ngo.update(name);
         if (outcome === 'updated') {
-          if (nameChanged) {
-            lines.push({ key: 'admin.result.name', ok: true });
-          }
-          if (logoChanged) {
-            lines.push({ key: 'admin.result.logo', ok: true });
-          }
+          lines.push({ key: 'admin.result.name', ok: true });
         } else {
+          ngoReady = false;
           lines.push({ key: `admin.result.ngoFailed.${outcome}`, ok: false });
+        }
+      }
+
+      // Логотип — лише коли файл обрано (і назва, якщо її міняли, збереглася).
+      const file = this.chosenLogo();
+      if (file && ngoReady) {
+        const outcome = await this.ngo.uploadLogo(file);
+        if (outcome === 'uploaded') {
+          lines.push({ key: 'admin.result.logo', ok: true });
+          this.clearLogoSelection();
+        } else {
+          lines.push({ key: `admin.result.logoFailed.${outcome}`, ok: false });
         }
       }
     }
@@ -230,16 +237,15 @@ export class AdminNgoFormComponent {
     this.resultLines.set(lines);
   }
 
-  /**
-   * Посилання на логотип для `PUT /api/v1/ngo`. Задум: є право `UpdateNgo` —
-   * якщо користувач обрав новий файл, завантажити його й повернути отримане
-   * посилання; якщо не обирав — повернути посилання, що вже є в системі (поле
-   * `existingLogoUrl` у прихованому інпуті форми).
-   *
-   * Поки порожня функція: завантаження файлу ще нема, тож завжди `null`.
-   */
-  protected async resolveLogoUrl(): Promise<string | null> {
-    return null;
+  /** Логотип завантажено: обраний файл і його превʼю більше не потрібні (тепер логотип — з сервера). */
+  private clearLogoSelection(): void {
+    this.releasePreview();
+    this.fileName.set(null);
+    this.chosenLogo.set(null);
+    const input = this.logoInput()?.nativeElement;
+    if (input) {
+      input.value = '';
+    }
   }
 
   private releasePreview(): void {

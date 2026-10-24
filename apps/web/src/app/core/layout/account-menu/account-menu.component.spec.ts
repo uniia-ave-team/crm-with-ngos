@@ -1,4 +1,4 @@
-import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { TranslatePipe, provideTranslateService } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
@@ -18,7 +18,10 @@ describe('AccountMenuComponent', () => {
     TestBed.configureTestingModule({
       declarations: [AccountMenuComponent],
       imports: [AvatarModule, AlphaOutlineModule, TranslatePipe],
-      schemas: [CUSTOM_ELEMENTS_SCHEMA],
+      // Компонент тут оголошено напряму в TestBed, і його директиви в області видимості тесту
+      // не діють: `[appProtectedSrc]` лягає звичайною властивістю елемента (сама директива —
+      // у власному спеку); без NO_ERRORS_SCHEMA привʼязка до `img` була б помилкою.
+      schemas: [NO_ERRORS_SCHEMA],
       providers: [provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }), provideHttpClient(), provideHttpClientTesting()],
     });
   });
@@ -164,8 +167,9 @@ describe('AccountMenuComponent', () => {
     fixture.detectChanges();
     const tiles = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.account-tile'));
     expect(tiles[0].querySelector('.account-tile__badge')).toBeNull();
-    expect(Array.from(tiles[1].querySelectorAll('.account-tile__badge img')).map((i) => i.getAttribute('src'))).toEqual([
-      'assets/custom.png',
-    ]);
+    // Адреса логотипа лягає в `appProtectedSrc` (у `src` її кладе директива, яка бере файл із токеном).
+    expect(
+      Array.from(tiles[1].querySelectorAll('.account-tile__badge img')).map((i) => (i as unknown as { appProtectedSrc: string }).appProtectedSrc),
+    ).toEqual(['assets/custom.png']);
   });
 });

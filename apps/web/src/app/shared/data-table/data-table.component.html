@@ -1,0 +1,59 @@
+<div class="data-table__scroll">
+  <table class="data-table" [attr.aria-label]="labelKey() ? (labelKey()! | translate) : null">
+    <colgroup>
+      @for (column of columns(); track column.id) {
+        <col [style.width]="column.width ?? null" />
+      }
+      <col class="data-table__menu-col" />
+    </colgroup>
+    <thead>
+      <tr>
+        @for (column of columns(); track column.id) {
+          <th scope="col">{{ column.labelKey ? (column.labelKey | translate) : '' }}</th>
+        }
+        <th scope="col" class="data-table__menu-cell">
+          @if (showAddColumn()) {
+            <button
+              type="button"
+              class="data-table__add"
+              tabindex="0"
+              [attr.aria-label]="'table.addColumn' | translate"
+              [attr.title]="'table.addColumn' | translate"
+              (click)="columnAdd.emit()"
+            >
+              <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+            </button>
+          }
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.id) {
+        <tr class="data-table__row" [class.data-table__row--active]="row.id === highlightedRowId()">
+          @for (column of columns(); track column.id) {
+            <td>
+              @if (column.template; as template) {
+                <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="{ $implicit: row, column: column }" />
+              } @else {
+                {{ text(row, column) }}
+              }
+            </td>
+          }
+          <td class="data-table__menu-cell">
+            @if (showRowMenu()) {
+              <button
+                type="button"
+                class="data-table__menu"
+                tabindex="0"
+                [attr.aria-label]="'table.rowMenu' | translate"
+                (click)="openMenu(row, $event)"
+              >
+                <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+              </button>
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

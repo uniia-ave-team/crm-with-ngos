@@ -1,0 +1,44 @@
+// Той самий вигляд пунктів, що й у меню акаунта: іконка й підпис, наведений пункт
+// виділяється акцентним кольором меню.
+:host {
+  display: block;
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--nav-fg-active);
+}
+
+.actions__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font-family: var(--font-menu);
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+
+  ion-icon {
+    flex: none;
+    font-size: 18px;
+    color: var(--nav-fg-inactive);
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: var(--nav-active-bg);
+    outline: none;
+  }
+}

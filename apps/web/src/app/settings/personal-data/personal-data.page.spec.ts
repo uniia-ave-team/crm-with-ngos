@@ -89,7 +89,7 @@ describe('PersonalDataPage', () => {
     const labelOf = (element: HTMLElement, id: string) => element.querySelector(`label[for=${id}]`) as HTMLElement;
     const hasMark = (el: HTMLElement) => !!el.querySelector('.settings-field__required');
 
-    it.each(['settings-last-name', 'settings-first-name', 'settings-email'])('marks %s as required: asterisk and the required attribute', (id) => {
+    it.each(['settings-last-name', 'settings-first-name'])('marks %s as required: asterisk and the required attribute', (id) => {
       const { element } = render();
       expect(hasMark(labelOf(element, id))).toBe(true);
       expect((element.querySelector(`#${id}`) as HTMLInputElement).required).toBe(true);
@@ -129,61 +129,12 @@ describe('PersonalDataPage', () => {
   });
 
   describe('opening the tab', () => {
-    const detailsUrl = (id: string) => `${server}/api/v1/users/${id}`;
-
-    it('asks for the detailed profile of the current user', async () => {
+    it('sends no request of its own: the profile comes from /users/me, which the page guard asks for', async () => {
       await signIn({ id: 'user-7', firstName: 'First', lastName: 'Last', email: 'a@b.org' });
+      // Запити входу (організація, права) — не сторінки: відкидаємо їх перед відкриттям.
+      http.match(() => true);
       render();
-      const request = http.expectOne(detailsUrl('user-7'));
-      expect(request.request.method).toBe('GET');
-      request.flush({ id: 'user-7', firstName: 'First', lastName: 'Last', email: 'a@b.org', roles: [], customFields: [] });
-    });
-
-    it('fills the form and the saved account from the answer', async () => {
-      await signIn({ id: 'user-7', firstName: 'Old First', lastName: 'Old Last', email: 'old@b.org' });
-      const { fixture, element } = render();
-      http.expectOne(detailsUrl('user-7')).flush({
-        id: 'user-7',
-        email: 'new@b.org',
-        firstName: 'First',
-        lastName: 'Last',
-        patronymic: 'Middle',
-        internalPosition: 'Position',
-        phoneNumber: '+380123456789',
-        country: 'Country',
-        emergencyContact: 'Contact',
-        avatarUrl: null,
-        roles: [],
-        customFields: [],
-      });
-      await vi.waitFor(() => expect(TestBed.inject(CurrentUserService).user()?.lastName).toBe('Last'));
-      fixture.detectChanges();
-
-      const value = (id: string) => (element.querySelector(`#${id}`) as HTMLInputElement).value;
-      expect(value('settings-last-name')).toBe('Last');
-      expect(value('settings-first-name')).toBe('First');
-      expect(value('settings-patronymic')).toBe('Middle');
-      expect(value('settings-position')).toBe('Position');
-      expect(value('settings-email')).toBe('new@b.org');
-      expect(value('settings-phone')).toBe('+380123456789');
-      expect(value('settings-emergency-contact')).toBe('Contact');
-      expect(value('settings-country')).toBe('Country');
-
-      const account = TestBed.inject(AccountsService).active()!;
-      expect(account).toMatchObject({ firstName: 'First', lastName: 'Last', email: 'new@b.org' });
-      expect(JSON.parse(localStorage.getItem(`yavir.account.${account.id}`)!)).toMatchObject({
-        firstName: 'First',
-        lastName: 'Last',
-      });
-    });
-
-    it('keeps the data from /users/me when the detailed profile is not available', async () => {
-      await signIn({ id: 'user-7', firstName: 'First', lastName: 'Last', email: 'a@b.org' });
-      const { fixture, element } = render();
-      http.expectOne(detailsUrl('user-7')).flush({}, { status: 403, statusText: 'Forbidden' });
-      await new Promise((resolve) => setTimeout(resolve));
-      fixture.detectChanges();
-      expect((element.querySelector('#settings-first-name') as HTMLInputElement).value).toBe('First');
+      http.expectNone(() => true);
     });
 
     it('sends nothing when nobody is signed in', () => {
@@ -206,7 +157,6 @@ describe('PersonalDataPage', () => {
       uk.settings.personal.newAvatar,
       uk.settings.personal.position,
       uk.settings.personal.pronouns,
-      uk.settings.personal.email,
       uk.settings.personal.phone,
       uk.settings.personal.emergencyContact,
       uk.settings.personal.country,
@@ -222,12 +172,11 @@ describe('PersonalDataPage', () => {
     ]);
   });
 
-  it('prefills the fields from the profile: last name, first name, patronymic, the email and the phone', async () => {
+  it('prefills the fields from the profile: last name, first name, patronymic and the phone', async () => {
     await signIn({
       firstName: 'First',
       lastName: 'Last',
       patronymic: 'Middle',
-      email: 'test@test.com',
       phoneNumber: '+380123456789',
     });
     const { element } = render();
@@ -235,7 +184,6 @@ describe('PersonalDataPage', () => {
     expect(value('settings-last-name')).toBe('Last');
     expect(value('settings-first-name')).toBe('First');
     expect(value('settings-patronymic')).toBe('Middle');
-    expect(value('settings-email')).toBe('test@test.com');
     expect(value('settings-phone')).toBe('+380123456789');
   });
 
@@ -254,7 +202,7 @@ describe('PersonalDataPage', () => {
   });
 
   describe('saving', () => {
-    const putUrl = (id = 'user-7') => `${server}/api/v1/users/${id}`;
+    const putUrl = () => `${server}/api/v1/users/me`;
     const profile = {
       id: 'user-7',
       firstName: 'First',
@@ -327,14 +275,12 @@ describe('PersonalDataPage', () => {
         const { fixture, element } = await open({ pronouns: null });
         setText(element, 'settings-last-name', '');
         setText(element, 'settings-first-name', '  ');
-        setText(element, 'settings-email', '');
         save(fixture, element);
 
-        expect(errors(element)).toEqual([uk.settings.personal.error.required, uk.settings.personal.error.required, uk.settings.personal.error.pronounsRequired, uk.settings.personal.error.required]);
+        expect(errors(element)).toEqual([uk.settings.personal.error.required, uk.settings.personal.error.required, uk.settings.personal.error.pronounsRequired]);
         // Помилка стоїть під своїм полем.
         expect(element.querySelector('#settings-last-name')!.parentElement!.querySelector('.settings-field__error')).not.toBeNull();
         expect(element.querySelector('#settings-first-name')!.parentElement!.querySelector('.settings-field__error')).not.toBeNull();
-        expect(element.querySelector('#settings-email')!.parentElement!.querySelector('.settings-field__error')).not.toBeNull();
         expect(element.querySelector('.settings-fieldset .settings-field__error')?.textContent).toContain(uk.settings.personal.error.pronounsRequired);
         http.expectNone({ method: 'PUT', url: putUrl() });
         expect(result(element)).toBeNull();
@@ -405,7 +351,7 @@ describe('PersonalDataPage', () => {
     });
 
     describe('the request', () => {
-      it('puts the profile to /users/{id}: the typed values, the current language and a null avatar', async () => {
+      it('puts the profile to /users/me: the typed values, the current language and a null avatar', async () => {
         const { fixture, element } = await open();
         setText(element, 'settings-last-name', ' Other ');
         setText(element, 'settings-position', 'Position B');
@@ -424,7 +370,6 @@ describe('PersonalDataPage', () => {
           preferredLanguage: 'uk',
           pronouns: uk.settings.personal.pronounShe,
           pronounCategory: 2,
-          avatarUrl: null,
         });
         request.flush(null, { status: 204, statusText: 'No Content' });
       });
@@ -457,7 +402,7 @@ describe('PersonalDataPage', () => {
         request.flush(null, { status: 204, statusText: 'No Content' });
       });
 
-      it('sends a null avatar even when a photo has been chosen', async () => {
+      it('keeps the avatar out of the PUT even when a photo has been chosen: the image goes in its own request', async () => {
         const { fixture, element } = await open();
         const input = element.querySelector('.settings-avatar__input') as HTMLInputElement;
         Object.defineProperty(input, 'files', { value: [new File(['x'], 'photo.png', { type: 'image/png' })], configurable: true });
@@ -465,8 +410,9 @@ describe('PersonalDataPage', () => {
         save(fixture, element);
 
         const request = http.expectOne({ method: 'PUT', url: putUrl() });
-        expect((request.request.body as { avatarUrl: unknown }).avatarUrl).toBeNull();
+        expect(request.request.body).not.toHaveProperty('avatarUrl');
         request.flush(null, { status: 204, statusText: 'No Content' });
+        await vi.waitFor(() => http.expectOne({ method: 'POST', url: `${putUrl()}/avatar` }).flush(null));
       });
 
       it.each([
@@ -499,6 +445,91 @@ describe('PersonalDataPage', () => {
         save(fixture, element);
         http.expectOne({ method: 'PUT', url: putUrl() }).flush(null, { status: 204, statusText: 'No Content' });
         await vi.waitFor(() => expect(result(element)).not.toBeNull());
+      });
+    });
+
+    describe('the avatar (POST /api/v1/users/me/avatar)', () => {
+      const avatarUrl = () => `${putUrl()}/avatar`;
+      const choose = (element: HTMLElement, file: File) => {
+        const input = element.querySelector('.settings-avatar__input') as HTMLInputElement;
+        Object.defineProperty(input, 'files', { value: [file], configurable: true });
+        input.dispatchEvent(new Event('change'));
+      };
+      const png = () => new File(['image'], 'photo.png', { type: 'image/png' });
+      const putOk = async () => {
+        const request = await vi.waitFor(() => http.expectOne({ method: 'PUT', url: putUrl() }));
+        request.flush(null, { status: 204, statusText: 'No Content' });
+      };
+
+      it('sends the chosen image as multipart/form-data (field "file") after the PUT, then reads the profile again (GET /users/me)', async () => {
+        const { fixture, element } = await open();
+        choose(element, png());
+        save(fixture, element);
+        http.expectNone({ method: 'POST', url: avatarUrl() });
+        await putOk();
+
+        const upload = await vi.waitFor(() => http.expectOne({ method: 'POST', url: avatarUrl() }));
+        const form = upload.request.body as FormData;
+        expect(form).toBeInstanceOf(FormData);
+        expect((form.get('file') as File).name).toBe('photo.png');
+        upload.flush(null);
+
+        const profileRequest = await vi.waitFor(() => http.expectOne({ method: 'GET', url: putUrl() }));
+        profileRequest.flush({ ...profile, avatarUrl: '/files/new.png', roles: [], customFields: [] });
+        await vi.waitFor(() => expect(TestBed.inject(CurrentUserService).user()?.avatarUrl).toBe('/files/new.png'));
+        await vi.waitFor(() => expect(result(element) ?? (fixture.detectChanges(), result(element))).not.toBeNull());
+        expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(uk.settings.personal.noFile);
+        expect(result(element)?.textContent?.trim()).toBe(uk.settings.personal.result.success);
+      });
+
+      it('sends no image request when no file is chosen', async () => {
+        const { fixture, element } = await open();
+        save(fixture, element);
+        await putOk();
+        await vi.waitFor(() => expect(result(element) ?? (fixture.detectChanges(), result(element))).not.toBeNull());
+        http.expectNone({ method: 'POST', url: avatarUrl() });
+      });
+
+      it('does not send the image when the PUT failed', async () => {
+        const { fixture, element } = await open();
+        choose(element, png());
+        save(fixture, element);
+        http.expectOne({ method: 'PUT', url: putUrl() }).flush({}, { status: 400, statusText: 'Bad Request' });
+        await vi.waitFor(() => expect(result(element) ?? (fixture.detectChanges(), result(element))).not.toBeNull());
+        http.expectNone({ method: 'POST', url: avatarUrl() });
+      });
+
+      it.each([
+        [400, uk.settings.personal.result.avatar.invalid],
+        [401, uk.settings.personal.result.avatar.unauthorized],
+        [403, uk.settings.personal.result.avatar.forbidden],
+        [500, uk.settings.personal.result.avatar.error],
+      ])('shows a red block for HTTP %i of the image request and keeps the file for another try', async (status, text) => {
+        const { fixture, element } = await open();
+        choose(element, png());
+        save(fixture, element);
+        await putOk();
+        const upload = await vi.waitFor(() => http.expectOne({ method: 'POST', url: avatarUrl() }));
+        upload.flush({}, { status, statusText: 'x' });
+        await vi.waitFor(() => expect(result(element) ?? (fixture.detectChanges(), result(element))).not.toBeNull());
+
+        const block = result(element)!;
+        expect(block.textContent?.trim()).toBe(text);
+        expect(block.classList).not.toContain('settings-result--success');
+        expect(block.getAttribute('role')).toBe('alert');
+        expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe('photo.png');
+        // Дані профілю при цьому збережено.
+        expect(TestBed.inject(CurrentUserService).user()?.firstName).toBe('First');
+      });
+
+      it('says that the server does not answer for the image request', async () => {
+        const { fixture, element } = await open();
+        choose(element, png());
+        save(fixture, element);
+        await putOk();
+        (await vi.waitFor(() => http.expectOne({ method: 'POST', url: avatarUrl() }))).error(new ProgressEvent('error'));
+        await vi.waitFor(() => expect(result(element) ?? (fixture.detectChanges(), result(element))).not.toBeNull());
+        expect(result(element)?.textContent?.trim()).toBe(uk.settings.personal.result.avatar.unreachable);
       });
     });
 
@@ -540,16 +571,6 @@ describe('PersonalDataPage', () => {
         save(fixture, element);
         http.expectOne({ method: 'PUT', url: putUrl() }).flush(null, { status: 204, statusText: 'No Content' });
         await vi.waitFor(() => expect(language.language()).toBe('en'));
-      });
-
-      it('switches the interface to the language of the detailed profile when the tab is opened', async () => {
-        await signIn({ ...profile, preferredLanguage: 'uk' });
-        const language = TestBed.inject(LanguageService);
-        render();
-        expect(language.language()).toBe('uk');
-
-        http.expectOne({ method: 'GET', url: putUrl() }).flush({ ...profile, preferredLanguage: 'be', roles: [], customFields: [] });
-        await vi.waitFor(() => expect(language.language()).toBe('be'));
       });
 
       it('sends the chosen code, and null when nothing is chosen', async () => {
@@ -921,7 +942,8 @@ describe('PersonalDataPage', () => {
       choose(element, png());
       fixture.detectChanges();
 
-      http.expectOne(`${server}/api/v1/users/user-7`).flush({
+      void TestBed.inject(CurrentUserService).reload();
+      http.expectOne(`${server}/api/v1/users/me`).flush({
         id: 'user-7',
         email: 'a@b.org',
         firstName: 'First',
@@ -952,7 +974,60 @@ describe('PersonalDataPage', () => {
     const click = vi.spyOn(input, 'click').mockImplementation(() => undefined);
     (element.querySelector('.settings-avatar__choose') as HTMLButtonElement).click();
     expect(click).toHaveBeenCalled();
-    expect(input.accept).toBe('image/*');
+    expect(input.accept).toBe('image/png,image/webp,image/jpeg,image/gif');
+  });
+
+  describe('avatar file types', () => {
+    const choose = (element: HTMLElement, file: File) => {
+      const input = element.querySelector('.settings-avatar__input') as HTMLInputElement;
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      input.dispatchEvent(new Event('change'));
+    };
+    const error = (element: HTMLElement) => element.querySelector('.settings-avatar__upload .settings-field__error');
+
+    it('lists the types in the hint, from the language file', () => {
+      const { element } = render();
+      expect(element.textContent).toContain(uk.settings.personal.avatarHint);
+    });
+
+    it.each([
+      ['photo.png', 'image/png'],
+      ['photo.webp', 'image/webp'],
+      ['photo.jpeg', 'image/jpeg'],
+      ['photo.jpg', 'image/jpeg'],
+      ['photo.gif', 'image/gif'],
+    ])('accepts %s', (name, type) => {
+      const { fixture, element } = render();
+      choose(element, new File(['x'], name, { type }));
+      fixture.detectChanges();
+
+      expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(name);
+      expect(error(element)).toBeNull();
+    });
+
+    it.each([
+      ['photo.svg', 'image/svg+xml'],
+      ['photo.bmp', 'image/bmp'],
+      ['notes.txt', 'text/plain'],
+    ])('rejects %s, with the error from the language file, and keeps "no file"', (name, type) => {
+      const { fixture, element } = render();
+      choose(element, new File(['x'], name, { type }));
+      fixture.detectChanges();
+
+      expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(uk.settings.personal.noFile);
+      expect(error(element)?.textContent?.trim()).toBe(uk.settings.personal.error.avatarType);
+    });
+
+    it('clears the error when an allowed file is chosen afterwards', () => {
+      const { fixture, element } = render();
+      choose(element, new File(['x'], 'photo.svg', { type: 'image/svg+xml' }));
+      fixture.detectChanges();
+      expect(error(element)).not.toBeNull();
+
+      choose(element, new File(['x'], 'photo.png', { type: 'image/png' }));
+      fixture.detectChanges();
+      expect(error(element)).toBeNull();
+    });
   });
 
   it('does not send anything to the server on save: it is only the look so far', () => {

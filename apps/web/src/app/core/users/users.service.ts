@@ -4,14 +4,17 @@ import { firstValueFrom, timeout } from 'rxjs';
 
 import { ConnectionService } from '../connection/connection.service';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
-import { UserProfile } from './user-profile';
 
 const API_USERS_PATH = '/api/v1/users';
 const REQUEST_TIMEOUT_MS = 10000;
+/** Завантаження файлу триває довше за звичайний запит. */
+const UPLOAD_TIMEOUT_MS = 60000;
 
 export interface NewUser {
   firstName: string;
   lastName: string;
+  /** По батькові; необовʼязкове (`null` — не вказано), але поле в запиті обовʼязкове. */
+  patronymic: string | null;
   email: string;
   password: string;
   confirmPassword: string;
@@ -20,10 +23,12 @@ export interface NewUser {
 export type CreateUserResult = 'created' | RequestFailure;
 export type ChangePasswordResult = 'changed' | RequestFailure;
 export type UpdateProfileResult = 'updated' | RequestFailure;
+export type UploadAvatarResult = 'uploaded' | RequestFailure;
 
 /**
- * Тіло `PUT /api/v1/users/{id}`: сервер вимагає всі поля (кожне — рядок або
- * `null`). Категорія займенників — число з `PronounCategory`.
+ * Тіло `PUT /api/v1/users/me`: сервер вимагає всі поля (кожне — рядок або
+ * `null`). Категорія займенників — число з `PronounCategory`. Аватара тут
+ * нема: він завантажується окремо (`uploadAvatar`).
  */
 export interface ProfileUpdate {
   firstName: string | null;
@@ -36,7 +41,6 @@ export interface ProfileUpdate {
   preferredLanguage: string | null;
   pronouns: string | null;
   pronounCategory: number | null;
-  avatarUrl: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -56,23 +60,6 @@ export class UsersService {
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[UsersService] Не вдалося створити користувача (${failure})`, error);
-      return failure;
-    }
-  }
-
-  /**
-   * `GET <сервер>/api/v1/users/{id}` — детальний профіль користувача (потрібне
-   * право `ViewUser`). Повертає профіль або причину невдачі (404 — `error`).
-   */
-  async get(id: string): Promise<UserProfile | RequestFailure> {
-    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}`;
-    console.log(`[UsersService] Запитую профіль користувача: ${url}`);
-
-    try {
-      return await firstValueFrom(this.http.get<UserProfile>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
-    } catch (error) {
-      const failure = toRequestFailure(error);
-      console.warn(`[UsersService] Не вдалося отримати профіль (${failure})`, error);
       return failure;
     }
   }
@@ -102,11 +89,12 @@ export class UsersService {
   }
 
   /**
-   * `PUT <сервер>/api/v1/users/{id}` — оновлення профілю (потрібне право
-   * `UpdateUser`; 204 без тіла). Токен додає `authInterceptor`.
+   * `PUT <сервер>/api/v1/users/me` — оновлення профілю поточного користувача
+   * (лише авторизація, права `UpdateUser` не потрібно; 204 без тіла). Токен
+   * додає `authInterceptor`.
    */
-  async updateProfile(id: string, profile: ProfileUpdate): Promise<UpdateProfileResult> {
-    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}`;
+  async updateProfile(profile: ProfileUpdate): Promise<UpdateProfileResult> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me`;
     console.log(`[UsersService] Оновлюю профіль користувача: ${url}`);
 
     try {
@@ -116,6 +104,29 @@ export class UsersService {
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[UsersService] Не вдалося оновити профіль (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
+   * `POST <сервер>/api/v1/users/me/avatar` — завантаження аватара поточного
+   * користувача (`multipart/form-data`, поле `file`; лише авторизація; 200 без
+   * тіла). Передається саме зображення, а не посилання: посилання на нього
+   * призначає сервер, тож новий `avatarUrl` читається з профілю (`GET /users/me`).
+   */
+  async uploadAvatar(file: File): Promise<UploadAvatarResult> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/avatar`;
+    console.log(`[UsersService] Завантажую аватар: ${url}`);
+
+    try {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      await firstValueFrom(this.http.post(url, form).pipe(timeout(UPLOAD_TIMEOUT_MS)));
+      console.log('[UsersService] Аватар завантажено');
+      return 'uploaded';
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося завантажити аватар (${failure})`, error);
       return failure;
     }
   }
