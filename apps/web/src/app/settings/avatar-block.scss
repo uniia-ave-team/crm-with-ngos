@@ -1,0 +1,71 @@
+// Блок завантаження зображення: велика мініатюра зліва, вибір файлу й підказки
+// справа. Спільний для «Даних профілю» (аватар) і сторінки «Адмін» (логотип ГО).
+.settings-avatar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-avatar__image {
+  --avatar-size: 120px;
+  --avatar-font-size: 44px;
+  flex: none;
+}
+
+.settings-avatar__upload {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-avatar__file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+// Рідний input[type=file] прихований: кнопку й напис малюємо самі, щоб тексти
+// брались із мовного файлу, а не з мови браузера.
+.settings-avatar__input {
+  display: none;
+}
+
+.settings-avatar__choose {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  background: var(--nav-bg);
+  color: var(--nav-fg-active);
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+
+  &:focus-visible {
+    border-color: var(--settings-accent);
+    outline: none;
+  }
+}
+
+.settings-avatar__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nav-fg-inactive);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-avatar__hint {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+
+  // Місце лишається, поки примітки не видно: блок аватара не міняє висоту.
+  &--hidden {
+    visibility: hidden;
+  }
+}

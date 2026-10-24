@@ -66,17 +66,51 @@ describe('authGuard', () => {
     expect(result.toString()).toBe('/login');
   });
 
-  it('lets the user in without any request when the current account is already confirmed in this page session', async () => {
-    addAccount('user-1', jwtAt(600), 'r1');
-    const user = TestBed.inject(CurrentUserService);
-    const confirmed = user.ensure();
-    http.expectOne(`${server}/api/v1/users/me`).flush(profile);
-    await confirmed;
-    http.match(`${server}/api/v1/ngo`);
+  describe('when the current account is already confirmed in this page session', () => {
+    async function confirm() {
+      addAccount('user-1', jwtAt(600), 'r1');
+      const user = TestBed.inject(CurrentUserService);
+      const confirmed = user.ensure();
+      http.expectOne(`${server}/api/v1/users/me`).flush(profile);
+      await confirmed;
+      http.match(`${server}/api/v1/ngo`);
+      return user;
+    }
 
-    expect(await run()).toBe(true);
-    http.expectNone(`${server}/health`);
-    http.expectNone(`${server}/api/v1/users/me`);
+    it('lets the user in at once, without the search of the accounts', async () => {
+      await confirm();
+
+      expect(await run()).toBe(true);
+      http.expectNone(`${server}/health`);
+      http.expectOne(`${server}/api/v1/users/me`);
+    });
+
+    it('asks for the profile again on every page change and takes the changes made in the database', async () => {
+      const user = await confirm();
+
+      expect(await run()).toBe(true);
+      http.expectOne(`${server}/api/v1/users/me`).flush({ ...profile, firstName: ' ', lastName: ' ' });
+      await vi.waitFor(() => expect(user.user()).toMatchObject({ firstName: ' ', lastName: ' ' }));
+      http.match(`${server}/api/v1/ngo`);
+
+      // Ще одна зміна сторінки — ще один запит.
+      expect(await run()).toBe(true);
+      http.expectOne(`${server}/api/v1/users/me`).flush({ ...profile, firstName: '  ' });
+      await vi.waitFor(() => expect(user.user()).toMatchObject({ firstName: '  ' }));
+    });
+
+    it('does not hold the page back while the profile is being requested, nor lose it when the request fails', async () => {
+      const user = await confirm();
+
+      // Запит ще не відповів, а сторінку вже пущено.
+      expect(await run()).toBe(true);
+      const request = http.expectOne(`${server}/api/v1/users/me`);
+      request.error(new ProgressEvent('error'));
+      await vi.waitFor(() => expect(console.warn).toHaveBeenCalled());
+
+      expect(user.user()).toMatchObject({ id: 'user-1' });
+      expect(accounts.active()).not.toBeNull();
+    });
   });
 
   it('searches the saved accounts: the first valid one becomes the current one and its data is loaded', async () => {

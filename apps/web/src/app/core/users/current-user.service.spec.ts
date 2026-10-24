@@ -12,7 +12,9 @@ describe('CurrentUserService', () => {
   let service: CurrentUserService;
   let auth: AuthService;
   let url: string;
-  const profile = { id: 'u1', email: 'a@b.org', firstName: 'Олена', lastName: 'Іваненко', roles: [], customFields: [] };
+  // Імена в тестах — пробіли: «старе» значення один пробіл, «нове» (після
+  // оновлення чи збереження) — два, щоб їх можна було відрізнити.
+  const profile = { id: 'u1', email: 'a@b.org', firstName: ' ', lastName: ' ', roles: [], customFields: [] };
 
   function signIn(): void {
     const server = TestBed.inject(ConnectionService).serverUrl();
@@ -120,5 +122,216 @@ describe('CurrentUserService', () => {
     await result;
     TestBed.tick();
     expect(fresh.user()).toEqual(profile);
+  });
+
+  describe('permissions (GET /users/me/permissions together with /users/me)', () => {
+    const permissionsUrl = () => `${TestBed.inject(ConnectionService).serverUrl()}/api/v1/users/me/permissions`;
+    const stored = () => JSON.parse(localStorage.getItem(`yavir.account.${TestBed.inject(AccountsService).activeId()}`)!);
+
+    async function loaded(permissions: string[] = ['ViewUser']): Promise<void> {
+      const first = service.ensure();
+      http.expectOne(url).flush(profile);
+      await first;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+      http.expectOne(permissionsUrl()).flush(permissions);
+      await vi.waitFor(() => expect(service.permissions()).toEqual(permissions));
+    }
+
+    it('asks for the permissions after the profile and writes them to the account record in localStorage', async () => {
+      await loaded(['ViewUser', 'UpdateUser']);
+      expect(stored().permissions).toEqual(['ViewUser', 'UpdateUser']);
+    });
+
+    it('asks again on every request of the profile and replaces the list', async () => {
+      await loaded(['ViewUser', 'UpdateUser']);
+
+      const result = service.reload();
+      http.expectOne(url).flush(profile);
+      await result;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+      http.expectOne(permissionsUrl()).flush(['ViewUser']);
+
+      await vi.waitFor(() => expect(service.permissions()).toEqual(['ViewUser']));
+      expect(stored().permissions).toEqual(['ViewUser']);
+    });
+
+    it('keeps the saved permissions when they could not be received', async () => {
+      await loaded(['ViewUser']);
+
+      const result = service.reload();
+      http.expectOne(url).flush(profile);
+      await result;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+      http.expectOne(permissionsUrl()).flush({}, { status: 500, statusText: 'x' });
+
+      await vi.waitFor(() => expect(console.warn).toHaveBeenCalled());
+      expect(service.permissions()).toEqual(['ViewUser']);
+      expect(stored().permissions).toEqual(['ViewUser']);
+    });
+
+    it('does not write the permissions to an account that is not the current one any more', async () => {
+      const first = service.ensure();
+      http.expectOne(url).flush(profile);
+      await first;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+      const request = http.expectOne(permissionsUrl());
+      const id = TestBed.inject(AccountsService).activeId()!;
+
+      auth.clearTokens();
+      request.flush(['ViewUser']);
+      await Promise.resolve();
+      expect(JSON.parse(localStorage.getItem(`yavir.account.${id}`) ?? 'null')?.permissions ?? []).toEqual([]);
+    });
+  });
+
+  describe('reload (GET /users/me on every page change)', () => {
+    async function loaded(): Promise<void> {
+      const first = service.ensure();
+      http.expectOne(url).flush(profile);
+      await first;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+    }
+
+    it('asks again although the profile is already known, and replaces it with the answer', async () => {
+      await loaded();
+      const result = service.reload();
+      const request = http.expectOne(url);
+      expect(request.request.method).toBe('GET');
+      request.flush({ ...profile, firstName: '  ', lastName: '  ' });
+
+      expect(await result).toBe('ok');
+      expect(service.user()).toMatchObject({ id: 'u1', firstName: '  ', lastName: '  ' });
+      const record = JSON.parse(localStorage.getItem(`yavir.account.${TestBed.inject(AccountsService).activeId()}`)!);
+      expect(record).toMatchObject({ firstName: '  ', lastName: '  ' });
+    });
+
+    it('shares one request between simultaneous calls', async () => {
+      await loaded();
+      const first = service.reload();
+      const second = service.reload();
+      http.expectOne(url).flush(profile);
+      expect(await first).toBe('ok');
+      expect(await second).toBe('ok');
+    });
+
+    it.each([500, 404])('keeps the profile when the server answers %i', async (status) => {
+      await loaded();
+      const result = service.reload();
+      http.expectOne(url).flush({}, { status, statusText: 'x' });
+      expect(await result).toBe('unavailable');
+      expect(service.user()).toEqual(profile);
+    });
+
+    it('sends nothing without tokens', async () => {
+      auth.clearTokens();
+      expect(await service.reload()).toBe('unauthorized');
+      http.expectNone(url);
+    });
+  });
+
+  describe('refresh (GET /users/{id})', () => {
+    const detailsUrl = () => `${TestBed.inject(ConnectionService).serverUrl()}/api/v1/users/u1`;
+    const fullProfile = {
+      ...profile,
+      email: 'new@b.org',
+      firstName: '  ',
+      lastName: '  ',
+      patronymic: ' ',
+      internalPosition: ' ',
+      phoneNumber: ' ',
+      country: ' ',
+      emergencyContact: ' ',
+      avatarUrl: '/files/a.png',
+    };
+    const stored = () => JSON.parse(localStorage.getItem(`yavir.account.${TestBed.inject(AccountsService).activeId()}`)!);
+
+    async function loaded(): Promise<void> {
+      const first = service.ensure();
+      http.expectOne(url).flush(profile);
+      await first;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+    }
+
+    it('asks for the detailed profile of the current user by id and replaces the profile in memory', async () => {
+      await loaded();
+      const result = service.refresh();
+      const request = http.expectOne(detailsUrl());
+      expect(request.request.method).toBe('GET');
+      request.flush(fullProfile);
+
+      expect(await result).toBe('ok');
+      expect(service.user()).toEqual(fullProfile);
+    });
+
+    it('writes the new data into the account record in localStorage', async () => {
+      await loaded();
+      const result = service.refresh();
+      http.expectOne(detailsUrl()).flush(fullProfile);
+      await result;
+
+      expect(stored()).toMatchObject({
+        userId: 'u1',
+        firstName: fullProfile.firstName,
+        lastName: fullProfile.lastName,
+        avatarUrl: '/files/a.png',
+        email: 'new@b.org',
+      });
+    });
+
+    it('keeps the email the user signed in with when the profile has none', async () => {
+      await loaded();
+      const result = service.refresh();
+      http.expectOne(detailsUrl()).flush({ ...fullProfile, email: '' });
+      await result;
+      expect(stored().email).toBe('a@b.org');
+    });
+
+    it('does nothing and sends nothing before the profile is known', async () => {
+      TestBed.inject(AccountsService).update(TestBed.inject(AccountsService).activeId()!, { userId: '' });
+      expect(await service.refresh()).toBe('skipped');
+      http.expectNone(() => true);
+    });
+
+    it.each([403, 404, 500])('keeps what it has when the server answers %i', async (status) => {
+      await loaded();
+      const result = service.refresh();
+      http.expectOne(detailsUrl()).flush({}, { status, statusText: 'x' });
+      expect(await result).toBe('failed');
+      expect(service.user()).toEqual(profile);
+      expect(stored().firstName).toBe(profile.firstName);
+    });
+
+    it('does not take a profile that arrived after the account changed', async () => {
+      await loaded();
+      const result = service.refresh();
+      const request = http.expectOne(detailsUrl());
+      auth.clearTokens();
+      request.flush(fullProfile);
+      expect(await result).toBe('skipped');
+      // Профіль попереднього акаунта скидається ефектом, а нового не прийнято.
+      TestBed.tick();
+      expect(service.user()).toBeNull();
+    });
+  });
+
+  describe('applyLocal', () => {
+    it('merges saved changes into the profile in memory and into the account record', async () => {
+      const first = service.ensure();
+      http.expectOne(url).flush(profile);
+      await first;
+      http.match(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/ngo`);
+
+      const changes = { firstName: '  ', lastName: '  ', patronymic: ' ' };
+      service.applyLocal(changes);
+
+      expect(service.user()).toMatchObject({ id: 'u1', email: 'a@b.org', ...changes });
+      const record = JSON.parse(localStorage.getItem(`yavir.account.${TestBed.inject(AccountsService).activeId()}`)!);
+      expect(record).toMatchObject({ firstName: changes.firstName, lastName: changes.lastName, email: 'a@b.org' });
+    });
+
+    it('does nothing while the profile is not loaded', () => {
+      service.applyLocal({ firstName: '  ' });
+      expect(service.user()).toBeNull();
+    });
   });
 });

@@ -6,7 +6,7 @@
   </a>
 
   <ul class="rail__items">
-    @for (item of navItems; track item.url) {
+    @for (item of navItems(); track item.url) {
       <li>
         <a
           class="rail__item"
@@ -65,7 +65,7 @@
 </header>
 
 <nav class="bottom-tabs" [attr.aria-label]="'common.mainNav' | translate">
-  @for (item of navItems; track item.url) {
+  @for (item of navItems(); track item.url) {
     <a
       class="bottom-tabs__item"
       [routerLink]="item.url"

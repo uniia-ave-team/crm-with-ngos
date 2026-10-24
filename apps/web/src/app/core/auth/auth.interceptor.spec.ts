@@ -62,6 +62,7 @@ describe('authInterceptor', () => {
 
   it.each([
     ['GET', '/api/v1/system/status'],
+    ['GET', '/api/v1/loginpageimages/random'],
     ['POST', '/api/v1/auth/login'],
     ['POST', '/api/v1/auth/refresh-token'],
     ['POST', '/api/v1/auth/logout'],

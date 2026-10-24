@@ -29,7 +29,7 @@
 
         <div class="login-form">
           <div class="login-form__media">
-            <img class="login-form__image" src="assets/login_image.jpg" alt="" />
+            <img class="login-form__image" [src]="loginImage()" alt="" (error)="onLoginImageError()" />
           </div>
 
           <div class="login-form__panel">
@@ -90,20 +90,20 @@
 
               <p class="login-form__caption">{{ 'login.form.codeveloped' | translate }}</p>
               <div class="login-form__logos">
-                <img class="theme-light" [src]="'assets/logos/' + uniiaLogo() + '.svg'" alt="Унія" />
-                <img class="theme-dark" [src]="'assets/logos_white/' + uniiaLogo() + '.svg'" alt="Унія" />
-                <img class="theme-light" src="assets/logos/Ave_Team.svg" alt="Ave Team" />
-                <img class="theme-dark" src="assets/logos_white/Ave_Team.svg" alt="Ave Team" />
+                <img class="theme-light" [src]="'assets/logos/' + uniiaLogo() + '.svg'" [alt]="'login.form.partners.uniia' | translate" />
+                <img class="theme-dark" [src]="'assets/logos_white/' + uniiaLogo() + '.svg'" [alt]="'login.form.partners.uniia' | translate" />
+                <img class="theme-light" src="assets/logos/Ave_Team.svg" [alt]="'login.form.partners.aveTeam' | translate" />
+                <img class="theme-dark" src="assets/logos_white/Ave_Team.svg" [alt]="'login.form.partners.aveTeam' | translate" />
               </div>
 
               <p class="login-form__caption">{{ 'login.form.supported' | translate }}</p>
               <div class="login-form__logos">
-                <img class="theme-light" src="assets/logos/NED.png" alt="NED" />
-                <img class="theme-dark" src="assets/logos_white/NED.png" alt="NED" />
-                <img class="theme-light" src="assets/logos/pd.png" alt="PD" />
-                <img class="theme-dark" src="assets/logos_white/PD.png" alt="PD" />
-                <img class="theme-light" src="assets/logos/lets_NGO.png" alt="Let's NGO" />
-                <img class="theme-dark" src="assets/logos_white/lets_NGO.png" alt="Let's NGO" />
+                <img class="theme-light" src="assets/logos/NED.png" [alt]="'login.form.partners.ned' | translate" />
+                <img class="theme-dark" src="assets/logos_white/NED.png" [alt]="'login.form.partners.ned' | translate" />
+                <img class="theme-light" src="assets/logos/pd.png" [alt]="'login.form.partners.pd' | translate" />
+                <img class="theme-dark" src="assets/logos_white/PD.png" [alt]="'login.form.partners.pd' | translate" />
+                <img class="theme-light" src="assets/logos/lets_NGO.png" [alt]="'login.form.partners.letsNgo' | translate" />
+                <img class="theme-dark" src="assets/logos_white/lets_NGO.png" [alt]="'login.form.partners.letsNgo' | translate" />
               </div>
             </div>
           </div>
@@ -129,7 +129,8 @@
             fill="outline"
             type="text"
             maxlength="200"
-            [placeholder]="'login.ngo.namePlaceholder' | translate"
+            required
+            [placeholder]="('login.ngo.namePlaceholder' | translate) + ' *'"
             [attr.aria-label]="'login.ngo.nameLabel' | translate"
             [ngModel]="ngoName()"
             (ngModelChange)="onNgoNameChange($event)"
@@ -230,7 +231,8 @@
             fill="outline"
             type="email"
             autocomplete="email"
-            [placeholder]="'login.admin.email' | translate"
+            required
+            [placeholder]="('login.admin.email' | translate) + ' *'"
             [attr.aria-label]="'login.admin.email' | translate"
             [ngModel]="adminEmail()"
             (ngModelChange)="onFieldChange(adminEmail, $event)"
@@ -244,7 +246,8 @@
             fill="outline"
             type="text"
             autocomplete="family-name"
-            [placeholder]="'login.admin.lastName' | translate"
+            required
+            [placeholder]="('login.admin.lastName' | translate) + ' *'"
             [attr.aria-label]="'login.admin.lastName' | translate"
             [ngModel]="adminLastName()"
             (ngModelChange)="onFieldChange(adminLastName, $event)"
@@ -255,7 +258,8 @@
             fill="outline"
             type="text"
             autocomplete="given-name"
-            [placeholder]="'login.admin.firstName' | translate"
+            required
+            [placeholder]="('login.admin.firstName' | translate) + ' *'"
             [attr.aria-label]="'login.admin.firstName' | translate"
             [ngModel]="adminFirstName()"
             (ngModelChange)="onFieldChange(adminFirstName, $event)"
@@ -264,48 +268,18 @@
           @if (adminFirstNameError(); as fieldError) {
             <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
           }
-          <ion-input tabindex="0"
-            class="login__input"
-            fill="outline"
-            type="password"
-            autocomplete="new-password"
-            [placeholder]="'login.admin.password' | translate"
-            [attr.aria-label]="'login.admin.password' | translate"
-            [ngModel]="adminPassword()"
-            (ngModelChange)="onFieldChange(adminPassword, $event)"
-            (keyup.enter)="submitAdmin()"
-          ></ion-input>
-          @if (adminPasswordError(); as fieldError) {
-            <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
-          }
-          <ul class="login__requirements">
-            @for (requirement of adminPasswordRequirements(); track requirement.key) {
-              <li class="login__requirement" [class.login__requirement--met]="requirement.met">
-                <span class="login__requirement-icon" aria-hidden="true">{{ requirement.icon }}</span>
-                <span>{{ ('login.admin.requirements.' + requirement.key) | translate }}</span>
-              </li>
-            }
-          </ul>
-          <ion-input tabindex="0"
-            class="login__input"
-            fill="outline"
-            type="password"
-            autocomplete="new-password"
-            [placeholder]="'login.admin.passwordRepeat' | translate"
-            [attr.aria-label]="'login.admin.passwordRepeat' | translate"
-            [ngModel]="adminPasswordRepeat()"
-            (ngModelChange)="onFieldChange(adminPasswordRepeat, $event)"
-            (keyup.enter)="submitAdmin()"
-          ></ion-input>
-          @if (adminPasswordRepeatError(); as fieldError) {
-            <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
-          }
-          <ul class="login__requirements">
-            <li class="login__requirement" [class.login__requirement--met]="adminPasswordsMatch()">
-              <span class="login__requirement-icon" aria-hidden="true">=</span>
-              <span>{{ 'login.admin.requirements.match' | translate }}</span>
-            </li>
-          </ul>
+          <app-password-fields
+            [password]="adminPassword()"
+            [repeat]="adminPasswordRepeat()"
+            [required]="true"
+            [passwordLabel]="'login.admin.password' | translate"
+            [repeatLabel]="'login.admin.passwordRepeat' | translate"
+            [passwordError]="adminPasswordError() ? 'login.admin.error.' + adminPasswordError() : null"
+            [repeatError]="adminPasswordRepeatError() ? 'login.admin.error.' + adminPasswordRepeatError() : null"
+            (passwordChange)="onFieldChange(adminPassword, $event)"
+            (repeatChange)="onFieldChange(adminPasswordRepeat, $event)"
+            (submitted)="submitAdmin()"
+          />
 
           <ion-button
             tabindex="0"
