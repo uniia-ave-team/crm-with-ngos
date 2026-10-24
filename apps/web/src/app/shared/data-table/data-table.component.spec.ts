@@ -3,12 +3,12 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { DataTableCellContext, DataTableColumn, DataTableRow } from './data-table.component';
+import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent } from './data-table.component';
 import { DataTableModule } from './data-table.module';
 
 @Component({
   template: `
-    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" />
+    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [highlightedRowId]="highlighted()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" />
     <ng-template #custom let-row let-column="column"><b class="custom">{{ column.id }}:{{ row['title'] }}</b></ng-template>
   `,
   imports: [DataTableModule],
@@ -19,7 +19,8 @@ class HostComponent {
   readonly label = signal<string | null>(null);
   readonly rowMenuShown = signal(true);
   readonly addShown = signal(true);
-  readonly opened: DataTableRow[] = [];
+  readonly highlighted = signal<string | null>(null);
+  readonly opened: DataTableRowMenuEvent[] = [];
   columnAdds = 0;
   readonly custom = viewChild<TemplateRef<DataTableCellContext>>('custom');
 }
@@ -156,11 +157,32 @@ describe('DataTableComponent', () => {
       }
     });
 
-    it('emits the row of the button that was clicked', () => {
+    it('emits the row and the button itself (to anchor a popover to it) of the click', () => {
       const { fixture, host, element } = render(base, rows);
-      (element.querySelectorAll('tbody .data-table__menu')[1] as HTMLButtonElement).click();
+      const button = element.querySelectorAll('tbody .data-table__menu')[1] as HTMLButtonElement;
+      button.click();
       fixture.detectChanges();
-      expect(host.opened).toEqual([rows[1]]);
+      expect(host.opened).toHaveLength(1);
+      expect(host.opened[0].row).toBe(rows[1]);
+      expect(host.opened[0].anchor).toBe(button);
+    });
+  });
+
+  describe('the highlighted row', () => {
+    const active = (element: HTMLElement) =>
+      Array.from(element.querySelectorAll('tbody tr')).map((tr) => tr.classList.contains('data-table__row--active'));
+
+    it('is marked like a hovered row, only the one with that id', () => {
+      const { fixture, host, element } = render(base, rows);
+      expect(active(element)).toEqual([false, false]);
+
+      host.highlighted.set('r2');
+      fixture.detectChanges();
+      expect(active(element)).toEqual([false, true]);
+
+      host.highlighted.set(null);
+      fixture.detectChanges();
+      expect(active(element)).toEqual([false, false]);
     });
   });
 

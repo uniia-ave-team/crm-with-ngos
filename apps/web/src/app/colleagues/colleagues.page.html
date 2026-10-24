@@ -2,12 +2,12 @@
   <ion-toolbar>
     <ion-title>{{ 'page.colleagues' | translate }}</ion-title>
     <ion-buttons slot="end" class="colleagues__actions">
-      <button type="button" class="colleagues__btn colleagues__btn--roles" tabindex="0">
+      <button type="button" class="colleagues__btn colleagues__btn--roles" tabindex="0" (click)="openPanel('roles')">
         <ion-icon name="people" aria-hidden="true"></ion-icon>
         <span>{{ 'colleagues.roles' | translate }}</span>
       </button>
       @if (canAdd()) {
-        <button type="button" class="colleagues__btn colleagues__btn--add" tabindex="0">
+        <button type="button" class="colleagues__btn colleagues__btn--add" tabindex="0" (click)="openPanel('add')">
           <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
           <span>{{ 'colleagues.add' | translate }}</span>
         </button>
@@ -20,8 +20,32 @@
 </ion-header>
 
 <ion-content [fullscreen]="true">
-  <app-data-table [columns]="columns()" [rows]="rows()" [showRowMenu]="canOpenRowMenu()" [showAddColumn]="canViewCustomFields()" labelKey="page.colleagues" />
+  <app-data-table
+    [columns]="columns()"
+    [rows]="rows()"
+    [showRowMenu]="canOpenRowMenu()"
+    [showAddColumn]="canViewCustomFields()"
+    [highlightedRowId]="menuRowId()"
+    labelKey="page.colleagues"
+    (rowMenu)="openRowMenu($event)"
+  />
 </ion-content>
+
+<!-- Меню дій з колегою: відкривається кнопкою з трьома крапками під нею. -->
+<app-popover
+  width="240px"
+  side="bottom"
+  alignment="end"
+  compactSide="bottom"
+  compactAlignment="end"
+  [label]="'table.rowMenu' | translate"
+  (closed)="menuRowId.set(null)"
+>
+  <app-colleague-actions [items]="actions()" (choose)="onActionChosen($event)" />
+</app-popover>
+
+<!-- Бічне вікно: його відкривають «Ролі», «Додати» та дії з меню; зміст ще не зроблено. -->
+<app-side-panel [label]="'page.colleagues' | translate" (closed)="panel.set(null)"></app-side-panel>
 
 <!-- ПІБ: аватар, імʼя й займенники. -->
 <ng-template #personCell let-row>

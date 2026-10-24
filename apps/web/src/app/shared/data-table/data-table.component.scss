@@ -49,7 +49,8 @@ td:first-child {
 }
 
 .data-table__row:hover td,
-.data-table__row:focus-within td {
+.data-table__row:focus-within td,
+.data-table__row--active td {
   background: var(--nav-active-bg);
 }
 
@@ -105,7 +106,8 @@ th.data-table__menu-cell {
 }
 
 .data-table__row:hover .data-table__menu,
-.data-table__row:focus-within .data-table__menu {
+.data-table__row:focus-within .data-table__menu,
+.data-table__row--active .data-table__menu {
   opacity: 1;
 }
 

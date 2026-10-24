@@ -4,6 +4,7 @@
     "mainNav": "Основна навігація",
     "collapsePanel": "Згорнути панель",
     "expandPanel": "Розгорнути панель",
+    "close": "Закрити",
     "pleaseWait": "Будь ласка, зачекайте...",
     "passwordRequirements": {
       "length": "Мінімум 8 символів",
@@ -105,6 +106,13 @@
       "position": "Посада",
       "email": "Пошта",
       "phone": "Телефон"
+    },
+    "actions": {
+      "permissions": "Змінити права",
+      "edit": "Редагувати",
+      "resetPassword": "Скинути пароль",
+      "disable": "Вимкнути",
+      "delete": "Видалити"
     },
     "sample": {
       "name": "Прізвище Імʼя",

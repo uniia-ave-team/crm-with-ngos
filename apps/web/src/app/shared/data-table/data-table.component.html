@@ -29,7 +29,7 @@
     </thead>
     <tbody>
       @for (row of rows(); track row.id) {
-        <tr class="data-table__row">
+        <tr class="data-table__row" [class.data-table__row--active]="row.id === highlightedRowId()">
           @for (column of columns(); track column.id) {
             <td>
               @if (column.template; as template) {
@@ -46,7 +46,7 @@
                 class="data-table__menu"
                 tabindex="0"
                 [attr.aria-label]="'table.rowMenu' | translate"
-                (click)="rowMenu.emit(row)"
+                (click)="openMenu(row, $event)"
               >
                 <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
               </button>

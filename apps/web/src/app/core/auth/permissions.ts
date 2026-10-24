@@ -36,19 +36,6 @@ export const GALLERY_PERMISSIONS: readonly string[] = [
 /** Права вкладки «Колеги»: достатньо `ViewUser` (пункт меню й страж маршруту). */
 export const COLLEAGUES_PERMISSIONS: readonly string[] = [PERMISSIONS.viewUser];
 
-/**
- * Дії з колегою на вкладці «Колеги»: три крапки в кінці рядка показуються, якщо
- * є хоча б одне з цих прав.
- */
-export const COLLEAGUE_ACTIONS_PERMISSIONS: readonly string[] = [
-  PERMISSIONS.updateUser,
-  PERMISSIONS.disableUser,
-  PERMISSIONS.deleteUser,
-  PERMISSIONS.assignRoleToUser,
-  PERMISSIONS.canResetPassword,
-  PERMISSIONS.manageRole,
-];
-
 /** Чи є в `granted` хоча б одне з прав `required` (порожній `required` — не підходить ніхто). */
 export function hasAnyPermission(granted: readonly string[], required: readonly string[]): boolean {
   return required.some((permission) => granted.includes(permission));

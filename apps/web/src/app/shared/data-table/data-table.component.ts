@@ -12,6 +12,12 @@ export interface DataTableCellContext {
   readonly column: DataTableColumn;
 }
 
+/** Подія кнопки з трьома крапками: рядок і сама кнопка (до неї можна прив'язати спливаюче вікно). */
+export interface DataTableRowMenuEvent {
+  readonly row: DataTableRow;
+  readonly anchor: HTMLElement;
+}
+
 /** Опис колонки. */
 export interface DataTableColumn {
   /** Ідентифікатор колонки; за ним у рядку береться значення для комірки за замовчуванням. */
@@ -34,7 +40,7 @@ export interface DataTableColumn {
  * бейдж, кілька рядків), колонці дають `template` (`<ng-template let-row>`). В
  * кінці кожного рядка стоїть кнопка з трьома крапками: вона з'являється при
  * наведенні на рядок (на пристроях без наведення — завжди) і подає `rowMenu` з
- * цим рядком; в кінці рядка заголовків — завжди видимий «+», що подає `columnAdd`. Наведений рядок виділяється акцентним кольором (`--nav-active-bg`).
+ * цим рядком і самою кнопкою (до неї прив'язують спливаюче вікно); в кінці рядка заголовків — завжди видимий «+», що подає `columnAdd`. Наведений рядок виділяється акцентним кольором (`--nav-active-bg`).
  */
 @Component({
   selector: 'app-data-table',
@@ -51,10 +57,16 @@ export class DataTableComponent {
   readonly showAddColumn = input(true);
   /** Показувати кнопку з трьома крапками в кінці рядків (без неї комірка порожня). */
   readonly showRowMenu = input(true);
+  /** Рядок, який лишається виділеним, як при наведенні (наприклад, поки відкрите його меню); `null` — нема. */
+  readonly highlightedRowId = input<string | null>(null);
   /** Натиснули кнопку з трьома крапками в кінці рядка. */
-  readonly rowMenu = output<DataTableRow>();
+  readonly rowMenu = output<DataTableRowMenuEvent>();
   /** Натиснули «+» в кінці рядка заголовків. */
   readonly columnAdd = output<void>();
+
+  protected openMenu(row: DataTableRow, event: Event): void {
+    this.rowMenu.emit({ row, anchor: event.currentTarget as HTMLElement });
+  }
 
   protected text(row: DataTableRow, column: DataTableColumn): string {
     const value = row[column.id];
