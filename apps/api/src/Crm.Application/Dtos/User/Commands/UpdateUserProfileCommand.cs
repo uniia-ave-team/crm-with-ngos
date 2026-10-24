@@ -18,7 +18,6 @@ namespace Crm.Application.Dtos.User.Commands;
 /// <param name="PreferredLanguage">The updated preferred interface language.</param>
 /// <param name="Pronouns">The updated preferred pronouns.</param>
 /// <param name="PronounCategory">The updated grammatical category of pronouns.</param>
-/// <param name="AvatarUrl">The updated avatar URL or file path.</param>
 public record UpdateUserProfileCommand(
     Guid UserId,
     string FirstName,
@@ -30,5 +29,4 @@ public record UpdateUserProfileCommand(
     string? EmergencyContact,
     string? PreferredLanguage,
     string? Pronouns,
-    PronounCategory? PronounCategory,
-    string? AvatarUrl) : IRequest, ITransactionalCommand;
+    PronounCategory? PronounCategory) : IRequest, ITransactionalCommand;

@@ -69,6 +69,18 @@ public interface IIdentityService
     Task AddToRolesAsync(Guid userId, IEnumerable<string> roleNames, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Asynchronously determines whether the specified user belongs to the specified role.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user.</param>
+    /// <param name="roleName">The name of the role to check.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation.
+    /// The task result contains <c>true</c> if the user belongs to the specified role; otherwise, <c>false</c>.
+    /// </returns>
+    Task<bool> IsInRoleAsync(Guid userId, string roleName, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Asynchronously adds the refresh token and its expiration time for a specific user.
     /// </summary>
     /// <param name="userId">The unique identifier of the user.</param>

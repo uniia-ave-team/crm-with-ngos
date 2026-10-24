@@ -12,6 +12,7 @@ using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Seeders;
 using Crm.Infrastructure.Repositories;
 using Crm.Infrastructure.Services;
+using Crm.Infrastructure.Services.FileValidators;
 using Mapster;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
@@ -112,6 +113,12 @@ public static class InfrastructureServiceCollectionExtensions
         .AddEntityFrameworkStores<ApplicationDbContext>()
         .AddDefaultTokenProviders();
 
+        services.AddOptions<DataProtectionTokenProviderOptions>()
+            .Configure<IOptions<JwtOptions>>((options, jwtOpts) =>
+            {
+                options.TokenLifespan = TimeSpan.FromHours(jwtOpts.Value.ResetPasswordTokenExpiryHours);
+            });
+
         services.AddSingleton<IConfigureOptions<IdentityOptions>>(sp =>
         {
             var identityOptions = sp.GetRequiredService<IOptions<CustomIdentityOptions>>().Value;
@@ -178,6 +185,9 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IFileStorageService, LocalFileStorageService>();
         services.AddSingleton<IFileUrlProvider, LocalFileUrlProvider>();
         services.AddScoped<IFileTransactionTracker, FileTransactionTracker>();
+        services.AddScoped<IImageValidator, ImageValidator>();
+        services.AddTransient<IFormatValidator, SvgImageValidator>();
+        services.AddTransient<IFormatValidator, RasterImageValidator>();
 
         return services;
     }

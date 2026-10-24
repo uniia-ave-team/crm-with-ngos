@@ -4,7 +4,6 @@ using Crm.Infrastructure.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Console;
 
 namespace Crm.Cli.Extensions;
 
@@ -24,36 +23,25 @@ public static class CliServiceCollectionExtensions
         services.AddPersistence(configuration);
         services.AddRepositories();
         services.AddCustomIdentity(configuration);
-        services.AddCliLogging();
+        services.AddCliLogging(configuration);
         services.AddCliCommands();
 
         return services;
     }
 
     /// <summary>
-    /// Configures console logging tailored for CLI execution, enabling single-line colorized output
-    /// and routing log entries at or above <see cref="LogLevel.Error"/> to the standard error stream.
+    /// Configures console logging for CLI execution. Levels, the error stream threshold and formatter options
+    /// come from the <c>Logging</c> configuration section, so they can be overridden with environment variables.
     /// </summary>
     /// <param name="services">The service collection to populate.</param>
+    /// <param name="configuration">The application configuration provider.</param>
     /// <returns>The original service collection instance for method chaining.</returns>
-    public static IServiceCollection AddCliLogging(this IServiceCollection services)
+    public static IServiceCollection AddCliLogging(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddLogging(builder =>
         {
-            builder.ClearProviders();
-
-            builder.AddSimpleConsole(options =>
-            {
-                options.ColorBehavior = LoggerColorBehavior.Enabled;
-                options.SingleLine = true;
-                options.IncludeScopes = false;
-                options.TimestampFormat = null;
-            });
-
-            builder.Services.Configure<ConsoleLoggerOptions>(options =>
-            {
-                options.LogToStandardErrorThreshold = LogLevel.Error;
-            });
+            builder.AddConfiguration(configuration.GetSection("Logging"));
+            builder.AddSimpleConsole();
         });
 
         return services;

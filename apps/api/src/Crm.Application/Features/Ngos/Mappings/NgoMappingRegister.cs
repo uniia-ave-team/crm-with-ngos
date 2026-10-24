@@ -16,13 +16,11 @@ public class NgoMappingRegister : IRegister
             .Map(dest => dest.LogoUrl, src => src.Logo);
 
         config.NewConfig<CreateNgoCommand, Ngo>()
-            .Map(dest => dest.Logo, src => src.LogoUrl)
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.Users)
             .Ignore(dest => dest.CreatedAt);
 
         config.NewConfig<UpdateNgoCommand, Ngo>()
-            .Map(dest => dest.Logo, src => src.LogoUrl)
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.Users)
             .Ignore(dest => dest.CreatedAt);

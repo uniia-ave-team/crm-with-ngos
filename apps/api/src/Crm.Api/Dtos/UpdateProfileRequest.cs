@@ -15,7 +15,6 @@ namespace Crm.Api.Dtos;
 /// <param name="PreferredLanguage">The updated preferred interface language.</param>
 /// <param name="Pronouns">The updated preferred pronouns.</param>
 /// <param name="PronounCategory">The updated grammatical category of pronouns.</param>
-/// <param name="AvatarUrl">The updated avatar URL or file path.</param>
 public record UpdateProfileRequest(
     string FirstName,
     string LastName,
@@ -26,5 +25,4 @@ public record UpdateProfileRequest(
     string? EmergencyContact,
     string? PreferredLanguage,
     string? Pronouns,
-    PronounCategory? PronounCategory,
-    string? AvatarUrl);
+    PronounCategory? PronounCategory);

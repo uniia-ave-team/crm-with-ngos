@@ -105,11 +105,11 @@ api:
 web:
     npm --prefix {{web_dir}} start
 
-# The launch profile only supplies DOTNET_ENVIRONMENT=Development, so user-secrets are read; the arguments replace its own.
+# Development makes the CLI read the user-secrets written by `just setup`.
 
 # Run the admin CLI against the local database, e.g. `just cli reset-password -e admin@example.org`.
 cli *args:
-    dotnet run --project {{cli_project}} --launch-profile "CLI: Help" -- {{args}}
+    dotnet run --project {{cli_project}} --no-launch-profile -e DOTNET_ENVIRONMENT=Development -- {{args}}
 
 # Run the admin CLI inside the Docker API container, e.g. `just cli-docker reset-password -e admin@example.org`.
 cli-docker *args:

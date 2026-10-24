@@ -16,6 +16,10 @@ updates:
           - 'Microsoft.EntityFrameworkCore*'
           - 'Microsoft.Extensions.*'
           - 'Npgsql*'
+      # The managed package and its native assets must stay on the same version.
+      skiasharp:
+        patterns:
+          - 'SkiaSharp*'
       testing:
         patterns:
           - 'xunit*'

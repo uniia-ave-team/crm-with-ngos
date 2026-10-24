@@ -2952,19 +2952,12 @@
       },
       "CreateNgoCommand": {
         "required": [
-          "name",
-          "logoUrl"
+          "name"
         ],
         "type": "object",
         "properties": {
           "name": {
             "type": "string"
-          },
-          "logoUrl": {
-            "type": [
-              "null",
-              "string"
-            ]
           }
         }
       },
@@ -3538,19 +3531,12 @@
       },
       "UpdateNgoCommand": {
         "required": [
-          "name",
-          "logoUrl"
+          "name"
         ],
         "type": "object",
         "properties": {
           "name": {
             "type": "string"
-          },
-          "logoUrl": {
-            "type": [
-              "null",
-              "string"
-            ]
           }
         }
       },
@@ -3583,8 +3569,7 @@
           "emergencyContact",
           "preferredLanguage",
           "pronouns",
-          "pronounCategory",
-          "avatarUrl"
+          "pronounCategory"
         ],
         "type": "object",
         "properties": {
@@ -3655,13 +3640,6 @@
               }
             ],
             "description": "The updated grammatical category of pronouns."
-          },
-          "avatarUrl": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "The updated avatar URL or file path."
           }
         },
         "description": "Represents a command to update the profile details of the currently authenticated user."

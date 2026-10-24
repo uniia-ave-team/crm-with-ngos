@@ -19,4 +19,9 @@ public static class FileStorageConstants
     /// The folder name used for storing login page images and backgrounds.
     /// </summary>
     public const string LoginPageImagesFolder = "login-page-images";
+
+    /// <summary>
+    /// The list of allowed file extensions for uploaded images and media.
+    /// </summary>
+    public static readonly string[] AllowedExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg"];
 }

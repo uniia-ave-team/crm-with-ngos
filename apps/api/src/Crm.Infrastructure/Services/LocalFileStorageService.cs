@@ -1,4 +1,3 @@
-using System.Text;
 using Crm.Application.Interfaces;
 using Crm.Infrastructure.Options;
 using Microsoft.Extensions.Options;
@@ -9,27 +8,11 @@ namespace Crm.Infrastructure.Services;
 /// Implements <see cref="IFileStorageService"/> to manage physical files locally on the disk.
 /// </summary>
 /// <param name="options">The configuration options containing the UploadDirectory.</param>
-public class LocalFileStorageService(IOptions<FileStorageOptions> options) : IFileStorageService
+public class LocalFileStorageService(
+    IOptions<FileStorageOptions> options,
+    IImageValidator imageValidator) : IFileStorageService
 {
     private const int DefaultBufferSize = 4096;
-
-    private static readonly Dictionary<string, byte[][]> _imageSignatures = new(StringComparer.OrdinalIgnoreCase)
-    {
-        { ".jpeg", [[0xFF, 0xD8, 0xFF]] },
-        { ".jpg", [[0xFF, 0xD8, 0xFF]] },
-        { ".png", [[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]] },
-        { ".gif", [[0x47, 0x49, 0x46, 0x38]] },
-        { ".webp", [[0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]] },
-        { ".bmp", [[0x42, 0x4D]] },
-    };
-
-    private static readonly Dictionary<string, int> _imageSignatureMaxLengths =
-        _imageSignatures.ToDictionary(
-            kvp => kvp.Key,
-            kvp => kvp.Value.Max(s => s.Length),
-            StringComparer.OrdinalIgnoreCase);
-
-    private readonly FileStorageOptions _options = options.Value;
 
     /// <inheritdoc />
     public Task<string> SaveFileAsync(Stream contentStream, string originalFileName, string folderName, CancellationToken cancellationToken = default)
@@ -45,14 +28,12 @@ public class LocalFileStorageService(IOptions<FileStorageOptions> options) : IFi
     {
         ValidateStream(contentStream);
         ValidateFileName(originalFileName);
-        ValidateImageSignature(contentStream, originalFileName);
 
-        if (contentStream.CanSeek)
-        {
-            contentStream.Position = 0;
-        }
+        using var validationResult = imageValidator.Validate(contentStream, originalFileName);
 
-        return SaveValidatedAsync(contentStream, originalFileName, folderName, cancellationToken);
+        return !validationResult.IsValid
+            ? throw new ArgumentException("The file content does not match a supported image format.", nameof(originalFileName))
+            : SaveValidatedAsync(validationResult.ResultStream ?? contentStream, originalFileName, folderName, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -85,46 +66,82 @@ public class LocalFileStorageService(IOptions<FileStorageOptions> options) : IFi
 
         string filePath = GetSecureFilePath(folderName, fileName);
 
-        File.Delete(filePath);
+        if (File.Exists(filePath))
+        {
+            File.Delete(filePath);
+        }
 
         return Task.CompletedTask;
     }
 
-    private async Task<string> SaveValidatedAsync(Stream s, string name, string folder, CancellationToken ct)
+    private async Task<string> SaveValidatedAsync(Stream stream, string name, string folder, CancellationToken cancellationToken)
     {
         string uniqueName = GenerateUniqueFileName(name);
-        string dir = GetTargetDirectory(folder);
+        string directoryPath = GetTargetDirectory(folder);
 
-        EnsureDirectoryExists(dir);
+        EnsureDirectoryExists(directoryPath);
 
-        await SaveToDiskAsync(s, Path.Combine(dir, uniqueName), ct);
+        string filePath = Path.Combine(directoryPath, uniqueName);
+        await SaveToDiskAsync(stream, filePath, cancellationToken);
 
         return uniqueName;
     }
 
     private string GetSecureFilePath(string folderName, string fileName)
     {
-        string targetDirectory = GetTargetDirectory(folderName);
-        string targetDirectoryFullPath = Path.GetFullPath(targetDirectory);
+        string baseDirectory = GetTargetDirectory(folderName);
+        string fullBaseDirectory = Path.GetFullPath(baseDirectory);
 
-        string filePath = Path.GetFullPath(Path.Combine(targetDirectory, fileName));
+        if (!fullBaseDirectory.EndsWith(Path.DirectorySeparatorChar))
+        {
+            fullBaseDirectory += Path.DirectorySeparatorChar;
+        }
 
-        return !filePath.StartsWith(targetDirectoryFullPath, StringComparison.OrdinalIgnoreCase)
-            ? throw new UnauthorizedAccessException("Path traversal attempt detected.")
-            : filePath;
+        string fullFilePath = Path.GetFullPath(Path.Combine(fullBaseDirectory, fileName));
+
+        return !fullFilePath.StartsWith(fullBaseDirectory, StringComparison.OrdinalIgnoreCase)
+            ? throw new UnauthorizedAccessException("Path traversal attempt detected in file name.")
+            : fullFilePath;
+    }
+
+    private string GetTargetDirectory(string folderName)
+    {
+        string uploadDir = options.Value.UploadDirectory;
+
+        if (!Path.IsPathRooted(uploadDir))
+        {
+            uploadDir = Path.Combine(AppContext.BaseDirectory, uploadDir);
+        }
+
+        string normalizedUploadDir = Path.GetFullPath(uploadDir);
+
+        if (!normalizedUploadDir.EndsWith(Path.DirectorySeparatorChar))
+        {
+            normalizedUploadDir += Path.DirectorySeparatorChar;
+        }
+
+        string targetDir = Path.GetFullPath(Path.Combine(normalizedUploadDir, folderName));
+
+        return !targetDir.StartsWith(normalizedUploadDir, StringComparison.OrdinalIgnoreCase)
+            ? throw new UnauthorizedAccessException("Path traversal attempt detected in folder name.")
+            : targetDir;
     }
 
     private static void ValidateStream(Stream contentStream)
     {
-        if (contentStream is null || contentStream.Length == 0)
+        ArgumentNullException.ThrowIfNull(contentStream);
+
+        if (contentStream.Length == 0)
         {
-            throw new ArgumentException("The file stream cannot be null or empty.", nameof(contentStream));
+            throw new ArgumentException("The file stream cannot be empty.", nameof(contentStream));
         }
 
-        if (contentStream.CanSeek)
+        if (!contentStream.CanSeek)
         {
-            contentStream.Position = 0;
+            throw new ArgumentException("The stream must be seekable to validate its signature.", nameof(contentStream));
         }
+
+        contentStream.Position = 0;
     }
 
     private static void ValidateFileName(string originalFileName)
@@ -135,62 +152,10 @@ public class LocalFileStorageService(IOptions<FileStorageOptions> options) : IFi
         }
     }
 
-    private static void ValidateImageSignature(Stream stream, string fileName)
-    {
-        if (!stream.CanSeek)
-        {
-            throw new ArgumentException("The stream must be seekable to validate its signature.", nameof(stream));
-        }
-
-        string extension = Path.GetExtension(fileName);
-
-        if (string.IsNullOrEmpty(extension) ||
-            !_imageSignatures.TryGetValue(extension, out byte[][]? signatures) ||
-            !_imageSignatureMaxLengths.TryGetValue(extension, out int maxSignatureLength))
-        {
-            throw new ArgumentException($"The file extension '{extension}' is not a supported image type.", nameof(fileName));
-        }
-
-        using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
-        byte[] headerBytes = reader.ReadBytes(maxSignatureLength);
-
-        bool isValid = signatures.Any(sig => MatchesSignature(headerBytes, sig));
-
-        if (!isValid)
-        {
-            throw new ArgumentException("The file signature does not match its extension.", nameof(fileName));
-        }
-    }
-
-    private static bool MatchesSignature(byte[] header, byte[] signature)
-    {
-        for (int i = 0; i < signature.Length && i < header.Length; i++)
-        {
-            if (signature[i] != 0x00 && header[i] != signature[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private static string GenerateUniqueFileName(string originalFileName)
     {
         string extension = Path.GetExtension(originalFileName);
         return $"{Guid.NewGuid()}{extension}";
-    }
-
-    private string GetTargetDirectory(string folderName)
-    {
-        string uploadDir = _options.UploadDirectory;
-
-        if (!Path.IsPathRooted(uploadDir))
-        {
-            uploadDir = Path.Combine(AppContext.BaseDirectory, uploadDir);
-        }
-
-        return Path.Combine(uploadDir, folderName);
     }
 
     private static void EnsureDirectoryExists(string directoryPath)
@@ -203,7 +168,7 @@ public class LocalFileStorageService(IOptions<FileStorageOptions> options) : IFi
 
     private static async Task SaveToDiskAsync(Stream sourceStream, string filePath, CancellationToken cancellationToken)
     {
-        using var fileStream = new FileStream(
+        using var destinationStream = new FileStream(
             filePath,
             FileMode.Create,
             FileAccess.Write,
@@ -211,7 +176,7 @@ public class LocalFileStorageService(IOptions<FileStorageOptions> options) : IFi
             DefaultBufferSize,
             useAsync: true);
 
-        await sourceStream.CopyToAsync(fileStream, cancellationToken);
+        await sourceStream.CopyToAsync(destinationStream, cancellationToken);
     }
 
     private static bool ShouldIgnoreFile(string fileName) =>

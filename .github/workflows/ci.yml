@@ -138,6 +138,23 @@ jobs:
           curl -fsS -o /dev/null -X POST http://localhost:5065/api/v1/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"smoke@example.org","password":"Changed-2b"}'
 
+      # Raster validation loads a native library, and SVG uploads must come back sanitized.
+      - name: Smoke test image uploads
+        run: |
+          api=http://localhost:5065/api/v1
+          token=$(curl -fsS -X POST "$api/auth/login" -H 'Content-Type: application/json' \
+            -d '{"email":"smoke@example.org","password":"Changed-2b"}' | jq -r .accessToken)
+          auth="Authorization: Bearer $token"
+          echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' | base64 -d > smoke.png
+          curl -fsS -o /dev/null -H "$auth" -F file=@smoke.png "$api/users/me/avatar"
+          curl -fsS -o /dev/null -X POST "$api/ngo" -H "$auth" -H 'Content-Type: application/json' -d '{"name":"Smoke"}'
+          echo '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><circle r="5"/></svg>' > smoke.svg
+          curl -fsS -o /dev/null -H "$auth" -F file=@smoke.svg "$api/ngo/logo"
+          logo=$(curl -fsS -H "$auth" "$api/ngo/logo")
+          echo "$logo"
+          grep -q '<circle' <<<"$logo"
+          ! grep -qiE '<script|onload' <<<"$logo"
+
       - name: Container logs
         if: failure()
         run: docker compose logs
