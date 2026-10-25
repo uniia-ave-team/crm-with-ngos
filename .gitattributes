@@ -2,6 +2,14 @@
 # runners and containers.
 * text=auto eol=lf
 
+# .NET source files
+*.cs            text eol=lf
+*.csproj        text eol=lf
+*.fsproj        text eol=lf
+*.vbproj        text eol=lf
+*.props         text eol=lf
+*.targets       text eol=lf
+
 *.sh            text eol=lf
 Dockerfile      text eol=lf
 *.Dockerfile    text eol=lf
