@@ -1,6 +1,6 @@
 # CRM API — Backend Service
 
-> Modular multi-tenant REST API for NGO CRM management. Handles authentication, member directories, role-based access control, custom user fields, and file storage — built on ASP.NET Core with a clean CQRS / Clean Architecture design.
+> Modular multi-tenant REST API for NGO CRM management. Handles authentication, member directories, role-based access control, custom user fields, dynamic custom tables and records, table templates, and file storage — built on ASP.NET Core with a clean CQRS / Clean Architecture design.
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Component | Technology | Version |
 |---|---|---|
-| Runtime & Language | .NET / C# | 10.0 / 13 |
+| Runtime & Language | .NET / C# | 10.0 / 14 |
 | Web Framework | ASP.NET Core Web API | 10.0 |
 | ORM | Entity Framework Core | 10.0 |
 | Database | PostgreSQL (via Npgsql) | 17+ |
@@ -34,10 +34,10 @@ apps/api/
 │
 └── src/
     ├── Crm.Domain/                   # Core business models — entities, enums, interfaces, exceptions
-    │   ├── Entities/                 # Domain entities (User, Ngo, Role, etc.)
-    │   ├── Enums/                    # Domain enumerations (AccessRight, status flags)
+    │   ├── Entities/                 # Domain entities (User, Ngo, Role, CustomTable, CustomRecord, TableTemplate, etc.)
+    │   ├── Enums/                    # Domain enumerations (AccessRight, FieldDataType, status flags)
     │   ├── Exceptions/               # Base domain exception types
-    │   └── Interfaces/               # Repository contracts (IRepository<T>)
+    │   └── Interfaces/               # Repository contracts (IRepository<T>, IFieldSchema)
     │
     ├── Crm.Application/              # Use-case layer — CQRS handlers, DTOs, validators
     │   ├── Features/                 # Vertical slices: Users, Ngos, Roles, System, LoginPageImages
@@ -419,7 +419,7 @@ docker run \
 
 | Компонент / Бібліотека | Призначення |
 |------------------------|-------------|
-| **.NET 10 / C# 13** | Основна платформа та мова розробки |
+| **.NET 10 / C# 14** | Основна платформа та мова розробки |
 | **ASP.NET Core Web API** | HTTP REST API з підтримкою версіонування (`/api/v1/...`) |
 | **Entity Framework Core 10** | ORM для доступу до даних |
 | **PostgreSQL 17 (Npgsql)** | Реляційна база даних |
@@ -442,10 +442,10 @@ apps/api/
 ├── Dockerfile                   # Багатоетапна збірка API у контейнер
 ├── src/
 │   ├── Crm.Domain/              # Корневий шар бізнес-моделей
-│   │   ├── Entities/            # Доменні сутності (User, Ngo, Role тощо)
-│   │   ├── Enums/               # Переліки прав (AccessRight), статусів тощо
+│   │   ├── Entities/            # Доменні сутності (User, Ngo, Role, CustomTable, CustomRecord, TableTemplate тощо)
+│   │   ├── Enums/               # Переліки прав (AccessRight), типів полів (FieldDataType), статусів тощо
 │   │   ├── Exceptions/          # Базові доменні винятки
-│   │   └── Interfaces/          # Інтерфейси репозиторіїв (IRepository)
+│   │   └── Interfaces/          # Інтерфейси репозиторіїв (IRepository, IFieldSchema)
 │   │
 │   ├── Crm.Application/         # Шар бізнес-логіки та сценаріїв
 │   │   ├── Behaviors/           # MediatR pipeline behaviors (валідація, транзакції)
