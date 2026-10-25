@@ -17,4 +17,5 @@ public static class CliLogEventIds
     public const int UserRetrievalFailed = 5105;
     public const int PasswordResetFailed = 5106;
     public const int PasswordResetSuccess = 5107;
+    public const int UserNotAdmin = 5108;
 }

@@ -13,7 +13,6 @@ public class UserMappingRegister : IRegister
     public void Register(TypeAdapterConfig config)
     {
         config.NewConfig<UpdateUserProfileCommand, User>()
-            .Map(dest => dest.Avatar, src => src.AvatarUrl)
             .Ignore(dest => dest.Id);
     }
 }

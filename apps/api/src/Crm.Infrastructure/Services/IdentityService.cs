@@ -90,6 +90,14 @@ public class IdentityService(
     }
 
     /// <inheritdoc />
+    public async Task<bool> IsInRoleAsync(Guid userId, string roleName, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+
+        return user is not null && await userManager.IsInRoleAsync(user, roleName);
+    }
+
+    /// <inheritdoc />
     public Task AddRefreshTokenAsync(Guid userId, TokenResult tokenResult, CancellationToken cancellationToken = default)
         => userRefreshTokenRepository.CreateAsync(
             userId: userId,

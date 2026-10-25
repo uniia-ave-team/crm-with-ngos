@@ -5,6 +5,7 @@ using Crm.Application.Interfaces;
 using Crm.Cli.Abstractions;
 using Crm.Cli.Constants;
 using Crm.Cli.Models;
+using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Entities;
@@ -43,10 +44,11 @@ public partial class ResetAdminPasswordCommand(
 
         var admin = await FindAdminAsync(email, cancellationToken);
 
-        return admin is not null
+        bool ifPasswordResetSuccessful = admin is not null
             && TryReadPasswordSecurely(out var password)
-            && await TryResetPasswordAsync(admin, password, cancellationToken)
-            ? 0 : 1;
+            && await TryResetPasswordAsync(admin, password, cancellationToken);
+
+        return ifPasswordResetSuccessful ? 0 : 1;
     }
 
     private bool TryGetEmail(
@@ -90,12 +92,12 @@ public partial class ResetAdminPasswordCommand(
 
     private static string ReadHiddenPassword(string prompt)
     {
-        Console.Write(prompt);
-
         if (Console.IsInputRedirected)
         {
             return Console.ReadLine() ?? string.Empty;
         }
+
+        Console.Write(prompt);
 
         var password = new StringBuilder();
 
@@ -129,11 +131,20 @@ public partial class ResetAdminPasswordCommand(
     {
         try
         {
-            return await authUserRepository.GetAsync<AuthUser>(email, cancellationToken);
+            var user = await authUserRepository.GetAsync<AuthUser>(email, cancellationToken);
+
+            var isAdmin = await identityService.IsInRoleAsync(user.Id, RoleConsts.Admin, cancellationToken);
+            if (!isAdmin)
+            {
+                LogUserNotAdmin(logger, email);
+                return null;
+            }
+
+            return user;
         }
         catch (NotFoundException ex)
         {
-            LogAdminNotFound(logger, email, ex);
+            LogAdminNotFound(logger, email);
             return null;
         }
         catch (Exception ex)
@@ -155,7 +166,7 @@ public partial class ResetAdminPasswordCommand(
         }
         catch (UserOperationException ex)
         {
-            LogPasswordResetFailed(logger, identifier, ex);
+            LogPasswordResetRejected(logger, identifier, ex.Message);
             return false;
         }
     }
@@ -170,14 +181,17 @@ public partial class ResetAdminPasswordCommand(
     private static partial void LogEmailMissing(ILogger logger);
 
     [LoggerMessage(EventId = CliLogEventIds.AdminUserNotFound, Level = LogLevel.Error, Message = "Target administrator user with email '{Email}' could not be found in the database.")]
-    private static partial void LogAdminNotFound(ILogger logger, string email, Exception exception);
+    private static partial void LogAdminNotFound(ILogger logger, string email);
 
     [LoggerMessage(EventId = CliLogEventIds.UserRetrievalFailed, Level = LogLevel.Error, Message = "An unexpected error occurred while retrieving administrator user '{Email}'.")]
     private static partial void LogUserRetrievalFailed(ILogger logger, string email, Exception exception);
 
-    [LoggerMessage(EventId = CliLogEventIds.PasswordResetFailed, Level = LogLevel.Error, Message = "An unexpected error occurred while resetting the administrator password for user '{UserIdentifier}'.")]
-    private static partial void LogPasswordResetFailed(ILogger logger, string userIdentifier, Exception exception);
+    [LoggerMessage(EventId = CliLogEventIds.PasswordResetFailed, Level = LogLevel.Error, Message = "Password for user '{UserIdentifier}' was not changed. {Reason}")]
+    private static partial void LogPasswordResetRejected(ILogger logger, string userIdentifier, string reason);
 
     [LoggerMessage(EventId = CliLogEventIds.PasswordResetSuccess, Level = LogLevel.Information, Message = "Password for user '{UserIdentifier}' was successfully updated.")]
     private static partial void LogPasswordResetSuccess(ILogger logger, string userIdentifier);
+
+    [LoggerMessage(EventId = CliLogEventIds.UserNotAdmin, Level = LogLevel.Warning, Message = "Target user with email '{Email}' is not an administrator.")]
+    private static partial void LogUserNotAdmin(ILogger logger, string email);
 }

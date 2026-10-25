@@ -1,0 +1,26 @@
+<!-- Закрите вікно лишається в розмітці (зміст не пересоздається), але `inert` не дає
+     фокусу й читалкам потрапити в нього. -->
+<aside
+  class="side-panel"
+  [class.side-panel--open]="isOpen()"
+  role="dialog"
+  [attr.aria-label]="label()"
+  [attr.inert]="isOpen() ? null : ''"
+  [style.--side-panel-width]="width()"
+>
+  <header class="side-panel__header">
+    <button
+      #closeButton
+      type="button"
+      class="side-panel__close"
+      tabindex="0"
+      [attr.aria-label]="'common.close' | translate"
+      (click)="close()"
+    >
+      <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+    </button>
+  </header>
+  <div class="side-panel__body">
+    <ng-content />
+  </div>
+</aside>
