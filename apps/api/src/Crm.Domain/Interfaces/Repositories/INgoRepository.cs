@@ -20,7 +20,7 @@ public interface INgoRepository : IGenericRepository<Ngo>
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved NGO entity.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
+    /// <exception cref="NotFoundException">Thrown if the NGO is not found in the database.</exception>
     Task<Ngo> GetAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -29,7 +29,7 @@ public interface INgoRepository : IGenericRepository<Ngo>
     /// <typeparam name="TResult">The type of the projected result (e.g., DTO).</typeparam>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the projected entity.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the record is not found in the database.</exception>
+    /// <exception cref="NotFoundException">Thrown if the record is not found in the database.</exception>
     Task<TResult> GetAsync<TResult>(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -37,8 +37,7 @@ public interface INgoRepository : IGenericRepository<Ngo>
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the logo file name.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
-    /// <exception cref="EntityFieldNotFoundException">Thrown if the NGO exists but its logo is not set.</exception>
+    /// <exception cref="NotFoundException">Thrown if the NGO is not found in the database or if the NGO exists but its logo is not set.</exception>
     Task<string> GetLogoAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -46,7 +45,7 @@ public interface INgoRepository : IGenericRepository<Ngo>
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved tracked NGO entity.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
+    /// <exception cref="NotFoundException">Thrown if the NGO is not found in the database.</exception>
     Task<Ngo> GetForUpdateAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -54,7 +53,7 @@ public interface INgoRepository : IGenericRepository<Ngo>
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved NGO ID.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
+    /// <exception cref="NotFoundException">Thrown if the NGO is not found in the database.</exception>
     Task<Guid> GetIdAsync(CancellationToken cancellationToken = default);
 
     /// <summary>

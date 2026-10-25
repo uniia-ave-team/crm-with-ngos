@@ -29,4 +29,22 @@ public enum AccessRight
     ViewLoginPageImages = 13,
     CreateLoginPageImages = 14,
     DeleteLoginPageImages = 15,
+
+    // --- Table Templates ---
+    ViewTableTemplate = 16,
+    CreateTableTemplate = 17,
+    UpdateTableTemplate = 18,
+    DeleteTableTemplate = 19,
+
+    // --- Custom Tables & Schema ---
+    ViewCustomTable = 20,
+    CreateCustomTable = 21,
+    UpdateCustomTable = 22,
+    DeleteCustomTable = 23,
+
+    // --- Custom Records ---
+    ViewCustomRecord = 24,
+    CreateCustomRecord = 25,
+    UpdateCustomRecord = 26,
+    DeleteCustomRecord = 27,
 }

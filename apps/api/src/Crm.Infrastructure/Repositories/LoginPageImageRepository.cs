@@ -26,15 +26,14 @@ public class LoginPageImageRepository(
     /// <param name="id">The unique identifier of the login page image.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the file name or URL.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the login page image is not found in the database.</exception>
-    /// <exception cref="EntityFieldNotFoundException">Thrown if the login page image exists but its file reference is not set.</exception>
+    /// <exception cref="EntityFieldNotFoundException{LoginPageImage}">Thrown if the login page image is not found in the database.</exception>
     public async Task<string> GetUrlAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var url = await DbSet
             .AsNoTracking()
             .Where(x => x.Id == id)
             .Select(x => x.Url)
-            .FirstOrDefaultAsync(cancellationToken) ?? throw new EntityNotFoundException(nameof(LoginPageImage));
+            .FirstOrDefaultAsync(cancellationToken) ?? throw new EntityFieldNotFoundException<LoginPageImage>(nameof(LoginPageImage.Url));
 
         return url;
     }
@@ -45,7 +44,7 @@ public class LoginPageImageRepository(
     /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
     /// <param name="searchTerm">Optional search term to filter images by URL.</param>
     /// <param name="orderBy">The name of the property to sort by.</param>
-    /// <param name="sortOrder">The sort direction (e.g., "asc" or "desc"). Defaults to ascending.</param>
+    /// <param name="sortOrder">The sort direction (e.g., <see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>). Defaults to <see cref="SortOrderConstants.Ascending"/>.</param>
     /// <param name="pageNumber">The current page number (1-based index). Defaults to 1.</param>
     /// <param name="pageSize">The number of items per page. Defaults to 10.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

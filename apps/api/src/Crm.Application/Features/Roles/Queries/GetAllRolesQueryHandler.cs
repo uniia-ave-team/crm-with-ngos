@@ -17,7 +17,7 @@ public partial class GetAllRolesQueryHandler(
 {
     public async Task<PagedResult<RoleDto>> Handle(GetAllRolesQuery request, CancellationToken cancellationToken)
     {
-        LogFetchingRoles(logger, request.PageNumber, request.PageSize, request.SearchTerm);
+        LogFetchingRoles(logger, request.PageNumber, request.PageSize, request.SearchTerm != null);
 
         var pagedResult = await authRoleRepository.GetPagedAsync<RoleDto>(
             searchTerm: request.SearchTerm,
@@ -32,8 +32,8 @@ public partial class GetAllRolesQueryHandler(
         return pagedResult;
     }
 
-    [LoggerMessage(EventId = LogEventIds.FetchingRoles, Level = LogLevel.Information, Message = "Fetching roles - Page: {PageNumber}, Size: {PageSize}, Search: {SearchTerm}")]
-    private static partial void LogFetchingRoles(ILogger logger, int pageNumber, int pageSize, string? searchTerm);
+    [LoggerMessage(EventId = LogEventIds.FetchingRoles, Level = LogLevel.Information, Message = "Fetching roles - Page: {PageNumber}, Size: {PageSize}, HasSearchFilter: {HasSearchFilter}")]
+    private static partial void LogFetchingRoles(ILogger logger, int pageNumber, int pageSize, bool hasSearchFilter);
 
     [LoggerMessage(EventId = LogEventIds.RolesFetched, Level = LogLevel.Information, Message = "Successfully retrieved {FetchedCount} roles out of {TotalCount} total matched.")]
     private static partial void LogRolesFetched(ILogger logger, int fetchedCount, int totalCount);

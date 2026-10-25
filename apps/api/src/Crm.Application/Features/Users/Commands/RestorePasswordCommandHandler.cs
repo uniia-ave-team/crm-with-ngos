@@ -25,7 +25,7 @@ public partial class RestorePasswordCommandHandler(
     /// <param name="request">The command containing the user identifier for whom the reset token is requested.</param>
     /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
     /// <returns>A task returning the generated JWT password restore token result.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown when the user with the specified ID does not exist.</exception>
+    /// <exception cref="NotFoundException">Thrown when the user with the specified ID does not exist.</exception>
     public async Task<TokenResultDto> Handle(GenerateRestorePasswordTokenCommand request, CancellationToken cancellationToken)
     {
         LogGeneratingPasswordResetToken(logger, request.UserId);

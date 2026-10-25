@@ -131,7 +131,7 @@ public partial class ResetAdminPasswordCommand(
         {
             return await authUserRepository.GetAsync<AuthUser>(email, cancellationToken);
         }
-        catch (EntityNotFoundException ex)
+        catch (NotFoundException ex)
         {
             LogAdminNotFound(logger, email, ex);
             return null;

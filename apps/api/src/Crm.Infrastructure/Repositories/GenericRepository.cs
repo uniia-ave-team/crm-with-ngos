@@ -27,7 +27,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     private static readonly ConcurrentDictionary<Type, Dictionary<string, string>> _dtoSortMappingCache = new();
 
     /// <summary>
-    /// Case-insensitive whitelist of allowed sort direction specifiers ("asc" / "desc") for dynamic sorting validation.
+    /// Case-insensitive whitelist of allowed sort direction specifiers (<see cref="SortOrderConstants.Ascending"/> / <see cref="SortOrderConstants.Descending"/>) for dynamic sorting validation.
     /// </summary>
     private static readonly HashSet<string> _allowedSortOrders = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -58,12 +58,21 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     }
 
     /// <summary>
+    /// Asynchronously adds a collection of entities to the database context.
+    /// </summary>
+    /// <param name="entities">The collection of entities to create.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous save operation.</returns>
+    public Task CreateAsync(IEnumerable<T> entities, CancellationToken cancellationToken = default)
+        => DbSet.AddRangeAsync(entities, cancellationToken);
+
+    /// <summary>
     /// Asynchronously deletes an entity by its unique identifier using a bulk delete operation.
     /// </summary>
     /// <param name="id">The unique identifier of the entity to delete.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
     public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var rowsAffected = await DbSet
@@ -72,7 +81,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
 
         if (rowsAffected == 0)
         {
-            throw new EntityNotFoundException(typeof(T).Name, id);
+            throw new EntityNotFoundException<T>(id);
         }
     }
 
@@ -82,13 +91,13 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="id">The unique identifier of the entity to retrieve.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The entity with the specified ID.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
     public async Task<T> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await DbSet
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
-            ?? throw new EntityNotFoundException(typeof(T).Name, id);
+            ?? throw new EntityNotFoundException<T>(id);
     }
 
     /// <summary>
@@ -98,7 +107,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="id">The unique identifier of the entity to retrieve.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The projected entity DTO with the specified ID.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
     public async Task<TResult> GetAsync<TResult>(Guid id, CancellationToken cancellationToken = default)
     {
         return await DbSet
@@ -106,7 +115,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
             .Where(x => x.Id == id)
             .ProjectToType<TResult>()
             .FirstOrDefaultAsync(cancellationToken)
-            ?? throw new EntityNotFoundException(typeof(T).Name, id);
+            ?? throw new EntityNotFoundException<T>(id);
     }
 
     /// <summary>
@@ -115,12 +124,12 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="id">The unique identifier of the entity to retrieve.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The tracked entity with the specified ID.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
     public async Task<T> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await DbSet
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
-            ?? throw new EntityNotFoundException(typeof(T).Name, id);
+            ?? throw new EntityNotFoundException<T>(id);
     }
 
     /// <summary>
@@ -130,7 +139,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="id">The unique identifier of the entity to check.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if no entity with the specified ID exists.</exception>
+    /// <exception cref="NotFoundException">Thrown if no entity with the specified ID exists.</exception>
     public async Task EnsureExistsAsync(Guid id, CancellationToken cancellationToken = default)
     {
         bool exists = await DbSet
@@ -139,7 +148,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
 
         if (!exists)
         {
-            throw new EntityNotFoundException(typeof(T).Name, id);
+            throw new EntityNotFoundException<T>(id);
         }
     }
 
@@ -186,7 +195,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A random projected entity.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if no entities exist in the database for this type.</exception>
+    /// <exception cref="NotFoundException">Thrown if no entities exist in the database for this type.</exception>
     public async Task<TResult> GetRandomAsync<TResult>(CancellationToken cancellationToken = default)
     {
         return await DbSet
@@ -194,7 +203,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
             .OrderBy(x => Guid.NewGuid())
             .ProjectToType<TResult>()
             .FirstOrDefaultAsync(cancellationToken)
-            ?? throw new EntityNotFoundException(typeof(T).Name);
+            ?? throw new EntityNotFoundException<T>();
     }
 
     /// <summary>
@@ -206,7 +215,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// Non-translatable expressions will cause client-side evaluation.
     /// </param>
     /// <param name="orderBy">The name of the property to sort by.</param>
-    /// <param name="sortOrder">The sort direction ("asc" or "desc").</param>
+    /// <param name="sortOrder">The sort direction (<see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>). Defaults to <see cref="SortOrderConstants.Ascending"/>.</param>
     /// <param name="pageNumber">The current page number (1-based).</param>
     /// <param name="pageSize">The number of items per page.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
@@ -249,7 +258,12 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
                                     ? sortOrder
                                     : SortOrderConstants.Ascending;
 
-                query = query.OrderBy($"{resolvedEntityPath} {safeSortOrder}");
+                query = query.OrderBy($"{resolvedEntityPath} {safeSortOrder}")
+                    .ThenBy(e => e.Id);
+            }
+            else
+            {
+                query = query.OrderBy(e => e.Id);
             }
         }
 
