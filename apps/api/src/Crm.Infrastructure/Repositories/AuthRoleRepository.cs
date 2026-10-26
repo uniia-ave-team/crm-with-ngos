@@ -26,7 +26,7 @@ public class AuthRoleRepository(
     /// <param name="roleName">The name of the role to check.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if no entity with the specified role name exists.</exception>
+    /// <exception cref="NotFoundException">Thrown if no entity with the specified role name exists.</exception>
     public async Task EnsureExistsAsync(string roleName, CancellationToken cancellationToken = default)
     {
         var normalizedName = roleName.ToUpperInvariant();
@@ -37,7 +37,7 @@ public class AuthRoleRepository(
 
         if (!exists)
         {
-            throw new EntityNotFoundException(nameof(AuthRole), roleName);
+            throw new EntityNotFoundException<AuthRole>(roleName);
         }
     }
 
@@ -47,7 +47,7 @@ public class AuthRoleRepository(
     /// <param name="roleName">The name of the role to find.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation. The task result contains the role's <see cref="Guid"/> identifier.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if no role with the specified name exists.</exception>
+    /// <exception cref="NotFoundException">Thrown if no role with the specified name exists.</exception>
     public async Task<Guid> GetRoleIdByNameAsync(string roleName, CancellationToken cancellationToken = default)
     {
         var normalizedName = roleName.ToUpperInvariant();
@@ -58,7 +58,7 @@ public class AuthRoleRepository(
             .Select(m => (Guid?)m.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return roleId ?? throw new EntityNotFoundException(nameof(AuthRole), roleName);
+        return roleId ?? throw new EntityNotFoundException<AuthRole>(roleName);
     }
 
     /// <summary>
@@ -98,7 +98,7 @@ public class AuthRoleRepository(
     /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
     /// <param name="searchTerm">Optional search term to filter roles by name, feminitive name, or plural name.</param>
     /// <param name="orderBy">The name of the property to sort by.</param>
-    /// <param name="sortOrder">The sort direction (e.g., "asc" or "desc"). Defaults to ascending.</param>
+    /// <param name="sortOrder">The sort direction (e.g., <see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>). Defaults to <see cref="SortOrderConstants.Ascending"/>.</param>
     /// <param name="pageNumber">The current page number (1-based index). Defaults to 1.</param>
     /// <param name="pageSize">The number of items per page. Defaults to 10.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

@@ -58,7 +58,7 @@ public partial class DeleteUserCommandHandler(
 
             LogUserAvatarDeletedSuccessfully(logger, userId);
         }
-        catch (EntityFieldNotFoundException)
+        catch (NotFoundException)
         {
             LogUserAvatarNotFound(logger, userId);
         }

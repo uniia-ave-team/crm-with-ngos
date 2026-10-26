@@ -142,7 +142,7 @@ public partial class ResetAdminPasswordCommand(
 
             return user;
         }
-        catch (EntityNotFoundException)
+        catch (NotFoundException)
         {
             LogAdminNotFound(logger, email);
             return null;

@@ -35,7 +35,7 @@ public class AuthUserRepository(
     /// <param name="email">The email address of the entity to retrieve.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The projected entity DTO associated with the specified email address.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified email address is not found.</exception>
+    /// <exception cref="NotFoundException">Thrown if the entity with the specified email address is not found.</exception>
     public async Task<TResult> GetAsync<TResult>(string email, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = email.ToUpperInvariant();
@@ -45,7 +45,7 @@ public class AuthUserRepository(
             .Where(x => x.NormalizedEmail == normalizedEmail)
             .ProjectToType<TResult>()
             .FirstOrDefaultAsync(cancellationToken)
-            ?? throw new EntityNotFoundException(nameof(AuthUser), email);
+            ?? throw new EntityNotFoundException<AuthUser>(email);
     }
 
     /// <summary>
@@ -54,7 +54,7 @@ public class AuthUserRepository(
     /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
     /// <param name="searchTerm">Optional search term to filter entities (e.g., by name, email, or other relevant fields).</param>
     /// <param name="orderBy">The name of the property to sort by.</param>
-    /// <param name="sortOrder">The sort direction (e.g., "asc" or "desc"). Defaults to ascending.</param>
+    /// <param name="sortOrder">The sort direction (e.g., <see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>). Defaults to <see cref="SortOrderConstants.Ascending"/>.</param>
     /// <param name="pageNumber">The current page number (1-based index). Defaults to 1.</param>
     /// <param name="pageSize">The number of items per page. Defaults to 10.</param>
     /// <param name="showDeleted">A value indicating whether to include soft-deleted entities in the results. Defaults to false.</param>

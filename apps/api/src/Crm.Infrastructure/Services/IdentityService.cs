@@ -51,7 +51,7 @@ public class IdentityService(
     public async Task AddToRoleAsync(Guid userId, string roleName, CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+            ?? throw new EntityNotFoundException<AuthUser>(userId);
 
         var result = await userManager.AddToRoleAsync(user, roleName);
 
@@ -65,7 +65,7 @@ public class IdentityService(
     public async Task RemoveFromRoleAsync(Guid userId, string roleName, CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+            ?? throw new EntityNotFoundException<AuthUser>(userId);
 
         var result = await userManager.RemoveFromRoleAsync(user, roleName);
 
@@ -79,7 +79,7 @@ public class IdentityService(
     public async Task AddToRolesAsync(Guid userId, IEnumerable<string> roleNames, CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+            ?? throw new EntityNotFoundException<AuthUser>(userId);
 
         var result = await userManager.AddToRolesAsync(user, roleNames);
 
@@ -109,7 +109,7 @@ public class IdentityService(
     public async Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+            ?? throw new EntityNotFoundException<AuthUser>(userId);
 
         var result = await userManager.ChangePasswordAsync(user, currentPassword, newPassword);
 
@@ -123,7 +123,7 @@ public class IdentityService(
     public async Task<string> GetResetTokenAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+            ?? throw new EntityNotFoundException<AuthUser>(userId);
 
         var result = await userManager.GeneratePasswordResetTokenAsync(user);
 
@@ -134,7 +134,7 @@ public class IdentityService(
     public async Task ResetPasswordAsync(Guid userId, string token, string newPassword, CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+            ?? throw new EntityNotFoundException<AuthUser>(userId);
 
         var result = await userManager.ResetPasswordAsync(user, token, newPassword);
 
@@ -150,7 +150,7 @@ public class IdentityService(
     public async Task ResetPasswordAsync(Guid userId, string newPassword, CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+            ?? throw new EntityNotFoundException<AuthUser>(userId);
 
         var token = await userManager.GeneratePasswordResetTokenAsync(user);
 
@@ -168,7 +168,7 @@ public class IdentityService(
     public async Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var user = await userManager.FindByIdAsync(userId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthUser), userId);
+            ?? throw new EntityNotFoundException<AuthUser>(userId);
 
         var result = await userManager.DeleteAsync(user);
 

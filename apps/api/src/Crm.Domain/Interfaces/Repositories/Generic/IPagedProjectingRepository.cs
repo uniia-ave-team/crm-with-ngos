@@ -20,7 +20,7 @@ public interface IPagedProjectingRepository<T>
     /// Non-translatable expressions will cause client-side evaluation.
     /// </param>
     /// <param name="orderBy">The name of the property to sort by.</param>
-    /// <param name="sortOrder">The sort direction ("asc" or "desc").</param>
+    /// <param name="sortOrder">The sort direction (<see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>).</param>
     /// <param name="pageNumber">The current page number (1-based).</param>
     /// <param name="pageSize">The number of items per page.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

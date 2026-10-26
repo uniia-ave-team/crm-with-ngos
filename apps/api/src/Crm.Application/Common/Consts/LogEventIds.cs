@@ -177,4 +177,43 @@ public static class LogEventIds
     public const int CleanupStarted = 8004;
     public const int CleanupSuccessfullyFinished = 8005;
     public const int CleanupFailed = 8006;
+
+    // 9000s: Custom Tables, Templates, and Records
+    public const int CreatingTableTemplate = 9001;
+    public const int TableTemplateCreatedSuccessfully = 9002;
+    public const int UpdatingTableTemplate = 9003;
+    public const int CannotModifySystemPreset = 9004;
+    public const int TableTemplateUpdatedSuccessfully = 9005;
+    public const int DeletingTableTemplate = 9006;
+    public const int CannotDeleteSystemPreset = 9007;
+    public const int TableTemplateDeletedSuccessfully = 9008;
+    public const int FetchingTableTemplateById = 9009;
+    public const int TableTemplateByIdFetched = 9010;
+    public const int FetchingTableTemplates = 9011;
+    public const int TableTemplatesFetched = 9012;
+    public const int CreatingCustomTable = 9013;
+    public const int CustomTableCreatedSuccessfully = 9014;
+    public const int CreatingCustomTableFromTemplate = 9015;
+    public const int CustomTableFromTemplateCreatedSuccessfully = 9016;
+    public const int UpdatingCustomTable = 9017;
+    public const int CustomTableUpdatedSuccessfully = 9018;
+    public const int DeletingCustomTable = 9019;
+    public const int CustomTableDeletedSuccessfully = 9020;
+    public const int FetchingCustomTableById = 9021;
+    public const int CustomTableByIdFetched = 9022;
+    public const int FetchingCustomTables = 9023;
+    public const int CustomTablesFetched = 9024;
+    public const int CreatingCustomRecord = 9025;
+    public const int CustomRecordCreatedSuccessfully = 9026;
+    public const int UpdatingCustomRecord = 9027;
+    public const int CustomRecordUpdatedSuccessfully = 9028;
+    public const int DeletingCustomRecord = 9029;
+    public const int CustomRecordDeletedSuccessfully = 9030;
+    public const int FetchingCustomRecordById = 9031;
+    public const int CustomRecordByIdFetched = 9032;
+    public const int FetchingCustomRecords = 9033;
+    public const int CustomRecordsFetched = 9034;
+    public const int CheckingTableTemplates = 9035;
+    public const int TableTemplatesAlreadySeeded = 9036;
+    public const int TableTemplatesSeededSuccessfully = 9037;
 }

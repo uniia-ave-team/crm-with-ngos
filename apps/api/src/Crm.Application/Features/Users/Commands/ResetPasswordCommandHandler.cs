@@ -30,7 +30,7 @@ public partial class ResetPasswordCommandHandler(
     /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <exception cref="InvalidCredentialException">Thrown when the token is invalid, expired, or missing required claims.</exception>
-    /// <exception cref="EntityNotFoundException">Thrown when the user referenced in the token does not exist.</exception>
+    /// <exception cref="NotFoundException">Thrown when the user referenced in the token does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown when the underlying identity provider fails to reset the password.</exception>
     public async Task Handle(ResetPasswordCommand request, CancellationToken cancellationToken)
     {

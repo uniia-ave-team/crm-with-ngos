@@ -42,7 +42,7 @@ public interface IIdentityService
     /// <param name="roleName">The name of the role to assign.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user with the specified ID does not exist.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user with the specified ID does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown if the role assignment operation fails (e.g., role does not exist, user already has the role).</exception>
     Task AddToRoleAsync(Guid userId, string roleName, CancellationToken cancellationToken = default);
 
@@ -53,7 +53,7 @@ public interface IIdentityService
     /// <param name="roleName">The name of the role to remove.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user with the specified ID does not exist.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user with the specified ID does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown if the role removal operation fails (e.g., role does not exist, user does not have the role).</exception>
     Task RemoveFromRoleAsync(Guid userId, string roleName, CancellationToken cancellationToken = default);
 
@@ -64,7 +64,7 @@ public interface IIdentityService
     /// <param name="roleNames">The collection of role names to assign.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user with the specified ID does not exist.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user with the specified ID does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown if the role assignment operation fails (e.g., roles do not exist, user already has the roles).</exception>
     Task AddToRolesAsync(Guid userId, IEnumerable<string> roleNames, CancellationToken cancellationToken = default);
 
@@ -97,7 +97,7 @@ public interface IIdentityService
     /// <param name="newPassword">The new password to set.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user with the specified ID does not exist.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user with the specified ID does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown if the password change operation fails (e.g., incorrect current password, or the new password does not meet complexity requirements).</exception>
     Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default);
 
@@ -107,7 +107,7 @@ public interface IIdentityService
     /// <param name="userId">The unique identifier of the user.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the generated password reset token.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user with the specified ID does not exist.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user with the specified ID does not exist.</exception>
     Task<string> GetResetTokenAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -117,7 +117,7 @@ public interface IIdentityService
     /// <param name="userId">The unique identifier of the user whose password is being reset.</param>
     /// <param name="newPassword">The new plaintext password to assign.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <exception cref="EntityNotFoundException">Thrown when a user with the specified <paramref name="userId"/> is not found.</exception>
+    /// <exception cref="NotFoundException">Thrown when a user with the specified <paramref name="userId"/> is not found.</exception>
     /// <exception cref="UserOperationException">Thrown when the password reset fails validation against configured identity policies.</exception>
     /// <exception cref="OperationCanceledException">Thrown when the operation is canceled via the <paramref name="cancellationToken"/>.</exception>
     Task ResetPasswordAsync(Guid userId, string newPassword, CancellationToken cancellationToken = default);
@@ -130,7 +130,7 @@ public interface IIdentityService
     /// <param name="newPassword">The new password to set.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user with the specified ID does not exist.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user with the specified ID does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown if the password reset operation fails (e.g., invalid or expired token, or the new password does not meet complexity requirements).</exception>
     Task ResetPasswordAsync(Guid userId, string token, string newPassword, CancellationToken cancellationToken = default);
 
@@ -140,7 +140,7 @@ public interface IIdentityService
     /// <param name="userId">The unique identifier of the user to delete.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user with the specified ID does not exist.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user with the specified ID does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown if the deletion operation fails.</exception>
     Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken = default);
 }

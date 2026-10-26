@@ -78,7 +78,7 @@ public partial class CreateUserCommandHandler(
         {
             await authRoleRepository.EnsureExistsAsync(RoleConsts.Admin, cancellationToken);
         }
-        catch (EntityNotFoundException)
+        catch (NotFoundException)
         {
             LogAdminRoleNotFound(logger, RoleConsts.Admin);
             throw new InvalidOperationException($"Critical initialization error: Role '{RoleConsts.Admin}' does not exist.");

@@ -6,7 +6,7 @@ namespace Crm.Domain.Exceptions;
 public sealed class EntitiesNotFoundException(
     string entityType,
     IReadOnlyCollection<object> missingKeys)
-    : Exception(FormatMessage(entityType, missingKeys))
+    : NotFoundException(FormatMessage(entityType, missingKeys))
 {
     private static string FormatMessage(string entityType, IReadOnlyCollection<object> missingKeys)
     {
