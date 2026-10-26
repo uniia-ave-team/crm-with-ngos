@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Reflection;
 using System.Text;
 using Crm.Application.Common.Consts;
 using Crm.Application.Extensions;
@@ -10,6 +11,7 @@ using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Options;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Seeders;
+using Crm.Infrastructure.Persistence.Seeders.SystemPresets;
 using Crm.Infrastructure.Repositories;
 using Crm.Infrastructure.Services;
 using Crm.Infrastructure.Services.FileValidators;
@@ -81,10 +83,11 @@ public static class InfrastructureServiceCollectionExtensions
     public static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString(ConfigurationKeys.PostgreSqlConnection)));
+                   options.UseNpgsql(configuration.GetConnectionString(ConfigurationKeys.PostgreSqlConnection)));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
-        services.AddTransient<IDatabaseSeeder, AdminRoleSeeder>();
+        services.AddStrategies<IDatabaseSeeder>(typeof(InfrastructureServiceCollectionExtensions).Assembly);
+        services.AddStrategies<ISystemTableTemplate>(typeof(InfrastructureServiceCollectionExtensions).Assembly);
 
         return services;
     }
@@ -98,6 +101,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IUserRefreshTokenRepository, UserRefreshTokenRepository>();
         services.AddScoped<IUserCustomFieldRepository, UserCustomFieldRepository>();
         services.AddScoped<ILoginPageImageRepository, LoginPageImageRepository>();
+        services.AddScoped<ITableTemplateRepository, TableTemplateRepository>();
+        services.AddScoped<ICustomRecordRepository, CustomRecordRepository>();
+        services.AddScoped<ICustomTableRepository, CustomTableRepository>();
+        services.AddScoped<ICustomFieldRepository, CustomFieldRepository>();
 
         return services;
     }
@@ -110,8 +117,8 @@ public static class InfrastructureServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddIdentity<AuthUser, AuthRole>()
-        .AddEntityFrameworkStores<ApplicationDbContext>()
-        .AddDefaultTokenProviders();
+            .AddEntityFrameworkStores<ApplicationDbContext>()
+            .AddDefaultTokenProviders();
 
         services.AddOptions<DataProtectionTokenProviderOptions>()
             .Configure<IOptions<JwtOptions>>((options, jwtOpts) =>
@@ -286,6 +293,32 @@ public static class InfrastructureServiceCollectionExtensions
     private static IServiceCollection AddInfrastructureBackgroundServices(this IServiceCollection services)
     {
         services.AddHostedService<ExpiredTokensCleanupService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Scans the specified assemblies and automatically registers all concrete implementations
+    /// of the given strategy interface <typeparamref name="TStrategy"/> as <see cref="ServiceLifetime.Transient"/>.
+    /// </summary>
+    /// <typeparam name="TStrategy">The strategy interface or base type to scan for.</typeparam>
+    /// <param name="services">The service collection.</param>
+    /// <param name="assemblies">The assemblies to scan. If none provided, scans the calling assembly.</param>
+    /// <returns>The original <see cref="IServiceCollection"/> instance for method chaining.</returns>
+    private static IServiceCollection AddStrategies<TStrategy>(
+        this IServiceCollection services,
+        params Assembly[] assemblies)
+    {
+        var strategyType = typeof(TStrategy);
+
+        var implementations = assemblies
+            .SelectMany(a => a.GetTypes())
+            .Where(t => strategyType.IsAssignableFrom(t) && t is { IsClass: true, IsAbstract: false });
+
+        foreach (var implementation in implementations)
+        {
+            services.AddTransient(strategyType, implementation);
+        }
 
         return services;
     }

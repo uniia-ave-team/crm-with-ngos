@@ -31,7 +31,7 @@ public partial class InviteUserCommandHandler(
     /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
     /// <returns>A task returning the generated JWT invitation token.</returns>
     /// <exception cref="EntitiesNotFoundException">Thrown when any requested role is not found.</exception>
-    /// <exception cref="EntityNotFoundException">Thrown when the NGO is not found.</exception>
+    /// <exception cref="NotFoundException">Thrown when the NGO is not found.</exception>
     /// <exception cref="EntityAlreadyExistsException">Thrown when a user with the specified email already exists.</exception>
     public async Task<TokenResultDto> Handle(InviteUserCommand request, CancellationToken cancellationToken)
     {

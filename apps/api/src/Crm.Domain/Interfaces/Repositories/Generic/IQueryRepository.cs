@@ -22,7 +22,7 @@ public interface IQueryRepository<T>
     /// <param name="id">The unique identifier of the entity to retrieve.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The tracked entity with the specified ID.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
     Task<T> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -1,3 +1,4 @@
+using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Shouldly;
 
@@ -10,35 +11,31 @@ namespace Crm.Domain.Tests.Exceptions;
 public class DomainExceptionsTests
 {
     /// <summary>
-    /// Verifies that the <see cref="EntityNotFoundException"/> correctly formats its message
+    /// Verifies that the <see cref="EntityNotFoundException{User}"/> correctly formats its message
     /// and assigns a 404 status code when an explicit key is provided.
     /// </summary>
     [Fact]
-    public void EntityNotFoundExceptionWithKeyShouldFormatMessageProperly()
+    public void NotFoundExceptionWithKeyShouldFormatMessageProperly()
     {
         // Arrange
-        var entityType = "User";
         var key = Guid.Empty;
 
         // Act
-        var exception = new EntityNotFoundException(entityType, key);
+        var exception = new EntityNotFoundException<User>(key);
 
         // Assert
         exception.Message.ShouldBe($"Entity 'User' with key '{Guid.Empty}' was not found.");
     }
 
     /// <summary>
-    /// Verifies that the <see cref="EntityNotFoundException"/> correctly formats its message
+    /// Verifies that the <see cref="EntityNotFoundException{User}"/> correctly formats its message
     /// when no specific key is provided.
     /// </summary>
     [Fact]
-    public void EntityNotFoundExceptionWithoutKeyShouldFormatMessageProperly()
+    public void NotFoundExceptionWithoutKeyShouldFormatMessageProperly()
     {
-        // Arrange
-        var entityType = "User";
-
-        // Act
-        var exception = new EntityNotFoundException(entityType);
+        // Arrange & Act
+        var exception = new EntityNotFoundException<User>();
 
         // Assert
         exception.Message.ShouldBe("Entity 'User' was not found.");

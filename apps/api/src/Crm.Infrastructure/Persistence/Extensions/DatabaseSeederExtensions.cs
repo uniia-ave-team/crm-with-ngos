@@ -18,7 +18,7 @@ public static class DatabaseSeederExtensions
     /// <exception cref="InvalidOperationException">Thrown if required services (such as <see cref="AdminRoleSeeder"/>) are not registered in the dependency injection container.</exception>
     public static async Task SeedDatabaseAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
     {
-        using var scope = serviceProvider.CreateScope();
+        await using var scope = serviceProvider.CreateAsyncScope();
         var services = scope.ServiceProvider;
 
         var seeders = services.GetServices<IDatabaseSeeder>();

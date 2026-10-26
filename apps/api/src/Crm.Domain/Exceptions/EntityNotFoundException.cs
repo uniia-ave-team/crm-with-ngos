@@ -1,13 +1,13 @@
 namespace Crm.Domain.Exceptions;
 
 /// <summary>
-/// Represents an exception that is thrown when an entity is not found in the data store.
+/// Represents an exception that is thrown when an entity of type <typeparamref name="T"/> is not found in the data store.
 /// </summary>
-public sealed class EntityNotFoundException(string entityType, object? key = null)
-    : Exception(FormatMessage(entityType, key))
+/// <typeparam name="T">The type of the entity.</typeparam>
+public sealed class EntityNotFoundException<T>(object? key = null) : NotFoundException(FormatMessage(key))
 {
-    private static string FormatMessage(string entityType, object? key) =>
+    private static string FormatMessage(object? key) =>
         key is null
-            ? $"Entity '{entityType}' was not found."
-            : $"Entity '{entityType}' with key '{key}' was not found.";
+            ? $"Entity '{typeof(T).Name}' was not found."
+            : $"Entity '{typeof(T).Name}' with key '{key}' was not found.";
 }

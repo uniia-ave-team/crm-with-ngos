@@ -17,7 +17,7 @@ public partial class GetUsersQueryHandler(
 {
     public async Task<PagedResult<UserDto>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
     {
-        LogFetchingUsers(logger, request.PageNumber, request.PageSize, request.SearchTerm);
+        LogFetchingUsers(logger, request.PageNumber, request.PageSize, request.SearchTerm != null);
 
         var pagedResult = await userRepository.GetPagedAsync<UserDto>(
             searchTerm: request.SearchTerm,
@@ -33,8 +33,8 @@ public partial class GetUsersQueryHandler(
         return pagedResult;
     }
 
-    [LoggerMessage(EventId = LogEventIds.FetchingUsers, Level = LogLevel.Information, Message = "Fetching users - Page: {PageNumber}, Size: {PageSize}, Search: {SearchTerm}")]
-    private static partial void LogFetchingUsers(ILogger logger, int pageNumber, int pageSize, string? searchTerm);
+    [LoggerMessage(EventId = LogEventIds.FetchingUsers, Level = LogLevel.Information, Message = "Fetching users - Page: {PageNumber}, Size: {PageSize}, HasSearchFilter: {HasSearchFilter}")]
+    private static partial void LogFetchingUsers(ILogger logger, int pageNumber, int pageSize, bool hasSearchFilter);
 
     [LoggerMessage(EventId = LogEventIds.UsersFetched, Level = LogLevel.Information, Message = "Successfully retrieved {FetchedCount} users out of {TotalCount} total matched.")]
     private static partial void LogUsersFetched(ILogger logger, int fetchedCount, int totalCount);

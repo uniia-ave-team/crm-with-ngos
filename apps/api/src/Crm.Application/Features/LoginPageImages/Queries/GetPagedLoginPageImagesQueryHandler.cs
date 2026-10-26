@@ -22,7 +22,7 @@ public partial class GetPagedLoginPageImagesQueryHandler(
 {
     public async Task<PagedResult<LoginPageImageDto>> Handle(GetPagedLoginPageImagesQuery request, CancellationToken cancellationToken)
     {
-        LogFetchingImages(logger, request.PageNumber, request.PageSize, request.SearchTerm);
+        LogFetchingImages(logger, request.PageNumber, request.PageSize, request.SearchTerm != null);
 
         var pagedResult = await repository.GetPagedAsync<LoginPageImageDto>(
             searchTerm: request.SearchTerm,
@@ -44,8 +44,8 @@ public partial class GetPagedLoginPageImagesQueryHandler(
         return new PagedResult<LoginPageImageDto>(updatedItems, pagedResult.TotalCount, pagedResult.PageNumber, pagedResult.PageSize);
     }
 
-    [LoggerMessage(EventId = LogEventIds.FetchingAllLoginPageImages, Level = LogLevel.Information, Message = "Fetching login page images - Page: {pageNumber}, Size: {pageSize}, Search: {searchTerm}.")]
-    private static partial void LogFetchingImages(ILogger logger, int pageNumber, int pageSize, string? searchTerm);
+    [LoggerMessage(EventId = LogEventIds.FetchingAllLoginPageImages, Level = LogLevel.Information, Message = "Fetching login page images - Page: {pageNumber}, Size: {pageSize}, HasSearchFilter: {HasSearchFilter}.")]
+    private static partial void LogFetchingImages(ILogger logger, int pageNumber, int pageSize, bool hasSearchFilter);
 
     [LoggerMessage(EventId = LogEventIds.AllLoginPageImagesFetched, Level = LogLevel.Information, Message = "Successfully retrieved {fetchedCount} login page images out of {totalCount} total matched.")]
     private static partial void LogImagesFetched(ILogger logger, int fetchedCount, int totalCount);

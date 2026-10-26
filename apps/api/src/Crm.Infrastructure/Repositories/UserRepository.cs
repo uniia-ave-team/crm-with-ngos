@@ -21,18 +21,17 @@ public class UserRepository(
     /// <param name="userId">The unique identifier of the user.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the avatar file name.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user is not found in the database.</exception>
-    /// <exception cref="EntityFieldNotFoundException">Thrown if the user exists but their avatar is not set.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user is not found in the database or if the user exists but their avatar is not set.</exception>
     public async Task<string> GetAvatarAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var projection = await DbSet
             .AsNoTracking()
             .Where(x => x.Id == userId)
             .Select(x => new { x.Avatar })
-            .FirstOrDefaultAsync(cancellationToken) ?? throw new EntityNotFoundException(nameof(User));
+            .FirstOrDefaultAsync(cancellationToken) ?? throw new EntityNotFoundException<User>();
 
         return string.IsNullOrWhiteSpace(projection.Avatar)
-            ? throw new EntityFieldNotFoundException(nameof(User), nameof(User.Avatar))
+            ? throw new EntityFieldNotFoundException<User>(nameof(User.Avatar))
             : projection.Avatar;
     }
 
@@ -52,7 +51,7 @@ public class UserRepository(
     /// <param name="userId">The unique identifier of the user to check.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task whose result is <c>true</c> if the user is active, or <c>false</c> if deactivated.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user profile with the specified ID is not found.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user profile with the specified ID is not found.</exception>
     public async Task<bool> IsActiveAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var isActive = await DbSet
@@ -61,7 +60,7 @@ public class UserRepository(
             .Select(u => (bool?)u.IsActive)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return isActive ?? throw new EntityNotFoundException(nameof(User), userId);
+        return isActive ?? throw new EntityNotFoundException<User>(userId);
     }
 
     /// <summary>

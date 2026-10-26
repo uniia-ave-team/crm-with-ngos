@@ -13,8 +13,7 @@ public interface IUserRepository : IGenericRepository<User>
     /// <param name="userId">The unique identifier of the user.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the avatar file name.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the user is not found in the database.</exception>
-    /// <exception cref="EntityFieldNotFoundException">Thrown if the user exists but their avatar is not set.</exception>
+    /// <exception cref="NotFoundException">Thrown if the user is not found in the database or if the user exists but their avatar is not set.</exception>
     Task<string> GetAvatarAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>

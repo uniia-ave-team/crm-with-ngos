@@ -26,7 +26,7 @@ public partial class GetNgoQueryHandler(
     /// <param name="request">The query request.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation, containing the mapped <see cref="NgoDto"/>.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if the NGO is not found in the database.</exception>
+    /// <exception cref="NotFoundException">Thrown if the NGO is not found in the database.</exception>
     public async Task<NgoDto?> Handle(GetNgoQuery request, CancellationToken cancellationToken)
     {
         LogFetchingNgoDetails(logger);

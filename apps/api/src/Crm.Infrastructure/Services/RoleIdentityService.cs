@@ -36,7 +36,7 @@ public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdent
     public async Task UpdateRoleAsync(Guid roleId, string roleName, string? feminitiveName = null, string? pluralName = null, CancellationToken cancellationToken = default)
     {
         var role = await roleManager.FindByIdAsync(roleId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthRole), roleId);
+            ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
         role.Name = roleName;
         role.FeminitiveName = feminitiveName;
@@ -54,7 +54,7 @@ public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdent
     public async Task DeleteRoleAsync(Guid roleId, CancellationToken cancellationToken = default)
     {
         var role = await roleManager.FindByIdAsync(roleId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthRole), roleId);
+            ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
         var result = await roleManager.DeleteAsync(role);
 
@@ -68,7 +68,7 @@ public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdent
     public async Task AddPermissionToRoleAsync(Guid roleId, string permissionValue, CancellationToken cancellationToken = default)
     {
         var role = await roleManager.FindByIdAsync(roleId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthRole), roleId);
+            ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
         var claim = new Claim(CustomClaimTypes.Permission, permissionValue);
 
@@ -84,7 +84,7 @@ public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdent
     public async Task RemovePermissionFromRoleAsync(Guid roleId, string permissionValue, CancellationToken cancellationToken = default)
     {
         var role = await roleManager.FindByIdAsync(roleId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthRole), roleId);
+            ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
         var claim = new Claim(CustomClaimTypes.Permission, permissionValue);
 
@@ -100,7 +100,7 @@ public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdent
     public async Task<HashSet<string>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken = default)
     {
         var role = await roleManager.FindByIdAsync(roleId.ToString())
-            ?? throw new EntityNotFoundException(nameof(AuthRole), roleId);
+            ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
         var claims = await roleManager.GetClaimsAsync(role);
 

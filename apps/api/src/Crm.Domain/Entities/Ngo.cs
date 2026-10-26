@@ -26,4 +26,9 @@ public class Ngo : BaseEntity
     /// Gets or sets the collection of business user profiles belonging to this NGO instance.
     /// </summary>
     public ICollection<User> Users { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the collection of actual custom tables (instances) created by this NGO.
+    /// </summary>
+    public ICollection<CustomTable> CustomTables { get; set; } = [];
 }

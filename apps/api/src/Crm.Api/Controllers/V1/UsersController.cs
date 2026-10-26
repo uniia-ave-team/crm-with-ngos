@@ -302,7 +302,7 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> AddMyCustomField(
-        [FromBody] AddCustomFieldRequest request,
+        [FromBody] AddCustomUserFieldRequest request,
         CancellationToken cancellationToken)
     {
         var command = request.Adapt<AddUserCustomFieldCommand>() with { UserId = currentUserService.GetUserId() };
@@ -483,7 +483,7 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddCustomField(
         Guid id,
-        [FromBody] AddCustomFieldRequest request,
+        [FromBody] AddCustomUserFieldRequest request,
         CancellationToken cancellationToken)
     {
         var command = request.Adapt<AddUserCustomFieldCommand>() with { UserId = id };

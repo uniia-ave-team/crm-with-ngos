@@ -153,7 +153,7 @@ public sealed partial class RolePermissionsCache(
 
             await SetRolePermissionsAsync(roleId, rights, cancellationToken);
         }
-        catch (EntityNotFoundException)
+        catch (NotFoundException)
         {
             await SetRolePermissionsAsync(roleId, rights, _negativeCacheTtl);
         }

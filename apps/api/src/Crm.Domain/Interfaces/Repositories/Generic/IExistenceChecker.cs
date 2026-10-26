@@ -14,7 +14,7 @@ public interface IExistenceChecker
     /// <param name="id">The unique identifier of the entity to check.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if no entity with the specified ID exists.</exception>
+    /// <exception cref="NotFoundException">Thrown if no entity with the specified ID exists.</exception>
     Task EnsureExistsAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>

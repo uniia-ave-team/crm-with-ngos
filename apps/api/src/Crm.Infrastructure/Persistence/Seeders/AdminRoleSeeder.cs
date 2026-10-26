@@ -50,7 +50,7 @@ public partial class AdminRoleSeeder(
 
             LogAdminRoleAlreadyExists(logger, RoleConsts.Admin);
         }
-        catch (EntityNotFoundException)
+        catch (NotFoundException)
         {
             roleId = await roleIdentityService.CreateRoleAsync(RoleConsts.Admin, cancellationToken: cancellationToken);
 

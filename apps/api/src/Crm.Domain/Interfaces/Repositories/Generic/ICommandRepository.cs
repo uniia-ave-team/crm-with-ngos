@@ -15,6 +15,14 @@ public interface ICommandRepository<T>
     Task<T> CreateAsync(T entity, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Asynchronously adds a collection of entities to the database context.
+    /// </summary>
+    /// <param name="entities">The collection of entities to create.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous save operation.</returns>
+    Task CreateAsync(IEnumerable<T> entities, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Asynchronously deletes an entity from the underlying data store by its unique identifier.
     /// </summary>
     /// <param name="id">The unique identifier of the entity to delete.</param>

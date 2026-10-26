@@ -1,3 +1,4 @@
+using Crm.Application.Common.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
 using MediatR;
@@ -16,8 +17,8 @@ namespace Crm.Application.Dtos.LoginPageImage.Queries;
 /// The name of the entity property by which the collection should be sorted (e.g., "ImageUrl").
 /// </param>
 /// <param name="SortOrder">
-/// The direction of sorting. Use <see cref="SortOrderConstants.Ascending"/> ("asc")
-/// or <see cref="SortOrderConstants.Descending"/> ("desc"). Default is ascending.
+/// The direction of sorting. Use <see cref="SortOrderConstants.Ascending"/>
+/// or <see cref="SortOrderConstants.Descending"/>. Default is <see cref="SortOrderConstants.Ascending"/>.
 /// </param>
 /// <param name="PageNumber">
 /// The target page number to retrieve (1-based index). Default is 1.
@@ -30,4 +31,4 @@ public record GetPagedLoginPageImagesQuery(
     string? OrderBy = nameof(LoginPageImageDto.Url),
     string? SortOrder = SortOrderConstants.Ascending,
     int PageNumber = PaginationConstants.MinPageNumber,
-    int PageSize = PaginationConstants.DefaultPageSize) : IRequest<PagedResult<LoginPageImageDto>>;
+    int PageSize = PaginationConstants.DefaultPageSize) : IRequest<PagedResult<LoginPageImageDto>>, IPagedSearchQuery;
