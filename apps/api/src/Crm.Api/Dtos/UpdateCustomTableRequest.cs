@@ -1,4 +1,5 @@
 using Crm.Application.Dtos.CustomTables;
+using Crm.Application.Dtos.CustomTables.Commands;
 
 namespace Crm.Api.Dtos;
 
@@ -11,4 +12,12 @@ namespace Crm.Api.Dtos;
 public record UpdateCustomTableRequest(
     string Name,
     string? Description,
-    List<UpdateCustomFieldDto> Fields);
+    List<UpdateCustomFieldDto> Fields)
+{
+    /// <summary>
+    /// Maps the request payload to an <see cref="UpdateCustomTableCommand"/> instance.
+    /// </summary>
+    /// <param name="id">The unique identifier of the custom table from the route.</param>
+    public UpdateCustomTableCommand ToCommand(Guid id) =>
+        new(id, Name, Description, Fields);
+}

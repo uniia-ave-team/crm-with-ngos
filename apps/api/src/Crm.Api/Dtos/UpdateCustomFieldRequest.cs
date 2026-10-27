@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using Crm.Application.Dtos.User.Commands;
+
 namespace Crm.Api.Dtos;
 
 /// <summary>
@@ -7,4 +10,13 @@ namespace Crm.Api.Dtos;
 /// <param name="IsPublic">A value indicating whether the custom field is visible to other regular users.</param>
 public record UpdateCustomFieldRequest(
     string Value,
-    bool IsPublic);
+    [property: JsonRequired] bool IsPublic)
+{
+    /// <summary>
+    /// Maps the request payload to an <see cref="UpdateUserCustomFieldCommand"/> instance.
+    /// </summary>
+    /// <param name="customFieldId">The unique identifier of the custom field entry to update.</param>
+    /// <param name="userId">The unique identifier of the user initiating the update.</param>
+    public UpdateUserCustomFieldCommand ToCommand(Guid customFieldId, Guid userId) =>
+        new(customFieldId, userId, Value, IsPublic);
+}

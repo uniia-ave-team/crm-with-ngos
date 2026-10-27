@@ -1,3 +1,4 @@
+using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Enums;
 
 namespace Crm.Api.Dtos;
@@ -25,4 +26,23 @@ public record UpdateProfileRequest(
     string? EmergencyContact,
     string? PreferredLanguage,
     string? Pronouns,
-    PronounCategory? PronounCategory);
+    PronounCategory? PronounCategory)
+{
+    /// <summary>
+    /// Maps the request payload to an <see cref="UpdateUserProfileCommand"/> instance.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the target user.</param>
+    public UpdateUserProfileCommand ToCommand(Guid userId) =>
+        new(
+            userId,
+            FirstName,
+            LastName,
+            Patronymic,
+            InternalPosition,
+            PhoneNumber,
+            Country,
+            EmergencyContact,
+            PreferredLanguage,
+            Pronouns,
+            PronounCategory);
+}
