@@ -1,6 +1,6 @@
 using Crm.Domain.Entities;
 
-namespace Crm.Domain.Consts.Entities;
+namespace Crm.Domain.Consts.Entities.ValidationConstants;
 
 /// <summary>
 /// Provides validation and configuration constants for the <see cref="CustomField"/> entity.

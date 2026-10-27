@@ -1,3 +1,4 @@
+using Crm.Domain.Consts.Entities.GeneralConstants;
 using Crm.Domain.Entities;
 using Crm.Infrastructure.Persistence.ValueGenerators;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,10 @@ namespace Crm.Infrastructure.Persistence.Configurations;
 /// </summary>
 public class CustomRecordConfiguration : IEntityTypeConfiguration<CustomRecord>
 {
+    private const string IndexMethodGin = "gin";
+    private static readonly string ComputedSearchVectorSql =
+        $"to_tsvector('{CustomRecordConstants.SearchVectorConfiguration}', \"Data\"::text)";
+
     public void Configure(EntityTypeBuilder<CustomRecord> builder)
     {
         builder.HasKey(r => r.Id);
@@ -21,5 +26,11 @@ public class CustomRecordConfiguration : IEntityTypeConfiguration<CustomRecord>
         builder.Property(r => r.Data)
             .HasColumnType(nameof(NpgsqlDbType.Jsonb).ToLowerInvariant())
             .IsRequired();
+
+        builder.Property<NpgsqlTsVector>(CustomRecordConstants.SearchVectorPropertyName)
+                    .HasComputedColumnSql(ComputedSearchVectorSql, stored: true);
+
+        builder.HasIndex(CustomRecordConstants.SearchVectorPropertyName)
+            .HasMethod(IndexMethodGin);
     }
 }

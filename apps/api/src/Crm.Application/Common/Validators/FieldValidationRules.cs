@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using Crm.Domain.Consts.Entities;
+using Crm.Domain.Consts.Entities.ValidationConstants;
 using Crm.Domain.Interfaces;
 using FluentValidation;
 

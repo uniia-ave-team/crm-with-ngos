@@ -26,12 +26,6 @@ public static class JsonbFunctionsExtensions
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
-    /// Extracts string values from a JSONB document into a single text stream for search matching.
-    /// </summary>
-    public static string JsonValuesToText(JsonObject data)
-        => throw new NotSupportedException(ExceptionMessage);
-
-    /// <summary>
     /// Builds an EF Core compatible update expression from SchemaDiffResult.
     /// Returns null if no schema changes are present in diff.
     /// </summary>

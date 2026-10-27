@@ -28,7 +28,6 @@ public static class ModelBuilderDbFunctionsExtensions
     public static ModelBuilder AddCustomDbFunctions(this ModelBuilder modelBuilder)
     {
         RegisterJsonbApplyPatch(modelBuilder);
-        RegisterJsonValuesToText(modelBuilder);
 
         return modelBuilder;
     }
@@ -179,30 +178,6 @@ public static class ModelBuilderDbFunctionsExtensions
         }
 
         throw new InvalidOperationException($"Patch arrays must be translated as constant string arrays. Received: {expression.GetType().Name}");
-    }
-
-    // TODO: Think about adding GIN index for jsonb columns in migrations.
-    private static void RegisterJsonValuesToText(ModelBuilder modelBuilder)
-    {
-        var method = typeof(JsonbFunctionsExtensions).GetMethod(
-            nameof(JsonbFunctionsExtensions.JsonValuesToText),
-            [typeof(JsonObject)])
-            ?? throw new InvalidOperationException("JsonValuesToText registration failed.");
-
-        modelBuilder.HasDbFunction(method)
-            .HasStoreType(TextStoreType)
-            .HasParameter("data", p => p.HasStoreType(JsonbStoreType))
-            .HasTranslation(args =>
-            {
-                var json = args[0];
-                var typedJson = EnsureTypeMapping(json, JsonbMapping);
-
-                return new SqlUnaryExpression(
-                    operatorType: ExpressionType.Convert,
-                    operand: typedJson,
-                    type: typeof(string),
-                    typeMapping: TextMapping);
-            });
     }
 
     private static SqlFunctionExpression JsonbConcat(

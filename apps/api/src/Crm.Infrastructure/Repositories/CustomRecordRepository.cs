@@ -2,12 +2,13 @@ using System.Linq.Expressions;
 using System.Text.Json.Nodes;
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
+using Crm.Domain.Consts.Entities.GeneralConstants;
 using Crm.Domain.Entities;
-using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Extensions.FunctionExtensions;
 using Microsoft.EntityFrameworkCore;
+using NpgsqlTypes;
 
 namespace Crm.Infrastructure.Repositories;
 
@@ -82,17 +83,15 @@ public class CustomRecordRepository(
     }
 
     /// <summary>
-    /// Builds the filter expression for querying custom records based on search term and table ID.
-    /// Translates JSONB payload cast to SQL text pattern matching in PostgreSQL.
+    /// Builds the filter expression for querying custom records based on an optional search term and table ID.
+    /// Translates full-text search queries to PostgreSQL tsquery matching against the computed SearchVector shadow property.
     /// </summary>
     private static Expression<Func<CustomRecord, bool>> BuildCustomRecordFilter(string? searchTerm, Guid customTableId)
     {
         return string.IsNullOrWhiteSpace(searchTerm)
             ? (r => r.CustomTableId == customTableId)
-            : (r => r.CustomTableId == customTableId
-                 && EF.Functions.ILike(
-                     JsonbFunctionsExtensions.JsonValuesToText(r.Data),
-                     searchTerm.ToContainsLikePattern(),
-                     "\\"));
+            : r => r.CustomTableId == customTableId
+                && EF.Property<NpgsqlTsVector>(r, CustomRecordConstants.SearchVectorPropertyName)
+                    .Matches(EF.Functions.WebSearchToTsQuery(CustomRecordConstants.SearchVectorConfiguration, searchTerm));
     }
 }
