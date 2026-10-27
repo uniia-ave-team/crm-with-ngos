@@ -76,7 +76,9 @@ public class CustomRecordRepository(
 
         return updateLambda is null
             ? Task.FromResult(0)
-            : DbSet.Where(x => x.CustomTableId == customTableId).ExecuteUpdateAsync(s => s.SetProperty(r => r.Data, updateLambda), cancellationToken);
+            : DbSet
+            .Where(r => r.CustomTableId == customTableId)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.Data, updateLambda), cancellationToken);
     }
 
     /// <summary>

@@ -2,7 +2,6 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using Crm.Domain.Common;
-using Crm.Domain.Entities;
 using Crm.Domain.Extensions;
 
 namespace Crm.Infrastructure.Persistence.Extensions.FunctionExtensions;
@@ -10,33 +9,26 @@ namespace Crm.Infrastructure.Persistence.Extensions.FunctionExtensions;
 public static class JsonbFunctionsExtensions
 {
     private const string ExceptionMessage = "This method is for EF Core LINQ queries only.";
-    private static readonly MethodInfo RemoveFn = typeof(JsonbFunctionsExtensions).GetMethod(nameof(JsonbRemove), [typeof(JsonObject), typeof(string)])!;
-    private static readonly MethodInfo RenameFn = typeof(JsonbFunctionsExtensions).GetMethod(nameof(JsonbRenameKey), [typeof(JsonObject), typeof(string), typeof(string)])!;
-    private static readonly MethodInfo ConcatPayloadFn = typeof(JsonbFunctionsExtensions).GetMethod(nameof(JsonbConcatPayload), [typeof(JsonObject), typeof(string)])!;
+
+    private static readonly MethodInfo ApplyPatchFn = typeof(JsonbFunctionsExtensions).GetMethod(
+        nameof(JsonbApplyPatch),
+        [typeof(JsonObject), typeof(string[]), typeof(string[]), typeof(string[]), typeof(string[])])!;
 
     /// <summary>
-    /// Concatenates a JSON payload string to a PostgreSQL jsonb column using the '||' operator.
+    /// Applies a flat JSONB schema patch operation in a single linear SQL translation step.
     /// </summary>
-    public static JsonObject JsonbConcatPayload(JsonObject json, string jsonPayload)
+    public static JsonObject JsonbApplyPatch(
+        JsonObject json,
+        string[] dropKeys,
+        string[] targetKeys,
+        string[] sourceKeys,
+        string[] fallbackJson)
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
     /// Extracts string values from a JSONB document into a single text stream for search matching.
-    /// Mapped to the PostgreSQL function <c>jsonb_values_to_text</c>.
     /// </summary>
     public static string JsonValuesToText(JsonObject data)
-        => throw new NotSupportedException(ExceptionMessage);
-
-    /// <summary>
-    /// Removes a key from a PostgreSQL jsonb column using the '-' operator.
-    /// </summary>
-    public static JsonObject JsonbRemove(JsonObject json, string key)
-        => throw new NotSupportedException(ExceptionMessage);
-
-    /// <summary>
-    /// Renames a key in a PostgreSQL jsonb column while preserving its associated value.
-    /// </summary>
-    public static JsonObject JsonbRenameKey(JsonObject json, string oldKey, string newKey)
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
@@ -44,72 +36,68 @@ public static class JsonbFunctionsExtensions
     /// Returns null if no schema changes are present in diff.
     /// </summary>
     public static Expression<Func<TEntity, JsonObject>>? ToSchemaUpdateLambda<TEntity>(
-    this Expression<Func<TEntity, JsonObject>> propertySelector,
-    SchemaDiffResult diff)
+        this Expression<Func<TEntity, JsonObject>> propertySelector,
+        SchemaDiffResult diff)
     {
         ArgumentNullException.ThrowIfNull(propertySelector);
         ArgumentNullException.ThrowIfNull(diff);
 
+        var patch = BuildSchemaPatch(diff);
+
+        if (patch.DropKeys.Length == 0 && patch.TargetKeys.Length == 0)
+        {
+            return null;
+        }
+
         var initialBody = propertySelector.Body;
 
-        var updatedBody = initialBody
-            .ApplyPurge(diff.FieldsToRemove)
-            .ApplyRenames(diff.KeyRenames)
-            .ApplyBackfill(diff.FieldsToAdd, diff.FieldsNeedingBackfill);
+        var patchCall = Expression.Call(
+            ApplyPatchFn,
+            initialBody,
+            Expression.Constant(patch.DropKeys),
+            Expression.Constant(patch.TargetKeys),
+            Expression.Constant(patch.SourceKeys),
+            Expression.Constant(patch.FallbackJson));
 
-        return updatedBody == initialBody ? null : Expression.Lambda<Func<TEntity, JsonObject>>(updatedBody, propertySelector.Parameters);
+        return Expression.Lambda<Func<TEntity, JsonObject>>(patchCall, propertySelector.Parameters);
     }
 
-    private static Expression ApplyPurge(this Expression body, IEnumerable<CustomField> fieldsToRemove)
+    public static SchemaPatch BuildSchemaPatch(SchemaDiffResult diff)
     {
-        return fieldsToRemove.Aggregate(body, (e, f) =>
-            Expression.Call(RemoveFn, e, Expression.Constant(f.Key)));
-    }
+        var drop = new HashSet<string>(StringComparer.Ordinal);
+        var entries = new Dictionary<string, (string Source, string Fallback)>(StringComparer.Ordinal);
 
-    private static Expression ApplyRenames(this Expression body, IEnumerable<KeyRename> keyRenames)
-    {
-        body = keyRenames.Aggregate(body, (e, rn) =>
-            Expression.Call(RenameFn, e, Expression.Constant(rn.OldKey), Expression.Constant(rn.TempKey)));
-
-        return keyRenames.Aggregate(body, (e, rn) =>
-            Expression.Call(RenameFn, e, Expression.Constant(rn.TempKey), Expression.Constant(rn.NewKey)));
-    }
-
-    private static Expression ApplyBackfill(
-        this Expression body,
-        IEnumerable<CustomField> fieldsToAdd,
-        IEnumerable<CustomField> fieldsNeedingBackfill)
-    {
-        var fieldsToSeed = fieldsToAdd
-            .Where(f => f.IsRequired)
-            .Concat(fieldsNeedingBackfill)
-            .DistinctBy(f => f.Key)
-            .ToList();
-
-        if (fieldsToSeed.Count == 0)
+        foreach (var f in diff.FieldsToRemove)
         {
-            return body;
+            drop.Add(f.Key);
         }
 
-        body = fieldsToSeed.Aggregate(body, (e, f) =>
-            Expression.Call(RemoveFn, e, Expression.Constant(f.Key)));
-
-        var backfillPayload = BuildBackfillPayload(fieldsToSeed);
-
-        return Expression.Call(ConcatPayloadFn, body, Expression.Constant(backfillPayload.ToJsonString()));
-    }
-
-    private static JsonObject BuildBackfillPayload(IEnumerable<CustomField> fields)
-    {
-        var payload = new JsonObject();
-
-        foreach (var field in fields)
+        var renamedFrom = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var r in diff.KeyRenames)
         {
-            var rawValue = field.DataType.GetBackfillValue();
-
-            payload[field.Key] = rawValue.DeepClone();
+            drop.Add(r.OldKey);
+            renamedFrom[r.NewKey] = r.OldKey;
+            entries[r.NewKey] = (r.OldKey, string.Empty);
         }
 
-        return payload;
+        foreach (var f in diff.FieldsNeedingBackfill)
+        {
+            string sourceKey = renamedFrom.GetValueOrDefault(f.Key, f.Key);
+            entries[f.Key] = (sourceKey, f.DataType.GetBackfillJson());
+        }
+
+        foreach (var f in diff.FieldsToAdd)
+        {
+            if (f.IsRequired)
+            {
+                entries[f.Key] = (string.Empty, f.DataType.GetBackfillJson());
+            }
+        }
+
+        return new SchemaPatch(
+            [.. drop],
+            [.. entries.Keys],
+            [.. entries.Values.Select(v => v.Source)],
+            [.. entries.Values.Select(v => v.Fallback)]);
     }
 }
