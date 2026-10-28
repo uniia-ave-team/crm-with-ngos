@@ -29,16 +29,16 @@ describe('AccountsService', () => {
 
   describe('storing', () => {
     it('keeps an account as its own record plus an index and an active pointer', () => {
-      const account = service.add({ server, ...tokens, identity: 'user-1', userId: 'user-1', firstName: 'Олена', lastName: 'Іваненко', ngoName: 'Моя ГО', ngoLogoUrl: '/files/logo.png' });
+      const account = service.add({ server, ...tokens, identity: 'user-1', userId: 'user-1', firstName: 'Перший', lastName: 'Другий', ngoName: 'Організація', ngoLogoUrl: '/files/logo.png' });
 
       expect(JSON.parse(localStorage.getItem('yavir.accounts')!)).toEqual([account.id]);
       expect(localStorage.getItem('yavir.activeAccount')).toBe(account.id);
       expect(record(account.id)).toMatchObject({
         server,
         userId: 'user-1',
-        firstName: 'Олена',
-        lastName: 'Іваненко',
-        ngoName: 'Моя ГО',
+        firstName: 'Перший',
+        lastName: 'Другий',
+        ngoName: 'Організація',
         ngoLogoUrl: '/files/logo.png',
         accessToken: 'access',
         refreshToken: 'refresh',
@@ -98,22 +98,22 @@ describe('AccountsService', () => {
     });
 
     it('updates an existing account instead of duplicating it, keeping its snapshot', () => {
-      const first = service.add({ server, ...tokens, identity: 'a', firstName: 'Олена', ngoName: 'ГО' });
+      const first = service.add({ server, ...tokens, identity: 'a', firstName: 'Перший', ngoName: 'Організація' });
       const again = service.add({ server, accessToken: 'new', refreshToken: 'new-r', identity: 'a' });
       expect(again.id).toBe(first.id);
       expect(service.accounts()).toHaveLength(1);
-      expect(service.active()).toMatchObject({ accessToken: 'new', firstName: 'Олена', ngoName: 'ГО', addedAt: first.addedAt });
+      expect(service.active()).toMatchObject({ accessToken: 'new', firstName: 'Перший', ngoName: 'Організація', addedAt: first.addedAt });
     });
 
     it('updates the fields of a record, in memory and in storage', () => {
       const account = service.add({ server, ...tokens, identity: 'a' });
-      service.update(account.id, { firstName: 'Олена', ngoName: 'ГО', refreshToken: 'r2' });
-      expect(service.active()).toMatchObject({ firstName: 'Олена', ngoName: 'ГО', refreshToken: 'r2' });
-      expect(record(account.id)).toMatchObject({ firstName: 'Олена', ngoName: 'ГО', refreshToken: 'r2' });
+      service.update(account.id, { firstName: 'Перший', ngoName: 'Організація', refreshToken: 'r2' });
+      expect(service.active()).toMatchObject({ firstName: 'Перший', ngoName: 'Організація', refreshToken: 'r2' });
+      expect(record(account.id)).toMatchObject({ firstName: 'Перший', ngoName: 'Організація', refreshToken: 'r2' });
     });
 
     it('keeps the NGO logo when the account is added again, and updates it with the record', () => {
-      const first = service.add({ server, ...tokens, identity: 'a', ngoName: 'ГО', ngoLogoUrl: 'https://x/logo.png' });
+      const first = service.add({ server, ...tokens, identity: 'a', ngoName: 'Організація', ngoLogoUrl: 'https://x/logo.png' });
       service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'a' });
       expect(service.active()).toMatchObject({ id: first.id, ngoLogoUrl: 'https://x/logo.png' });
 
@@ -133,6 +133,46 @@ describe('AccountsService', () => {
       service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'a' });
       expect(service.active()?.permissions).toEqual(['ViewUser', 'UpdateUser']);
       expect(reopen().active()?.permissions).toEqual(['ViewUser', 'UpdateUser']);
+    });
+
+    describe('the thumbnails of the avatar and of the NGO logo', () => {
+      const thumb = (url: string) => ({ url, data: 'data:image/webp;base64,AAAA' });
+
+      it('starts with none', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        expect(account.avatarThumb).toBeNull();
+        expect(account.ngoLogoThumb).toBeNull();
+      });
+
+      it('stores them in the record with the update, in memory and in storage', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        service.update(account.id, { avatarThumb: thumb('/a.png'), ngoLogoThumb: thumb('/logo.png') });
+
+        expect(service.active()).toMatchObject({ avatarThumb: thumb('/a.png'), ngoLogoThumb: thumb('/logo.png') });
+        expect(record(account.id)).toMatchObject({ avatarThumb: thumb('/a.png'), ngoLogoThumb: thumb('/logo.png') });
+      });
+
+      it('keeps them when the account is added again (a new sign-in)', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        service.update(account.id, { avatarThumb: thumb('/a.png'), ngoLogoThumb: thumb('/logo.png') });
+
+        const again = service.add({ server, accessToken: 'new', refreshToken: 'new', identity: 'a' });
+        expect(again.avatarThumb).toEqual(thumb('/a.png'));
+        expect(again.ngoLogoThumb).toEqual(thumb('/logo.png'));
+      });
+
+      it('can be taken away with null', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        service.update(account.id, { avatarThumb: thumb('/a.png') });
+        service.update(account.id, { avatarThumb: null });
+        expect(record(account.id).avatarThumb).toBeNull();
+      });
+
+      it('are read back in a new tab', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        service.update(account.id, { avatarThumb: thumb('/a.png') });
+        expect(reopen().active()?.avatarThumb).toEqual(thumb('/a.png'));
+      });
     });
 
     it('ignores an update of an unknown account', () => {
@@ -322,14 +362,14 @@ describe('AccountsService', () => {
 
   describe('reading', () => {
     it('restores the accounts and the active one in a new tab', () => {
-      service.add({ server, ...tokens, identity: 'a', firstName: 'Олена' });
+      service.add({ server, ...tokens, identity: 'a', firstName: 'Перший' });
       const second = service.add({ server: other, ...tokens, identity: 'b' });
       service.setActive(second.id);
 
       const reopened = reopen();
       expect(reopened.accounts()).toHaveLength(2);
       expect(reopened.activeId()).toBe(second.id);
-      expect(reopened.accounts()[0].firstName).toBe('Олена');
+      expect(reopened.accounts()[0].firstName).toBe('Перший');
     });
 
     it('drops index entries without a record and ignores broken records', () => {
@@ -362,6 +402,21 @@ describe('AccountsService', () => {
         permissions: [],
         userId: '',
       });
+    });
+
+    it.each([
+      ['a string', 'data:image/webp;base64,AAAA'],
+      ['a number', 5],
+      ['an object without the data', { url: '/a.png' }],
+      ['an object without the address', { data: 'data:image/webp;base64,AAAA' }],
+      ['data that is not an image link', { url: '/a.png', data: 'javascript:alert(1)' }],
+      ['an address that is not a string', { url: 5, data: 'data:image/webp;base64,AAAA' }],
+    ])('ignores a damaged thumbnail in a record (%s)', (_name, damaged) => {
+      const account = service.add({ server, ...tokens, identity: 'a' });
+      localStorage.setItem(`yavir.account.${account.id}`, JSON.stringify({ ...record(account.id), avatarThumb: damaged, ngoLogoThumb: damaged }));
+      const reopened = reopen();
+      expect(reopened.active()?.avatarThumb).toBeNull();
+      expect(reopened.active()?.ngoLogoThumb).toBeNull();
     });
 
     it('ignores a damaged list of permissions in a record', () => {

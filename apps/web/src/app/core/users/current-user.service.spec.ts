@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
+import { ThumbnailService } from '../images/thumbnail.service';
 import { CurrentUserService } from './current-user.service';
 
 describe('CurrentUserService', () => {
@@ -226,6 +227,156 @@ describe('CurrentUserService', () => {
       auth.clearTokens();
       expect(await service.reload()).toBe('unauthorized');
       http.expectNone(url);
+    });
+  });
+
+  describe('the thumbnails of the avatar and of the NGO logo in the snapshot of the account', () => {
+    const THUMB = 'data:image/webp;base64,THUMB';
+    let server: string;
+    let create: ReturnType<typeof vi.spyOn>;
+    let counter: number;
+    const originalCreate = (URL as unknown as Record<string, unknown>)['createObjectURL'];
+    const originalRevoke = (URL as unknown as Record<string, unknown>)['revokeObjectURL'];
+
+    beforeEach(() => {
+      counter = 0;
+      (URL as unknown as Record<string, unknown>)['createObjectURL'] = vi.fn(() => `blob:http://localhost/${++counter}`);
+      (URL as unknown as Record<string, unknown>)['revokeObjectURL'] = vi.fn();
+      server = TestBed.inject(ConnectionService).serverUrl();
+      create = vi.spyOn(TestBed.inject(ThumbnailService), 'create').mockResolvedValue(THUMB);
+    });
+
+    afterEach(() => {
+      for (const [name, original] of [
+        ['createObjectURL', originalCreate],
+        ['revokeObjectURL', originalRevoke],
+      ] as const) {
+        if (original === undefined) {
+          delete (URL as unknown as Record<string, unknown>)[name];
+        } else {
+          (URL as unknown as Record<string, unknown>)[name] = original;
+        }
+      }
+    });
+
+    const avatar = (version = 'v1') => `${server}/api/v1/users/me/avatar?v=${version}`;
+    const logo = (version = 'v1') => `${server}/api/v1/ngo/logo?v=${version}`;
+    const ngoUrl = () => `${server}/api/v1/ngo`;
+    const active = () => TestBed.inject(AccountsService).active()!;
+
+    /** Профіль завантажено; повертає, коли запити назад отримано (організацію віддаємо як є). */
+    async function loadProfile(extra: Record<string, unknown>, ngo: Record<string, unknown> = { name: 'Org', logoUrl: null }): Promise<void> {
+      const first = service.ensure();
+      http.expectOne(url).flush({ ...profile, ...extra });
+      await first;
+      http.match(ngoUrl()).forEach((request) => request.flush(ngo));
+    }
+
+    it('makes the thumbnail of a new avatar from the file that it loads with the token, and stores it with the address it was made from', async () => {
+      await loadProfile({ avatarUrl: avatar() });
+
+      http.expectOne(avatar()).flush(new Blob(['x']));
+      await vi.waitFor(() => expect(active().avatarThumb).toEqual({ url: avatar(), data: THUMB }));
+      expect(create).toHaveBeenCalledWith('blob:http://localhost/1', 96, 'cover');
+    });
+
+    it('resolves a relative link against the server of the account', async () => {
+      await loadProfile({ avatarUrl: '/api/v1/users/me/avatar?v=v9' });
+      http.expectOne(avatar('v9')).flush(new Blob(['x']));
+      await vi.waitFor(() => expect(active().avatarThumb?.url).toBe('/api/v1/users/me/avatar?v=v9'));
+    });
+
+    it('stores the thumbnail in the record in localStorage', async () => {
+      await loadProfile({ avatarUrl: avatar() });
+      http.expectOne(avatar()).flush(new Blob(['x']));
+      await vi.waitFor(() => expect(active().avatarThumb).not.toBeNull());
+      const stored = JSON.parse(localStorage.getItem(`yavir.account.${active().id}`)!);
+      expect(stored.avatarThumb).toEqual({ url: avatar(), data: THUMB });
+    });
+
+    it('does not make it again, and does not ask for the file, while the address is the same', async () => {
+      TestBed.inject(AccountsService).update(active().id, { avatarThumb: { url: avatar(), data: THUMB } });
+      await loadProfile({ avatarUrl: avatar() });
+
+      http.expectNone(avatar());
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('makes a new one when the avatar changes (a new version in the address)', async () => {
+      TestBed.inject(AccountsService).update(active().id, { avatarThumb: { url: avatar('v1'), data: 'data:image/webp;base64,OLD' } });
+      await loadProfile({ avatarUrl: avatar('v2') });
+
+      http.expectOne(avatar('v2')).flush(new Blob(['x']));
+      await vi.waitFor(() => expect(active().avatarThumb).toEqual({ url: avatar('v2'), data: THUMB }));
+    });
+
+    it('takes the thumbnail away when the user has no avatar any more', async () => {
+      TestBed.inject(AccountsService).update(active().id, { avatarThumb: { url: avatar(), data: THUMB } });
+      await loadProfile({ avatarUrl: null });
+      await vi.waitFor(() => expect(active().avatarThumb).toBeNull());
+      http.expectNone(() => false);
+    });
+
+    it('does nothing when the user has no avatar and no thumbnail', async () => {
+      await loadProfile({ avatarUrl: null });
+      expect(active().avatarThumb).toBeNull();
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('keeps the old thumbnail when the new file cannot be loaded', async () => {
+      const old = { url: avatar('v1'), data: 'data:image/webp;base64,OLD' };
+      TestBed.inject(AccountsService).update(active().id, { avatarThumb: old });
+      await loadProfile({ avatarUrl: avatar('v2') });
+
+      http.expectOne(avatar('v2')).flush(new Blob([]), { status: 403, statusText: 'Forbidden' });
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(active().avatarThumb).toEqual(old);
+    });
+
+    it('keeps the old thumbnail when the new file cannot be drawn', async () => {
+      const old = { url: avatar('v1'), data: 'data:image/webp;base64,OLD' };
+      TestBed.inject(AccountsService).update(active().id, { avatarThumb: old });
+      create.mockResolvedValue(null);
+      await loadProfile({ avatarUrl: avatar('v2') });
+
+      http.expectOne(avatar('v2')).flush(new Blob(['x']));
+      await vi.waitFor(() => expect(create).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(active().avatarThumb).toEqual(old);
+    });
+
+    it('does not write the thumbnail into another account when the active one changed while the file was loading', async () => {
+      await loadProfile({ avatarUrl: avatar() });
+      const request = http.expectOne(avatar());
+
+      const other = TestBed.inject(AccountsService).add({ server, accessToken: 'a2', refreshToken: 'r2', identity: 'u2' });
+      TestBed.tick();
+      request.flush(new Blob(['x']));
+      await new Promise((resolve) => setTimeout(resolve));
+
+      expect(TestBed.inject(AccountsService).accounts().every((account) => account.avatarThumb === null)).toBe(true);
+      expect(other.avatarThumb).toBeNull();
+    });
+
+    it('makes the thumbnail of the NGO logo from the logo that the server gave, fitting it whole (contain)', async () => {
+      await loadProfile({}, { name: 'Org', logoUrl: logo() });
+
+      (await vi.waitFor(() => http.expectOne(logo()))).flush(new Blob(['x']));
+      await vi.waitFor(() => expect(active().ngoLogoThumb).toEqual({ url: logo(), data: THUMB }));
+      expect(create).toHaveBeenCalledWith(expect.stringMatching(/^blob:/), 64, 'contain');
+    });
+
+    it('does not make the logo thumbnail again for the same address, and takes it away when there is no logo', async () => {
+      TestBed.inject(AccountsService).update(active().id, { ngoLogoThumb: { url: logo(), data: THUMB } });
+      await loadProfile({}, { name: 'Org', logoUrl: logo() });
+      await new Promise((resolve) => setTimeout(resolve));
+      http.expectNone(logo());
+
+      const reload = service.reload();
+      http.expectOne(url).flush(profile);
+      await reload;
+      http.match(ngoUrl()).forEach((request) => request.flush({ name: 'Org', logoUrl: null }));
+      await vi.waitFor(() => expect(active().ngoLogoThumb).toBeNull());
     });
   });
 

@@ -2,10 +2,12 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Injector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { AccountsService } from '../accounts/accounts.service';
+import { AccountThumbnail, AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
+import { ProtectedImageService } from '../http/protected-image.service';
 import { LanguageService } from '../i18n/language.service';
+import { ThumbnailFit, ThumbnailService } from '../images/thumbnail.service';
 import { NgoService } from '../ngo/ngo.service';
 import { UserProfile } from './user-profile';
 import { UsersService } from './users.service';
@@ -25,6 +27,11 @@ export type CurrentUser = UserProfile;
  */
 export type CurrentUserResult = 'ok' | 'unauthorized' | 'unavailable';
 
+/** Розмір мініатюри аватара (px): плитка 44px, з запасом для щільних екранів. */
+const AVATAR_THUMBNAIL_SIZE = 96;
+/** Розмір мініатюри логотипа ГО (px): значок на плитці малий. */
+const LOGO_THUMBNAIL_SIZE = 64;
+
 /**
  * Поточний користувач. Перший запит `GET /api/v1/users/me` одночасно
  * перевіряє, що вхід актуальний (токен чинний, користувач активний), і дає
@@ -39,6 +46,8 @@ export class CurrentUserService {
   private readonly accounts = inject(AccountsService);
   private readonly ngo = inject(NgoService);
   private readonly users = inject(UsersService);
+  private readonly images = inject(ProtectedImageService);
+  private readonly thumbnails = inject(ThumbnailService);
   // Сервіс мови беремо, лише коли в профілі є мова: так профіль можна
   // використовувати й там, де перекладів немає (наприклад, у тестах без
   // TranslateService), і сервіс мови не створюється зайвий раз.
@@ -173,6 +182,7 @@ export class CurrentUserService {
       userId: user.id,
       ...(user.email ? { email: user.email } : {}),
     });
+    void this.syncAvatarThumbnail(session, user.avatarUrl ?? null);
   }
 
   /**
@@ -201,6 +211,70 @@ export class CurrentUserService {
     const ngo = await this.ngo.fetch();
     if (ngo !== null) {
       this.accounts.update(session, { ngoName: ngo.name, ngoLogoUrl: ngo.logoUrl });
+      await this.syncLogoThumbnail(session, ngo.logoUrl);
+    }
+  }
+
+  private account(session: string) {
+    return this.accounts.accounts().find((account) => account.id === session);
+  }
+
+  /**
+   * Мініатюра аватара в знімку акаунта (для плитки у вікні акаунтів, див.
+   * `AccountThumbnail`): робиться, коли аватар зʼявився чи змінився (інша адреса
+   * `?v=…`), знімається, коли аватара нема. Невдача лишає попередню мініатюру.
+   */
+  private async syncAvatarThumbnail(session: string, avatarUrl: string | null): Promise<void> {
+    const thumbnail = await this.thumbnailFor(session, avatarUrl, this.account(session)?.avatarThumb ?? null, AVATAR_THUMBNAIL_SIZE, 'cover');
+    if (thumbnail !== undefined && session === this.auth.sessionId()) {
+      this.accounts.update(session, { avatarThumb: thumbnail });
+    }
+  }
+
+  /** Мініатюра логотипа ГО в знімку акаунта (для значка на плитці), як і в аватара. */
+  private async syncLogoThumbnail(session: string, logoUrl: string | null): Promise<void> {
+    const thumbnail = await this.thumbnailFor(session, logoUrl, this.account(session)?.ngoLogoThumb ?? null, LOGO_THUMBNAIL_SIZE, 'contain');
+    if (thumbnail !== undefined && session === this.auth.sessionId()) {
+      this.accounts.update(session, { ngoLogoThumb: thumbnail });
+    }
+  }
+
+  /**
+   * Нова мініатюра для `url`: `undefined` — міняти нічого не треба (вже зроблена з
+   * цієї адреси чи зробити не вдалося), `null` — зображення нема, мініатюру
+   * прибрати, інакше — нова.
+   */
+  private async thumbnailFor(
+    session: string,
+    url: string | null,
+    current: AccountThumbnail | null,
+    size: number,
+    fit: ThumbnailFit,
+  ): Promise<AccountThumbnail | null | undefined> {
+    if (!url) {
+      return current === null ? undefined : null;
+    }
+    if (current?.url === url) {
+      return undefined;
+    }
+    const server = this.account(session)?.server ?? this.connection.serverUrl();
+    let absolute: string;
+    try {
+      absolute = new URL(url, `${server}/`).toString();
+    } catch {
+      return undefined;
+    }
+    // Зображення беремо з кешу (його вже могли завантажити для рейла) і віддаємо одразу, як зробимо мініатюру.
+    const lease = this.images.acquire(absolute);
+    try {
+      const source = await lease.src;
+      if (!source || session !== this.auth.sessionId()) {
+        return undefined;
+      }
+      const data = await this.thumbnails.create(source, size, fit);
+      return data ? { url, data } : undefined;
+    } finally {
+      lease.release();
     }
   }
 }

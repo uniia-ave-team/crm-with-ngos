@@ -4,6 +4,7 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { ConnectionService } from '../../core/connection/connection.service';
+import { ProtectedImageService } from '../../core/http/protected-image.service';
 import { ProtectedSrcModule } from './protected-src.module';
 
 @Component({
@@ -105,6 +106,61 @@ describe('ProtectedSrcDirective', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(image.getAttribute('src')).toBe('blob:http://localhost/1');
+  });
+
+  describe('the use of the image (it is not freed while it is shown)', () => {
+    /** Користування, яке директива взяла в сервісу, і скільки разів його віддано. */
+    function spyOnLeases() {
+      const images = TestBed.inject(ProtectedImageService);
+      const real = images.acquire.bind(images);
+      const released: string[] = [];
+      vi.spyOn(images, 'acquire').mockImplementation((url: string) => {
+        const lease = real(url);
+        return {
+          src: lease.src,
+          release: () => {
+            released.push(url);
+            lease.release();
+          },
+        };
+      });
+      return released;
+    }
+
+    it('takes the image for the use when it loads a protected file, and gives it back when the element is destroyed', async () => {
+      const released = spyOnLeases();
+      const { fixture, image } = render(logo());
+      http.expectOne(logo()).flush(new Blob(['x']));
+      await vi.waitFor(() => expect(image.getAttribute('src')).toBe('blob:http://localhost/1'));
+      expect(released).toEqual([]);
+
+      fixture.destroy();
+      expect(released).toEqual([logo()]);
+    });
+
+    it('gives the old image back when the address changes, and when it is taken away', async () => {
+      const released = spyOnLeases();
+      const { fixture, host } = render(logo('v1'));
+      http.expectOne(logo('v1')).flush(new Blob(['x']));
+      await Promise.resolve();
+
+      host.url.set(logo('v2'));
+      fixture.detectChanges();
+      expect(released).toEqual([logo('v1')]);
+
+      http.expectOne(logo('v2')).flush(new Blob(['y']));
+      await Promise.resolve();
+      host.url.set(null);
+      fixture.detectChanges();
+      expect(released).toEqual([logo('v1'), logo('v2')]);
+    });
+
+    it('does not take an image for a link that needs no authorization', () => {
+      const released = spyOnLeases();
+      const { fixture } = render('blob:http://localhost/preview');
+      fixture.destroy();
+      expect(released).toEqual([]);
+    });
   });
 
   it('removes src when the address is taken away', async () => {

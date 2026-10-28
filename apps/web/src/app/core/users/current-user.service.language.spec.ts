@@ -17,8 +17,8 @@ describe('CurrentUserService and the interface language', () => {
   const profile = (preferredLanguage: string | null) => ({
     id: 'u1',
     email: 'a@b.org',
-    firstName: 'Олена',
-    lastName: 'Іваненко',
+    firstName: 'Перший',
+    lastName: 'Другий',
     preferredLanguage,
     roles: [],
     customFields: [],
