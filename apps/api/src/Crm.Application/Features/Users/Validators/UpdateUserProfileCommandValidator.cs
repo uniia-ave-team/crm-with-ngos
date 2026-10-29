@@ -29,10 +29,6 @@ public class UpdateUserProfileCommandValidator : AbstractValidator<UpdateUserPro
             .MaximumLength(UserValidationConstants.MaxPatronymicLength)
             .When(x => !string.IsNullOrEmpty(x.Patronymic));
 
-        RuleFor(x => x.InternalPosition)
-            .MaximumLength(UserValidationConstants.MaxInternalPositionLength)
-            .When(x => !string.IsNullOrEmpty(x.InternalPosition));
-
         RuleFor(x => x.PhoneNumber)
             .MaximumLength(UserValidationConstants.MaxPhoneNumberLength)
             .When(x => !string.IsNullOrEmpty(x.PhoneNumber));

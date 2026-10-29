@@ -25,9 +25,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Patronymic)
             .HasMaxLength(UserValidationConstants.MaxPatronymicLength);
 
-        builder.Property(u => u.InternalPosition)
-            .HasMaxLength(UserValidationConstants.MaxInternalPositionLength);
-
         builder.Property(u => u.PhoneNumber)
             .HasMaxLength(UserValidationConstants.MaxPhoneNumberLength);
 

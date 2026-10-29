@@ -253,10 +253,6 @@ namespace Crm.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<string>("InternalPosition")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
