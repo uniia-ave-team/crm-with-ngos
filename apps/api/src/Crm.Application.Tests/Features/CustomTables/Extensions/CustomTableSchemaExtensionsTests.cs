@@ -1,5 +1,6 @@
 using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Features.CustomTables.Extensions;
+using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
@@ -54,7 +55,7 @@ public class CustomTableSchemaExtensionsTests
     }
 
     /// <summary>
-    /// Verifies that single and chained key renames are detected and captured in <see cref="Crm.Domain.Common.SchemaDiffResult.KeyRenames"/>.
+    /// Verifies that single and chained key renames are detected and captured in <see cref="SchemaDiffResult.KeyRenames"/>.
     /// </summary>
     [Fact]
     public void ComputeSchemaDiffWhenFieldKeyIsRenamedShouldCaptureKeyRename()
@@ -127,7 +128,7 @@ public class CustomTableSchemaExtensionsTests
     }
 
     /// <summary>
-    /// Verifies that when an optional existing field becomes required, it is tracked in <see cref="Crm.Domain.Common.SchemaDiffResult.FieldsNeedingBackfill"/>.
+    /// Verifies that when an optional existing field becomes required, it is tracked in <see cref="SchemaDiffResult.FieldsNeedingBackfill"/>.
     /// </summary>
     [Fact]
     public void ComputeSchemaDiffWhenOptionalFieldBecomesRequiredShouldIdentifyBackfillRequirement()
