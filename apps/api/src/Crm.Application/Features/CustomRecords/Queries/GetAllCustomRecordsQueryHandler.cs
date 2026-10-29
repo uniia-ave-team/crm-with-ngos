@@ -30,11 +30,13 @@ public partial class GetAllCustomRecordsQueryHandler(
 
         var customFields = await customFieldRepository.GetByCustomTableIdAsync(request.CustomTableId, cancellationToken);
 
-        // TODO: Add ordering logic to 'Data' property
+        var (resolvedOrderBy, fieldDataType) = customFields.ResolveOrdering(request.OrderBy);
+
         var pagedRecords = await customRecordRepository.GetPagedAsync<CustomRecordDto>(
             customTableId: request.CustomTableId,
             searchTerm: request.SearchTerm,
-            orderBy: request.OrderBy,
+            orderBy: resolvedOrderBy,
+            fieldDataType: fieldDataType,
             sortOrder: request.SortOrder,
             pageNumber: request.PageNumber,
             pageSize: request.PageSize,

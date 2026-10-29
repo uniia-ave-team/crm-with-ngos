@@ -15,11 +15,14 @@ public static class ModelBuilderDbFunctionsExtensions
     private const string TextStoreType = "text";
     private const string TextArrayStoreType = "text[]";
     private const string JsonbExtractPathFunction = "jsonb_extract_path";
+    private const string JsonbExtractPathTextFunction = "jsonb_extract_path_text";
     private const string JsonbBuildObjectFunction = "jsonb_build_object";
     private const string JsonbConcatFunction = "jsonb_concat";
 
     private static readonly RelationalTypeMapping JsonbMapping = new StringTypeMapping(JsonbStoreType, DbType.String);
     private static readonly RelationalTypeMapping TextMapping = new StringTypeMapping(TextStoreType, DbType.String);
+    private static readonly RelationalTypeMapping BoolMapping = new BoolTypeMapping("boolean", DbType.Boolean);
+    private static readonly RelationalTypeMapping IntMapping = new IntTypeMapping("integer", DbType.Int32);
     private static readonly SqlFragmentExpression JsonNullSqlFragment = new($"'null'::{JsonbStoreType}");
 
     /// <summary>
@@ -29,7 +32,128 @@ public static class ModelBuilderDbFunctionsExtensions
     {
         RegisterJsonbApplyPatch(modelBuilder);
 
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathText), TextStoreType, typeof(string));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathNumber), "numeric", typeof(decimal?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathBoolean), "boolean", typeof(bool?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDate), "date", typeof(DateOnly?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDateTime), "timestamp with time zone", typeof(DateTime?));
+
         return modelBuilder;
+    }
+
+    private static void RegisterJsonbExtractPath(
+        ModelBuilder modelBuilder,
+        string methodName,
+        string targetStoreType,
+        Type returnType)
+    {
+        var method = typeof(JsonbFunctionsExtensions).GetMethod(
+            methodName,
+            [typeof(JsonObject), typeof(string)])
+            ?? throw new InvalidOperationException($"{methodName} registration failed.");
+
+        Type nonNullableType = Nullable.GetUnderlyingType(returnType) ?? returnType;
+        bool isText = returnType == typeof(string);
+        var targetMapping = isText ? TextMapping : new GenericTypeMapping(targetStoreType, returnType);
+
+        modelBuilder.HasDbFunction(method)
+            .HasStoreType(targetStoreType)
+            .HasParameter("json", p => p.HasStoreType(JsonbStoreType))
+            .HasParameter("key", p => p.HasStoreType(TextStoreType))
+            .HasTranslation(args =>
+            {
+                var typedJson = EnsureTypeMapping(args[0], JsonbMapping);
+                var typedKey = EnsureTypeMapping(args[1], TextMapping);
+
+                var textExtractFunc = new SqlFunctionExpression(
+                    functionName: JsonbExtractPathTextFunction,
+                    arguments: [typedJson, typedKey],
+                    nullable: true,
+                    argumentsPropagateNullability: [true, true],
+                    type: typeof(string),
+                    typeMapping: TextMapping);
+
+                if (isText)
+                {
+                    return textExtractFunc;
+                }
+
+                bool isDate = string.Equals(targetStoreType, "date", StringComparison.OrdinalIgnoreCase);
+                bool isNumeric = string.Equals(targetStoreType, "numeric", StringComparison.OrdinalIgnoreCase);
+                bool isTemporal = string.Equals(targetStoreType, "timestamp with time zone", StringComparison.OrdinalIgnoreCase) || isDate;
+
+                string validCheckStoreType = isDate ? "timestamp with time zone" : targetStoreType;
+
+                SqlExpression isValidFunc = new SqlFunctionExpression(
+                    functionName: "pg_input_is_valid",
+                    arguments: [textExtractFunc, new SqlConstantExpression(validCheckStoreType, TextMapping)],
+                    nullable: true,
+                    argumentsPropagateNullability: [true, true],
+                    type: typeof(bool),
+                    typeMapping: BoolMapping);
+
+                if (isNumeric || isTemporal)
+                {
+                    string exclusionPattern = isNumeric
+                        ? @"^\s*(NaN|[-+]?Infinity|[-+]?inf)\s*$"
+                        : @"^\s*[-+]?Infinity\s*$";
+
+                    var isSpecialValue = new SqlFunctionExpression(
+                        functionName: "regexp_like",
+                        arguments: [
+                            textExtractFunc,
+                            new SqlConstantExpression(exclusionPattern, TextMapping),
+                            new SqlConstantExpression("i", TextMapping)
+                        ],
+                        nullable: true,
+                        argumentsPropagateNullability: [true, true, true],
+                        type: typeof(bool),
+                        typeMapping: BoolMapping);
+
+                    var isNotSpecialValue = new SqlUnaryExpression(
+                        ExpressionType.Not,
+                        isSpecialValue,
+                        typeof(bool),
+                        BoolMapping);
+
+                    isValidFunc = new SqlBinaryExpression(
+                        ExpressionType.AndAlso,
+                        isValidFunc,
+                        isNotSpecialValue,
+                        typeof(bool),
+                        BoolMapping);
+                }
+
+                SqlExpression castExpr;
+                if (isDate)
+                {
+                    var timestamptzMapping = new GenericTypeMapping("timestamp with time zone", typeof(DateTime));
+                    var timestamptzCast = new SqlUnaryExpression(
+                        ExpressionType.Convert,
+                        textExtractFunc,
+                        typeof(DateTime),
+                        timestamptzMapping);
+
+                    castExpr = new SqlUnaryExpression(
+                        ExpressionType.Convert,
+                        timestamptzCast,
+                        nonNullableType,
+                        targetMapping);
+                }
+                else
+                {
+                    castExpr = new SqlUnaryExpression(
+                        ExpressionType.Convert,
+                        textExtractFunc,
+                        nonNullableType,
+                        targetMapping);
+                }
+
+                return new CaseExpression(
+                    operand: null,
+                    whenClauses: [new CaseWhenClause(isValidFunc, castExpr)],
+                    elseResult: new SqlConstantExpression(null, returnType, targetMapping));
+            });
     }
 
     private static void RegisterJsonbApplyPatch(ModelBuilder modelBuilder)
@@ -228,5 +352,13 @@ public static class ModelBuilderDbFunctionsExtensions
                 SqlConstantExpression constantExpr => new SqlConstantExpression(constantExpr.Value, constantExpr.Type, fallbackMapping),
                 _ => expression,
             };
+    }
+
+    private sealed class GenericTypeMapping(string storeType, Type clrType) : RelationalTypeMapping(new RelationalTypeMappingParameters(
+        new CoreTypeMappingParameters(clrType),
+        storeType))
+    {
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new GenericTypeMapping(parameters.StoreType, parameters.CoreParameters.ClrType);
     }
 }

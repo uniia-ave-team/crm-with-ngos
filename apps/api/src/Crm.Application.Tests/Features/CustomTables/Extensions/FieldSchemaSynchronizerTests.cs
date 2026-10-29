@@ -223,23 +223,23 @@ public class FieldSchemaSynchronizerTests
         var dtoOne = new UpdateCustomFieldDto(fieldOneId, "Mutated One", "field_one", FieldDataType.Text, false, 0);
         var dtoTwo = new UpdateCustomFieldDto(fieldTwoId, "Mutated Two", "field_two", FieldDataType.Text, false, 1);
 
-        // Act & Assert
-        Should.Throw<InvalidOperationException>(() =>
-            FieldSchemaSynchronizer.Reconcile(
-                [fieldOne, fieldTwo],
-                [dtoOne, dtoTwo],
-                id => new EntityNotFoundException<CustomField>(id),
-                createEntity: d => new CustomField(),
-                updateEntity: (e, d) => e.Name = d.Name,
-                onMatched: (e, d) =>
+        // Act
+        var act = () => FieldSchemaSynchronizer.Reconcile(
+            [fieldOne, fieldTwo],
+            [dtoOne, dtoTwo],
+            id => new EntityNotFoundException<CustomField>(id),
+            createEntity: d => new CustomField(),
+            updateEntity: (e, d) => e.Name = d.Name,
+            onMatched: (e, d) =>
+            {
+                if (e.Key == "field_two")
                 {
-                    if (e.Key == "field_two")
-                    {
-                        throw new InvalidOperationException("Validation failed on second field.");
-                    }
-                }));
+                    throw new InvalidOperationException("Validation failed on second field.");
+                }
+            });
 
-        // Assert: fieldOne was NOT mutated even though it was inspected first
+        // Assert
+        Should.Throw<InvalidOperationException>(act);
         fieldOne.Name.ShouldBe("Original One");
         fieldTwo.Name.ShouldBe("Original Two");
     }

@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces;
 using FluentValidation;
 
@@ -23,7 +24,8 @@ public partial class FieldValidationRules<TField> : AbstractValidator<TField>
         RuleFor(x => x.Key)
             .NotEmpty()
             .MaximumLength(CustomFieldValidationConstants.MaxKeyLength)
-            .Matches(KeyRegex()).WithMessage("Key must be snake_case.");
+            .Matches(KeyRegex()).WithMessage("Key must be snake_case.")
+            .Must(k => !CustomFieldExtensions.IsReservedKey(k)).WithMessage("Key cannot be a reserved entity property name.");
 
         RuleFor(x => x.DataType)
             .IsInEnum();

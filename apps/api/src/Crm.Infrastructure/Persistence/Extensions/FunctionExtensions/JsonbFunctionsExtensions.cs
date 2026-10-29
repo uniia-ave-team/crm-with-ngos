@@ -26,6 +26,36 @@ public static class JsonbFunctionsExtensions
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
+    /// Extracts a scalar text value from a JSONB document at the specified property key.
+    /// </summary>
+    public static string? JsonbExtractPathText(JsonObject json, string key)
+        => throw new NotSupportedException(ExceptionMessage);
+
+    /// <summary>
+    /// Extracts a numeric value from a JSONB document and casts it to numeric in SQL queries.
+    /// </summary>
+    public static decimal? JsonbExtractPathNumber(JsonObject json, string key)
+        => throw new NotSupportedException(ExceptionMessage);
+
+    /// <summary>
+    /// Extracts a boolean value from a JSONB document and casts it to boolean in SQL queries.
+    /// </summary>
+    public static bool? JsonbExtractPathBoolean(JsonObject json, string key)
+        => throw new NotSupportedException(ExceptionMessage);
+
+    /// <summary>
+    /// Extracts a date value (YYYY-MM-DD) from a JSONB document and casts it to date in SQL queries.
+    /// </summary>
+    public static DateOnly? JsonbExtractPathDate(JsonObject json, string key)
+        => throw new NotSupportedException(ExceptionMessage);
+
+    /// <summary>
+    /// Extracts a date/time value from a JSONB document and casts it to timestamp with time zone in SQL queries.
+    /// </summary>
+    public static DateTime? JsonbExtractPathDateTime(JsonObject json, string key)
+        => throw new NotSupportedException(ExceptionMessage);
+
+    /// <summary>
     /// Builds an EF Core compatible update expression from SchemaDiffResult.
     /// Returns null if no schema changes are present in diff.
     /// </summary>

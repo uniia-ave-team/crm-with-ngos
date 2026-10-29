@@ -32,5 +32,7 @@ public class CustomRecordConfiguration : IEntityTypeConfiguration<CustomRecord>
 
         builder.HasIndex(CustomRecordConstants.SearchVectorPropertyName)
             .HasMethod(IndexMethodGin);
+
+        builder.HasIndex(r => new { r.CustomTableId, r.Id });
     }
 }

@@ -82,11 +82,11 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CustomTableId");
-
                     b.HasIndex("SearchVector");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
+
+                    b.HasIndex("CustomTableId", "Id");
 
                     b.ToTable("CustomRecord");
                 });
