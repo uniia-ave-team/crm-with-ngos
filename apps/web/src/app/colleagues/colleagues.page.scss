@@ -56,6 +56,17 @@ ion-title {
     background: var(--colleagues-add);
   }
 
+  // «Назад»: нейтральна кнопка (не акцентна, як «Додати»).
+  &--back {
+    background: var(--nav-active-bg);
+    color: var(--nav-fg-active);
+  }
+
+  // У шапці бічного вікна: тієї ж висоти, що й хрестик поряд.
+  &--panel {
+    min-height: 40px;
+  }
+
   &:focus-visible {
     outline: 2px solid var(--nav-fg-active);
     outline-offset: 2px;
@@ -188,5 +199,17 @@ ion-title {
 @media (prefers-color-scheme: dark) {
   .badge--teal {
     color: #7fd1c3;
+  }
+}
+
+// Повідомлення у вікні «Ролі» на місці форми редагування (завантаження чи помилка).
+.colleagues__panel-message {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-family: var(--font-menu);
+  font-size: 14px;
+
+  &--error {
+    color: var(--nav-unavailable-icon);
   }
 }

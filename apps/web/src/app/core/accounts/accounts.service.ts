@@ -1,5 +1,7 @@
 import { Injectable, Signal, computed, signal } from '@angular/core';
 
+import { UserRole, sanitizeRoles } from '../users/user-profile';
+
 /** Індекс: впорядкований список `id` акаунтів (JSON-масив рядків). */
 const INDEX_KEY = 'yavir.accounts';
 /** Запис акаунта: `yavir.account.<id>`. */
@@ -66,6 +68,11 @@ export interface StoredAccount {
    * кожній зміні сторінки); порожньо — ще не отримано чи прав нема.
    */
   readonly permissions: readonly string[];
+  /**
+   * Ролі користувача з його профілю (`roles` відповіді `GET /api/v1/users/me`),
+   * оновлюються разом із профілем; порожньо — ще не отримано чи ролей нема.
+   */
+  readonly roles: readonly UserRole[];
   readonly accessToken: string;
   readonly refreshToken: string;
   /**
@@ -124,6 +131,7 @@ export type AccountPatch = Partial<
     | 'avatarThumb'
     | 'ngoLogoThumb'
     | 'permissions'
+    | 'roles'
     | 'accessToken'
     | 'refreshToken'
     | 'tokensIssuedAt'
@@ -234,6 +242,7 @@ export class AccountsService {
       avatarThumb: existing?.avatarThumb ?? null,
       ngoLogoThumb: existing?.ngoLogoThumb ?? null,
       permissions: input.permissions ?? existing?.permissions ?? [],
+      roles: existing?.roles ?? [],
       accessToken: input.accessToken,
       refreshToken: input.refreshToken,
       tokensIssuedAt: now,
@@ -440,6 +449,7 @@ function normalize(account: StoredAccount): StoredAccount {
     permissions: Array.isArray(account.permissions)
       ? account.permissions.filter((permission): permission is string => typeof permission === 'string')
       : [],
+    roles: sanitizeRoles(account.roles),
     tokensIssuedAt: account.tokensIssuedAt ?? 0,
     addedAt: account.addedAt ?? 0,
     lastUsedAt: account.lastUsedAt ?? 0,

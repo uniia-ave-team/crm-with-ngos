@@ -3,6 +3,8 @@ import { TranslateService } from '@ngx-translate/core';
 
 import { PERMISSIONS, hasAnyPermission } from '../core/auth/permissions';
 import { LanguageService } from '../core/i18n/language.service';
+import { RequestFailure } from '../core/http/request-failure';
+import { Role, RoleDetails, RolesService } from '../core/roles/roles.service';
 import { CurrentUserService } from '../core/users/current-user.service';
 import {
   DataTableCellContext,
@@ -13,6 +15,17 @@ import {
 import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
 import { ColleagueAction, ColleagueActionItem } from './colleague-actions/colleague-actions.component';
+import { NewColleague } from './colleague-form/colleague-form.component';
+import { NewRole } from './role-form/role-form.component';
+import { RolesView } from './roles-panel/roles-panel.component';
+
+/** Стан форми редагування ролі: запит ролі (`GET /api/v1/roles/{id}`) і сама роль, коли вона є. */
+export interface RoleEditView {
+  readonly status: 'loading' | 'ready' | 'failed';
+  readonly role: RoleDetails | null;
+  /** Причина невдачі (лише для `failed`). */
+  readonly failure: RequestFailure | null;
+}
 
 type BadgeTone = 'green' | 'teal' | 'gray';
 type DotColor = 'green' | 'blue';
@@ -80,9 +93,12 @@ interface ColleagueRow extends DataTableRow {
  * крапки в кінці рядків відкривають меню дій, у якому кожен пункт має своє
  * право («Змінити права» — `AssignRoleToUser` або `ManageRole`, «Редагувати» —
  * `UpdateUser`, «Скинути пароль» — `CanResetPassword`, «Вимкнути акаунт» —
- * `DisableUser`, «Ввімкнути акаунт» — `UpdateUser`, «Видалити» — `DeleteUser`), а без жодного з них крапок нема; «+» в
- * кінці рядка заголовків — з `Permissions.ViewCustomFields`. Саму вкладку
- * в бічному меню показують лише з `Permissions.ViewUser` (`PrimaryNavComponent`).
+ * `DisableUser`, «Ввімкнути акаунт» — `UpdateUser`, «Видалити» — `DeleteUser`),
+ * а без жодного з них крапок нема; «+» в кінці рядка заголовків — з
+ * `Permissions.ViewCustomFields`. У вікні «Ролі» кнопки «Додати роль»,
+ * «Редагувати» й «Видалити» — з `Permissions.ManageRole` (список ролей видно
+ * всім). Саму вкладку в бічному меню показують лише з `Permissions.ViewUser`
+ * (`PrimaryNavComponent`).
  *
  * Бічне вікно (`app-side-panel`) відкривають кнопки «Ролі» й «Додати» та кожна дія
  * з меню біля трьох крапок (функції-заглушки нижче); що в ньому показувати, ще не
@@ -100,10 +116,13 @@ interface ColleagueRow extends DataTableRow {
 export class ColleaguesPage {
   private readonly translate = inject(TranslateService);
   private readonly language = inject(LanguageService).language;
+  private readonly roles = inject(RolesService);
   private readonly permissions = inject(CurrentUserService).permissions;
 
   /** Може додавати колег (кнопка «Додати»). */
   protected readonly canAdd = computed(() => this.permissions().includes(PERMISSIONS.createUser));
+  /** Може керувати ролями: кнопки «Додати роль», «Редагувати» й «Видалити» у вікні «Ролі». */
+  protected readonly canManageRoles = computed(() => this.permissions().includes(PERMISSIONS.manageRole));
   /** Дії з колегою, доступні користувачеві (пункти меню біля трьох крапок). */
   protected readonly actions = computed<readonly ColleagueActionItem[]>(() =>
     ACTION_RULES.filter((rule) => hasAnyPermission(this.permissions(), rule.requiresAny)),
@@ -115,6 +134,22 @@ export class ColleaguesPage {
   private readonly sidePanel = viewChild(SidePanelComponent);
   /** Що відкрито в бічному вікні (`null` — вікно закрите). */
   protected readonly panel = signal<ColleaguesPanelState | null>(null);
+  /**
+   * Що було відкрито востаннє: зміст вікна лишається, поки воно ховається
+   * (інакше він зникав би ще до кінця анімації закриття).
+   */
+  protected readonly panelContent = signal<ColleaguesPanelKind | null>(null);
+  /** Ролі для бічного вікна «Ролі» (запит іде при кожному його відкритті). */
+  protected readonly rolesView = signal<RolesView>({ status: 'loading', roles: [], failure: null });
+  private rolesLoading = false;
+  /** Що показано у вікні «Ролі»: список, форма нової ролі («Додати роль») чи форма ролі, що редагується. */
+  private readonly rolesMode = signal<'list' | 'add' | 'edit'>('list');
+  /** Форми лише для того, хто може керувати ролями; інакше завжди список. */
+  protected readonly rolesScreen = computed<'list' | 'add' | 'edit'>(() => (this.canManageRoles() ? this.rolesMode() : 'list'));
+  /** Роль, що редагується: запит і її дані для форми. */
+  protected readonly roleEditView = signal<RoleEditView>({ status: 'loading', role: null, failure: null });
+  /** Номер останнього запиту ролі: відповідь на давніший (інша роль чи вже «Назад») ігнорується. */
+  private roleRequest = 0;
   /** Рядок, для якого відкрите меню дій (лишається виділеним, поки меню відкрите); `null` — меню закрите. */
   protected readonly menuRowId = signal<string | null>(null);
   /**
@@ -194,7 +229,91 @@ export class ColleaguesPage {
   /** Відкриває бічне вікно для кнопки шапки чи дії (`userId` — колега, якого стосується дія). */
   protected openPanel(kind: ColleaguesPanelKind, userId: string | null = null): void {
     this.panel.set({ kind, userId });
+    this.panelContent.set(kind);
     this.sidePanel()?.open();
+    if (kind === 'add') {
+      // Форма колеги вибирає ролі зі списку: він такий самий, як у вікні «Ролі».
+      void this.loadRoles();
+    }
+    if (kind === 'roles') {
+      // «Ролі» завжди відкривають на списку, а не на формі, де зупинились минулого разу.
+      this.roleRequest++;
+      this.rolesMode.set('list');
+      void this.loadRoles();
+    }
+  }
+
+  /** «Додати роль» у шапці вікна «Ролі»: замість списку з'являється форма нової ролі. */
+  protected addRole(): void {
+    this.rolesMode.set('add');
+  }
+
+  /** «Назад» у шапці вікна на формі ролі: знову список ролей. */
+  protected backToRoles(): void {
+    this.roleRequest++;
+    this.rolesMode.set('list');
+  }
+
+  /** «Додати» у формі нового колеги. Заглушка: дані поки не надсилаємо. */
+  protected createColleague(colleague: NewColleague): void {
+    console.log(`[ColleaguesPage] Додати колегу: ${colleague.email}, ролей: ${colleague.roleIds.length} (відправку ще не зроблено)`);
+  }
+
+  /** «Додати» у формі нової ролі. Заглушка: дані поки не надсилаємо. */
+  protected createRole(role: NewRole): void {
+    console.log(`[ColleaguesPage] Додати роль: ${role.name} (відправку ще не зроблено)`);
+  }
+
+  /**
+   * «Редагувати» (олівець) біля ролі у вікні «Ролі»: питає роль у сервера
+   * (`GET /api/v1/roles/{id}`) і показує форму, заповнену її назвами. Поки
+   * йде запит чи якщо він не вдався, замість форми — повідомлення.
+   */
+  protected async editRole(role: Role): Promise<void> {
+    const request = ++this.roleRequest;
+    this.roleEditView.set({ status: 'loading', role: null, failure: null });
+    this.rolesMode.set('edit');
+    const result = await this.roles.get(role.id);
+    if (request !== this.roleRequest) {
+      return;
+    }
+    this.roleEditView.set(
+      typeof result === 'string' ? { status: 'failed', role: null, failure: result } : { status: 'ready', role: result, failure: null },
+    );
+  }
+
+  /** «Зберегти» у формі редагування ролі. Заглушка: дані поки не надсилаємо. */
+  protected updateRole(role: RoleDetails, changes: NewRole): void {
+    console.log(`[ColleaguesPage] Зберегти роль ${role.id}: ${changes.name} (відправку ще не зроблено)`);
+  }
+
+  /** «Видалити» (смітник) біля ролі у вікні «Ролі». Заглушка: отримує роль. */
+  protected deleteRole(role: Role): void {
+    console.log(`[ColleaguesPage] Видалити роль: ${role.id} (поки не реалізовано)`);
+  }
+
+  /**
+   * Запит ролей (`GET /api/v1/roles`) при відкритті вікна «Ролі»: старий список
+   * лишається, поки йде оновлення; невдача показує причину (список, що вже є, теж).
+   * Запит, що ще триває, не дублюється.
+   */
+  private async loadRoles(): Promise<void> {
+    if (this.rolesLoading) {
+      return;
+    }
+    this.rolesLoading = true;
+    const previous = this.rolesView().roles;
+    this.rolesView.set({ status: 'loading', roles: previous, failure: null });
+    try {
+      const result = await this.roles.all();
+      this.rolesView.set(
+        typeof result === 'string'
+          ? { status: 'failed', roles: previous, failure: result }
+          : { status: 'ready', roles: result, failure: null },
+      );
+    } finally {
+      this.rolesLoading = false;
+    }
   }
 
   // Заглушки дій з колегою: отримують `id` користувача й відкривають бічне вікно,

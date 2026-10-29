@@ -1,0 +1,49 @@
+<h2 class="colleague-form__title">{{ 'colleagues.colleagueForm.title' | translate }}</h2>
+
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <div class="settings-field">
+    <label class="settings-field__label" for="colleague-form-email">{{ 'colleagues.colleagueForm.email' | translate }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span></label>
+    <input
+      id="colleague-form-email"
+      class="settings-input"
+      type="email"
+      tabindex="0"
+      required
+      autocomplete="off"
+      [value]="email()"
+      (input)="onEmailInput($event)"
+    />
+    @if (emailError(); as errorKey) {
+      <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <fieldset class="colleague-form__roles">
+    <legend class="settings-field__label">{{ 'colleagues.colleagueForm.roles' | translate }}</legend>
+    @if (roles().failure; as failure) {
+      <p class="colleague-form__message colleague-form__message--error" role="alert">{{ 'colleagues.rolesPanel.error.' + failure | translate }}</p>
+    }
+    @if (roles().roles.length > 0) {
+      <div class="colleague-form__choices">
+        @for (role of roles().roles; track role.id) {
+          <button
+            type="button"
+            class="colleague-form__choice"
+            role="checkbox"
+            tabindex="0"
+            [attr.aria-checked]="selected().has(role.id)"
+            (click)="toggle(role.id)"
+          >
+            <app-role-pill [name]="role.name" [active]="selected().has(role.id)" [icon]="selected().has(role.id) ? 'checkmark-circle' : 'ellipse-outline'" />
+          </button>
+        }
+      </div>
+    } @else if (roles().status === 'loading') {
+      <p class="colleague-form__message" role="status">{{ 'colleagues.rolesPanel.loading' | translate }}</p>
+    } @else if (roles().status === 'ready') {
+      <p class="colleague-form__message">{{ 'colleagues.rolesPanel.empty' | translate }}</p>
+    }
+  </fieldset>
+
+  <button type="submit" class="settings-submit" tabindex="0">{{ 'colleagues.colleagueForm.submit' | translate }}</button>
+</form>

@@ -1,14 +1,23 @@
-import { Component, ElementRef, Signal, input, output, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Signal, effect, input, output, signal, viewChild } from '@angular/core';
 
 /**
  * Універсальне висувне бокове вікно: зміст довільний (`ng-content`), праворуч від
  * вмісту сторінки, згори донизу сторінки (поверх її шапки). Закривається кнопкою
- * з хрестиком і клавішею Esc; фокус при відкритті йде на хрестик, а при
+ * з хрестиком, клавішею Esc і кліком будь-де поза вікном (по іншому елементу
+ * інтерфейсу чи порожньому тілу сторінки); фокус при відкритті йде на хрестик, а при
  * закритті повертається на елемент, що його мав.
  *
  *   <button (click)="panel.open()">…</button>
  *   <app-side-panel #panel label="Редагувати подію" (closed)="…">
  *     …будь-який зміст…
+ *   </app-side-panel>
+ *
+ * Зліва в шапці, на одній висоті з хрестиком, стоїть те, що передано з атрибутом
+ * `sidePanelHeader` (наприклад, кнопка дії вікна):
+ *
+ *   <app-side-panel>
+ *     <button sidePanelHeader (click)="add()">Додати</button>
+ *     …зміст…
  *   </app-side-panel>
  *
  * Розміри: на десктопі ширина `width` (за замовчуванням 280px — як у другої
@@ -40,8 +49,29 @@ export class SidePanelComponent {
   readonly isOpen: Signal<boolean> = this.openSignal.asReadonly();
 
   private readonly closeButton = viewChild<ElementRef<HTMLButtonElement>>('closeButton');
+  private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
   /** Елемент, що мав фокус до відкриття: на нього фокус повертається при закритті. */
   private previouslyFocused: HTMLElement | null = null;
+
+  constructor() {
+    // Клік поза вікном закриває його. Слухач стоїть на фазі занурення (capture),
+    // тому спрацьовує до обробників самого кліка: кнопка, що відкриває вікно,
+    // не закриє його одразу ж, а клік по кнопці вікна (її розмітка може
+    // змінитися під час обробки) завжди лишається всередині.
+    effect((onCleanup) => {
+      if (!this.openSignal()) {
+        return;
+      }
+      const onClick = (event: Event) => {
+        const panel = this.panel()?.nativeElement;
+        if (panel && !event.composedPath().includes(panel)) {
+          this.close();
+        }
+      };
+      document.addEventListener('click', onClick, true);
+      onCleanup(() => document.removeEventListener('click', onClick, true));
+    });
+  }
 
   /** Відкриває вікно. */
   open(): void {

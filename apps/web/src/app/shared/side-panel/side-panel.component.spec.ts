@@ -11,6 +11,7 @@ import { SidePanelModule } from './side-panel.module';
   template: `
     <button id="opener" type="button">open</button>
     <app-side-panel #panel [width]="width()" [label]="label()" (opened)="events.push('opened')" (closed)="events.push('closed')">
+      <button sidePanelHeader type="button" class="header-action">дія</button>
       <p class="content">зміст</p>
     </app-side-panel>
   `,
@@ -118,6 +119,73 @@ describe('SidePanelComponent', () => {
     });
   });
 
+  describe('a click outside the panel', () => {
+    function opened() {
+      const ctx = render();
+      ctx.panel.open();
+      ctx.fixture.detectChanges();
+      TestBed.tick();
+      return ctx;
+    }
+
+    it('closes it, when the click is on another element of the page', () => {
+      const { host, panel, opener } = opened();
+      opener.click();
+      expect(panel.isOpen()).toBe(false);
+      expect(host.events).toEqual(['opened', 'closed']);
+    });
+
+    it('closes it, when the click is on the empty body of the page', () => {
+      const { panel } = opened();
+      document.body.click();
+      expect(panel.isOpen()).toBe(false);
+    });
+
+    it('does not close it, when the click is on the content, the button of the header or the cross area', () => {
+      const { fixture, element, panel, aside } = opened();
+      (element.querySelector('.content') as HTMLElement).click();
+      (element.querySelector('.header-action') as HTMLElement).click();
+      aside().click();
+      fixture.detectChanges();
+      expect(panel.isOpen()).toBe(true);
+    });
+
+    it('does not close it at once when the click that opens it is on an element outside', () => {
+      const { fixture, element, panel, host } = render();
+      const opener = element.querySelector('#opener') as HTMLButtonElement;
+      opener.addEventListener('click', () => panel.open());
+      opener.click();
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(panel.isOpen()).toBe(true);
+      expect(host.events).toEqual(['opened']);
+    });
+
+    it('does not close it when the clicked element is removed by the click itself (it stays inside by its path)', () => {
+      const { fixture, element, panel } = opened();
+      const content = element.querySelector('.content') as HTMLElement;
+      content.addEventListener('click', () => content.remove());
+      content.click();
+      fixture.detectChanges();
+      expect(panel.isOpen()).toBe(true);
+    });
+
+    it('is not listened to when the panel is closed, and not any more after it closes', () => {
+      const { fixture, host, panel } = render();
+      document.body.click();
+      expect(host.events).toEqual([]);
+
+      panel.open();
+      fixture.detectChanges();
+      TestBed.tick();
+      panel.close();
+      fixture.detectChanges();
+      TestBed.tick();
+      document.body.click();
+      expect(host.events).toEqual(['opened', 'closed']);
+    });
+  });
+
   describe('the focus', () => {
     it('goes to the close button when the panel opens, and back to the element that had it when the panel closes', async () => {
       const { fixture, element, panel, opener } = render();
@@ -133,6 +201,27 @@ describe('SidePanelComponent', () => {
       fixture.detectChanges();
       expect(document.activeElement).toBe(opener);
       element.remove();
+    });
+  });
+
+  describe('the start of the header row', () => {
+    it('puts what is given with sidePanelHeader to the left of the cross, in the same row', () => {
+      const { element } = render();
+      const header = element.querySelector('.side-panel__header') as HTMLElement;
+      const action = element.querySelector('.header-action') as HTMLElement;
+      const close = element.querySelector('.side-panel__close') as HTMLElement;
+
+      expect(header.contains(action)).toBe(true);
+      expect(header.contains(close)).toBe(true);
+      expect(element.querySelector('.side-panel__header-start')?.contains(action)).toBe(true);
+      // Дія стоїть перед хрестиком у розмітці (зліва).
+      expect(action.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('does not put the rest of the content into the header', () => {
+      const { element } = render();
+      expect(element.querySelector('.side-panel__header')?.contains(element.querySelector('.content'))).toBe(false);
+      expect(element.querySelector('.side-panel__body')?.contains(element.querySelector('.content'))).toBe(true);
     });
   });
 

@@ -52,6 +52,20 @@ describe('CurrentUserService', () => {
     http.expectNone(url);
   });
 
+  it('writes the roles of the profile to the account record in localStorage, and replaces them on the next request', async () => {
+    const roles = [{ id: 'r1', name: 'Перша' }, { id: 'r2', name: 'Друга' }];
+    const stored = () => JSON.parse(localStorage.getItem(`yavir.account.${TestBed.inject(AccountsService).activeId()}`)!);
+    const first = service.ensure();
+    http.expectOne(url).flush({ ...profile, roles });
+    await first;
+    expect(stored().roles).toEqual(roles);
+
+    const next = service.reload();
+    http.expectOne(url).flush({ ...profile, roles: [roles[1]] });
+    await next;
+    expect(stored().roles).toEqual([roles[1]]);
+  });
+
   it('shares one request between simultaneous checks', async () => {
     const first = service.ensure();
     const second = service.ensure();

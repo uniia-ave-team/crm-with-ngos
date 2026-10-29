@@ -432,6 +432,28 @@ describe('AccountsService', () => {
       expect(reopen().active()?.permissions).toEqual([]);
     });
 
+    it('stores the roles in the record, keeps them when the account is added again and starts with none', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      expect(first.roles).toEqual([]);
+
+      service.update(first.id, { roles: [{ id: 'r1', name: 'Перша' }] });
+      expect(record(first.id).roles).toEqual([{ id: 'r1', name: 'Перша' }]);
+
+      service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'a' });
+      expect(reopen().active()?.roles).toEqual([{ id: 'r1', name: 'Перша' }]);
+    });
+
+    it('ignores a damaged list of roles in a record', () => {
+      const damaged = [{ id: 'r1', name: 'Перша' }, { id: 'r2' }, { name: 'Друга' }, { id: 3, name: 'Третя' }, null, 'r4'];
+      localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
+      localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r', roles: damaged }));
+      localStorage.setItem('yavir.activeAccount', 'x');
+      expect(reopen().active()?.roles).toEqual([{ id: 'r1', name: 'Перша' }]);
+
+      localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r', roles: 'r1' }));
+      expect(reopen().active()?.roles).toEqual([]);
+    });
+
     it('copes with a broken index', () => {
       localStorage.setItem('yavir.accounts', 'garbage');
       expect(reopen().accounts()).toEqual([]);

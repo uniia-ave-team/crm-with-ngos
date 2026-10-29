@@ -9,7 +9,7 @@ import { ProtectedImageService } from '../http/protected-image.service';
 import { LanguageService } from '../i18n/language.service';
 import { ThumbnailFit, ThumbnailService } from '../images/thumbnail.service';
 import { NgoService } from '../ngo/ngo.service';
-import { UserProfile } from './user-profile';
+import { UserProfile, sanitizeRoles } from './user-profile';
 import { UsersService } from './users.service';
 
 const API_CURRENT_USER_PATH = '/api/v1/users/me';
@@ -180,6 +180,7 @@ export class CurrentUserService {
       lastName: user.lastName ?? '',
       avatarUrl: user.avatarUrl ?? null,
       userId: user.id,
+      roles: sanitizeRoles(user.roles),
       ...(user.email ? { email: user.email } : {}),
     });
     void this.syncAvatarThumbnail(session, user.avatarUrl ?? null);

@@ -44,8 +44,39 @@
   <app-colleague-actions [items]="actions()" (choose)="onActionChosen($event)" />
 </app-popover>
 
-<!-- Бічне вікно: його відкривають «Ролі», «Додати» та дії з меню; зміст ще не зроблено. -->
-<app-side-panel [label]="'page.colleagues' | translate" (closed)="panel.set(null)"></app-side-panel>
+<!-- Бічне вікно: його відкривають «Ролі», «Додати» та дії з меню; зміст поки є в «Ролей» і «Додати». -->
+<app-side-panel [label]="'page.colleagues' | translate" (closed)="panel.set(null)">
+  @if (panelContent() === 'roles' && rolesScreen() === 'list' && canManageRoles()) {
+    <button sidePanelHeader type="button" class="colleagues__btn colleagues__btn--add colleagues__btn--panel" tabindex="0" (click)="addRole()">
+      <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+      <span>{{ 'colleagues.rolesPanel.add' | translate }}</span>
+    </button>
+  }
+  @if (panelContent() === 'roles' && rolesScreen() !== 'list') {
+    <button sidePanelHeader type="button" class="colleagues__btn colleagues__btn--back colleagues__btn--panel" tabindex="0" (click)="backToRoles()">
+      <ion-icon name="arrow-back-outline" aria-hidden="true"></ion-icon>
+      <span>{{ 'common.back' | translate }}</span>
+    </button>
+  }
+  @if (panelContent() === 'roles' && rolesScreen() === 'add') {
+    <app-role-form (save)="createRole($event)" />
+  }
+  @if (panelContent() === 'roles' && rolesScreen() === 'edit') {
+    @if (roleEditView().role; as editedRole) {
+      <app-role-form [role]="editedRole" (save)="updateRole(editedRole, $event)" />
+    } @else if (roleEditView().failure; as failure) {
+      <p class="colleagues__panel-message colleagues__panel-message--error" role="alert">{{ 'colleagues.roleForm.loadError.' + failure | translate }}</p>
+    } @else {
+      <p class="colleagues__panel-message" role="status">{{ 'colleagues.roleForm.loading' | translate }}</p>
+    }
+  }
+  @if (panelContent() === 'add') {
+    <app-colleague-form [roles]="rolesView()" (save)="createColleague($event)" />
+  }
+  @if (panelContent() === 'roles' && rolesScreen() === 'list') {
+    <app-roles-panel [view]="rolesView()" [canManage]="canManageRoles()" (roleEdit)="editRole($event)" (roleDelete)="deleteRole($event)" />
+  }
+</app-side-panel>
 
 <!-- ПІБ: аватар, імʼя й займенники. -->
 <ng-template #personCell let-row>
