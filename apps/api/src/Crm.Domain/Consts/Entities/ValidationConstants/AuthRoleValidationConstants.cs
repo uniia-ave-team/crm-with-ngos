@@ -1,4 +1,4 @@
-namespace Crm.Domain.Consts.Entities;
+namespace Crm.Domain.Consts.Entities.ValidationConstants;
 
 /// <summary>
 /// Provides validation and configuration constants for AuthRole entities.

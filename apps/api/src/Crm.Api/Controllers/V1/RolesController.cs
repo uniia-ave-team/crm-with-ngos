@@ -6,7 +6,6 @@ using Crm.Application.Dtos.Role.Commands;
 using Crm.Application.Dtos.Role.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
-using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -110,9 +109,7 @@ public class RolesController(IMediator mediator) : ControllerBase
         [FromBody] UpdateRoleRequest request,
         CancellationToken cancellationToken)
     {
-        var command = request.Adapt<UpdateRoleCommand>() with { Id = id };
-
-        await mediator.Send(command, cancellationToken);
+        await mediator.Send(request.ToCommand(id), cancellationToken);
         return NoContent();
     }
 

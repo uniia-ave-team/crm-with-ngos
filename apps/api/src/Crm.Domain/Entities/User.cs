@@ -24,11 +24,6 @@ public class User : BaseEntity
     public string? Patronymic { get; set; }
 
     /// <summary>
-    /// Gets or sets the internal organizational role, title, or position held by the user.
-    /// </summary>
-    public string? InternalPosition { get; set; }
-
-    /// <summary>
     /// Gets or sets the contact phone number of the user.
     /// </summary>
     public string? PhoneNumber { get; set; }
