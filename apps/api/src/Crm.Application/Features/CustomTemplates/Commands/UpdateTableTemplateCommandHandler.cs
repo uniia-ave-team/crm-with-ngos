@@ -1,6 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.CustomTemplates.Commands;
 using Crm.Application.Extensions;
+using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
@@ -36,7 +37,9 @@ public partial class UpdateTableTemplateCommandHandler(
         FieldSchemaSynchronizer.Synchronize(
                     template.Fields,
                     request.Fields,
-                    id => new TemplateFieldNotFoundException(id, template.Id));
+                    id => new TemplateFieldNotFoundException(id, template.Id),
+                    dto => dto.Adapt<TemplateField>(),
+                    (existing, dto) => dto.Adapt(existing));
 
         template.Fields.EnsureValidFieldSchema();
 

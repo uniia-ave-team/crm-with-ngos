@@ -1,4 +1,5 @@
 using Crm.Application.Dtos.CustomTemplates;
+using Crm.Application.Dtos.CustomTemplates.Commands;
 
 namespace Crm.Api.Dtos;
 
@@ -11,4 +12,12 @@ namespace Crm.Api.Dtos;
 public record UpdateTableTemplateRequest(
     string Name,
     string? Description,
-    List<UpdateTemplateFieldDto> Fields);
+    List<UpdateTemplateFieldDto> Fields)
+{
+    /// <summary>
+    /// Maps the request payload to an <see cref="UpdateTableTemplateCommand"/> instance.
+    /// </summary>
+    /// <param name="id">The unique identifier of the table template from the route.</param>
+    public UpdateTableTemplateCommand ToCommand(Guid id) =>
+        new(id, Name, Description, Fields);
+}

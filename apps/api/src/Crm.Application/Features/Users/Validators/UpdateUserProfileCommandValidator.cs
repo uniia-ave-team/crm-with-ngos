@@ -1,5 +1,5 @@
 using Crm.Application.Dtos.User.Commands;
-using Crm.Domain.Consts.Entities;
+using Crm.Domain.Consts.Entities.ValidationConstants;
 using FluentValidation;
 
 namespace Crm.Application.Features.Users.Validators;
@@ -28,10 +28,6 @@ public class UpdateUserProfileCommandValidator : AbstractValidator<UpdateUserPro
         RuleFor(x => x.Patronymic)
             .MaximumLength(UserValidationConstants.MaxPatronymicLength)
             .When(x => !string.IsNullOrEmpty(x.Patronymic));
-
-        RuleFor(x => x.InternalPosition)
-            .MaximumLength(UserValidationConstants.MaxInternalPositionLength)
-            .When(x => !string.IsNullOrEmpty(x.InternalPosition));
 
         RuleFor(x => x.PhoneNumber)
             .MaximumLength(UserValidationConstants.MaxPhoneNumberLength)

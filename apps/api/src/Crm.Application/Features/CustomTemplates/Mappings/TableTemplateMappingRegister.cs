@@ -28,6 +28,7 @@ public class TableTemplateMappingRegister : IRegister
             .Ignore(dest => dest.Template);
 
         config.NewConfig<UpdateTemplateFieldDto, TemplateField>()
+            .Ignore(dest => dest.Id)
             .Ignore(dest => dest.TemplateId)
             .Ignore(dest => dest.Template);
     }

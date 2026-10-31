@@ -1,6 +1,6 @@
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts.Entities;
+using Crm.Domain.Consts.Entities.ValidationConstants;
 using FluentValidation;
 
 namespace Crm.Application.Features.Users.Validators;
