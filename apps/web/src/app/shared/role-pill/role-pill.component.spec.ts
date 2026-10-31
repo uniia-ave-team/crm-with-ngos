@@ -47,6 +47,14 @@ describe('RolePillComponent', () => {
     expect(render('Куратор', false).pill().classList).not.toContain('pill--active');
   });
 
+  it('has a transparent border when it is active, and a colored one when it is not (the size is the same)', () => {
+    const active = getComputedStyle(render('Куратор').pill());
+    const inactive = getComputedStyle(render('Куратор', false).pill());
+    expect(active.borderTopColor).toBe('rgba(0, 0, 0, 0)');
+    expect(inactive.borderTopColor).not.toBe('rgba(0, 0, 0, 0)');
+    expect(active.borderTopWidth).toBe(inactive.borderTopWidth);
+  });
+
   it('follows the name and the state when they change', () => {
     const { fixture, host, pill } = render('Куратор', true);
     host.name.set('Член');

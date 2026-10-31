@@ -128,9 +128,14 @@ describe('RoleFormComponent', () => {
 
     it('does not offer the permissions that everybody has or that are given automatically', () => {
       const all = PERMISSION_GROUPS.flatMap((group) => group.permissions);
-      for (const right of ['ViewNgo', 'CreateNgo', 'ViewLoginPageImages', 'ViewTableTemplate']) {
+      for (const right of ['ViewNgo', 'CreateNgo', 'ViewTableTemplate']) {
         expect(all).not.toContain(`Permissions.${right}`);
       }
+    });
+
+    it('puts the viewing of the login page images together with the editing of the organization', () => {
+      const group = PERMISSION_GROUPS.find((candidate) => candidate.id === 'editNgo');
+      expect(group?.permissions).toContain('Permissions.ViewLoginPageImages');
     });
 
     it('is placed above the button "Add"', () => {

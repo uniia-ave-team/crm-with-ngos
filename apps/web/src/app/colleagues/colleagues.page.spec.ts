@@ -3,14 +3,18 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../assets/i18n/uk.json';
 import { AccountsService } from '../core/accounts/accounts.service';
 import { ConnectionService } from '../core/connection/connection.service';
+import { CurrentUserService } from '../core/users/current-user.service';
+import { UsersService } from '../core/users/users.service';
+import { avatarColor } from '../shared/avatar/avatar-color';
 import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
+import { ColleagueActionsComponent } from './colleague-actions/colleague-actions.component';
 import { ColleaguesPageModule } from './colleagues.module';
 import { ColleaguesPage } from './colleagues.page';
 
@@ -60,6 +64,29 @@ describe('ColleaguesPage', () => {
     // Колонки з шаблонами комірок зʼявляються після першого прогону розмітки.
     fixture.detectChanges();
     return { fixture, element: fixture.nativeElement as HTMLElement };
+  }
+
+  /** Колеги зі сторінки сервера: нейтральні імена, пошта за номером. */
+  const user = (n: number, extra: Record<string, unknown> = {}) => ({
+    id: `user-${n}`,
+    email: `user${n}@example.org`,
+    firstName: `Перший${n}`,
+    lastName: `Колега${n}`,
+    ...extra,
+  });
+  const usersUrl = () => `${TestBed.inject(ConnectionService).serverUrl()}/api/v1/users`;
+  const usersRequest = (page = 1) =>
+    TestBed.inject(HttpTestingController).expectOne((request) => request.url === usersUrl() && request.params.get('PageNumber') === String(page));
+
+  /** Сторінка, на яку сервер уже відповів чотирма колегами (рядки таблиці є). */
+  async function renderLoaded(permissions: string[] = FULL) {
+    const ctx = render(permissions);
+    usersRequest().flush({ items: [1, 2, 3, 4].map((n) => user(n)), hasNextPage: false });
+    await vi.waitFor(() => {
+      ctx.fixture.detectChanges();
+      expect(ctx.element.querySelectorAll('tbody tr')).toHaveLength(4);
+    });
+    return ctx;
   }
 
   const headerButtons = (element: HTMLElement) => Array.from(element.querySelectorAll('ion-header button'));
@@ -142,33 +169,200 @@ describe('ColleaguesPage', () => {
       ]);
     });
 
-    it('draws the rows with the avatar, the name with the pronouns, the position and the contacts', () => {
-      const rows = Array.from(render().element.querySelectorAll('tbody tr'));
-      expect(rows.length).toBeGreaterThan(0);
-      for (const row of rows) {
+    it('draws a row for every colleague of the server: the name and the email are theirs, the rest are the placeholders', async () => {
+      const { element } = await renderLoaded();
+      const rows = Array.from(element.querySelectorAll('tbody tr'));
+      rows.forEach((row, index) => {
+        const n = index + 1;
         expect(row.querySelector('app-avatar')).not.toBeNull();
-        expect(row.querySelector('.person__name')?.textContent?.trim()).toBe(uk.colleagues.sample.name);
-        expect(row.querySelector('.person__pronouns')?.textContent?.trim()).toBeTruthy();
-        expect(row.querySelector('.badge')?.textContent?.trim()).toBe(uk.colleagues.sample.badge);
+        expect(row.querySelector('.person__name')?.textContent?.trim()).toBe(`Перший${n} Колега${n}`);
+        expect(row.querySelector('.person__pronouns')?.textContent?.trim()).toBe(uk.common.empty);
         const cells = row.querySelectorAll('td');
-        expect(cells[2].textContent?.trim()).toBe(uk.colleagues.sample.email);
+        expect(cells[2].textContent?.trim()).toBe(`user${n}@example.org`);
         expect(cells[3].textContent?.trim()).toBe(uk.colleagues.sample.phone);
-      }
+      });
     });
 
-    it('draws the lines of the position with a colored dot', () => {
-      const { element } = render();
-      const dots = Array.from(element.querySelectorAll('.position__dot'));
-      expect(dots.length).toBeGreaterThan(0);
-      expect(dots.every((d) => d.classList.contains('position__dot--green') || d.classList.contains('position__dot--blue'))).toBe(true);
-      expect(element.querySelector('.position__line')?.textContent?.trim()).toBe(uk.colleagues.sample.line);
+    describe('uses what the colleague has, so that only the request has to change', () => {
+      const full = {
+        id: 'user-9',
+        email: 'user9@example.org',
+        firstName: 'Перший',
+        lastName: 'Колега',
+        phoneNumber: ' +380000000001 ',
+        country: null,
+        emergencyContact: null,
+        pronouns: 'Займенники колеги',
+        avatarUrl: 'https://cdn.example.org/a.png',
+        roles: [
+          { id: 'r1', name: 'Перша' },
+          { id: 'r2', name: 'Друга' },
+        ],
+      };
+
+      /** Сторінка, для якої сервіс віддає колегу з усіма полями (так, як віддаватиме оновлений запит). */
+      async function renderWith(colleague: Record<string, unknown>) {
+        vi.spyOn(UsersService.prototype, 'list').mockResolvedValue({ items: [colleague as never], hasNextPage: false });
+        const ctx = render();
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(ctx.element.querySelectorAll('tbody tr')).toHaveLength(1);
+        });
+        return ctx;
+      }
+
+      it('shows the pronouns, the phone and the avatar of the colleague, the roles as pills', async () => {
+        const { element } = await renderWith(full);
+        const row = element.querySelector('tbody tr') as HTMLElement;
+        expect(row.querySelector('.person__pronouns')?.textContent?.trim()).toBe('Займенники колеги');
+        expect(row.querySelectorAll('td')[3].textContent?.trim()).toBe('+380000000001');
+        const avatar = row.querySelector('app-avatar') as unknown as { avatarUrl: unknown };
+        expect(avatar).not.toBeNull();
+        expect(Array.from(row.querySelectorAll('.position app-role-pill .pill')).map((p) => p.textContent?.trim())).toEqual(['Перша', 'Друга']);
+      });
+
+      it('keeps the dash for the pronouns and the placeholder of the phone for what is empty, and shows no roles', async () => {
+        const { element } = await renderWith({ ...full, roles: [], pronouns: '  ', phoneNumber: null });
+        const row = element.querySelector('tbody tr') as HTMLElement;
+        expect(row.querySelector('.person__pronouns')?.textContent?.trim()).toBe(uk.common.empty);
+        expect(row.querySelectorAll('td')[3].textContent?.trim()).toBe(uk.colleagues.sample.phone);
+        expect(row.querySelector('app-role-pill')).toBeNull();
+      });
+
+      it.each([
+        [2, uk.settings.personal.pronounShe],
+        [1, uk.settings.personal.pronounHe],
+        [3, uk.settings.personal.pronounThey],
+      ])('shows the words of the category %i, not the text, when there is a category', async (category, words) => {
+        const { element } = await renderWith({ ...full, pronounCategory: category, pronouns: 'Текст, якого не видно' });
+        expect(element.querySelector('.person__pronouns')?.textContent?.trim()).toBe(words);
+      });
+
+      it('shows the own text of the colleague when there is no category ("other" in the profile)', async () => {
+        const { element } = await renderWith({ ...full, pronounCategory: null, pronouns: ' Власні займенники ' });
+        expect(element.querySelector('.person__pronouns')?.textContent?.trim()).toBe('Власні займенники');
+      });
+
+      it.each([
+        ['there is neither a category nor a text', { pronounCategory: null, pronouns: null }],
+        ['the text is only spaces', { pronounCategory: null, pronouns: '   ' }],
+        ['the category is not one of the known ones and there is no text', { pronounCategory: 9, pronouns: null }],
+      ])('shows a dash when %s', async (_name, pronouns) => {
+        const { element } = await renderWith({ ...full, ...pronouns });
+        expect(element.querySelector('.person__pronouns')?.textContent?.trim()).toBe(uk.common.empty);
+      });
+    });
+
+    it('colors the avatar of a colleague without a picture like the avatar of that person is colored everywhere: by the names and the organization of the user', async () => {
+      const accounts = TestBed.inject(AccountsService);
+      const { fixture, element } = render();
+      accounts.update(accounts.activeId()!, { ngoName: 'Організація' });
+      usersRequest().flush({ items: [user(1)], hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelectorAll('tbody tr')).toHaveLength(1);
+      });
+
+      const swatch = document.createElement('span');
+      swatch.style.backgroundColor = avatarColor('Перший1', 'Колега1', 'Організація') ?? '';
+      const avatar = element.querySelector('tbody .avatar') as HTMLElement;
+      expect(swatch.style.backgroundColor).not.toBe('');
+      expect(avatar.style.backgroundColor).toBe(swatch.style.backgroundColor);
+    });
+
+    it('puts the placeholders of the name and the email in place of those that are empty', async () => {
+      const { fixture, element } = render();
+      usersRequest().flush({ items: [user(1, { firstName: ' ', lastName: '', email: '' })], hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelectorAll('tbody tr')).toHaveLength(1);
+      });
+      expect(element.querySelector('.person__name')?.textContent?.trim()).toBe(uk.colleagues.sample.name);
+      expect(element.querySelectorAll('tbody td')[2].textContent?.trim()).toBe(uk.colleagues.sample.email);
+    });
+
+    describe('the column "Position" (the roles of the colleague)', () => {
+      const pillsOf = (row: Element) => Array.from(row.querySelectorAll('.position app-role-pill .pill')).map((p) => p.textContent?.trim());
+      const colleague = (n: number, roles: { id: string; name: string }[]) => ({
+        id: `user-${n}`,
+        email: `user${n}@example.org`,
+        firstName: `Перший${n}`,
+        lastName: `Колега${n}`,
+        phoneNumber: null,
+        country: null,
+        emergencyContact: null,
+        pronouns: null,
+        pronounCategory: null,
+        avatarUrl: null,
+        roles,
+      });
+
+      /** Сторінка, для якої сервіс віддає колег із такими ролями (так, як віддаватиме оновлений запит). */
+      async function renderWithRoles(...roleLists: { id: string; name: string }[][]) {
+        vi.spyOn(UsersService.prototype, 'list').mockResolvedValue({
+          items: roleLists.map((roles, index) => colleague(index + 1, roles)),
+          hasNextPage: false,
+        });
+        const ctx = render();
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(ctx.element.querySelectorAll('tbody tr')).toHaveLength(roleLists.length);
+        });
+        return ctx;
+      }
+      const ROLES = [
+        { id: 'r1', name: 'Перша' },
+        { id: 'r2', name: 'Друга' },
+        { id: 'r3', name: 'Третя' },
+      ];
+
+      it('shows the roles of every colleague as the same pills as the list of "Roles" (app-role-pill, filled)', async () => {
+        const { element } = await renderWithRoles(ROLES, [ROLES[1]]);
+        const rows = Array.from(element.querySelectorAll('tbody tr'));
+        expect(rows.map((row) => pillsOf(row))).toEqual([['Перша', 'Друга', 'Третя'], ['Друга']]);
+        expect(element.querySelectorAll('tbody .pill--active')).toHaveLength(4);
+      });
+
+      it('shows no pills for a colleague without roles (there are no placeholder roles)', async () => {
+        const { element } = await renderLoaded();
+        expect(element.querySelectorAll('tbody app-role-pill')).toHaveLength(0);
+        expect(element.querySelectorAll('tbody .position__roles').length).toBe(4);
+      });
+
+      it('puts the pills of one colleague side by side, wrapping to the next line when they do not fit', async () => {
+        const { element } = await renderWithRoles(ROLES);
+        const cell = element.querySelector('tbody .position__roles') as HTMLElement;
+        const style = getComputedStyle(cell);
+        expect(style.display).toBe('flex');
+        expect(style.flexDirection).not.toBe('column');
+        expect(style.flexWrap).toBe('wrap');
+      });
+
+      it('keeps the lines "project — role" with a colored dot under the pills', async () => {
+        const { element } = await renderWithRoles(ROLES);
+        const rows = Array.from(element.querySelectorAll('tbody tr'));
+        expect(rows.map((row) => row.querySelectorAll('.position__line').length)).toEqual([2]);
+        const dots = Array.from(element.querySelectorAll('.position__dot'));
+        expect(dots.every((d) => d.classList.contains('position__dot--green') || d.classList.contains('position__dot--blue'))).toBe(true);
+        expect(element.querySelector('.position__line')?.textContent?.trim()).toBe(uk.colleagues.sample.line);
+        const first = rows[0].querySelector('.position') as HTMLElement;
+        expect(first.firstElementChild?.classList).toContain('position__roles');
+      });
+
+      it('colors the pill by the name of the role, like in the list of "Roles"', async () => {
+        const { element } = await renderWithRoles(ROLES);
+        const pills = Array.from(element.querySelectorAll<HTMLElement>('tbody .position app-role-pill .pill'));
+        const colors = pills.map((pill) => pill.style.getPropertyValue('--pill-base'));
+        expect(colors.every((color) => color !== '')).toBe(true);
+        expect(new Set(colors).size).toBe(3);
+      });
     });
 
     describe('the three dots at the end of the rows', () => {
       const menus = (element: HTMLElement) => element.querySelectorAll('tbody .data-table__menu');
 
-      it('are in every row, as the last cell, with any of the six rights', () => {
-        const { element } = render(['Permissions.UpdateUser']);
+      it('are in every row, as the last cell, with any of the six rights', async () => {
+        const { element } = await renderLoaded(['Permissions.UpdateUser']);
         const rows = element.querySelectorAll('tbody tr');
         expect(menus(element)).toHaveLength(rows.length);
         for (const row of Array.from(rows)) {
@@ -176,19 +370,19 @@ describe('ColleaguesPage', () => {
         }
       });
 
-      it.each(ROW_ACTIONS)('are shown when the user has only %s', (right) => {
-        expect(menus(render([right]).element).length).toBeGreaterThan(0);
+      it.each(ROW_ACTIONS)('are shown when the user has only %s', async (right) => {
+        expect(menus((await renderLoaded([right])).element).length).toBeGreaterThan(0);
       });
 
-      it('are hidden when the user has none of the six rights (the cell stays, empty)', () => {
-        const { element } = render(['Permissions.ViewUser', 'Permissions.CreateUser', 'Permissions.ViewCustomFields', 'Permissions.ViewEmergencyContact']);
+      it('are hidden when the user has none of the six rights (the cell stays, empty)', async () => {
+        const { element } = await renderLoaded(['Permissions.ViewUser', 'Permissions.CreateUser', 'Permissions.ViewCustomFields', 'Permissions.ViewEmergencyContact']);
         expect(menus(element)).toHaveLength(0);
         expect(element.querySelectorAll('tbody tr').length).toBeGreaterThan(0);
         expect(element.querySelector('tbody tr')?.lastElementChild?.classList).toContain('data-table__menu-cell');
       });
 
-      it('appear and disappear together with the rights', () => {
-        const { fixture, element } = render([]);
+      it('appear and disappear together with the rights', async () => {
+        const { fixture, element } = await renderLoaded([]);
         const accounts = TestBed.inject(AccountsService);
         expect(menus(element)).toHaveLength(0);
 
@@ -283,8 +477,8 @@ describe('ColleaguesPage', () => {
         expect(popoverOf(render(ROW_ACTIONS).fixture).isOpen()).toBe(false);
       });
 
-      it('opens under the three dots that were clicked, and keeps that row highlighted', () => {
-        const { fixture, element } = render(ROW_ACTIONS);
+      it('opens under the three dots that were clicked, and keeps that row highlighted', async () => {
+        const { fixture, element } = await renderLoaded(ROW_ACTIONS);
         const button = rowDots(element, 1);
         button.click();
         fixture.detectChanges();
@@ -296,8 +490,8 @@ describe('ColleaguesPage', () => {
         expect(activeRows(element)).toEqual([false, true, false, false]);
       });
 
-      it('moves to another row when other dots are clicked', () => {
-        const { fixture, element } = render(ROW_ACTIONS);
+      it('moves to another row when other dots are clicked', async () => {
+        const { fixture, element } = await renderLoaded(ROW_ACTIONS);
         rowDots(element, 0).click();
         fixture.detectChanges();
         rowDots(element, 2).click();
@@ -312,8 +506,8 @@ describe('ColleaguesPage', () => {
         ['disable', 'disableColleague'],
         ['enable', 'enableColleague'],
         ['delete', 'deleteColleague'],
-      ])('calls the function of the action "%s" (%s) with the id of the colleague of that row', (action, method) => {
-        const { fixture, element } = render(ROW_ACTIONS);
+      ])('calls the function of the action "%s" (%s) with the id of the colleague of that row', async (action, method) => {
+        const { fixture, element } = await renderLoaded(ROW_ACTIONS);
         const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
         const spies = ['changePermissions', 'editColleague', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague'].map(
           (name) => [name, vi.spyOn(page, name)] as const,
@@ -326,12 +520,88 @@ describe('ColleaguesPage', () => {
         for (const [name, spy] of spies) {
           if (name === method) {
             expect(spy).toHaveBeenCalledTimes(1);
-            expect(spy).toHaveBeenCalledWith('sample-3');
+            expect(spy).toHaveBeenCalledWith({ id: 'user-3', name: 'Перший3 Колега3' });
           } else {
             expect(spy).not.toHaveBeenCalled();
           }
         }
         expect(popoverOf(fixture).isOpen()).toBe(false);
+      });
+
+      describe('the row of the user himself', () => {
+        const itemsOf = (fixture: ComponentFixture<ColleaguesPage>) =>
+          (fixture.debugElement.query(By.directive(ColleagueActionsComponent)).componentInstance as ColleagueActionsComponent).items();
+
+        const state = (fixture: ComponentFixture<ColleaguesPage>) => (fixture.componentInstance as unknown as { panel(): unknown }).panel();
+
+        function asUser(id: string) {
+          const accounts = TestBed.inject(AccountsService);
+          accounts.update(accounts.activeId()!, { userId: id });
+        }
+
+        it('has only "Profile settings" (the item of the account menu), none of the other items', async () => {
+          const { fixture, element } = await renderLoaded(ROW_ACTIONS);
+          asUser('user-2');
+          rowDots(element, 1).click();
+          fixture.detectChanges();
+
+          const items = itemsOf(fixture);
+          expect(items).toEqual([{ id: 'profileSettings', labelKey: 'nav.account.settings', icon: 'cog-outline' }]);
+          expect(uk.nav.account.settings).toBe('Налаштування профілю');
+        });
+
+        it('has all the items by the rights for any other row, and again after the own row was opened', async () => {
+          const { fixture, element } = await renderLoaded(ROW_ACTIONS);
+          asUser('user-2');
+          rowDots(element, 0).click();
+          fixture.detectChanges();
+          expect(itemsOf(fixture).map((item) => item.id)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'enable', 'delete']);
+
+          rowDots(element, 1).click();
+          fixture.detectChanges();
+          expect(itemsOf(fixture)).toHaveLength(1);
+
+          rowDots(element, 2).click();
+          fixture.detectChanges();
+          expect(itemsOf(fixture)).toHaveLength(6);
+        });
+
+        it('is known by the id of the loaded profile too (it wins over the snapshot of the account)', async () => {
+          const { fixture, element } = await renderLoaded(ROW_ACTIONS);
+          asUser('user-9');
+          (TestBed.inject(CurrentUserService) as unknown as { userSignal: { set(user: unknown): void } }).userSignal.set({ id: 'user-3' });
+          rowDots(element, 2).click();
+          fixture.detectChanges();
+          expect(itemsOf(fixture).map((item) => item.id)).toEqual(['profileSettings']);
+        });
+
+        it('is not recognized when the id of the user is not known yet (no profile, an empty id in the snapshot)', async () => {
+          const { fixture, element } = await renderLoaded(ROW_ACTIONS);
+          asUser('');
+          rowDots(element, 1).click();
+          fixture.detectChanges();
+          expect(itemsOf(fixture)).toHaveLength(6);
+        });
+
+        it('goes to the settings of the profile when it is chosen: no panel and none of the actions with a colleague', async () => {
+          const { fixture, element } = await renderLoaded(ROW_ACTIONS);
+          asUser('user-2');
+          const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+          const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
+          const spies = ['changePermissions', 'editColleague', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague'].map((name) =>
+            vi.spyOn(page, name),
+          );
+          rowDots(element, 1).click();
+          fixture.detectChanges();
+
+          page['onActionChosen']('profileSettings');
+          fixture.detectChanges();
+
+          expect(navigate).toHaveBeenCalledWith('/settings');
+          expect(spies.every((spy) => !spy.mock.calls.length)).toBe(true);
+          expect(popoverOf(fixture).isOpen()).toBe(false);
+          expect(state(fixture)).toBeNull();
+        });
       });
 
       it('calls nothing when no menu is open (no colleague to act on)', () => {
@@ -343,7 +613,7 @@ describe('ColleaguesPage', () => {
       });
 
       it('closes when an action is chosen, and the row is not highlighted any more', async () => {
-        const { fixture, element } = render(ROW_ACTIONS);
+        const { fixture, element } = await renderLoaded(ROW_ACTIONS);
         rowDots(element, 0).click();
         fixture.detectChanges();
         const popover = popoverOf(fixture);
@@ -380,7 +650,7 @@ describe('ColleaguesPage', () => {
       (headerButtons(element)[0] as HTMLButtonElement).click();
       fixture.detectChanges();
       expect(panelOf(fixture).isOpen()).toBe(true);
-      expect(state(fixture)).toEqual({ kind: 'roles', userId: null });
+      expect(state(fixture)).toEqual({ kind: 'roles', userId: null, userName: null });
     });
 
     it('is called by the button "Add"', () => {
@@ -389,7 +659,7 @@ describe('ColleaguesPage', () => {
       add.click();
       fixture.detectChanges();
       expect(panelOf(fixture).isOpen()).toBe(true);
-      expect(state(fixture)).toEqual({ kind: 'add', userId: null });
+      expect(state(fixture)).toEqual({ kind: 'add', userId: null, userName: null });
     });
 
     it.each([
@@ -399,8 +669,8 @@ describe('ColleaguesPage', () => {
       ['disable', 'disableColleague'],
       ['enable', 'enableColleague'],
       ['delete', 'deleteColleague'],
-    ])('is called by every action of the menu: "%s" opens it for the colleague of that row', (action, method) => {
-      const { fixture, element } = render(FULL_RIGHTS);
+    ])('is called by every action of the menu: "%s" opens it for the colleague of that row', async (action, method) => {
+      const { fixture, element } = await renderLoaded(FULL_RIGHTS);
       (element.querySelectorAll('tbody .data-table__menu')[3] as HTMLButtonElement).click();
       fixture.detectChanges();
 
@@ -409,9 +679,36 @@ describe('ColleaguesPage', () => {
       page['onActionChosen'](action);
       fixture.detectChanges();
 
-      expect(stub).toHaveBeenCalledWith('sample-4');
+      expect(stub).toHaveBeenCalledWith({ id: 'user-4', name: 'Перший4 Колега4' });
       expect(panelOf(fixture).isOpen()).toBe(true);
-      expect(state(fixture)).toEqual({ kind: action, userId: 'sample-4' });
+      expect(state(fixture)).toEqual({ kind: action, userId: 'user-4', userName: 'Перший4 Колега4' });
+    });
+
+    it('gives the name of the colleague from the request to the panel with the id, and null when the colleague has no name', async () => {
+      vi.spyOn(UsersService.prototype, 'list').mockResolvedValue({
+        items: [
+          { id: 'user-1', email: '', firstName: ' ', lastName: '', phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] },
+          { id: 'user-2', email: '', firstName: 'Перший', lastName: 'Колега', phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] },
+        ],
+        hasNextPage: false,
+      });
+      const { fixture, element } = render(FULL_RIGHTS);
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelectorAll('tbody tr')).toHaveLength(2);
+      });
+      const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
+      for (const [index, expected] of [
+        [0, { userId: 'user-1', userName: null }],
+        [1, { userId: 'user-2', userName: 'Перший Колега' }],
+      ] as const) {
+        (element.querySelectorAll('tbody .data-table__menu')[index] as HTMLButtonElement).click();
+        fixture.detectChanges();
+        page['onActionChosen']('edit');
+        fixture.detectChanges();
+        expect(state(fixture)).toEqual({ kind: 'edit', ...expected });
+        panelOf(fixture).close();
+      }
     });
 
     it('opens by each of the six stubs themselves, with the id that was given to them', () => {
@@ -426,8 +723,8 @@ describe('ColleaguesPage', () => {
         ['deleteColleague', 'delete'],
       ];
       for (const [method, kind] of cases) {
-        page[method]('user-1');
-        expect(state(fixture)).toEqual({ kind, userId: 'user-1' });
+        page[method]({ id: 'user-1', name: 'Перший' });
+        expect(state(fixture)).toEqual({ kind, userId: 'user-1', userName: 'Перший' });
         panelOf(fixture).close();
       }
     });
@@ -442,6 +739,301 @@ describe('ColleaguesPage', () => {
       expect(panelOf(fixture).isOpen()).toBe(false);
       expect(state(fixture)).toBeNull();
     });
+  });
+
+  describe('the colleagues from the server (GET /api/v1/users, 20 at a time, the rest while scrolling)', () => {
+    const many = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => user(from + i));
+    const rowsCount = (element: HTMLElement) => element.querySelectorAll('tbody tr').length;
+    const infinite = (element: HTMLElement) => element.querySelector('ion-infinite-scroll') as HTMLElement & { complete: () => void; disabled: boolean };
+    const message = (element: HTMLElement) => element.querySelector('.colleagues__list-message');
+
+    it('asks for the first page with 20 colleagues when the page opens', () => {
+      render();
+      const request = usersRequest(1);
+      expect(request.request.method).toBe('GET');
+      expect(request.request.params.get('PageSize')).toBe('20');
+    });
+
+    it('says that the colleagues are loading while it waits, and shows no rows', () => {
+      const { element } = render();
+      expect(message(element)?.textContent?.trim()).toBe(uk.colleagues.list.loading);
+      expect(rowsCount(element)).toBe(0);
+    });
+
+    it('says that there are none when the server has none', async () => {
+      const { fixture, element } = render();
+      usersRequest().flush({ items: [], hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(message(element)?.textContent?.trim()).toBe(uk.colleagues.list.empty);
+      });
+    });
+
+    it('draws the colleagues, and the message is gone', async () => {
+      const { element } = await renderLoaded();
+      expect(rowsCount(element)).toBe(4);
+      expect(message(element)).toBeNull();
+    });
+
+    it('asks for the next page when the end of the table is reached, and adds it under the rows that are there', async () => {
+      const { fixture, element } = render();
+      usersRequest(1).flush({ items: many(1, 20), hasNextPage: true });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(20);
+      });
+      http().expectNone((request) => request.params.get('PageNumber') === '2');
+
+      const complete = vi.fn();
+      infinite(element).complete = complete;
+      infinite(element).dispatchEvent(new CustomEvent('ionInfinite'));
+      const second = usersRequest(2);
+      expect(second.request.params.get('PageSize')).toBe('20');
+      second.flush({ items: many(21, 25), hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(25);
+      });
+      expect(complete).toHaveBeenCalled();
+      expect(element.querySelectorAll('.person__name')[20].textContent?.trim()).toBe('Перший21 Колега21');
+    });
+
+    it('does not ask again when the server says there are no more pages, but still finishes the scroll', async () => {
+      const { fixture, element } = render();
+      usersRequest(1).flush({ items: many(1, 3), hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(3);
+      });
+      expect(infinite(element).disabled).toBe(true);
+
+      const complete = vi.fn();
+      infinite(element).complete = complete;
+      infinite(element).dispatchEvent(new CustomEvent('ionInfinite'));
+      await vi.waitFor(() => expect(complete).toHaveBeenCalled());
+      http().expectNone((request) => request.url === usersUrl());
+    });
+
+    it('does not show the same colleague twice when the pages overlap', async () => {
+      const { fixture, element } = render();
+      usersRequest(1).flush({ items: many(1, 3), hasNextPage: true });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(3);
+      });
+      infinite(element).dispatchEvent(new CustomEvent('ionInfinite'));
+      usersRequest(2).flush({ items: many(3, 5), hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(5);
+      });
+    });
+
+    it('does not ask twice while a request is in flight', async () => {
+      const { fixture, element } = render();
+      usersRequest(1).flush({ items: many(1, 3), hasNextPage: true });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(3);
+      });
+      infinite(element).dispatchEvent(new CustomEvent('ionInfinite'));
+      infinite(element).dispatchEvent(new CustomEvent('ionInfinite'));
+      usersRequest(2).flush({ items: many(4, 5), hasNextPage: false });
+    });
+
+    it.each([
+      [403, 'forbidden'],
+      [500, 'error'],
+    ] as const)('says why it failed (HTTP %i) with a button to try again, and keeps the rows that are there', async (status, failure) => {
+      const { fixture, element } = render();
+      usersRequest(1).flush({ items: many(1, 3), hasNextPage: true });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(3);
+      });
+      infinite(element).dispatchEvent(new CustomEvent('ionInfinite'));
+      usersRequest(2).flush({}, { status, statusText: 'x' });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(message(element)?.getAttribute('role')).toBe('alert');
+      });
+      expect(message(element)?.textContent).toContain(uk.colleagues.list.error[failure]);
+      expect(rowsCount(element)).toBe(3);
+      expect(infinite(element).disabled).toBe(true);
+
+      (element.querySelector('.colleagues__retry') as HTMLButtonElement).click();
+      usersRequest(2).flush({ items: many(4, 5), hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(5);
+      });
+      expect(message(element)).toBeNull();
+    });
+
+    it('says why the first page failed and can try again', async () => {
+      const { fixture, element } = render();
+      usersRequest(1).flush({}, { status: 403, statusText: 'Forbidden' });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(message(element)?.textContent).toContain(uk.colleagues.list.error.forbidden);
+      });
+      expect(rowsCount(element)).toBe(0);
+
+      (element.querySelector('.colleagues__retry') as HTMLButtonElement).click();
+      usersRequest(1).flush({ items: many(1, 2), hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(2);
+      });
+    });
+
+    describe('sorting by a click on the header (OrderBy and SortOrder of the request)', () => {
+      const heads = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLButtonElement>('thead th .data-table__sort'));
+      const clickHead = (ctx: { fixture: ComponentFixture<ColleaguesPage>; element: HTMLElement }, index: number) => {
+        heads(ctx.element)[index].click();
+        ctx.fixture.detectChanges();
+      };
+      async function loaded(count = 3) {
+        const ctx = render();
+        usersRequest(1).flush({ items: many(1, count), hasNextPage: true });
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(rowsCount(ctx.element)).toBe(count);
+        });
+        return ctx;
+      }
+      const params = (request: ReturnType<typeof usersRequest>) => ({
+        orderBy: request.request.params.get('OrderBy'),
+        sortOrder: request.request.params.get('SortOrder'),
+      });
+
+      it('has a sort button in the four headers of the columns', () => {
+        const { element } = render();
+        expect(heads(element)).toHaveLength(4);
+      });
+
+      it('clears the table and asks for the first page again with OrderBy and SortOrder=asc by the first click', async () => {
+        const ctx = await loaded();
+        clickHead(ctx, 3);
+        expect(rowsCount(ctx.element)).toBe(0);
+        expect(message(ctx.element)?.textContent?.trim()).toBe(uk.colleagues.list.loading);
+        const request = usersRequest(1);
+        expect(request.request.params.get('PageSize')).toBe('20');
+        expect(params(request)).toEqual({ orderBy: 'PhoneNumber', sortOrder: 'asc' });
+        request.flush({ items: many(1, 2), hasNextPage: false });
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(rowsCount(ctx.element)).toBe(2);
+        });
+      });
+
+      it('asks with SortOrder=desc by the second click and without any arguments of the sorting by the third', async () => {
+        const ctx = await loaded();
+        clickHead(ctx, 2);
+        expect(params(usersRequest(1))).toEqual({ orderBy: 'Email', sortOrder: 'asc' });
+
+        clickHead(ctx, 2);
+        expect(params(usersRequest(1))).toEqual({ orderBy: 'Email', sortOrder: 'desc' });
+
+        clickHead(ctx, 2);
+        const third = usersRequest(1);
+        expect(third.request.params.has('OrderBy')).toBe(false);
+        expect(third.request.params.has('SortOrder')).toBe(false);
+      });
+
+      it('takes OrderBy from the column: LastName for the name, nothing for the position, Email, PhoneNumber', async () => {
+        const ctx = render();
+        usersRequest(1).flush({ items: [], hasNextPage: false });
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(message(ctx.element)?.textContent?.trim()).toBe(uk.colleagues.list.empty);
+        });
+        const orderBy: (string | null)[] = [];
+        for (const index of [0, 1, 2, 3]) {
+          clickHead(ctx, index);
+          const request = usersRequest(1);
+          orderBy.push(request.request.params.get('OrderBy'));
+          request.flush({ items: [], hasNextPage: false });
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(message(ctx.element)?.textContent?.trim()).toBe(uk.colleagues.list.empty);
+          });
+        }
+        expect(orderBy).toEqual(['LastName', null, 'Email', 'PhoneNumber']);
+      });
+
+      it('asks without OrderBy and SortOrder for the position (its argument is empty), but still clears the table', async () => {
+        const ctx = await loaded();
+        clickHead(ctx, 1);
+        expect(rowsCount(ctx.element)).toBe(0);
+        const request = usersRequest(1);
+        expect(request.request.params.has('OrderBy')).toBe(false);
+        expect(request.request.params.has('SortOrder')).toBe(false);
+        expect(ctx.element.querySelectorAll('thead .data-table__head--sorted')).toHaveLength(1);
+      });
+
+      it('keeps the sorting for the next pages when the table is scrolled', async () => {
+        const ctx = await loaded();
+        clickHead(ctx, 2);
+        usersRequest(1);
+        clickHead(ctx, 2);
+        usersRequest(1).flush({ items: many(1, 20), hasNextPage: true });
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(rowsCount(ctx.element)).toBe(20);
+        });
+
+        infinite(ctx.element).dispatchEvent(new CustomEvent('ionInfinite'));
+        expect(params(usersRequest(2))).toEqual({ orderBy: 'Email', sortOrder: 'desc' });
+      });
+
+      it('starts from the first page after a new sorting, even if later pages were loaded', async () => {
+        const ctx = await loaded(20);
+        infinite(ctx.element).dispatchEvent(new CustomEvent('ionInfinite'));
+        usersRequest(2).flush({ items: many(21, 25), hasNextPage: true });
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(rowsCount(ctx.element)).toBe(25);
+        });
+
+        clickHead(ctx, 0);
+        expect(rowsCount(ctx.element)).toBe(0);
+        usersRequest(1);
+      });
+
+      it('ignores the answer to the request of the former sorting that comes late', async () => {
+        const ctx = await loaded();
+        clickHead(ctx, 0);
+        const former = usersRequest(1);
+        clickHead(ctx, 0);
+        const current = usersRequest(1);
+
+        current.flush({ items: many(11, 12), hasNextPage: false });
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(rowsCount(ctx.element)).toBe(2);
+        });
+        former.flush({ items: many(1, 5), hasNextPage: false });
+        await Promise.resolve();
+        await Promise.resolve();
+        ctx.fixture.detectChanges();
+        expect(rowsCount(ctx.element)).toBe(2);
+        expect(ctx.element.querySelectorAll('.person__name')[0].textContent?.trim()).toBe('Перший11 Колега11');
+      });
+
+      it('keeps one header selected while the sorting changes from one column to another', async () => {
+        const ctx = await loaded();
+        clickHead(ctx, 0);
+        usersRequest(1);
+        clickHead(ctx, 3);
+        usersRequest(1);
+        const selected = Array.from(ctx.element.querySelectorAll('thead .data-table__head--sorted'));
+        expect(selected).toHaveLength(1);
+        expect(selected[0]).toBe(ctx.element.querySelectorAll('thead th')[3]);
+      });
+    });
+
+    const http = () => TestBed.inject(HttpTestingController);
   });
 
   describe('the roles in the side panel (GET /api/v1/roles)', () => {
@@ -533,7 +1125,7 @@ describe('ColleaguesPage', () => {
       const { fixture } = render(FULL_RIGHTS);
       const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
       for (const method of ['changePermissions', 'editColleague', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague']) {
-        page[method]('user-1');
+        page[method]({ id: 'user-1', name: 'Перший' });
       }
       http.expectNone((request) => request.url === rolesUrl);
     });

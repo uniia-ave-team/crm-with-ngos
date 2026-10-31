@@ -12,8 +12,8 @@ const group = (id: string, ...rights: string[]): PermissionGroup => ({
 
 /**
  * Права, які вибирають у ролі, у порядку форми. Права, що є в усіх чи
- * видаються автоматично (`ViewNgo`, `CreateNgo`, `ViewLoginPageImages`,
- * `ViewTableTemplate`), сюди не входять.
+ * видаються автоматично (`ViewNgo`, `CreateNgo`, `ViewTableTemplate`), сюди не
+ * входять.
  */
 export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
   group('viewUsers', 'ViewUser'),
@@ -26,6 +26,7 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
   group(
     'editNgo',
     'UpdateNgo',
+    'ViewLoginPageImages',
     'CreateLoginPageImages',
     'DeleteLoginPageImages',
     'CreateTableTemplate',

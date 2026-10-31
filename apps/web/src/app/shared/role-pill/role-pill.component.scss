@@ -13,7 +13,7 @@
   gap: 6px;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 4px 14px;
+  padding: 2px 10px;
   border: 1.5px solid var(--pill-base-resolved);
   border-radius: 999px;
   background: transparent;
@@ -23,7 +23,9 @@
   font-weight: 500;
   line-height: 1.4;
 
+  // Рамка залитої плашки прозора (розмір той самий, що в порожньої).
   &--active {
+    border-color: transparent;
     background: var(--pill-base-resolved);
     color: #fff;
   }

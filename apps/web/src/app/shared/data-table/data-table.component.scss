@@ -44,6 +44,61 @@ td:first-child {
   padding-inline-start: 28px;
 }
 
+// Заголовок колонки — кнопка сортування на всю комірку. При наведенні, як і
+// вибраний (відсортований) заголовок, комірка виділяється (як рядок), а справа
+// стоїть іконка: фільтр при наведенні, стрілка вибраного напряму завжди.
+// Виділення — шаром поверх `--nav-bg`, бо `--nav-active-bg` напівпрозорий.
+.data-table__head {
+  position: relative;
+  padding: 0;
+}
+
+.data-table__sort {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 22px 44px 22px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: -2px;
+  }
+}
+
+.data-table__head:first-child {
+  padding-inline-start: 0;
+}
+
+.data-table__head:first-child .data-table__sort {
+  padding-inline-start: 28px;
+}
+
+.data-table__filter {
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 14px;
+  transform: translateY(-50%);
+  font-size: 18px;
+  opacity: 0;
+}
+
+.data-table__head:hover,
+.data-table__head--sorted {
+  background-image: linear-gradient(var(--nav-active-bg), var(--nav-active-bg));
+
+  .data-table__filter {
+    opacity: 1;
+  }
+}
+
 .data-table__menu-col {
   width: 72px;
 }

@@ -3,12 +3,12 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent } from './data-table.component';
+import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent, DataTableSort } from './data-table.component';
 import { DataTableModule } from './data-table.module';
 
 @Component({
   template: `
-    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [highlightedRowId]="highlighted()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" />
+    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [highlightedRowId]="highlighted()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
     <ng-template #custom let-row let-column="column"><b class="custom">{{ column.id }}:{{ row['title'] }}</b></ng-template>
   `,
   imports: [DataTableModule],
@@ -22,6 +22,7 @@ class HostComponent {
   readonly highlighted = signal<string | null>(null);
   readonly opened: DataTableRowMenuEvent[] = [];
   columnAdds = 0;
+  readonly sorts: (DataTableSort | null)[] = [];
   readonly custom = viewChild<TemplateRef<DataTableCellContext>>('custom');
 }
 
@@ -55,6 +56,126 @@ describe('DataTableComponent', () => {
     const { element } = render(base, rows);
     const headers = Array.from(element.querySelectorAll('th')).map((th) => th.textContent?.trim());
     expect(headers).toEqual([uk.colleagues.columns.name, uk.colleagues.columns.email, '']);
+  });
+
+  describe('the filter icon in the headers of the columns', () => {
+    it('is in the header of every column, at the end of the cell, and not in the cell of the menu column', () => {
+      const { element } = render(base, rows);
+      const heads = Array.from(element.querySelectorAll('th'));
+      const withIcon = heads.map((th) => th.querySelector('ion-icon.data-table__filter') !== null);
+      expect(withIcon).toEqual([true, true, false]);
+      for (const th of heads.slice(0, 2)) {
+        expect(th.classList).toContain('data-table__head');
+        expect(th.querySelector('button')?.lastElementChild?.classList).toContain('data-table__filter');
+      }
+    });
+
+    it('is the icon filter-outline, hidden from the screen readers, and adds no text to the header', () => {
+      const { element } = render(base, rows);
+      const icon = element.querySelector('th ion-icon.data-table__filter') as unknown as HTMLElement & { name: string };
+      expect(icon.name).toBe('filter-outline');
+      expect(icon.getAttribute('aria-hidden')).toBe('true');
+      expect(element.querySelector('th')?.textContent?.trim()).toBe(uk.colleagues.columns.name);
+    });
+
+    it('is not shown (and the cell is not highlighted) until the header is hovered, only by the styles', () => {
+      const { element } = render(base, rows);
+      expect(getComputedStyle(element.querySelector('th ion-icon') as HTMLElement).opacity).toBe('0');
+    });
+  });
+
+  describe('sorting by the headers', () => {
+    const sortable: DataTableColumn[] = [
+      { id: 'name', labelKey: 'colleagues.columns.name', orderBy: 'LastName' },
+      { id: 'position', labelKey: 'colleagues.columns.position', orderBy: '' },
+      { id: 'email', labelKey: 'colleagues.columns.email', orderBy: 'Email' },
+    ];
+    const head = (element: HTMLElement, index: number) => element.querySelectorAll('th')[index] as HTMLElement;
+    const button = (element: HTMLElement, index: number) => head(element, index).querySelector('button') as HTMLButtonElement;
+    const iconName = (element: HTMLElement, index: number) =>
+      (head(element, index).querySelector('ion-icon') as unknown as { name: string }).name;
+    const click = (ctx: ReturnType<typeof render>, index: number) => {
+      button(ctx.element, index).click();
+      ctx.fixture.detectChanges();
+    };
+
+    it('has a button in every header of the columns, with a tabindex, and none is sorted at first', () => {
+      const ctx = render(sortable, rows);
+      for (const index of [0, 1, 2]) {
+        expect(button(ctx.element, index).getAttribute('tabindex')).toBe('0');
+        expect(button(ctx.element, index).textContent?.trim()).toBe(head(ctx.element, index).textContent?.trim());
+        expect(head(ctx.element, index).classList).not.toContain('data-table__head--sorted');
+        expect(head(ctx.element, index).hasAttribute('aria-sort')).toBe(false);
+        expect(iconName(ctx.element, index)).toBe('filter-outline');
+      }
+      expect(ctx.host.sorts).toEqual([]);
+    });
+
+    it('sorts from the smallest by the first click: the header stays selected, the icon is the caret down, and the column is given', () => {
+      const ctx = render(sortable, rows);
+      click(ctx, 0);
+      expect(head(ctx.element, 0).classList).toContain('data-table__head--sorted');
+      expect(head(ctx.element, 0).getAttribute('aria-sort')).toBe('ascending');
+      expect(iconName(ctx.element, 0)).toBe('caret-down-outline');
+      expect(ctx.host.sorts).toEqual([{ column: sortable[0], direction: 'asc' }]);
+      expect(ctx.host.sorts[0]?.column.orderBy).toBe('LastName');
+    });
+
+    it('sorts the other way by the second click on the same header: the caret up', () => {
+      const ctx = render(sortable, rows);
+      click(ctx, 0);
+      click(ctx, 0);
+      expect(head(ctx.element, 0).classList).toContain('data-table__head--sorted');
+      expect(head(ctx.element, 0).getAttribute('aria-sort')).toBe('descending');
+      expect(iconName(ctx.element, 0)).toBe('caret-up-outline');
+      expect(ctx.host.sorts[1]).toEqual({ column: sortable[0], direction: 'desc' });
+    });
+
+    it('resets the choice by the third click: the header is not selected, the icon is the filter again, and null is given', () => {
+      const ctx = render(sortable, rows);
+      click(ctx, 0);
+      click(ctx, 0);
+      click(ctx, 0);
+      expect(head(ctx.element, 0).classList).not.toContain('data-table__head--sorted');
+      expect(head(ctx.element, 0).hasAttribute('aria-sort')).toBe(false);
+      expect(iconName(ctx.element, 0)).toBe('filter-outline');
+      expect(ctx.host.sorts[2]).toBeNull();
+    });
+
+    it('starts again from the smallest after the reset', () => {
+      const ctx = render(sortable, rows);
+      for (let i = 0; i < 4; i++) {
+        click(ctx, 0);
+      }
+      expect(ctx.host.sorts.map((sort) => sort?.direction ?? null)).toEqual(['asc', 'desc', null, 'asc']);
+    });
+
+    it('keeps only one header selected: another click selects it and takes the choice from the first, from the first step', () => {
+      const ctx = render(sortable, rows);
+      click(ctx, 0);
+      click(ctx, 0);
+      click(ctx, 2);
+      expect(head(ctx.element, 0).classList).not.toContain('data-table__head--sorted');
+      expect(iconName(ctx.element, 0)).toBe('filter-outline');
+      expect(head(ctx.element, 2).classList).toContain('data-table__head--sorted');
+      expect(iconName(ctx.element, 2)).toBe('caret-down-outline');
+      expect(ctx.element.querySelectorAll('.data-table__head--sorted')).toHaveLength(1);
+      expect(ctx.host.sorts[2]).toEqual({ column: sortable[2], direction: 'asc' });
+    });
+
+    it('selects the column with an empty orderBy too, and gives it as it is', () => {
+      const ctx = render(sortable, rows);
+      click(ctx, 1);
+      expect(head(ctx.element, 1).classList).toContain('data-table__head--sorted');
+      expect(ctx.host.sorts[0]?.column.orderBy).toBe('');
+    });
+
+    it('does not touch the menu column and the plus: no button in the last header cell besides the plus', () => {
+      const { element } = render(sortable, rows);
+      const last = element.querySelectorAll('th')[3] as HTMLElement;
+      expect(last.querySelector('.data-table__sort')).toBeNull();
+      expect(last.querySelector('.data-table__add')).not.toBeNull();
+    });
   });
 
   describe('the plus at the end of the header row', () => {
