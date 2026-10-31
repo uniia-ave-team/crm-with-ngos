@@ -6,7 +6,6 @@ using Crm.Application.Dtos.CustomTemplates.Commands;
 using Crm.Application.Dtos.CustomTemplates.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
-using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -92,7 +91,7 @@ public class TableTemplatesController(IMediator mediator) : ControllerBase
         [FromBody] UpdateTableTemplateRequest request,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.Adapt<UpdateTableTemplateCommand>() with { Id = id }, cancellationToken);
+        await mediator.Send(request.ToCommand(id), cancellationToken);
         return NoContent();
     }
 

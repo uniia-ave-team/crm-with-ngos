@@ -1,6 +1,7 @@
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
 using Crm.Domain.Entities;
+using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories.Generic;
 
 namespace Crm.Domain.Interfaces.Repositories;
@@ -26,6 +27,7 @@ public interface ICustomRecordRepository : IGenericRepository<CustomRecord>
     /// <param name="customTableId">Filter to retrieve records belonging to a specific custom table.</param>
     /// <param name="searchTerm">Optional search term to filter records across all JSON payload fields.</param>
     /// <param name="orderBy">The name of the property to sort by.</param>
+    /// <param name="fieldDataType">Optional data type of the target dynamic field used for correct sorting conversion.</param>
     /// <param name="sortOrder">The sort direction (<see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>). Defaults to <see cref="SortOrderConstants.Ascending"/>.</param>
     /// <param name="pageNumber">The current page number (1-based index).</param>
     /// <param name="pageSize">The number of items per page.</param>
@@ -35,6 +37,7 @@ public interface ICustomRecordRepository : IGenericRepository<CustomRecord>
         Guid customTableId,
         string? searchTerm = null,
         string? orderBy = null,
+        FieldDataType? fieldDataType = null,
         string? sortOrder = SortOrderConstants.Ascending,
         int pageNumber = PaginationConstants.MinPageNumber,
         int pageSize = PaginationConstants.DefaultPageSize,

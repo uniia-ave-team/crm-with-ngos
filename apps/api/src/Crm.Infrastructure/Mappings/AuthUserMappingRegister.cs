@@ -22,7 +22,6 @@ public class AuthUserMappingRegister : IRegister
             .Map(dest => dest.FirstName, src => src.UserProfile.FirstName)
             .Map(dest => dest.LastName, src => src.UserProfile.LastName)
             .Map(dest => dest.Patronymic, src => src.UserProfile.Patronymic)
-            .Map(dest => dest.InternalPosition, src => src.UserProfile.InternalPosition)
             .Map(dest => dest.PhoneNumber, src => src.UserProfile.PhoneNumber)
             .Map(dest => dest.Country, src => src.UserProfile.Country)
             .Map(dest => dest.EmergencyContact, src => src.UserProfile.EmergencyContact)

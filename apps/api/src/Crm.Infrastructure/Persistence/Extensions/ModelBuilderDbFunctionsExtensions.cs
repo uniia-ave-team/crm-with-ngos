@@ -1,6 +1,7 @@
 using System.Data;
 using System.Linq.Expressions;
 using System.Text.Json.Nodes;
+using Crm.Domain.Common;
 using Crm.Infrastructure.Persistence.Extensions.FunctionExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
@@ -12,146 +13,295 @@ public static class ModelBuilderDbFunctionsExtensions
 {
     private const string JsonbStoreType = "jsonb";
     private const string TextStoreType = "text";
+    private const string TextArrayStoreType = "text[]";
     private const string JsonbExtractPathFunction = "jsonb_extract_path";
+    private const string JsonbExtractPathTextFunction = "jsonb_extract_path_text";
     private const string JsonbBuildObjectFunction = "jsonb_build_object";
+    private const string JsonbConcatFunction = "jsonb_concat";
 
-    private static readonly RelationalTypeMapping JsonbMapping = new StringTypeMapping("jsonb", DbType.String);
-    private static readonly RelationalTypeMapping TextMapping = new StringTypeMapping("text", DbType.String);
+    private static readonly RelationalTypeMapping JsonbMapping = new StringTypeMapping(JsonbStoreType, DbType.String);
+    private static readonly RelationalTypeMapping TextMapping = new StringTypeMapping(TextStoreType, DbType.String);
+    private static readonly RelationalTypeMapping BoolMapping = new BoolTypeMapping("boolean", DbType.Boolean);
+    private static readonly RelationalTypeMapping IntMapping = new IntTypeMapping("integer", DbType.Int32);
+    private static readonly SqlFragmentExpression JsonNullSqlFragment = new($"'null'::{JsonbStoreType}");
 
     /// <summary>
     /// Registers custom database function translations for EF Core.
     /// </summary>
-    /// <param name="modelBuilder">The <see cref="ModelBuilder"/> instance.</param>
-    /// <returns>The updated <see cref="ModelBuilder"/> instance for chaining.</returns>
     public static ModelBuilder AddCustomDbFunctions(this ModelBuilder modelBuilder)
     {
-        RegisterJsonbRemove(modelBuilder);
-        RegisterJsonbConcatPayload(modelBuilder);
-        RegisterJsonbRenameKey(modelBuilder);
-        RegisterJsonValuesToText(modelBuilder);
+        RegisterJsonbApplyPatch(modelBuilder);
+
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathText), TextStoreType, typeof(string));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathNumber), "numeric", typeof(decimal?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathBoolean), "boolean", typeof(bool?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDate), "date", typeof(DateOnly?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDateTime), "timestamp with time zone", typeof(DateTime?));
 
         return modelBuilder;
     }
 
-    // TODO: Think about adding GIN index for jsonb columns in migrations.
-    private static void RegisterJsonValuesToText(ModelBuilder modelBuilder)
+    private static void RegisterJsonbExtractPath(
+        ModelBuilder modelBuilder,
+        string methodName,
+        string targetStoreType,
+        Type returnType)
     {
-        var method = typeof(JsonbFunctionsExtensions)
-            .GetMethod(
-                nameof(JsonbFunctionsExtensions.JsonValuesToText),
-                [typeof(JsonObject)])
-            ?? throw new InvalidOperationException("JsonValuesToText registration failed.");
+        var method = typeof(JsonbFunctionsExtensions).GetMethod(
+            methodName,
+            [typeof(JsonObject), typeof(string)])
+            ?? throw new InvalidOperationException($"{methodName} registration failed.");
+
+        Type nonNullableType = Nullable.GetUnderlyingType(returnType) ?? returnType;
+        bool isText = returnType == typeof(string);
+        var targetMapping = isText ? TextMapping : new GenericTypeMapping(targetStoreType, returnType);
 
         modelBuilder.HasDbFunction(method)
-            .HasStoreType(TextStoreType)
-            .HasParameter("data", p => p.HasStoreType(JsonbStoreType))
-            .HasTranslation(args =>
-            {
-                var json = args[0];
-                var typedJson = EnsureTypeMapping(json, JsonbMapping);
-
-                return new SqlUnaryExpression(
-                    operatorType: ExpressionType.Convert,
-                    operand: typedJson,
-                    type: typeof(string),
-                    typeMapping: TextMapping);
-            });
-    }
-
-    private static void RegisterJsonbConcatPayload(ModelBuilder modelBuilder)
-    {
-        var method = typeof(JsonbFunctionsExtensions)
-            .GetMethod(nameof(JsonbFunctionsExtensions.JsonbConcatPayload), [typeof(JsonObject), typeof(string)])
-            ?? throw new InvalidOperationException("JsonbConcatPayload registration failed.");
-
-        modelBuilder.HasDbFunction(method)
-            .HasStoreType(JsonbStoreType)
-            .HasParameter("json", p => p.HasStoreType(JsonbStoreType))
-            .HasParameter("jsonPayload", p => p.HasStoreType(JsonbStoreType))
-            .HasTranslation(args =>
-            {
-                var json = args[0];
-                var payload = args[1];
-
-                var jsonMapping = json.TypeMapping ?? JsonbMapping;
-
-                var typedJson = EnsureTypeMapping(json, jsonMapping);
-                var typedPayload = EnsureTypeMapping(payload, jsonMapping);
-
-                return JsonbConcat(typedJson, typedPayload, jsonMapping);
-            });
-    }
-
-    private static void RegisterJsonbRemove(ModelBuilder modelBuilder)
-    {
-        var jsonbRemoveMethod = typeof(JsonbFunctionsExtensions)
-            .GetMethod(
-                nameof(JsonbFunctionsExtensions.JsonbRemove),
-                [typeof(JsonObject), typeof(string)])
-            ?? throw new InvalidOperationException("JsonbRemove registration failed.");
-
-        modelBuilder.HasDbFunction(jsonbRemoveMethod)
-            .HasStoreType(JsonbStoreType)
+            .HasStoreType(targetStoreType)
             .HasParameter("json", p => p.HasStoreType(JsonbStoreType))
             .HasParameter("key", p => p.HasStoreType(TextStoreType))
             .HasTranslation(args =>
             {
-                var json = args[0];
-                var key = args[1];
+                var typedJson = EnsureTypeMapping(args[0], JsonbMapping);
+                var typedKey = EnsureTypeMapping(args[1], TextMapping);
 
-                var jsonMapping = json.TypeMapping ?? JsonbMapping;
-                var stringMapping = key.TypeMapping ?? TextMapping;
+                var textExtractFunc = new SqlFunctionExpression(
+                    functionName: JsonbExtractPathTextFunction,
+                    arguments: [typedJson, typedKey],
+                    nullable: true,
+                    argumentsPropagateNullability: [true, true],
+                    type: typeof(string),
+                    typeMapping: TextMapping);
 
-                var typedJson = EnsureTypeMapping(json, jsonMapping);
-                var typedKey = EnsureTypeMapping(key, stringMapping);
+                if (isText)
+                {
+                    return textExtractFunc;
+                }
 
-                return new SqlBinaryExpression(
-                    ExpressionType.Subtract,
-                    typedJson,
-                    typedKey,
-                    json.Type,
-                    jsonMapping);
+                bool isDate = string.Equals(targetStoreType, "date", StringComparison.OrdinalIgnoreCase);
+                bool isNumeric = string.Equals(targetStoreType, "numeric", StringComparison.OrdinalIgnoreCase);
+                bool isTemporal = string.Equals(targetStoreType, "timestamp with time zone", StringComparison.OrdinalIgnoreCase) || isDate;
+
+                string validCheckStoreType = isDate ? "timestamp with time zone" : targetStoreType;
+
+                SqlExpression isValidFunc = new SqlFunctionExpression(
+                    functionName: "pg_input_is_valid",
+                    arguments: [textExtractFunc, new SqlConstantExpression(validCheckStoreType, TextMapping)],
+                    nullable: true,
+                    argumentsPropagateNullability: [true, true],
+                    type: typeof(bool),
+                    typeMapping: BoolMapping);
+
+                if (isNumeric || isTemporal)
+                {
+                    string exclusionPattern = isNumeric
+                        ? @"^\s*(NaN|[-+]?Infinity|[-+]?inf)\s*$"
+                        : @"^\s*[-+]?Infinity\s*$";
+
+                    var isSpecialValue = new SqlFunctionExpression(
+                        functionName: "regexp_like",
+                        arguments: [
+                            textExtractFunc,
+                            new SqlConstantExpression(exclusionPattern, TextMapping),
+                            new SqlConstantExpression("i", TextMapping)
+                        ],
+                        nullable: true,
+                        argumentsPropagateNullability: [true, true, true],
+                        type: typeof(bool),
+                        typeMapping: BoolMapping);
+
+                    var isNotSpecialValue = new SqlUnaryExpression(
+                        ExpressionType.Not,
+                        isSpecialValue,
+                        typeof(bool),
+                        BoolMapping);
+
+                    isValidFunc = new SqlBinaryExpression(
+                        ExpressionType.AndAlso,
+                        isValidFunc,
+                        isNotSpecialValue,
+                        typeof(bool),
+                        BoolMapping);
+                }
+
+                SqlExpression castExpr;
+                if (isDate)
+                {
+                    var timestamptzMapping = new GenericTypeMapping("timestamp with time zone", typeof(DateTime));
+                    var timestamptzCast = new SqlUnaryExpression(
+                        ExpressionType.Convert,
+                        textExtractFunc,
+                        typeof(DateTime),
+                        timestamptzMapping);
+
+                    castExpr = new SqlUnaryExpression(
+                        ExpressionType.Convert,
+                        timestamptzCast,
+                        nonNullableType,
+                        targetMapping);
+                }
+                else
+                {
+                    castExpr = new SqlUnaryExpression(
+                        ExpressionType.Convert,
+                        textExtractFunc,
+                        nonNullableType,
+                        targetMapping);
+                }
+
+                return new CaseExpression(
+                    operand: null,
+                    whenClauses: [new CaseWhenClause(isValidFunc, castExpr)],
+                    elseResult: new SqlConstantExpression(null, returnType, targetMapping));
             });
     }
 
-    private static void RegisterJsonbRenameKey(ModelBuilder modelBuilder)
+    private static void RegisterJsonbApplyPatch(ModelBuilder modelBuilder)
     {
-        var jsonbRenameMethod = typeof(JsonbFunctionsExtensions)
-            .GetMethod(
-                nameof(JsonbFunctionsExtensions.JsonbRenameKey),
-                [typeof(JsonObject), typeof(string), typeof(string)])
-            ?? throw new InvalidOperationException("JsonbRenameKey registration failed.");
+        var method = typeof(JsonbFunctionsExtensions).GetMethod(
+            nameof(JsonbFunctionsExtensions.JsonbApplyPatch),
+            [typeof(JsonObject), typeof(string[]), typeof(string[]), typeof(string[]), typeof(string[])])
+            ?? throw new InvalidOperationException("JsonbApplyPatch registration failed.");
 
-        modelBuilder.HasDbFunction(jsonbRenameMethod)
+        var parameters = method.GetParameters().ToDictionary(p => p.Name!, StringComparer.OrdinalIgnoreCase);
+
+        modelBuilder.HasDbFunction(method)
             .HasStoreType(JsonbStoreType)
-            .HasParameter("json", p => p.HasStoreType(JsonbStoreType))
-            .HasParameter("oldKey", p => p.HasStoreType(TextStoreType))
-            .HasParameter("newKey", p => p.HasStoreType(TextStoreType))
+            .HasParameter(parameters["json"].Name!, p => p.HasStoreType(JsonbStoreType))
+            .HasParameter(parameters[nameof(SchemaPatch.DropKeys)].Name!, p => p.HasStoreType(TextArrayStoreType))
+            .HasParameter(parameters[nameof(SchemaPatch.TargetKeys)].Name!, p => p.HasStoreType(TextArrayStoreType))
+            .HasParameter(parameters[nameof(SchemaPatch.SourceKeys)].Name!, p => p.HasStoreType(TextArrayStoreType))
+            .HasParameter(parameters[nameof(SchemaPatch.FallbackJson)].Name!, p => p.HasStoreType(TextArrayStoreType))
             .HasTranslation(args =>
             {
-                var json = args[0];
-                var oldKey = args[1];
-                var newKey = args[2];
+                const int maxPairsPerCall = 50;
 
-                var jsonMapping = json.TypeMapping ?? JsonbMapping;
-                var stringMapping = oldKey.TypeMapping ?? TextMapping;
+                var rawJson = args[0];
+                var jsonMapping = rawJson.TypeMapping ?? JsonbMapping;
+                var typedJson = EnsureTypeMapping(rawJson, jsonMapping);
 
-                var typedJson = EnsureTypeMapping(json, jsonMapping);
-                var typedOldKey = EnsureTypeMapping(oldKey, stringMapping);
-                var typedNewKey = EnsureTypeMapping(newKey, stringMapping);
+                string[] dropKeys = ReadConstArray(args[1]);
+                string[] targetKeys = ReadConstArray(args[2]);
+                string[] sourceKeys = ReadConstArray(args[3]);
+                string[] fallbackJson = ReadConstArray(args[4]);
 
-                var jsonMinusOldKey = new SqlBinaryExpression(
-                    ExpressionType.Subtract,
-                    typedJson,
-                    typedOldKey,
-                    json.Type,
-                    jsonMapping);
+                SqlExpression baseJson = typedJson;
+                if (dropKeys.Length > 0)
+                {
+                    var arraySql = string.Join(", ", dropKeys.Select(k => $"'{k.Replace("'", "''")}'"));
+                    var arrayExpr = new SqlFragmentExpression($"ARRAY[{arraySql}]::{TextArrayStoreType}");
 
-                var extractedValue = ExtractPath(typedJson, typedOldKey, jsonMapping);
-                var newObject = JsonbBuildObject(typedJson, typedNewKey, extractedValue, jsonMapping);
+                    baseJson = new SqlBinaryExpression(
+                        ExpressionType.Subtract,
+                        typedJson,
+                        arrayExpr,
+                        rawJson.Type,
+                        jsonMapping);
+                }
 
-                return JsonbConcat(jsonMinusOldKey, newObject, jsonMapping);
+                if (targetKeys.Length == 0)
+                {
+                    return baseJson;
+                }
+
+                SqlExpression currentResult = baseJson;
+
+                for (int offset = 0; offset < targetKeys.Length; offset += maxPairsPerCall)
+                {
+                    int count = Math.Min(maxPairsPerCall, targetKeys.Length - offset);
+                    var objArgs = new List<SqlExpression>(count * 2);
+
+                    for (int i = offset; i < offset + count; i++)
+                    {
+                        string targetKey = targetKeys[i];
+                        string sourceKey = sourceKeys[i];
+                        string fallback = fallbackJson[i];
+
+                        var targetKeyExpr = new SqlConstantExpression(targetKey, typeof(string), TextMapping);
+                        var valueExpr = BuildValueExpression(typedJson, sourceKey, fallback, jsonMapping);
+
+                        objArgs.Add(targetKeyExpr);
+                        objArgs.Add(valueExpr);
+                    }
+
+                    var buildObjectFunc = new SqlFunctionExpression(
+                        functionName: JsonbBuildObjectFunction,
+                        arguments: objArgs,
+                        nullable: true,
+                        argumentsPropagateNullability: objArgs.Select(_ => false),
+                        type: rawJson.Type,
+                        typeMapping: jsonMapping);
+
+                    currentResult = JsonbConcat(currentResult, buildObjectFunc, jsonMapping);
+                }
+
+                return currentResult;
             });
+    }
+
+    private static SqlExpression BuildValueExpression(
+        SqlExpression jsonLeaf,
+        string sourceKey,
+        string fallbackJson,
+        RelationalTypeMapping jsonMapping)
+    {
+        bool hasSource = !string.IsNullOrEmpty(sourceKey);
+        bool hasFallback = !string.IsNullOrEmpty(fallbackJson);
+
+        if (!hasSource && hasFallback)
+        {
+            return new SqlFragmentExpression($"'{fallbackJson.Replace("'", "''")}'::jsonb");
+        }
+
+        if (hasSource && !hasFallback)
+        {
+            var sourceKeyExpr = new SqlConstantExpression(sourceKey, typeof(string), TextMapping);
+            return ExtractPath(jsonLeaf, sourceKeyExpr, jsonMapping);
+        }
+
+        if (hasSource && hasFallback)
+        {
+            var sourceKeyExpr = new SqlConstantExpression(sourceKey, typeof(string), TextMapping);
+            var extractedValue = ExtractPath(jsonLeaf, sourceKeyExpr, jsonMapping);
+
+            var nullIfFunc = new SqlFunctionExpression(
+                functionName: "NULLIF",
+                arguments: [extractedValue, JsonNullSqlFragment],
+                nullable: true,
+                argumentsPropagateNullability: [false, false],
+                type: typeof(JsonNode),
+                typeMapping: jsonMapping);
+
+            var fallbackExpr = new SqlFragmentExpression($"'{fallbackJson.Replace("'", "''")}'::jsonb");
+
+            return new SqlFunctionExpression(
+                functionName: "COALESCE",
+                arguments: [nullIfFunc, fallbackExpr],
+                nullable: true,
+                argumentsPropagateNullability: [false, false],
+                type: typeof(JsonNode),
+                typeMapping: jsonMapping);
+        }
+
+        return JsonNullSqlFragment;
+    }
+
+    private static string[] ReadConstArray(SqlExpression expression)
+    {
+        if (expression is SqlConstantExpression sqlConst)
+        {
+            if (sqlConst.Value is ConstantExpression { Value: string[] arrFromConst })
+            {
+                return arrFromConst;
+            }
+
+            if (sqlConst.Value is string[] arrDirect)
+            {
+                return arrDirect;
+            }
+        }
+
+        throw new InvalidOperationException($"Patch arrays must be translated as constant string arrays. Received: {expression.GetType().Name}");
     }
 
     private static SqlFunctionExpression JsonbConcat(
@@ -164,29 +314,8 @@ public static class ModelBuilderDbFunctionsExtensions
         var typedPayload = EnsureTypeMapping(payload, mapping);
 
         return new SqlFunctionExpression(
-            functionName: "jsonb_concat",
+            functionName: JsonbConcatFunction,
             arguments: [typedTarget, typedPayload],
-            nullable: true,
-            argumentsPropagateNullability: [false, false],
-            type: target.Type,
-            typeMapping: mapping);
-    }
-
-    private static SqlFunctionExpression JsonbBuildObject(
-        SqlExpression target,
-        SqlExpression key,
-        SqlExpression value,
-        RelationalTypeMapping? jsonbMapping)
-    {
-        var mapping = jsonbMapping ?? target.TypeMapping ?? JsonbMapping;
-        var stringMapping = key.TypeMapping ?? TextMapping;
-
-        var typedKey = EnsureTypeMapping(key, stringMapping);
-        var typedValue = EnsureTypeMapping(value, mapping);
-
-        return new SqlFunctionExpression(
-            functionName: JsonbBuildObjectFunction,
-            arguments: [typedKey, typedValue],
             nullable: true,
             argumentsPropagateNullability: [false, false],
             type: target.Type,
@@ -199,10 +328,8 @@ public static class ModelBuilderDbFunctionsExtensions
         RelationalTypeMapping? jsonbMapping)
     {
         var mapping = jsonbMapping ?? json.TypeMapping ?? JsonbMapping;
-        var stringMapping = key.TypeMapping ?? TextMapping;
-
         var typedJson = EnsureTypeMapping(json, mapping);
-        var typedKey = EnsureTypeMapping(key, stringMapping);
+        var typedKey = EnsureTypeMapping(key, TextMapping);
 
         return new SqlFunctionExpression(
             functionName: JsonbExtractPathFunction,
@@ -225,5 +352,13 @@ public static class ModelBuilderDbFunctionsExtensions
                 SqlConstantExpression constantExpr => new SqlConstantExpression(constantExpr.Value, constantExpr.Type, fallbackMapping),
                 _ => expression,
             };
+    }
+
+    private sealed class GenericTypeMapping(string storeType, Type clrType) : RelationalTypeMapping(new RelationalTypeMappingParameters(
+        new CoreTypeMappingParameters(clrType),
+        storeType))
+    {
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new GenericTypeMapping(parameters.StoreType, parameters.CoreParameters.ClrType);
     }
 }

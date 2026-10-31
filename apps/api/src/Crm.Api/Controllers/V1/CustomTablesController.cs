@@ -6,7 +6,6 @@ using Crm.Application.Dtos.CustomTables.Commands;
 using Crm.Application.Dtos.CustomTables.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
-using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -111,8 +110,7 @@ public class CustomTablesController(IMediator mediator) : ControllerBase
         [FromBody] UpdateCustomTableRequest request,
         CancellationToken cancellationToken)
     {
-        // TODO: Remove mapster dependency and use a dedicated DTO for the command instead of adapting the request.
-        await mediator.Send(request.Adapt<UpdateCustomTableCommand>() with { Id = id }, cancellationToken);
+        await mediator.Send(request.ToCommand(id), cancellationToken);
         return NoContent();
     }
 

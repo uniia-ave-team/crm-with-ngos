@@ -3,6 +3,7 @@ using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces;
+using Mapster;
 
 namespace Crm.Application.Features.CustomTables.Extensions;
 
@@ -39,6 +40,8 @@ public static class CustomTableSchemaExtensions
             table.Fields as IReadOnlyCollection<CustomField> ?? [.. table.Fields],
             incomingFields,
             id => new EntityNotFoundException<CustomField>(id),
+            createEntity: dto => dto.Adapt<CustomField>(),
+            updateEntity: (existing, dto) => dto.Adapt(existing),
             onMatched: (existing, dto) =>
             {
                 ValidateDataTypeChange(existing, dto, hasExistingRecords);

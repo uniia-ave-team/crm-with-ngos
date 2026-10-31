@@ -1,5 +1,5 @@
 using Crm.Application.Dtos.LoginPageImage.Commands;
-using Crm.Domain.Consts.Entities;
+using Crm.Domain.Consts.Entities.ValidationConstants;
 using FluentValidation;
 
 namespace Crm.Application.Features.LoginPageImages.Validators;

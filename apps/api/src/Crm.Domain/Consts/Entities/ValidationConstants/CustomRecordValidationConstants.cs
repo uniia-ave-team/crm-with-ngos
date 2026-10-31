@@ -1,4 +1,4 @@
-namespace Crm.Domain.Consts.Entities;
+namespace Crm.Domain.Consts.Entities.ValidationConstants;
 
 /// <summary>
 /// Provides constants for custom record validation.

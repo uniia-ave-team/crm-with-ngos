@@ -11,7 +11,6 @@ namespace Crm.Application.Dtos.User.Commands;
 /// <param name="FirstName">The updated first name.</param>
 /// <param name="LastName">The updated last name.</param>
 /// <param name="Patronymic">The updated patronymic.</param>
-/// <param name="InternalPosition">The updated internal position or job title within the NGO.</param>
 /// <param name="PhoneNumber">The updated phone number.</param>
 /// <param name="Country">The updated country of residence.</param>
 /// <param name="EmergencyContact">The updated emergency contact information.</param>
@@ -23,7 +22,6 @@ public record UpdateUserProfileCommand(
     string FirstName,
     string LastName,
     string? Patronymic,
-    string? InternalPosition,
     string? PhoneNumber,
     string? Country,
     string? EmergencyContact,

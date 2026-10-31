@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Crm.Application.Dtos.User.Commands;
 
 namespace Crm.Api.Dtos;
 
@@ -11,4 +12,12 @@ namespace Crm.Api.Dtos;
 public record AddCustomUserFieldRequest(
     string Key,
     string Value,
-    [property: JsonRequired] bool IsPublic);
+    [property: JsonRequired] bool IsPublic)
+{
+    /// <summary>
+    /// Maps the request payload to an <see cref="AddUserCustomFieldCommand"/> instance.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the target user from route or context.</param>
+    public AddUserCustomFieldCommand ToCommand(Guid userId) =>
+        new(userId, Key, Value, IsPublic);
+}

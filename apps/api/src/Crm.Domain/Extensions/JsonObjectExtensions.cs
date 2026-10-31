@@ -67,13 +67,14 @@ public static class JsonObjectExtensions
     }
 
     /// <summary>
-    /// Constructs a new <see cref="JsonObject"/> with keys strictly ordered according to the provided sequence of ordered keys.
-    /// Moves nodes directly from <paramref name="payload"/> without performing DeepClone.
+    /// Constructs a new <see cref="JsonObject"/> with keys strictly ordered according to the provided sequence of schema keys.
+    /// Moves nodes directly from <paramref name="payload"/> without performing DeepClone and explicitly populates missing schema keys with <see langword="null"/>.
     /// Intended for read operations (GET endpoints) before sending payloads to the client API.
     /// </summary>
     /// <param name="payload">The source JSON payload object retrieved from the database.</param>
     /// <param name="orderedKeys">The pre-ordered list or array of schema keys.</param>
-    /// <returns>A new <see cref="JsonObject"/> with properties ordered according to <paramref name="orderedKeys"/>.</returns>
+    /// <returns>A new <see cref="JsonObject"/> with properties ordered according to <paramref name="orderedKeys"/>, with missing keys explicitly set to <see langword="null"/>.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="payload"/> or <paramref name="orderedKeys"/> is <see langword="null"/>.</exception>
     public static JsonObject ReorderKeys(
         this JsonObject payload,
         IReadOnlyList<string> orderedKeys)
@@ -86,10 +87,8 @@ public static class JsonObjectExtensions
         for (var i = 0; i < orderedKeys.Count; i++)
         {
             var key = orderedKeys[i];
-            if (payload.Remove(key, out var node))
-            {
-                reorderedData.Add(key, node);
-            }
+            payload.Remove(key, out var node);
+            reorderedData.Add(key, node);
         }
 
         return reorderedData;

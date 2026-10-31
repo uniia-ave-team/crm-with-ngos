@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 
 #nullable disable
 
@@ -18,7 +19,7 @@ namespace Crm.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -58,7 +59,7 @@ namespace Crm.Infrastructure.Migrations
                     b.HasIndex("CustomTableId", "Key")
                         .IsUnique();
 
-                    b.ToTable("CustomField", (string)null);
+                    b.ToTable("CustomField");
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.CustomRecord", b =>
@@ -74,11 +75,20 @@ namespace Crm.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasComputedColumnSql("to_tsvector('simple', \"Data\"::text)", true);
+
                     b.HasKey("Id");
 
-                    b.HasIndex("CustomTableId");
+                    b.HasIndex("SearchVector");
 
-                    b.ToTable("CustomRecord", (string)null);
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
+
+                    b.HasIndex("CustomTableId", "Id");
+
+                    b.ToTable("CustomRecord");
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.CustomTable", b =>
@@ -108,7 +118,7 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasIndex("SourceTemplateId");
 
-                    b.ToTable("CustomTable", (string)null);
+                    b.ToTable("CustomTable");
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.LoginPageImage", b =>
@@ -152,7 +162,7 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Ngo", (string)null);
+                    b.ToTable("Ngo");
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.TableTemplate", b =>
@@ -175,7 +185,7 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TableTemplate", (string)null);
+                    b.ToTable("TableTemplate");
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.TemplateField", b =>
@@ -215,7 +225,7 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasIndex("TemplateId", "Order");
 
-                    b.ToTable("TemplateField", (string)null);
+                    b.ToTable("TemplateField");
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.User", b =>
@@ -242,10 +252,6 @@ namespace Crm.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
-
-                    b.Property<string>("InternalPosition")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -281,7 +287,7 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasIndex("NgoId");
 
-                    b.ToTable("User", (string)null);
+                    b.ToTable("User");
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.UserCustomField", b =>
@@ -311,7 +317,7 @@ namespace Crm.Infrastructure.Migrations
                     b.HasIndex("UserId", "Key")
                         .IsUnique();
 
-                    b.ToTable("UserCustomField", (string)null);
+                    b.ToTable("UserCustomField");
                 });
 
             modelBuilder.Entity("Crm.Infrastructure.Entities.AuthRole", b =>

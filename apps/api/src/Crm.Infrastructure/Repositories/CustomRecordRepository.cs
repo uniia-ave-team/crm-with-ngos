@@ -3,9 +3,10 @@ using System.Text.Json.Nodes;
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
 using Crm.Domain.Entities;
-using Crm.Domain.Extensions;
+using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Extensions;
 using Crm.Infrastructure.Persistence.Extensions.FunctionExtensions;
 using Microsoft.EntityFrameworkCore;
 
@@ -41,6 +42,7 @@ public class CustomRecordRepository(
     /// <param name="customTableId">Filter to retrieve records belonging to a specific custom table.</param>
     /// <param name="searchTerm">Optional search term to filter records across all JSON payload fields.</param>
     /// <param name="orderBy">The name of the property to sort by.</param>
+    /// <param name="fieldDataType">Optional data type of the target dynamic field used for correct sorting conversion.</param>
     /// <param name="sortOrder">The sort direction (<see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>). Defaults to <see cref="SortOrderConstants.Ascending"/>.</param>
     /// <param name="pageNumber">The current page number (1-based index).</param>
     /// <param name="pageSize">The number of items per page.</param>
@@ -50,17 +52,18 @@ public class CustomRecordRepository(
         Guid customTableId,
         string? searchTerm = null,
         string? orderBy = null,
+        FieldDataType? fieldDataType = null,
         string? sortOrder = SortOrderConstants.Ascending,
         int pageNumber = PaginationConstants.MinPageNumber,
         int pageSize = PaginationConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
-        => GetPagedAsync<TResult>(
-            predicate: BuildCustomRecordFilter(searchTerm, customTableId),
-            orderBy: orderBy,
-            sortOrder: sortOrder,
-            pageNumber: pageNumber,
-            pageSize: pageSize,
-            cancellationToken: cancellationToken);
+    {
+        var query = DbSet.AsNoTracking()
+            .FilterByTableAndSearch(customTableId, searchTerm)
+            .OrderByCustomRecord(orderBy, sortOrder, fieldDataType);
+
+        return ToPagedResultAsync<TResult>(query, pageNumber, pageSize, cancellationToken);
+    }
 
     /// <summary>
     /// Asynchronously synchronizes the JSON payload structure for all records belonging to a specified custom table in a single atomic operation.
@@ -76,21 +79,39 @@ public class CustomRecordRepository(
 
         return updateLambda is null
             ? Task.FromResult(0)
-            : DbSet.Where(x => x.CustomTableId == customTableId).ExecuteUpdateAsync(s => s.SetProperty(r => r.Data, updateLambda), cancellationToken);
+            : DbSet
+                .Where(r => r.CustomTableId == customTableId)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.Data, updateLambda), cancellationToken);
     }
 
     /// <summary>
-    /// Builds the filter expression for querying custom records based on search term and table ID.
-    /// Translates JSONB payload cast to SQL text pattern matching in PostgreSQL.
+    /// Applies dynamic ordering to the query. Overrides the default repository implementation
+    /// to support SQL-level sorting on JSONB keys within the <see cref="CustomRecord.Data"/> payload.
     /// </summary>
-    private static Expression<Func<CustomRecord, bool>> BuildCustomRecordFilter(string? searchTerm, Guid customTableId)
-    {
-        return string.IsNullOrWhiteSpace(searchTerm)
-            ? (r => r.CustomTableId == customTableId)
-            : (r => r.CustomTableId == customTableId
-                 && EF.Functions.ILike(
-                     JsonbFunctionsExtensions.JsonValuesToText(r.Data),
-                     searchTerm.ToContainsLikePattern(),
-                     "\\"));
-    }
+    /// <typeparam name="TResult">The projection target type.</typeparam>
+    /// <param name="query">The input queryable sequence.</param>
+    /// <param name="orderBy">The pre-resolved property name or exact JSONB key to sort by.</param>
+    /// <param name="sortOrder">The sort direction specifier.</param>
+    /// <returns>The sorted queryable sequence.</returns>
+    protected override IQueryable<CustomRecord> ApplyOrdering<TResult>(
+        IQueryable<CustomRecord> query,
+        string orderBy,
+        string? sortOrder)
+        => ApplyCustomFieldOrdering<TResult>(query, orderBy, sortOrder, fieldDataType: null);
+
+    /// <summary>
+    /// Applies dynamic sorting to the query based on entity properties or dynamic JSONB keys within <see cref="CustomRecord.Data"/>.
+    /// </summary>
+    /// <typeparam name="TResult">The projection target type.</typeparam>
+    /// <param name="query">The input <see cref="IQueryable{CustomRecord}"/> sequence to be sorted.</param>
+    /// <param name="orderBy">The property name or JSONB key path (e.g., "name", "data.age", "data['age']").</param>
+    /// <param name="sortOrder">The sort direction (<see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>).</param>
+    /// <param name="fieldDataType">The optional target data type used to perform strongly-typed SQL casting for dynamic JSON values.</param>
+    /// <returns>The sorted <see cref="IQueryable{CustomRecord}"/> sequence.</returns>
+    protected virtual IQueryable<CustomRecord> ApplyCustomFieldOrdering<TResult>(
+        IQueryable<CustomRecord> query,
+        string orderBy,
+        string? sortOrder,
+        FieldDataType? fieldDataType)
+        => query.OrderByCustomRecord(orderBy, sortOrder, fieldDataType);
 }

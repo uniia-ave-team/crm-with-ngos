@@ -13,26 +13,29 @@ namespace Crm.Domain.Extensions;
 public static partial class FieldDataTypeExtensions
 {
     /// <summary>
-    /// Resolves the default <see cref="JsonNode"/> value for a field data type based on its requirement status.
+    /// Converts a field data type to its corresponding JSON string literal for backfilling.
     /// </summary>
-    /// <param name="dataType">The field data type.</param>
-    /// <returns>A default <see cref="JsonNode"/> representation or <c>null</c> if the field is optional.</returns>
-    public static JsonNode? GetBackfillValue(this FieldDataType dataType)
+    /// <param name="type">The field data type to convert.</param>
+    /// <returns>A JSON-formatted string representation of the default backfill value.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when the provided <paramref name="type"/> has no defined backfill value.
+    /// </exception>
+    public static string GetBackfillJson(this FieldDataType type) => type switch
     {
         // TODO: Instead we should use default value from the client
-        return dataType switch
-        {
-            FieldDataType.Text => JsonValue.Create(string.Empty),
-            FieldDataType.Number => JsonValue.Create(0),
-            FieldDataType.Boolean => JsonValue.Create(false),
-            FieldDataType.Date => JsonValue.Create("1970-01-01"),
-            FieldDataType.DateTime => JsonValue.Create(DateTimeOffset.UnixEpoch.ToString("O")),
-            FieldDataType.Email => JsonValue.Create("no-reply@example.com"),
-            FieldDataType.Url => JsonValue.Create("https://example.com"),
-            FieldDataType.PhoneNumber => JsonValue.Create("+100000000000"),
-            _ => null,
-        };
-    }
+        FieldDataType.Text => "\"\"",
+        FieldDataType.Number => "0",
+        FieldDataType.Boolean => "false",
+        FieldDataType.Date => "\"1970-01-01\"",
+        FieldDataType.DateTime => $"\"{DateTimeOffset.UnixEpoch:O}\"",
+        FieldDataType.Email => "\"no-reply@example.com\"",
+        FieldDataType.Url => "\"https://example.com\"",
+        FieldDataType.PhoneNumber => "\"+100000000000\"",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(type),
+            type,
+            $"No backfill value defined for data type '{type}'."),
+    };
 
     /// <summary>
     /// Validates whether the provided <see cref="JsonNode"/> matches the expected <see cref="FieldDataType"/>.

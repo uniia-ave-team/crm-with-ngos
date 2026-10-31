@@ -27,5 +27,10 @@ public class CustomTableMappingRegister : IRegister
         config.NewConfig<UpdateCustomTableCommand, CustomTable>()
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.Fields);
+
+        config.NewConfig<UpdateCustomFieldDto, CustomField>()
+            .Ignore(dest => dest.Id)
+            .Ignore(dest => dest.CustomTableId)
+            .Ignore(dest => dest.CustomTable);
     }
 }

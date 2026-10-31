@@ -51,7 +51,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="entity">The entity to create.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation. The task result contains the newly created entity.</returns>
-    public async Task<T> CreateAsync(T entity, CancellationToken cancellationToken = default)
+    public virtual async Task<T> CreateAsync(T entity, CancellationToken cancellationToken = default)
     {
         var entry = await DbSet.AddAsync(entity, cancellationToken);
         return entry.Entity;
@@ -63,7 +63,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="entities">The collection of entities to create.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous save operation.</returns>
-    public Task CreateAsync(IEnumerable<T> entities, CancellationToken cancellationToken = default)
+    public virtual Task CreateAsync(IEnumerable<T> entities, CancellationToken cancellationToken = default)
         => DbSet.AddRangeAsync(entities, cancellationToken);
 
     /// <summary>
@@ -73,7 +73,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public virtual async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var rowsAffected = await DbSet
                     .Where(x => x.Id == id)
@@ -92,7 +92,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The entity with the specified ID.</returns>
     /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
-    public async Task<T> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    public virtual async Task<T> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await DbSet
             .AsNoTracking()
@@ -108,7 +108,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The projected entity DTO with the specified ID.</returns>
     /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
-    public async Task<TResult> GetAsync<TResult>(Guid id, CancellationToken cancellationToken = default)
+    public virtual async Task<TResult> GetAsync<TResult>(Guid id, CancellationToken cancellationToken = default)
     {
         return await DbSet
             .AsNoTracking()
@@ -125,7 +125,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The tracked entity with the specified ID.</returns>
     /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
-    public async Task<T> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
+    public virtual async Task<T> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await DbSet
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
@@ -140,7 +140,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <exception cref="NotFoundException">Thrown if no entity with the specified ID exists.</exception>
-    public async Task EnsureExistsAsync(Guid id, CancellationToken cancellationToken = default)
+    public virtual async Task EnsureExistsAsync(Guid id, CancellationToken cancellationToken = default)
     {
         bool exists = await DbSet
             .AsNoTracking()
@@ -160,7 +160,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <exception cref="EntitiesNotFoundException">Thrown if any entity with the specified ID is not found.</exception>
-    public async Task EnsureAllExistAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+    public virtual async Task EnsureAllExistAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
     {
         var distinctIds = ids.Distinct().ToList();
         if (distinctIds.Count == 0)
@@ -186,7 +186,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A list of all entities.</returns>
-    public async Task<List<T>> GetListAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<List<T>> GetListAsync(CancellationToken cancellationToken = default)
         => await DbSet.AsNoTracking().ToListAsync(cancellationToken);
 
     /// <summary>
@@ -196,7 +196,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A random projected entity.</returns>
     /// <exception cref="NotFoundException">Thrown if no entities exist in the database for this type.</exception>
-    public async Task<TResult> GetRandomAsync<TResult>(CancellationToken cancellationToken = default)
+    public virtual async Task<TResult> GetRandomAsync<TResult>(CancellationToken cancellationToken = default)
     {
         return await DbSet
             .AsNoTracking()
@@ -220,7 +220,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="pageSize">The number of items per page.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A paginated result containing the projected items and metadata.</returns>
-    public async Task<Domain.Common.PagedResult<TResult>> GetPagedAsync<TResult>(
+    public virtual Task<Domain.Common.PagedResult<TResult>> GetPagedAsync<TResult>(
         Expression<Func<T, bool>>? predicate = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
@@ -228,9 +228,6 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
         int pageSize = PaginationConstants.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
-        pageSize = Math.Clamp(pageSize, PaginationConstants.MinPageSize, PaginationConstants.MaxPageSize);
-        pageNumber = Math.Max(PaginationConstants.MinPageNumber, pageNumber);
-
         IQueryable<T> query = DbSet.AsNoTracking();
 
         if (predicate is not null)
@@ -238,8 +235,23 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
             query = query.Where(predicate);
         }
 
-        int totalCount = await query.CountAsync(cancellationToken);
+        query = string.IsNullOrWhiteSpace(orderBy)
+            ? query.OrderBy(e => e.Id)
+            : ApplyOrdering<TResult>(query, orderBy, sortOrder);
 
+        return ToPagedResultAsync<TResult>(query, pageNumber, pageSize, cancellationToken);
+    }
+
+    protected virtual async Task<Domain.Common.PagedResult<TResult>> ToPagedResultAsync<TResult>(
+        IQueryable<T> query,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        pageSize = Math.Clamp(pageSize, PaginationConstants.MinPageSize, PaginationConstants.MaxPageSize);
+        pageNumber = Math.Max(PaginationConstants.MinPageNumber, pageNumber);
+
+        int totalCount = await query.CountAsync(cancellationToken);
         int totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
         if (totalCount == 0 || pageNumber > totalPages)
@@ -247,34 +259,38 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
             return new([], totalCount, pageNumber, pageSize);
         }
 
-        if (!string.IsNullOrWhiteSpace(orderBy))
-        {
-            var sortMapping = GetSortMapping<TResult>();
-
-            if (sortMapping.TryGetValue(orderBy, out string? resolvedEntityPath)
-                && resolvedEntityPath.All(c => char.IsLetterOrDigit(c) || c == '.'))
-            {
-                string safeSortOrder = _allowedSortOrders.Contains(sortOrder ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                                    ? sortOrder
-                                    : SortOrderConstants.Ascending;
-
-                query = query.OrderBy($"{resolvedEntityPath} {safeSortOrder}")
-                    .ThenBy(e => e.Id);
-            }
-            else
-            {
-                query = query.OrderBy(e => e.Id);
-            }
-        }
-
-        IQueryable<TResult> projectedQuery = query.ProjectToType<TResult>();
-
-        var items = await projectedQuery
+        var items = await query
+            .ProjectToType<TResult>()
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
         return new(items, totalCount, pageNumber, pageSize);
+    }
+
+    /// <summary>
+    /// Applies dynamic ordering to the query. Can be overridden in derived repositories
+    /// to support custom sorting logic.
+    /// </summary>
+    protected virtual IQueryable<T> ApplyOrdering<TResult>(
+        IQueryable<T> query,
+        string orderBy,
+        string? sortOrder)
+    {
+        var sortMapping = GetSortMapping<TResult>();
+
+        if (sortMapping.TryGetValue(orderBy, out string? resolvedEntityPath)
+            && resolvedEntityPath.All(c => char.IsLetterOrDigit(c) || c == '.'))
+        {
+            string safeSortOrder = _allowedSortOrders.Contains(sortOrder ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                ? sortOrder
+                : SortOrderConstants.Ascending;
+
+            return query.OrderBy($"{resolvedEntityPath} {safeSortOrder}")
+                .ThenBy(e => e.Id);
+        }
+
+        return query.OrderBy(e => e.Id);
     }
 
     private static Dictionary<string, string> GetSortMapping<TResult>() =>

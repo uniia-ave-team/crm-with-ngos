@@ -1,3 +1,5 @@
+using Crm.Application.Dtos.Role.Commands;
+
 namespace Crm.Api.Dtos;
 
 /// <summary>
@@ -9,4 +11,12 @@ namespace Crm.Api.Dtos;
 public record UpdateRoleRequest(
     string NewName,
     string? FeminitiveName,
-    string? PluralName);
+    string? PluralName)
+{
+    /// <summary>
+    /// Maps the request payload to an <see cref="UpdateRoleCommand"/> instance.
+    /// </summary>
+    /// <param name="id">The unique identifier of the role from the route.</param>
+    public UpdateRoleCommand ToCommand(Guid id) =>
+        new(id, NewName, FeminitiveName, PluralName);
+}
