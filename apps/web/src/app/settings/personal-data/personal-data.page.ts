@@ -65,7 +65,6 @@ export class PersonalDataPage {
   protected readonly lastName = signal('');
   protected readonly firstName = signal('');
   protected readonly patronymic = signal('');
-  protected readonly position = signal('');
   protected readonly phone = signal('');
   protected readonly emergencyContact = signal('');
   protected readonly country = signal('');
@@ -227,7 +226,6 @@ export class PersonalDataPage {
         firstName: body.firstName ?? '',
         lastName: body.lastName ?? '',
         patronymic: body.patronymic,
-        internalPosition: body.internalPosition,
         phoneNumber: body.phoneNumber,
         country: body.country,
         emergencyContact: body.emergencyContact,
@@ -295,7 +293,6 @@ export class PersonalDataPage {
       firstName: nullable(this.firstName()),
       lastName: nullable(this.lastName()),
       patronymic: nullable(this.patronymic()),
-      internalPosition: nullable(this.position()),
       phoneNumber: nullable(this.phone()),
       country: nullable(this.country()),
       emergencyContact: nullable(this.emergencyContact()),
@@ -350,7 +347,6 @@ export class PersonalDataPage {
     this.lastName.set(user.lastName ?? '');
     this.firstName.set(user.firstName ?? '');
     this.patronymic.set(user.patronymic ?? '');
-    this.position.set(user.internalPosition ?? '');
     this.phone.set(user.phoneNumber ?? '');
     this.emergencyContact.set(user.emergencyContact ?? '');
     this.country.set(user.country ?? '');

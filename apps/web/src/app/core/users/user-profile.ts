@@ -25,7 +25,6 @@ export interface UserProfile {
   firstName: string;
   lastName: string;
   patronymic?: string | null;
-  internalPosition?: string | null;
   phoneNumber?: string | null;
   country?: string | null;
   emergencyContact?: string | null;

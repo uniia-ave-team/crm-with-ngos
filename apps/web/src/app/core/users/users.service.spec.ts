@@ -190,7 +190,6 @@ describe('UsersService', () => {
       firstName: ' ',
       lastName: ' ',
       patronymic: null,
-      internalPosition: null,
       phoneNumber: null,
       country: null,
       emergencyContact: null,

@@ -72,7 +72,6 @@ export interface ProfileUpdate {
   firstName: string | null;
   lastName: string | null;
   patronymic: string | null;
-  internalPosition: string | null;
   phoneNumber: string | null;
   country: string | null;
   emergencyContact: string | null;
