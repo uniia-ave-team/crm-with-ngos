@@ -1,0 +1,79 @@
+:host {
+  display: block;
+  color: var(--nav-fg-active);
+  font-family: var(--font-menu);
+}
+
+.roles__title {
+  margin: 0 0 20px;
+  font-family: var(--font-login-title);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.roles__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// Роль в рядку: плашка зліва, три крапки по правому краю.
+.roles__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+// Довга назва скорочується трикрапкою, а не виштовхує три крапки за вікно.
+.roles__item app-role-pill {
+  min-width: 0;
+}
+
+// Кнопки «Редагувати» й «Видалити» по правому краю рядка.
+.roles__actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  margin-inline-start: auto;
+}
+
+.roles__action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--nav-fg-inactive);
+  font-size: 20px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--nav-active-bg);
+    color: var(--nav-fg-active);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+.roles__message {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--nav-fg-inactive);
+
+  &--error {
+    color: var(--nav-unavailable-icon);
+  }
+}

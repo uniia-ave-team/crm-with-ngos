@@ -748,10 +748,10 @@ describe('LoginPage', () => {
       expect(store.active()).toMatchObject({ firstName: profile.firstName, lastName: profile.lastName, userId: 'user-1' });
       // Назва ГО теж іде у знімок.
       (await vi.waitFor(() => http.expectOne(`${pageServer()}/api/v1/ngo`))).flush({
-        name: 'Моя ГО',
+        name: 'Організація',
         logoUrl: '/files/logo.png',
       });
-      await vi.waitFor(() => expect(store.active()?.ngoName).toBe('Моя ГО'));
+      await vi.waitFor(() => expect(store.active()?.ngoName).toBe('Організація'));
       // ...і посилання на логотип ГО.
       expect(store.active()?.ngoLogoUrl).toBe('/files/logo.png');
     });
@@ -1240,11 +1240,11 @@ describe('LoginPage', () => {
     it('creates the organization with a null logoUrl, then redirects to the planner', async () => {
       const { connection, page } = createWithoutNgo();
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
-      page.onNgoNameChange('Моя ГО');
+      page.onNgoNameChange('Організація');
       const done = (page as unknown as { submitNgo(): Promise<void> }).submitNgo();
 
       const create = http.expectOne(`${connection.serverUrl()}/api/v1/ngo`);
-      expect(create.request.body).toEqual({ name: 'Моя ГО' });
+      expect(create.request.body).toEqual({ name: 'Організація' });
       create.flush(null, { status: 201, statusText: 'Created' });
       await done;
 
@@ -1262,7 +1262,7 @@ describe('LoginPage', () => {
         vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:logo', revokeObjectURL: () => undefined }));
         const ctx = createWithoutNgo();
         const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
-        ctx.page.onNgoNameChange('Моя ГО');
+        ctx.page.onNgoNameChange('Організація');
         const ngoUrl = `${ctx.connection.serverUrl()}/api/v1/ngo`;
         return { ...ctx, navigate, ngoUrl, logoUrl: `${ngoUrl}/logo` };
       }
@@ -1276,7 +1276,7 @@ describe('LoginPage', () => {
         // Спершу — дані організації (логотип ще не передається).
         const create = http.expectOne(ngoUrl);
         expect(create.request.method).toBe('POST');
-        expect(create.request.body).toEqual({ name: 'Моя ГО' });
+        expect(create.request.body).toEqual({ name: 'Організація' });
         http.expectNone(logoUrl);
         create.flush(null, created);
 
@@ -1288,7 +1288,7 @@ describe('LoginPage', () => {
         expect(sent.name).toBe('logo.png');
         expect(navigate).not.toHaveBeenCalled();
         upload.flush(null, ok);
-        (await vi.waitFor(() => http.expectOne(ngoUrl))).flush({ name: 'Моя ГО', logoUrl: '/files/logo.png' });
+        (await vi.waitFor(() => http.expectOne(ngoUrl))).flush({ name: 'Організація', logoUrl: '/files/logo.png' });
         await done;
 
         expect(navigate).toHaveBeenCalledWith('/planner');
@@ -1361,7 +1361,7 @@ describe('LoginPage', () => {
         const retry = await vi.waitFor(() => http.expectOne(logoUrl));
         http.expectNone(ngoUrl);
         retry.flush(null, ok);
-        (await vi.waitFor(() => http.expectOne(ngoUrl))).flush({ name: 'Моя ГО', logoUrl: '/files/logo.png' });
+        (await vi.waitFor(() => http.expectOne(ngoUrl))).flush({ name: 'Організація', logoUrl: '/files/logo.png' });
         await second;
 
         expect(navigate).toHaveBeenCalledWith('/planner');
@@ -1403,7 +1403,7 @@ describe('LoginPage', () => {
     it('does not redirect when creating the organization fails', async () => {
       const { connection, page } = createWithoutNgo();
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
-      page.onNgoNameChange('Моя ГО');
+      page.onNgoNameChange('Організація');
       const done = (page as unknown as { submitNgo(): Promise<void> }).submitNgo();
       http.expectOne(`${connection.serverUrl()}/api/v1/ngo`).flush({}, { status: 401, statusText: 'Unauthorized' });
       await done;
@@ -1412,7 +1412,7 @@ describe('LoginPage', () => {
 
     it('shows the server error and stays on the form when creation fails', async () => {
       const { fixture, connection, element, page } = createWithoutNgo();
-      page.onNgoNameChange('Моя ГО');
+      page.onNgoNameChange('Організація');
       const done = (page as unknown as { submitNgo(): Promise<void> }).submitNgo();
       http.expectOne(`${connection.serverUrl()}/api/v1/ngo`).flush({}, { status: 401, statusText: 'Unauthorized' });
       await done;
@@ -1445,7 +1445,7 @@ describe('LoginPage', () => {
       expect(logoError?.textContent).toContain(uk.login.ngo.logoTypeError);
       expect(element.querySelector('.login__error')).toBeNull();
 
-      form.onNgoNameChange('Моя ГО');
+      form.onNgoNameChange('Організація');
       pickLogo(element, new File(['x'], 'logo.png', { type: 'image/png' }));
       const done = form.submitNgo();
       http.expectOne(`${connection.serverUrl()}/api/v1/ngo`).flush({}, { status: 403, statusText: 'Forbidden' });

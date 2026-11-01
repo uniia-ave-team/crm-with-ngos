@@ -1,9 +1,10 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
 import { ConnectionService } from '../connection/connection.service';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
+import { UserRole } from './user-profile';
 
 const API_USERS_PATH = '/api/v1/users';
 const REQUEST_TIMEOUT_MS = 10000;
@@ -20,6 +21,43 @@ export interface NewUser {
   confirmPassword: string;
 }
 
+/**
+ * Колега зі списку `GET /api/v1/users`. Таблиця колег читає всі ці поля, але
+ * сервер поки віддає лише `id`, пошту й імена: решта (`null` / порожній список)
+ * виставляється в `toUserSummary` — коли відповідь їх міститиме, міняти треба
+ * лише її.
+ */
+export interface UserSummary {
+  readonly id: string;
+  readonly email: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly phoneNumber: string | null;
+  readonly country: string | null;
+  readonly emergencyContact: string | null;
+  readonly pronouns: string | null;
+  /** Категорія займенників — число з `PronounCategory`. */
+  readonly pronounCategory: number | null;
+  readonly avatarUrl: string | null;
+  readonly roles: readonly UserRole[];
+}
+
+/**
+ * Сортування списку колег: `OrderBy` (одне поле — сервер приймає лише одне імʼя
+ * властивості) і `SortOrder` (`asc` від меншого до більшого, `desc` навпаки).
+ * Порожній `orderBy` — сортування не передається.
+ */
+export interface UsersSort {
+  readonly orderBy: string;
+  readonly sortOrder: 'asc' | 'desc';
+}
+
+/** Сторінка списку колег. */
+export interface UsersPage {
+  readonly items: readonly UserSummary[];
+  readonly hasNextPage: boolean;
+}
+
 export type CreateUserResult = 'created' | RequestFailure;
 export type ChangePasswordResult = 'changed' | RequestFailure;
 export type UpdateProfileResult = 'updated' | RequestFailure;
@@ -34,7 +72,6 @@ export interface ProfileUpdate {
   firstName: string | null;
   lastName: string | null;
   patronymic: string | null;
-  internalPosition: string | null;
   phoneNumber: string | null;
   country: string | null;
   emergencyContact: string | null;
@@ -60,6 +97,40 @@ export class UsersService {
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[UsersService] Не вдалося створити користувача (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
+   * `GET <сервер>/api/v1/users?PageNumber=&PageSize=[&OrderBy=&SortOrder=]` — одна
+   * сторінка колег (потрібне право `ViewUser`). Сортування (`sort`) передається
+   * лише коли воно є й має непорожній `orderBy`: без нього сервер сортує за
+   * замовчуванням (за імʼям). Елементи без `id` пропускаються; відсутні імена й пошта —
+   * порожні рядки. Повертає сторінку або причину невдачі; відповідь без списку
+   * `items` вважається помилкою. Токен додає `authInterceptor`.
+   */
+  async list(pageNumber: number, pageSize: number, sort: UsersSort | null = null): Promise<UsersPage | RequestFailure> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}`;
+    console.log(`[UsersService] Запитую колег (сторінка ${pageNumber}, по ${pageSize}): ${url}`);
+
+    try {
+      let params = new HttpParams().set('PageNumber', pageNumber).set('PageSize', pageSize);
+      if (sort?.orderBy.trim()) {
+        params = params.set('OrderBy', sort.orderBy.trim()).set('SortOrder', sort.sortOrder);
+      }
+      const body = await firstValueFrom(this.http.get<Record<string, unknown>>(url, { params }).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      if (!Array.isArray(body?.['items'])) {
+        console.warn('[UsersService] Відповідь без списку колег', body);
+        return 'error';
+      }
+      const items = (body['items'] as (Record<string, unknown> | null)[]).flatMap((item) => {
+        const user = toUserSummary(item);
+        return user ? [user] : [];
+      });
+      return { items, hasNextPage: body['hasNextPage'] === true };
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося отримати колег (${failure})`, error);
       return failure;
     }
   }
@@ -151,4 +222,29 @@ export class UsersService {
       return failure;
     }
   }
+}
+
+/**
+ * Колега з елемента списку; без `id` — `null`. Поля, яких список поки не віддає,
+ * тут сталі (`null` й порожній список): коли сервер почне їх віддавати, їх
+ * читають звідси з `item`, а таблиця колег лишається як є.
+ */
+function toUserSummary(item: Record<string, unknown> | null): UserSummary | null {
+  if (typeof item?.['id'] !== 'string') {
+    return null;
+  }
+  const text = (value: unknown) => (typeof value === 'string' ? value : '');
+  return {
+    id: item['id'],
+    email: text(item['email']),
+    firstName: text(item['firstName']),
+    lastName: text(item['lastName']),
+    phoneNumber: null,
+    country: null,
+    emergencyContact: null,
+    pronouns: null,
+    pronounCategory: null,
+    avatarUrl: null,
+    roles: [],
+  };
 }

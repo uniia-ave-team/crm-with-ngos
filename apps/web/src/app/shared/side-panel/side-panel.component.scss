@@ -39,8 +39,17 @@
 
 .side-panel__header {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 16px 16px 0;
+}
+
+// Ліва частина шапки: те, що проєктується з атрибутом `sidePanelHeader`.
+.side-panel__header-start {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .side-panel__close {
@@ -70,7 +79,8 @@
 .side-panel__body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 8px 16px 16px;
+  // Більший відступ від шапки (кнопка дії й хрестик) до змісту, зокрема до заголовка.
+  padding: 28px 16px 16px;
   overflow-y: auto;
 }
 

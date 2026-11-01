@@ -1,7 +1,7 @@
 import { Component, input, output } from '@angular/core';
 
 /** Дія з колегою в меню біля трьох крапок. */
-export type ColleagueAction = 'permissions' | 'edit' | 'resetPassword' | 'disable' | 'enable' | 'delete';
+export type ColleagueAction = 'permissions' | 'edit' | 'resetPassword' | 'disable' | 'enable' | 'delete' | 'profileSettings';
 
 /** Пункт меню: яка дія, ключ підпису в мовному файлі й іконка. */
 export interface ColleagueActionItem {

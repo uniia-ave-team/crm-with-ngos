@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 
 import { PopoverComponent } from '../../../shared/popover/popover.component';
 import { AccountTile } from '../account-menu/account-menu.component';
-import { AccountsService } from '../../accounts/accounts.service';
+import { AccountThumbnail, AccountsService } from '../../accounts/accounts.service';
 import { AuthService } from '../../auth/auth.service';
 import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
@@ -86,10 +86,12 @@ export class PrimaryNavComponent {
       id: account.id,
       firstName: account.firstName,
       lastName: account.lastName,
-      // Відносні посилання (аватар і логотип ГО) — від адреси сервера саме цього акаунта.
-      avatarUrl: absoluteUrl(account.avatarUrl, account.server),
+      // Плитка малюється з мініатюр у знімку акаунта (`data:`-посилання, без запитів):
+      // закрите зображення можна завантажити лише з токеном активного акаунта, а плитки
+      // показують і неактивні. Мініатюра, зроблена зі старого аватара чи логотипа, не годиться.
+      avatarUrl: thumbnailData(account.avatarThumb, account.avatarUrl),
       ngoName: account.ngoName,
-      logoUrl: absoluteUrl(account.ngoLogoUrl, account.server),
+      logoUrl: thumbnailData(account.ngoLogoThumb, account.ngoLogoUrl),
       active: account.id === activeId,
       outdated: account.outdated,
       unavailable: account.unavailable,
@@ -120,15 +122,7 @@ export class PrimaryNavComponent {
   );
 }
 
-/** Посилання від адреси сервера; `null` — посилання нема чи воно некоректне. */
-function absoluteUrl(url: string | null, server: string): string | null {
-  const trimmed = url?.trim();
-  if (!trimmed) {
-    return null;
-  }
-  try {
-    return new URL(trimmed, `${server}/`).toString();
-  } catch {
-    return null;
-  }
+/** `data:`-посилання мініатюри, якщо вона зроблена з поточної адреси зображення; інакше `null` (на плитці будуть літери чи не буде значка). */
+function thumbnailData(thumbnail: AccountThumbnail | null, url: string | null): string | null {
+  return thumbnail && url && thumbnail.url === url ? thumbnail.data : null;
 }

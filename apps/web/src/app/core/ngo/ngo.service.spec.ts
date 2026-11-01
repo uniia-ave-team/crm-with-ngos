@@ -29,10 +29,10 @@ describe('NgoService', () => {
   });
 
   it('posts the name with a null logoUrl', async () => {
-    const result = service.create('Моя ГО');
+    const result = service.create('Організація');
     const request = http.expectOne(url);
     expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual({ name: 'Моя ГО' });
+    expect(request.request.body).toEqual({ name: 'Організація' });
     request.flush(null, { status: 201, statusText: 'Created' });
     expect(await result).toBe('created');
   });
@@ -46,10 +46,10 @@ describe('NgoService', () => {
       identity: 'u',
       ngoLogoUrl: '/old.png',
     });
-    const result = service.create('Моя ГО');
+    const result = service.create('Організація');
     http.expectOne(url).flush(null, { status: 201, statusText: 'Created' });
     expect(await result).toBe('created');
-    expect(accounts.accounts().find((a) => a.id === account.id)).toMatchObject({ ngoName: 'Моя ГО', ngoLogoUrl: null });
+    expect(accounts.accounts().find((a) => a.id === account.id)).toMatchObject({ ngoName: 'Організація', ngoLogoUrl: null });
   });
 
   describe('uploadLogo', () => {
@@ -216,14 +216,14 @@ describe('NgoService', () => {
       const result = service.fetch();
       const request = http.expectOne(url);
       expect(request.request.method).toBe('GET');
-      request.flush({ id: 'n', name: ' Моя ГО ', logoUrl: ' /files/logo.png ', createdAt: '2026-01-01T00:00:00Z' });
-      expect(await result).toEqual({ name: 'Моя ГО', logoUrl: '/files/logo.png' });
+      request.flush({ id: 'n', name: ' Організація ', logoUrl: ' /files/logo.png ', createdAt: '2026-01-01T00:00:00Z' });
+      expect(await result).toEqual({ name: 'Організація', logoUrl: '/files/logo.png' });
     });
 
     it.each([[null], [''], [undefined]])('treats a missing logo link (%s) as no logo', async (logoUrl) => {
       const result = service.fetch();
-      http.expectOne(url).flush({ name: 'Моя ГО', logoUrl });
-      expect(await result).toEqual({ name: 'Моя ГО', logoUrl: null });
+      http.expectOne(url).flush({ name: 'Організація', logoUrl });
+      expect(await result).toEqual({ name: 'Організація', logoUrl: null });
     });
 
     it('returns null without a name', async () => {
@@ -245,13 +245,13 @@ describe('NgoService', () => {
     [403, 'forbidden'],
     [500, 'error'],
   ])('maps HTTP %i to %s', async (status, expected) => {
-    const result = service.create('Моя ГО');
+    const result = service.create('Організація');
     http.expectOne(url).flush({}, { status, statusText: 'x' });
     expect(await result).toBe(expected);
   });
 
   it('reports an unreachable server', async () => {
-    const result = service.create('Моя ГО');
+    const result = service.create('Організація');
     http.expectOne(url).error(new ProgressEvent('error'));
     expect(await result).toBe('unreachable');
   });

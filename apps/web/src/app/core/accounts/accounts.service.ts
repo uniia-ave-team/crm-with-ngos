@@ -1,5 +1,7 @@
 import { Injectable, Signal, computed, signal } from '@angular/core';
 
+import { UserRole, sanitizeRoles } from '../users/user-profile';
+
 /** Індекс: впорядкований список `id` акаунтів (JSON-масив рядків). */
 const INDEX_KEY = 'yavir.accounts';
 /** Запис акаунта: `yavir.account.<id>`. */
@@ -53,11 +55,24 @@ export interface StoredAccount {
    */
   readonly ngoLogoUrl: string | null;
   /**
+   * Мініатюра аватара: плитка акаунта у вікні акаунтів малюється з неї, без
+   * запитів (закрите зображення можна завантажити лише з токеном активного
+   * акаунта, а плитки показують і неактивні). `null` — ще нема.
+   */
+  readonly avatarThumb: AccountThumbnail | null;
+  /** Мініатюра логотипа ГО для значка на плитці; `null` — ще нема. */
+  readonly ngoLogoThumb: AccountThumbnail | null;
+  /**
    * Права користувача для побудови інтерфейсу (`GET /api/v1/users/me/permissions`):
    * унікальні рядки, як їх віддав сервер. Оновлюються разом із профілем (при
    * кожній зміні сторінки); порожньо — ще не отримано чи прав нема.
    */
   readonly permissions: readonly string[];
+  /**
+   * Ролі користувача з його профілю (`roles` відповіді `GET /api/v1/users/me`),
+   * оновлюються разом із профілем; порожньо — ще не отримано чи ролей нема.
+   */
+  readonly roles: readonly UserRole[];
   readonly accessToken: string;
   readonly refreshToken: string;
   /**
@@ -90,6 +105,16 @@ export interface NewAccount {
   readonly permissions?: readonly string[];
 }
 
+/**
+ * Мініатюра зображення в знімку акаунта: сам стиснутий малюнок (`data:`-посилання)
+ * і адреса, з якої його зроблено (за нею видно, що зображення змінилось і
+ * мініатюру треба зробити заново).
+ */
+export interface AccountThumbnail {
+  readonly url: string;
+  readonly data: string;
+}
+
 /** Частина запису, яку можна змінювати: знімок, токени, службові поля. */
 export type AccountPatch = Partial<
   Pick<
@@ -103,7 +128,10 @@ export type AccountPatch = Partial<
     | 'avatarUrl'
     | 'ngoName'
     | 'ngoLogoUrl'
+    | 'avatarThumb'
+    | 'ngoLogoThumb'
     | 'permissions'
+    | 'roles'
     | 'accessToken'
     | 'refreshToken'
     | 'tokensIssuedAt'
@@ -211,7 +239,10 @@ export class AccountsService {
       avatarUrl: input.avatarUrl !== undefined ? input.avatarUrl : (existing?.avatarUrl ?? null),
       ngoName: input.ngoName !== undefined ? input.ngoName : (existing?.ngoName ?? null),
       ngoLogoUrl: input.ngoLogoUrl !== undefined ? input.ngoLogoUrl : (existing?.ngoLogoUrl ?? null),
+      avatarThumb: existing?.avatarThumb ?? null,
+      ngoLogoThumb: existing?.ngoLogoThumb ?? null,
       permissions: input.permissions ?? existing?.permissions ?? [],
+      roles: existing?.roles ?? [],
       accessToken: input.accessToken,
       refreshToken: input.refreshToken,
       tokensIssuedAt: now,
@@ -413,13 +444,25 @@ function normalize(account: StoredAccount): StoredAccount {
     avatarUrl: account.avatarUrl ?? null,
     ngoName: account.ngoName ?? null,
     ngoLogoUrl: account.ngoLogoUrl ?? null,
+    avatarThumb: thumbnailOrNull(account.avatarThumb),
+    ngoLogoThumb: thumbnailOrNull(account.ngoLogoThumb),
     permissions: Array.isArray(account.permissions)
       ? account.permissions.filter((permission): permission is string => typeof permission === 'string')
       : [],
+    roles: sanitizeRoles(account.roles),
     tokensIssuedAt: account.tokensIssuedAt ?? 0,
     addedAt: account.addedAt ?? 0,
     lastUsedAt: account.lastUsedAt ?? 0,
   };
+}
+
+/** Мініатюра з сховища: лише коректна пара рядків (адреса й `data:`-посилання), інакше `null`. */
+function thumbnailOrNull(value: unknown): AccountThumbnail | null {
+  if (value === null || typeof value !== 'object') {
+    return null;
+  }
+  const { url, data } = value as Record<string, unknown>;
+  return typeof url === 'string' && typeof data === 'string' && data.startsWith('data:image/') ? { url, data } : null;
 }
 
 function isStoredAccount(value: unknown): value is StoredAccount {

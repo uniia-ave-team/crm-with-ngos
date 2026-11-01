@@ -56,6 +56,17 @@ ion-title {
     background: var(--colleagues-add);
   }
 
+  // «Назад»: нейтральна кнопка (не акцентна, як «Додати»).
+  &--back {
+    background: var(--nav-active-bg);
+    color: var(--nav-fg-active);
+  }
+
+  // У шапці бічного вікна: тієї ж висоти, що й хрестик поряд.
+  &--panel {
+    min-height: 40px;
+  }
+
   &:focus-visible {
     outline: 2px solid var(--nav-fg-active);
     outline-offset: 2px;
@@ -132,7 +143,9 @@ ion-title {
   color: var(--nav-fg-inactive);
 }
 
-// Комірка «Посада».
+// Комірка «Посада»: зверху ролі колеги плашками (`app-role-pill`, як у вікні
+// «Ролі») в рядок, коли не вміщаються — переносяться на наступний; під ними
+// рядки «проєкт — роль» із кольоровою крапкою.
 .position {
   display: flex;
   flex-direction: column;
@@ -140,27 +153,11 @@ ion-title {
   gap: 6px;
 }
 
-.badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 500;
-
-  &--green {
-    background: rgb(50 103 11 / 12%);
-    color: var(--colleagues-dot-green);
-  }
-
-  &--teal {
-    background: rgb(71 138 127 / 16%);
-    color: #1f7a6c;
-  }
-
-  &--gray {
-    background: var(--nav-active-bg);
-    color: var(--nav-fg-inactive);
-  }
+.position__roles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
 }
 
 .position__line {
@@ -185,8 +182,42 @@ ion-title {
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .badge--teal {
-    color: #7fd1c3;
+// Повідомлення у вікні «Ролі» на місці форми редагування (завантаження чи помилка).
+.colleagues__panel-message {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-family: var(--font-menu);
+  font-size: 14px;
+
+  &--error {
+    color: var(--nav-unavailable-icon);
   }
+}
+
+// Повідомлення під таблицею: завантаження, порожній список чи помилка з повтором.
+.colleagues__list-message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 16px 24px;
+  color: var(--nav-fg-inactive);
+  font-family: var(--font-menu);
+  font-size: 14px;
+
+  &--error {
+    color: var(--nav-unavailable-icon);
+  }
+}
+
+.colleagues__retry {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
 }

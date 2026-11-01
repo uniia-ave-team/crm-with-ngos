@@ -57,14 +57,14 @@ describe('PrimaryNavComponent avatar initials', () => {
     Array.from(element.querySelectorAll('.rail__avatar .avatar, .mobile-topbar__avatar .avatar')).map((s) => s.textContent?.trim());
 
   it('shows the first letters of the first and last name in both avatars', async () => {
-    await signInAs('Олена', 'Іваненко');
+    await signInAs('Перший', 'Другий');
     const fixture = TestBed.createComponent(PrimaryNavComponent);
     fixture.detectChanges();
-    expect(avatars(fixture.nativeElement)).toEqual(['ОІ', 'ОІ']);
+    expect(avatars(fixture.nativeElement)).toEqual(['ПД', 'ПД']);
   });
 
   it('upper-cases the letters and ignores surrounding spaces', async () => {
-    await signInAs('  євген', ' вишневський');
+    await signInAs('  єдиний', ' вишуканий');
     const fixture = TestBed.createComponent(PrimaryNavComponent);
     fixture.detectChanges();
     expect(avatars(fixture.nativeElement)).toEqual(['ЄВ', 'ЄВ']);
@@ -75,16 +75,16 @@ describe('PrimaryNavComponent avatar initials', () => {
     fixture.detectChanges();
     expect(avatars(fixture.nativeElement)).toEqual(['', '']);
 
-    await signInAs('Олена', 'Іваненко');
+    await signInAs('Перший', 'Другий');
     fixture.detectChanges();
-    expect(avatars(fixture.nativeElement)).toEqual(['ОІ', 'ОІ']);
+    expect(avatars(fixture.nativeElement)).toEqual(['ПД', 'ПД']);
   });
 
   it('copes with a missing name', async () => {
-    await signInAs('Олена', '');
+    await signInAs('Перший', '');
     const fixture = TestBed.createComponent(PrimaryNavComponent);
     fixture.detectChanges();
-    expect(avatars(fixture.nativeElement)).toEqual(['О', 'О']);
+    expect(avatars(fixture.nativeElement)).toEqual(['П', 'П']);
   });
 
   describe('account list', () => {
@@ -93,14 +93,14 @@ describe('PrimaryNavComponent avatar initials', () => {
 
     it('shows the stored accounts instead of a placeholder, in the order they were added', () => {
       const store = TestBed.inject(AccountsService);
-      store.add({ server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity: 'u1', firstName: 'Олена', lastName: 'Іваненко', ngoName: 'Добра справа' });
-      store.add({ server: 'http://two.example:5065', accessToken: 'a2', refreshToken: 'r2', identity: 'u2', firstName: 'Петро', lastName: 'Коваль' });
+      store.add({ server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity: 'u1', firstName: 'Перший', lastName: 'Другий', ngoName: 'Організація' });
+      store.add({ server: 'http://two.example:5065', accessToken: 'a2', refreshToken: 'r2', identity: 'u2', firstName: 'Третій', lastName: 'Четвертий' });
       const fixture = TestBed.createComponent(PrimaryNavComponent);
       fixture.detectChanges();
 
       expect(tiles(fixture).map((tile) => [tile['firstName'], tile['lastName'], tile['ngoName']])).toEqual([
-        ['Олена', 'Іваненко', 'Добра справа'],
-        ['Петро', 'Коваль', null],
+        ['Перший', 'Другий', 'Організація'],
+        ['Третій', 'Четвертий', null],
       ]);
     });
 
@@ -117,31 +117,59 @@ describe('PrimaryNavComponent avatar initials', () => {
       expect(byId[first.id]).toMatchObject({ active: false, outdated: true, unavailable: true });
     });
 
-    it('resolves relative avatar and NGO logo links against the server of that very account', () => {
-      const store = TestBed.inject(AccountsService);
-      store.add({
-        server: 'http://one.example:5065',
-        accessToken: 'a',
-        refreshToken: 'r',
-        identity: 'u1',
-        avatarUrl: '/files/a.png',
-        ngoLogoUrl: 'files/logo.png',
-      });
-      store.add({
-        server: 'http://two.example:5065',
-        accessToken: 'a2',
-        refreshToken: 'r2',
-        identity: 'u2',
-        avatarUrl: 'https://cdn.example/b.png',
-        ngoLogoUrl: null,
-      });
-      const fixture = TestBed.createComponent(PrimaryNavComponent);
-      fixture.detectChanges();
+    describe('the pictures on the tiles (they come from the thumbnails in the snapshot of the account, with no requests)', () => {
+      const add = (identity: string, extra: Record<string, unknown> = {}) =>
+        TestBed.inject(AccountsService).add({ server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity, ...extra });
+      const thumbs = (id: string, avatar: [string, string] | null, logo: [string, string] | null) =>
+        TestBed.inject(AccountsService).update(id, {
+          avatarThumb: avatar ? { url: avatar[0], data: avatar[1] } : null,
+          ngoLogoThumb: logo ? { url: logo[0], data: logo[1] } : null,
+        });
+      const picture = (fixture: ReturnType<typeof TestBed.createComponent<PrimaryNavComponent>>) =>
+        tiles(fixture).map((tile) => [tile['avatarUrl'], tile['logoUrl']]);
 
-      expect(tiles(fixture).map((tile) => [tile['avatarUrl'], tile['logoUrl']])).toEqual([
-        ['http://one.example:5065/files/a.png', 'http://one.example:5065/files/logo.png'],
-        ['https://cdn.example/b.png', null],
-      ]);
+      it('takes the avatar and the logo from the thumbnails of each account, not from the links to the server', () => {
+        const first = add('u1', { avatarUrl: '/files/a.png', ngoLogoUrl: 'files/logo.png' });
+        thumbs(first.id, ['/files/a.png', 'data:image/webp;base64,AVATAR1'], ['files/logo.png', 'data:image/webp;base64,LOGO1']);
+        const second = TestBed.inject(AccountsService).add({
+          server: 'http://two.example:5065',
+          accessToken: 'a2',
+          refreshToken: 'r2',
+          identity: 'u2',
+          avatarUrl: 'https://cdn.example/b.png',
+        });
+        thumbs(second.id, ['https://cdn.example/b.png', 'data:image/webp;base64,AVATAR2'], null);
+
+        const fixture = TestBed.createComponent(PrimaryNavComponent);
+        fixture.detectChanges();
+        expect(picture(fixture)).toEqual([
+          ['data:image/webp;base64,AVATAR1', 'data:image/webp;base64,LOGO1'],
+          ['data:image/webp;base64,AVATAR2', null],
+        ]);
+      });
+
+      it('has no picture on the tile while there is no thumbnail yet (the letters are drawn)', () => {
+        add('u1', { avatarUrl: '/files/a.png', ngoLogoUrl: 'files/logo.png' });
+        const fixture = TestBed.createComponent(PrimaryNavComponent);
+        fixture.detectChanges();
+        expect(picture(fixture)).toEqual([[null, null]]);
+      });
+
+      it('does not use a thumbnail that was made from an older avatar or logo', () => {
+        const account = add('u1', { avatarUrl: '/files/new.png', ngoLogoUrl: 'files/new-logo.png' });
+        thumbs(account.id, ['/files/old.png', 'data:image/webp;base64,OLD'], ['files/old-logo.png', 'data:image/webp;base64,OLDLOGO']);
+        const fixture = TestBed.createComponent(PrimaryNavComponent);
+        fixture.detectChanges();
+        expect(picture(fixture)).toEqual([[null, null]]);
+      });
+
+      it('has no picture when the account has no avatar and no logo, even with a leftover thumbnail', () => {
+        const account = add('u1', { avatarUrl: null, ngoLogoUrl: null });
+        thumbs(account.id, ['/files/old.png', 'data:image/webp;base64,OLD'], ['files/old-logo.png', 'data:image/webp;base64,OLDLOGO']);
+        const fixture = TestBed.createComponent(PrimaryNavComponent);
+        fixture.detectChanges();
+        expect(picture(fixture)).toEqual([[null, null]]);
+      });
     });
 
     it('is empty when no accounts are stored', () => {

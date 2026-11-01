@@ -9,7 +9,7 @@ import { AvatarModule } from '../../../shared/avatar/avatar.module';
 import { AccountMenuComponent, AccountTile } from './account-menu.component';
 
 function accounts(count: number): AccountTile[] {
-  return Array.from({ length: count }, (_, id) => ({ id, firstName: 'Євген', lastName: 'Вишневський', avatarUrl: null }));
+  return Array.from({ length: count }, (_, id) => ({ id, firstName: 'Перший', lastName: 'Другий', avatarUrl: null }));
 }
 
 describe('AccountMenuComponent', () => {
@@ -60,8 +60,8 @@ describe('AccountMenuComponent', () => {
   it('marks an outdated account: yellow sync icon on the left and its own label', () => {
     const fixture = TestBed.createComponent(AccountMenuComponent);
     fixture.componentRef.setInput('accounts', [
-      { id: 'a', firstName: 'Євген', lastName: 'Вишневський', avatarUrl: null },
-      { id: 'b', firstName: 'Євген', lastName: 'Вишневський', avatarUrl: null, outdated: true },
+      { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null },
+      { id: 'b', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, outdated: true },
     ]);
     fixture.detectChanges();
     const tiles = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.account-tile'));
@@ -83,8 +83,8 @@ describe('AccountMenuComponent', () => {
   it('shows a red alert icon, not the sync one, for an account whose server did not answer', () => {
     const fixture = TestBed.createComponent(AccountMenuComponent);
     fixture.componentRef.setInput('accounts', [
-      { id: 'a', firstName: 'Євген', lastName: 'Вишневський', avatarUrl: null, outdated: true },
-      { id: 'b', firstName: 'Євген', lastName: 'Вишневський', avatarUrl: null, outdated: true, unavailable: true },
+      { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, outdated: true },
+      { id: 'b', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, outdated: true, unavailable: true },
     ]);
     fixture.detectChanges();
     const tiles = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.account-tile'));
@@ -105,7 +105,7 @@ describe('AccountMenuComponent', () => {
   it('shows no unavailable mark for a valid account, whatever its flag says', () => {
     const fixture = TestBed.createComponent(AccountMenuComponent);
     fixture.componentRef.setInput('accounts', [
-      { id: 'a', firstName: 'Євген', lastName: 'Вишневський', avatarUrl: null, unavailable: true },
+      { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, unavailable: true },
     ]);
     fixture.detectChanges();
     const tile = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.account-tile')!;
@@ -161,8 +161,8 @@ describe('AccountMenuComponent', () => {
   it.each([[null], [undefined], ['']])('shows the logo of the account only when logoUrl is set (logoUrl: %s)', (empty) => {
     const fixture = TestBed.createComponent(AccountMenuComponent);
     fixture.componentRef.setInput('accounts', [
-      { id: 0, firstName: 'Євген', lastName: 'Вишневський', avatarUrl: null, logoUrl: empty },
-      { id: 1, firstName: 'Євген', lastName: 'Вишневський', avatarUrl: null, logoUrl: 'assets/custom.png' },
+      { id: 0, firstName: 'Перший', lastName: 'Другий', avatarUrl: null, logoUrl: empty },
+      { id: 1, firstName: 'Перший', lastName: 'Другий', avatarUrl: null, logoUrl: 'assets/custom.png' },
     ]);
     fixture.detectChanges();
     const tiles = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.account-tile'));

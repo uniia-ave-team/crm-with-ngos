@@ -4,6 +4,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { IMAGE_TYPES } from '../../core/images/image-types';
 import { CurrentUserService } from '../../core/users/current-user.service';
+import { PRONOUN_CATEGORY } from '../../core/users/pronouns';
 import { UserProfile } from '../../core/users/user-profile';
 import { UsersService } from '../../core/users/users.service';
 import { LANGUAGES, LanguageOption } from '../../core/i18n/languages.generated';
@@ -26,9 +27,6 @@ type SaveResult =
   | 'avatar.error';
 
 const ERROR_PREFIX = 'settings.personal.error.';
-
-/** Значення `PronounCategory` на сервері (категорія займенників для звертання). */
-const PRONOUN_CATEGORY = { masculine: 1, feminine: 2, neutral: 3 } as const;
 
 /** Вибір у займенниках: один із трьох готових варіантів або «Інше» з власним текстом. */
 export type PronounChoice = 'she' | 'he' | 'they' | 'other';
@@ -67,7 +65,6 @@ export class PersonalDataPage {
   protected readonly lastName = signal('');
   protected readonly firstName = signal('');
   protected readonly patronymic = signal('');
-  protected readonly position = signal('');
   protected readonly phone = signal('');
   protected readonly emergencyContact = signal('');
   protected readonly country = signal('');
@@ -229,7 +226,6 @@ export class PersonalDataPage {
         firstName: body.firstName ?? '',
         lastName: body.lastName ?? '',
         patronymic: body.patronymic,
-        internalPosition: body.internalPosition,
         phoneNumber: body.phoneNumber,
         country: body.country,
         emergencyContact: body.emergencyContact,
@@ -297,7 +293,6 @@ export class PersonalDataPage {
       firstName: nullable(this.firstName()),
       lastName: nullable(this.lastName()),
       patronymic: nullable(this.patronymic()),
-      internalPosition: nullable(this.position()),
       phoneNumber: nullable(this.phone()),
       country: nullable(this.country()),
       emergencyContact: nullable(this.emergencyContact()),
@@ -352,7 +347,6 @@ export class PersonalDataPage {
     this.lastName.set(user.lastName ?? '');
     this.firstName.set(user.firstName ?? '');
     this.patronymic.set(user.patronymic ?? '');
-    this.position.set(user.internalPosition ?? '');
     this.phone.set(user.phoneNumber ?? '');
     this.emergencyContact.set(user.emergencyContact ?? '');
     this.country.set(user.country ?? '');

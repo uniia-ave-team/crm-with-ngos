@@ -1,4 +1,4 @@
-import { Component, TemplateRef, input, output } from '@angular/core';
+import { Component, TemplateRef, input, output, signal } from '@angular/core';
 
 /** Рядок таблиці: `id` обовʼязковий, решта полів — довільні (за ними колонки беруть значення). */
 export interface DataTableRow {
@@ -18,6 +18,15 @@ export interface DataTableRowMenuEvent {
   readonly anchor: HTMLElement;
 }
 
+/** Напрям сортування: від меншого до більшого чи навпаки. */
+export type DataTableSortDirection = 'asc' | 'desc';
+
+/** Сортування, яке вибрали клацанням по заголовку: колонка й напрям. */
+export interface DataTableSort {
+  readonly column: DataTableColumn;
+  readonly direction: DataTableSortDirection;
+}
+
 /** Опис колонки. */
 export interface DataTableColumn {
   /** Ідентифікатор колонки; за ним у рядку береться значення для комірки за замовчуванням. */
@@ -28,6 +37,12 @@ export interface DataTableColumn {
   readonly width?: string;
   /** Свій вигляд комірки; без нього показується значення `row[id]` текстом. */
   readonly template?: TemplateRef<DataTableCellContext>;
+  /**
+   * Що передати серверу в `OrderBy`, коли таблицю відсортували за цією колонкою
+   * (вона привʼязана до колонки, як аргумент до кнопки); порожній рядок — поки нема.
+   * Сама таблиця нічого не надсилає, вона лише віддає колонку подією `sortChange`.
+   */
+  readonly orderBy?: string;
 }
 
 /**
@@ -41,6 +56,13 @@ export interface DataTableColumn {
  * кінці кожного рядка стоїть кнопка з трьома крапками: вона з'являється при
  * наведенні на рядок (на пристроях без наведення — завжди) і подає `rowMenu` з
  * цим рядком і самою кнопкою (до неї прив'язують спливаюче вікно); в кінці рядка заголовків — завжди видимий «+», що подає `columnAdd`. Наведений рядок виділяється акцентним кольором (`--nav-active-bg`).
+ *
+ * Заголовки колонок — кнопки сортування. Клік по заголовку: перший раз «від меншого
+ * до більшого» (іконка `caret-down-outline`), другий — навпаки (`caret-up-outline`),
+ * третій скидає вибір (знову `filter-outline`, що видно при наведенні). Вибраним
+ * лишається лише один заголовок: клік по іншому починає з першого кроку. Кожен
+ * крок подається `sortChange` (колонка й напрям, а після скидання — `null`); саме
+ * сортування (запит) робить той, хто використовує таблицю.
  */
 @Component({
   selector: 'app-data-table',
@@ -63,6 +85,31 @@ export class DataTableComponent {
   readonly rowMenu = output<DataTableRowMenuEvent>();
   /** Натиснули «+» в кінці рядка заголовків. */
   readonly columnAdd = output<void>();
+  /** Змінилося сортування: вибрана колонка з напрямом, `null` — вибір скинуто. */
+  readonly sortChange = output<DataTableSort | null>();
+
+  /** Колонка (`id`), за якою відсортовано, і напрям; `null` — без сортування. */
+  protected readonly sorted = signal<{ readonly id: string; readonly direction: DataTableSortDirection } | null>(null);
+
+  /** Клік по заголовку: нова колонка — «за зростанням», та сама — «за спаданням», потім скидання. */
+  protected toggleSort(column: DataTableColumn): void {
+    const current = this.sorted();
+    if (current?.id !== column.id) {
+      this.sorted.set({ id: column.id, direction: 'asc' });
+      this.sortChange.emit({ column, direction: 'asc' });
+    } else if (current.direction === 'asc') {
+      this.sorted.set({ id: column.id, direction: 'desc' });
+      this.sortChange.emit({ column, direction: 'desc' });
+    } else {
+      this.sorted.set(null);
+      this.sortChange.emit(null);
+    }
+  }
+
+  protected sortDirection(column: DataTableColumn): DataTableSortDirection | null {
+    const current = this.sorted();
+    return current?.id === column.id ? current.direction : null;
+  }
 
   protected openMenu(row: DataTableRow, event: Event): void {
     this.rowMenu.emit({ row, anchor: event.currentTarget as HTMLElement });

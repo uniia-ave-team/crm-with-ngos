@@ -9,7 +9,22 @@
     <thead>
       <tr>
         @for (column of columns(); track column.id) {
-          <th scope="col">{{ column.labelKey ? (column.labelKey | translate) : '' }}</th>
+          @let direction = sortDirection(column);
+          <th
+            scope="col"
+            class="data-table__head"
+            [class.data-table__head--sorted]="direction"
+            [attr.aria-sort]="direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : null"
+          >
+            <button type="button" class="data-table__sort" tabindex="0" (click)="toggleSort(column)">
+              {{ column.labelKey ? (column.labelKey | translate) : '' }}
+              <ion-icon
+                class="data-table__filter"
+                [name]="direction === 'asc' ? 'caret-down-outline' : direction === 'desc' ? 'caret-up-outline' : 'filter-outline'"
+                aria-hidden="true"
+              ></ion-icon>
+            </button>
+          </th>
         }
         <th scope="col" class="data-table__menu-cell">
           @if (showAddColumn()) {

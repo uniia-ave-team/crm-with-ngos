@@ -1,6 +1,7 @@
 <!-- Закрите вікно лишається в розмітці (зміст не пересоздається), але `inert` не дає
      фокусу й читалкам потрапити в нього. -->
 <aside
+  #panel
   class="side-panel"
   [class.side-panel--open]="isOpen()"
   role="dialog"
@@ -9,6 +10,10 @@
   [style.--side-panel-width]="width()"
 >
   <header class="side-panel__header">
+    <!-- Те, що має стояти зліва, на одній висоті з хрестиком: кнопка дії вікна тощо. -->
+    <div class="side-panel__header-start">
+      <ng-content select="[sidePanelHeader]" />
+    </div>
     <button
       #closeButton
       type="button"

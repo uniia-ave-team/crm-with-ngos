@@ -1,0 +1,43 @@
+<h2 class="roles__title">{{ 'colleagues.rolesPanel.title' | translate }}</h2>
+
+@if (view().failure; as failure) {
+  <p class="roles__message roles__message--error" role="alert">{{ 'colleagues.rolesPanel.error.' + failure | translate }}</p>
+}
+
+@if (view().roles.length > 0) {
+  <ul class="roles__list">
+    @for (role of view().roles; track role.id) {
+      <li class="roles__item">
+        <app-role-pill [name]="role.name" />
+        @if (canManage()) {
+          <div class="roles__actions">
+            <button
+              type="button"
+              class="roles__action roles__action--edit"
+              tabindex="0"
+              [attr.aria-label]="'colleagues.rolesPanel.edit' | translate"
+              [attr.title]="'colleagues.rolesPanel.edit' | translate"
+              (click)="roleEdit.emit(role)"
+            >
+              <ion-icon name="create-outline" aria-hidden="true"></ion-icon>
+            </button>
+            <button
+              type="button"
+              class="roles__action roles__action--delete"
+              tabindex="0"
+              [attr.aria-label]="'colleagues.rolesPanel.delete' | translate"
+              [attr.title]="'colleagues.rolesPanel.delete' | translate"
+              (click)="roleDelete.emit(role)"
+            >
+              <ion-icon name="trash-outline" aria-hidden="true"></ion-icon>
+            </button>
+          </div>
+        }
+      </li>
+    }
+  </ul>
+} @else if (view().status === 'loading') {
+  <p class="roles__message" role="status">{{ 'colleagues.rolesPanel.loading' | translate }}</p>
+} @else if (view().status === 'ready') {
+  <p class="roles__message">{{ 'colleagues.rolesPanel.empty' | translate }}</p>
+}

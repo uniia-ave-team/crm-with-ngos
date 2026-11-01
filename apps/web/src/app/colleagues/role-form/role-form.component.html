@@ -1,0 +1,65 @@
+<h2 class="role-form__title">{{ (role() ? 'colleagues.roleForm.editTitle' : 'colleagues.roleForm.title') | translate }}</h2>
+
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <div class="settings-field">
+    <label class="settings-field__label" for="role-form-name">{{ 'colleagues.roleForm.name' | translate }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span></label>
+    <input
+      id="role-form-name"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      required
+      [attr.maxlength]="maxLength"
+      [value]="name()"
+      (input)="onInput(name, $event)"
+    />
+    @if (nameError(); as errorKey) {
+      <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="role-form-feminitive">{{ 'colleagues.roleForm.feminitive' | translate }}</label>
+    <input
+      id="role-form-feminitive"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      [attr.maxlength]="maxLength"
+      [value]="feminitiveName()"
+      (input)="onInput(feminitiveName, $event)"
+    />
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="role-form-plural">{{ 'colleagues.roleForm.plural' | translate }}</label>
+    <input
+      id="role-form-plural"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      [attr.maxlength]="maxLength"
+      [value]="pluralName()"
+      (input)="onInput(pluralName, $event)"
+    />
+  </div>
+
+  <fieldset class="role-form__permissions">
+    <legend class="settings-field__label">{{ 'colleagues.roleForm.permissionsTitle' | translate }}</legend>
+    @for (group of permissionGroups; track group.id) {
+      <label class="role-form__permission">
+        <span class="role-form__permission-name">{{ 'colleagues.roleForm.permissions.' + group.id | translate }}</span>
+        <input
+          type="checkbox"
+          role="switch"
+          class="role-form__switch"
+          tabindex="0"
+          [checked]="enabledGroups().has(group.id)"
+          (change)="togglePermission(group.id, $event)"
+        />
+      </label>
+    }
+  </fieldset>
+
+  <button type="submit" class="settings-submit" tabindex="0">{{ (role() ? 'colleagues.roleForm.save' : 'colleagues.roleForm.submit') | translate }}</button>
+</form>
