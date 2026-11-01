@@ -1,0 +1,11 @@
+<span
+  class="pill"
+  [class.pill--active]="active()"
+  [style.--pill-base]="color()?.base ?? null"
+  [style.--pill-light]="color()?.light ?? null"
+>
+  @if (icon(); as iconName) {
+    <ion-icon class="pill__icon" [name]="iconName" aria-hidden="true"></ion-icon>
+  }
+  <span class="pill__name">{{ name() }}</span>
+</span>

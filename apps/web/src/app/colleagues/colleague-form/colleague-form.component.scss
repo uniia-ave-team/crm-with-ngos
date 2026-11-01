@@ -1,0 +1,67 @@
+// Вигляд полів і кнопки — спільний із формами налаштувань (`settings-section.scss`);
+// відступи тут свої: форма в бічному вікні, воно вже має поля.
+:host {
+  padding: 0;
+}
+
+.colleague-form__title {
+  margin: 0 0 24px;
+  font-family: var(--font-login-title);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.settings-form {
+  gap: 22px;
+}
+
+.colleague-form__roles {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  legend {
+    padding: 0;
+    margin-bottom: 14px;
+  }
+}
+
+// Ролі плашками, що переносяться на наступні рядки.
+.colleague-form__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+// Кнопка-обгортка: плашка всередині, сама кнопка без вигляду.
+.colleague-form__choice {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--settings-accent);
+    outline-offset: 2px;
+  }
+}
+
+.colleague-form__message {
+  margin: 0;
+  font-size: 14px;
+  color: var(--nav-fg-inactive);
+
+  &--error {
+    margin-bottom: 10px;
+    color: var(--nav-unavailable-icon);
+  }
+}

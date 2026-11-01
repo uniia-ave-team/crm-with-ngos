@@ -12,7 +12,7 @@ describe('authGuard', () => {
   let http: HttpTestingController;
   let accounts: AccountsService;
   let server: string;
-  const profile = { id: 'user-1', email: 'a@b.org', firstName: 'Олена', lastName: 'Іваненко', avatarUrl: null, roles: [], customFields: [] };
+  const profile = { id: 'user-1', email: 'a@b.org', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, roles: [], customFields: [] };
 
   beforeEach(() => {
     localStorage.clear();
@@ -122,8 +122,8 @@ describe('authGuard', () => {
     expect(await result).toBe(true);
 
     expect(accounts.activeId()).toBe(AccountsService.accountId(server, 'user-1'));
-    expect(TestBed.inject(CurrentUserService).user()).toMatchObject({ firstName: 'Олена' });
-    expect(accounts.active()).toMatchObject({ firstName: 'Олена', lastName: 'Іваненко' });
+    expect(TestBed.inject(CurrentUserService).user()).toMatchObject({ firstName: 'Перший' });
+    expect(accounts.active()).toMatchObject({ firstName: 'Перший', lastName: 'Другий' });
   });
 
   it('refreshes an expired token during the search', async () => {

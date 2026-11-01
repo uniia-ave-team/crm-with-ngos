@@ -97,7 +97,6 @@ describe('PersonalDataPage', () => {
 
     it.each([
       'settings-patronymic',
-      'settings-position',
       'settings-phone',
       'settings-emergency-contact',
       'settings-country',
@@ -155,7 +154,6 @@ describe('PersonalDataPage', () => {
       uk.settings.personal.firstName,
       uk.settings.personal.patronymic,
       uk.settings.personal.newAvatar,
-      uk.settings.personal.position,
       uk.settings.personal.pronouns,
       uk.settings.personal.phone,
       uk.settings.personal.emergencyContact,
@@ -208,7 +206,6 @@ describe('PersonalDataPage', () => {
       firstName: 'First',
       lastName: 'Last',
       patronymic: 'Middle',
-      internalPosition: 'Position',
       phoneNumber: '+380123456789',
       country: 'Country',
       emergencyContact: 'Contact',
@@ -288,7 +285,7 @@ describe('PersonalDataPage', () => {
 
       it('does not complain about empty optional fields', async () => {
         const { fixture, element } = await open();
-        for (const id of ['settings-patronymic', 'settings-position', 'settings-phone', 'settings-emergency-contact', 'settings-country']) {
+        for (const id of ['settings-patronymic', 'settings-phone', 'settings-emergency-contact', 'settings-country']) {
           setText(element, id, '');
         }
         save(fixture, element);
@@ -354,7 +351,6 @@ describe('PersonalDataPage', () => {
       it('puts the profile to /users/me: the typed values, the current language and a null avatar', async () => {
         const { fixture, element } = await open();
         setText(element, 'settings-last-name', ' Other ');
-        setText(element, 'settings-position', 'Position B');
         save(fixture, element);
 
         const request = http.expectOne({ method: 'PUT', url: putUrl() });
@@ -363,7 +359,6 @@ describe('PersonalDataPage', () => {
           firstName: 'First',
           lastName: 'Other',
           patronymic: 'Middle',
-          internalPosition: 'Position B',
           phoneNumber: '+380123456789',
           country: 'Country',
           emergencyContact: 'Contact',
@@ -376,8 +371,7 @@ describe('PersonalDataPage', () => {
 
       it('sends null for every empty optional field, including whitespace only', async () => {
         const { fixture, element } = await open();
-        setText(element, 'settings-patronymic', '');
-        setText(element, 'settings-position', '   ');
+        setText(element, 'settings-patronymic', '   ');
         setText(element, 'settings-phone', '');
         setText(element, 'settings-emergency-contact', '');
         setText(element, 'settings-country', '');
@@ -386,7 +380,6 @@ describe('PersonalDataPage', () => {
         const request = http.expectOne({ method: 'PUT', url: putUrl() });
         expect(request.request.body).toMatchObject({
           patronymic: null,
-          internalPosition: null,
           phoneNumber: null,
           emergencyContact: null,
           country: null,
@@ -770,22 +763,10 @@ describe('PersonalDataPage', () => {
     expect((element.querySelector('#settings-country') as HTMLInputElement).value).toBe('');
   });
 
-  it('prefills the position from the profile and puts it right before the pronouns', async () => {
-    await signIn({ firstName: 'First', lastName: 'Last', internalPosition: 'Position B' });
+  it('has no position field: the API keeps no position in the profile', async () => {
+    await signIn({ firstName: 'First', lastName: 'Last' });
     const { element } = render();
-    expect((element.querySelector('#settings-position') as HTMLInputElement).value).toBe('Position B');
-
-    const blocks = Array.from(element.querySelectorAll('form > *')).map((child) => child.querySelector('input')?.id || child.tagName.toLowerCase());
-    const position = blocks.indexOf('settings-position');
-    expect(position).toBeGreaterThan(-1);
-    // Наступний блок — займенники (fieldset), а не поле вводу.
-    expect(blocks[position + 1]).toBe('fieldset');
-  });
-
-  it('leaves the position empty when the profile has none', async () => {
-    await signIn({ firstName: 'First', lastName: 'Last', internalPosition: null });
-    const { element } = render();
-    expect((element.querySelector('#settings-position') as HTMLInputElement).value).toBe('');
+    expect(element.querySelector('#settings-position')).toBeNull();
   });
 
   it('leaves the patronymic empty when the profile has none', async () => {

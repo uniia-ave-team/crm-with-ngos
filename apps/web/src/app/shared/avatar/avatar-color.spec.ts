@@ -10,77 +10,77 @@ describe('avatarColor', () => {
   });
 
   it('takes the first two letters of each name, subtracts the last letter of the first name and adds the last letter of the last name', () => {
-    // Євген: Є(1028)+в(1074)=2102; Вишневський: В(1042)+и(1080)=2122.
-    // Поправка: −н(1085) + й(1081) = −4 → 2098 = 832 і 2118 = 846 → 832846.
-    // З білим контраст 8.9:1 (ок), з чорним лише 2.4:1 → висвітлено до #a46076.
-    expect(avatarColor('Євген', 'Вишневський')).toBe('#a46076');
+    // Пізній: П(1055)+і(1110)=2165; Другий: Д(1044)+р(1088)=2132.
+    // Поправка: −й(1081) + й(1081) = 0 → 2165 = 875 і 2132 = 854 → 875854.
+    // З білим контраст 5.9:1 (ок), з чорним лише 3.6:1 → висвітлено до #946a66.
+    expect(avatarColor('Пізній', 'Другий')).toBe('#946a66');
   });
 
   it('shifts a too bright colour towards black (first shift) and a too dark one towards white (second shift)', () => {
-    // 867846: контраст із білим 3.4:1 → затемнено до #847645 (4.5:1 з білим, 4.7:1 з чорним).
-    expect(avatarColor('Олена', 'Іваненко')).toBe('#847645');
-    // 864843: з білим 6.9:1, з чорним 2.4:1 → висвітлено до #9b6763.
-    expect(avatarColor('Олег', 'Іваненко')).toBe('#9b6763');
-    // 866847 → #8c6f4f.
-    expect(avatarColor('Оксана', 'Ігнатенко')).toBe('#8c6f4f');
+    // 83884a: контраст із білим 3.8:1 → затемнено до #767a42 (4.5:1 з білим).
+    expect(avatarColor('Єдиний', 'Вишуканий')).toBe('#767a42');
+    // 854854: з білим 6.9:1, з чорним 3.1:1 → висвітлено до #9a6771.
+    expect(avatarColor('Перший', 'Другий')).toBe('#9a6771');
+    // 85f844: з білим лише 1.4:1 → сильно затемнено до #478524.
+    expect(avatarColor('Прекрасний', 'Дальній')).toBe('#478524');
   });
 
   describe('with the name of the organization', () => {
     it('adds the 5th letter to the first-name sum and the second-to-last letter to the last-name sum', () => {
-      // Добра справа: 5-та літера а(1072), передостання в(1074).
-      // Олена: 2137 + 1072 + 14 = 3223 (c97); Іваненко: 2104 + 1074 + 14 = 3192 (c78) → c97c78
-      // З білим контраст 3.5:1 → затемнено, з чорним 5.2:1 → #a56562 після зсувів.
-      expect(avatarColor('Олена', 'Іваненко', 'Добра справа')).toBe('#a56562');
+      // Організація: 5-та літера н(1085), передостання і(1110).
+      // Перший: 2132 + 1085 + 0 = 3217 (c91); Другий: 2132 + 1110 + 0 = 3242 (caa) → c91caa.
+      // З білим контраст 5.0:1 (ок), з чорним 4.2:1 → #cc29af після зсувів.
+      expect(avatarColor('Перший', 'Другий', 'Організація')).toBe('#cc29af');
     });
 
     it('adds 0 for a missing 5th letter, but still takes the second-to-last one', () => {
-      // Мрія: 4 літери, 5-ї нема (0); передостання і(1110) → 867 і 3228 (c9c) → 867c9c.
-      expect(avatarColor('Олена', 'Іваненко', 'Мрія')).toBe('#7c7290');
+      // Ідея: 4 літери, 5-ї нема (0); передостання е(1077) → 2132 (854) і 3209 (c89) → 854c89.
+      expect(avatarColor('Перший', 'Другий', 'Ідея')).toBe('#956398');
     });
 
     it('adds 0 to both sums when the name is missing or has a single letter', () => {
-      const without = avatarColor('Олена', 'Іваненко');
-      expect(avatarColor('Олена', 'Іваненко', '')).toBe(without);
-      expect(avatarColor('Олена', 'Іваненко', 'Я')).toBe(without);
-      expect(avatarColor('Олена', 'Іваненко', ' - 1 ')).toBe(without);
+      const without = avatarColor('Перший', 'Другий');
+      expect(avatarColor('Перший', 'Другий', '')).toBe(without);
+      expect(avatarColor('Перший', 'Другий', 'Я')).toBe(without);
+      expect(avatarColor('Перший', 'Другий', ' - 1 ')).toBe(without);
     });
 
     it('counts letters only, like the names do', () => {
-      expect(avatarColor('Олена', 'Іваненко', 'Добра справа')).toBe(avatarColor('Олена', 'Іваненко', 'Добра-справа!'));
+      expect(avatarColor('Перший', 'Другий', 'Організація')).toBe(avatarColor('Перший', 'Другий', 'Організ-ація!'));
     });
 
     it('still returns null for a person with no letters, whatever the organization', () => {
-      expect(avatarColor('', '', 'Добра справа')).toBeNull();
+      expect(avatarColor('', '', 'Організація')).toBeNull();
     });
   });
 
   it('gives different colours to different people with the same initials', () => {
-    expect(avatarColor('Олена', 'Іваненко')).not.toBe(avatarColor('Оксана', 'Ігнатенко'));
-    expect(avatarColor('Олена', 'Іваненко')).not.toBe(avatarColor('Олег', 'Іваненко'));
+    expect(avatarColor('Перший', 'Другий')).not.toBe(avatarColor('Прекрасний', 'Дальній'));
+    expect(avatarColor('Перший', 'Другий')).not.toBe(avatarColor('Пізній', 'Другий'));
   });
 
   it('is stable for the same name', () => {
-    expect(avatarColor('Олена', 'Іваненко')).toBe(avatarColor('Олена', 'Іваненко'));
+    expect(avatarColor('Перший', 'Другий')).toBe(avatarColor('Перший', 'Другий'));
   });
 
   it('works with Latin names, where the sums are shorter than three hex digits', () => {
-    // Ann: 175, Li: 181; поправка −n(110) + i(105) = −5 → 170 (aa) і 176 (b0) → aab0aa → #737873.
-    expect(avatarColor('Ann', 'Li')).toBe('#737873');
+    // Abc: A(65)+b(98)=163, Xy: X(88)+y(121)=209; поправка −c(99) + y(121) = 22 → 185 (b9) і 231 (e7) → b9e7b9 → #647d64.
+    expect(avatarColor('Abc', 'Xy')).toBe('#647d64');
   });
 
   it('appends the first-name sum again when there are fewer than six digits, and takes the modulus of a negative sum', () => {
-    // Іван без прізвища: 2104 − 1085 = 1019 (3fb); прізвище: 0 − 1085 → 1085 (43d) → 3fb43d → #2f872e.
-    expect(avatarColor('Іван', '')).toBe('#2f872e');
+    // Інший без прізвища: І(1030)+н(1085)=2115, поправка 0 − й(1081) → 1034 (40a); прізвище: 0 − 1081 → 1081 (439) → 40a439 → #35872f.
+    expect(avatarColor('Інший', '')).toBe('#35872f');
   });
 
   it('uses the last name alone when there is no first name', () => {
-    // Іваненко: 2104; поправка 0 − 0 + о(1086) → імʼя 1086 (43e), прізвище 3190 (c76) → 43ec76 → #268743.
-    expect(avatarColor('', 'Іваненко')).toBe('#268743');
+    // Інший: 2115; поправка 0 − 0 + й(1081) → імʼя 1081 (439), прізвище 2115 + 1081 = 3196 (c7c) → 439c7c → #388368.
+    expect(avatarColor('', 'Інший')).toBe('#388368');
   });
 
   it('counts letters only: spaces and hyphens are ignored', () => {
-    expect(avatarColor('Марія-Анна', 'Коваль')).toBe(avatarColor('МаріяАнна', 'Коваль'));
-    expect(avatarColor('Марія Анна', 'Коваль')).toBe(avatarColor('МаріяАнна', 'Коваль'));
+    expect(avatarColor('Мала-Ласка', 'Кінець')).toBe(avatarColor('МалаЛаска', 'Кінець'));
+    expect(avatarColor('Мала Ласка', 'Кінець')).toBe(avatarColor('МалаЛаска', 'Кінець'));
   });
 
   it('copes with names of a single letter and with letters outside the basic plane', () => {

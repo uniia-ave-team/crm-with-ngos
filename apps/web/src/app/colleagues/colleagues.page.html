@@ -28,7 +28,23 @@
     [highlightedRowId]="menuRowId()"
     labelKey="page.colleagues"
     (rowMenu)="openRowMenu($event)"
+    (sortChange)="onSort($event)"
   />
+
+  @if (colleagues().status === 'failed') {
+    <div class="colleagues__list-message colleagues__list-message--error" role="alert">
+      <span>{{ 'colleagues.list.error.' + colleagues().failure | translate }}</span>
+      <button type="button" class="colleagues__retry" tabindex="0" (click)="loadColleagues()">{{ 'colleagues.list.retry' | translate }}</button>
+    </div>
+  } @else if (colleagues().status === 'loading' && colleagues().users.length === 0) {
+    <p class="colleagues__list-message" role="status">{{ 'colleagues.list.loading' | translate }}</p>
+  } @else if (colleagues().status === 'ready' && colleagues().users.length === 0) {
+    <p class="colleagues__list-message">{{ 'colleagues.list.empty' | translate }}</p>
+  }
+
+  <ion-infinite-scroll threshold="200px" [disabled]="!colleagues().hasMore || colleagues().status === 'failed'" (ionInfinite)="onInfiniteScroll($event)">
+    <ion-infinite-scroll-content loadingSpinner="dots"></ion-infinite-scroll-content>
+  </ion-infinite-scroll>
 </ion-content>
 
 <!-- Меню дій з колегою: відкривається кнопкою з трьома крапками під нею. -->
@@ -41,17 +57,48 @@
   [label]="'table.rowMenu' | translate"
   (closed)="menuRowId.set(null)"
 >
-  <app-colleague-actions [items]="actions()" (choose)="onActionChosen($event)" />
+  <app-colleague-actions [items]="menuItems()" (choose)="onActionChosen($event)" />
 </app-popover>
 
-<!-- Бічне вікно: його відкривають «Ролі», «Додати» та дії з меню; зміст ще не зроблено. -->
-<app-side-panel [label]="'page.colleagues' | translate" (closed)="panel.set(null)"></app-side-panel>
+<!-- Бічне вікно: його відкривають «Ролі», «Додати» та дії з меню; зміст поки є в «Ролей» і «Додати». -->
+<app-side-panel [label]="'page.colleagues' | translate" (closed)="panel.set(null)">
+  @if (panelContent() === 'roles' && rolesScreen() === 'list' && canManageRoles()) {
+    <button sidePanelHeader type="button" class="colleagues__btn colleagues__btn--add colleagues__btn--panel" tabindex="0" (click)="addRole()">
+      <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+      <span>{{ 'colleagues.rolesPanel.add' | translate }}</span>
+    </button>
+  }
+  @if (panelContent() === 'roles' && rolesScreen() !== 'list') {
+    <button sidePanelHeader type="button" class="colleagues__btn colleagues__btn--back colleagues__btn--panel" tabindex="0" (click)="backToRoles()">
+      <ion-icon name="arrow-back-outline" aria-hidden="true"></ion-icon>
+      <span>{{ 'common.back' | translate }}</span>
+    </button>
+  }
+  @if (panelContent() === 'roles' && rolesScreen() === 'add') {
+    <app-role-form (save)="createRole($event)" />
+  }
+  @if (panelContent() === 'roles' && rolesScreen() === 'edit') {
+    @if (roleEditView().role; as editedRole) {
+      <app-role-form [role]="editedRole" (save)="updateRole(editedRole, $event)" />
+    } @else if (roleEditView().failure; as failure) {
+      <p class="colleagues__panel-message colleagues__panel-message--error" role="alert">{{ 'colleagues.roleForm.loadError.' + failure | translate }}</p>
+    } @else {
+      <p class="colleagues__panel-message" role="status">{{ 'colleagues.roleForm.loading' | translate }}</p>
+    }
+  }
+  @if (panelContent() === 'add') {
+    <app-colleague-form [roles]="rolesView()" (save)="createColleague($event)" />
+  }
+  @if (panelContent() === 'roles' && rolesScreen() === 'list') {
+    <app-roles-panel [view]="rolesView()" [canManage]="canManageRoles()" (roleEdit)="editRole($event)" (roleDelete)="deleteRole($event)" />
+  }
+</app-side-panel>
 
 <!-- ПІБ: аватар, імʼя й займенники. -->
 <ng-template #personCell let-row>
   @let colleague = asColleague(row);
   <div class="person">
-    <app-avatar class="person__avatar" [firstName]="null" [lastName]="null" [avatarUrl]="null" />
+    <app-avatar class="person__avatar" [firstName]="colleague.firstName" [lastName]="colleague.lastName" [avatarUrl]="colleague.avatarUrl" [ngoName]="ngoName()" />
     <div class="person__text">
       <span class="person__name">{{ colleague.name }}</span>
       <span class="person__pronouns">{{ colleague.pronouns }}</span>
@@ -59,13 +106,15 @@
   </div>
 </ng-template>
 
-<!-- Посада: бейдж і рядки з кольоровою крапкою. -->
+<!-- Посада: ролі колеги плашками в рядок і рядки «проєкт — роль» з кольоровою крапкою. -->
 <ng-template #positionCell let-row>
   @let colleague = asColleague(row);
   <div class="position">
-    @if (colleague.badge; as badge) {
-      <span class="badge" [class]="'badge badge--' + badge.tone">{{ badge.text }}</span>
-    }
+    <div class="position__roles">
+      @for (role of colleague.roles; track role.id) {
+        <app-role-pill [name]="role.name" />
+      }
+    </div>
     @for (line of colleague.lines; track $index) {
       <span class="position__line">
         <span class="position__dot" [class]="'position__dot position__dot--' + line.color" aria-hidden="true"></span>
