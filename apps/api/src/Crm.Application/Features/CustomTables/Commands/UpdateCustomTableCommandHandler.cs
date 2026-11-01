@@ -52,7 +52,11 @@ public partial class UpdateCustomTableCommandHandler(
         }
 
         customTable.Fields.EnsureValidFieldSchema();
-        await customRecordRepository.SyncRecordSchemaAsync(customTable.Id, diff, cancellationToken);
+
+        if (hasRecords)
+        {
+            await customRecordRepository.SyncRecordSchemaAsync(customTable.Id, diff, cancellationToken);
+        }
 
         LogCustomTableUpdatedSuccessfully(logger, customTable.Id);
     }

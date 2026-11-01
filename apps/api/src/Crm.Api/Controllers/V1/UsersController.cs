@@ -10,7 +10,6 @@ using Crm.Application.Dtos.User.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
-using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -140,9 +139,7 @@ public class UsersController(
         [FromBody] UpdateProfileRequest request,
         CancellationToken cancellationToken)
     {
-        var command = request.Adapt<UpdateUserProfileCommand>() with { UserId = id };
-
-        await mediator.Send(command, cancellationToken);
+        await mediator.Send(request.ToCommand(id), cancellationToken);
 
         return NoContent();
     }
@@ -198,9 +195,7 @@ public class UsersController(
         [FromBody] UpdateProfileRequest request,
         CancellationToken cancellationToken)
     {
-        var command = request.Adapt<UpdateUserProfileCommand>() with { UserId = currentUserService.GetUserId() };
-
-        await mediator.Send(command, cancellationToken);
+        await mediator.Send(request.ToCommand(currentUserService.GetUserId()), cancellationToken);
 
         return NoContent();
     }
@@ -267,9 +262,7 @@ public class UsersController(
         [FromBody] UpdatePasswordRequest request,
         CancellationToken cancellationToken)
     {
-        var command = request.Adapt<UpdatePasswordCommand>() with { UserId = currentUserService.GetUserId() };
-
-        await mediator.Send(command, cancellationToken);
+        await mediator.Send(request.ToCommand(currentUserService.GetUserId()), cancellationToken);
 
         return NoContent();
     }
@@ -305,9 +298,7 @@ public class UsersController(
         [FromBody] AddCustomUserFieldRequest request,
         CancellationToken cancellationToken)
     {
-        var command = request.Adapt<AddUserCustomFieldCommand>() with { UserId = currentUserService.GetUserId() };
-
-        await mediator.Send(command, cancellationToken);
+        await mediator.Send(request.ToCommand(currentUserService.GetUserId()), cancellationToken);
         return NoContent();
     }
 
@@ -350,13 +341,7 @@ public class UsersController(
         [FromBody] UpdateCustomFieldRequest request,
         CancellationToken cancellationToken)
     {
-        var command = request.Adapt<UpdateUserCustomFieldCommand>() with
-        {
-            CustomFieldId = customFieldId,
-            UserId = currentUserService.GetUserId(),
-        };
-
-        await mediator.Send(command, cancellationToken);
+        await mediator.Send(request.ToCommand(customFieldId, currentUserService.GetUserId()), cancellationToken);
         return NoContent();
     }
 
@@ -486,9 +471,7 @@ public class UsersController(
         [FromBody] AddCustomUserFieldRequest request,
         CancellationToken cancellationToken)
     {
-        var command = request.Adapt<AddUserCustomFieldCommand>() with { UserId = id };
-
-        await mediator.Send(command, cancellationToken);
+        await mediator.Send(request.ToCommand(id), cancellationToken);
         return NoContent();
     }
 
@@ -533,13 +516,7 @@ public class UsersController(
         [FromBody] UpdateCustomFieldRequest request,
         CancellationToken cancellationToken)
     {
-        var command = request.Adapt<UpdateUserCustomFieldCommand>() with
-        {
-            CustomFieldId = customFieldId,
-            UserId = id,
-        };
-
-        await mediator.Send(command, cancellationToken);
+        await mediator.Send(request.ToCommand(customFieldId, id), cancellationToken);
         return NoContent();
     }
 

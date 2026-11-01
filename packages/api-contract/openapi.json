@@ -5397,7 +5397,6 @@
           "firstName",
           "lastName",
           "patronymic",
-          "internalPosition",
           "phoneNumber",
           "country",
           "emergencyContact",
@@ -5421,13 +5420,6 @@
               "string"
             ],
             "description": "The updated patronymic."
-          },
-          "internalPosition": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "description": "The updated internal position or job title within the NGO."
           },
           "phoneNumber": {
             "type": [
@@ -5631,7 +5623,6 @@
           "firstName",
           "lastName",
           "patronymic",
-          "internalPosition",
           "phoneNumber",
           "country",
           "emergencyContact",
@@ -5657,12 +5648,6 @@
             "type": "string"
           },
           "patronymic": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "internalPosition": {
             "type": [
               "null",
               "string"

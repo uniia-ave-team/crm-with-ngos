@@ -1,7 +1,7 @@
 using Crm.Application.Common.Validators;
 using Crm.Application.Dtos.CustomTemplates;
 using Crm.Application.Dtos.CustomTemplates.Commands;
-using Crm.Domain.Consts.Entities;
+using Crm.Domain.Consts.Entities.ValidationConstants;
 using FluentValidation;
 
 namespace Crm.Application.Features.CustomTemplates.Validators;

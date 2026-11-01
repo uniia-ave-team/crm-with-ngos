@@ -119,7 +119,6 @@ public class AuthUserRepository(
                 u.UserProfile.FirstName.ToLower().Contains(term) ||
                 u.UserProfile.LastName.ToLower().Contains(term) ||
                 (u.UserProfile.Patronymic != null && u.UserProfile.Patronymic.ToLower().Contains(term)) ||
-                (u.UserProfile.InternalPosition != null && u.UserProfile.InternalPosition.ToLower().Contains(term)) ||
                 (u.UserProfile.PhoneNumber != null && u.UserProfile.PhoneNumber.ToLower().Contains(term)) ||
                 (u.UserProfile.Country != null && u.UserProfile.Country.ToLower().Contains(term)) ||
                 (u.Email != null && u.Email.ToLower().Contains(term)));

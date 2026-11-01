@@ -10,7 +10,6 @@ namespace Crm.Application.Dtos.User;
 /// <param name="FirstName">The first name of the user.</param>
 /// <param name="LastName">The last name of the user.</param>
 /// <param name="Patronymic">The patronymic of the user.</param>
-/// <param name="InternalPosition">The internal position or job title of the user within the NGO.</param>
 /// <param name="PhoneNumber">The phone number of the user.</param>
 /// <param name="Country">The country of residence of the user.</param>
 /// <param name="EmergencyContact">The emergency contact information for the user.</param>
@@ -25,7 +24,6 @@ public record UserProfileDto(
     string FirstName,
     string LastName,
     string? Patronymic,
-    string? InternalPosition,
     string? PhoneNumber,
     string? Country,
     string? EmergencyContact,
