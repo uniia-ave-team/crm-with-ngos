@@ -13,7 +13,15 @@ public class AuthUserMappingRegister : IRegister
     {
         config.NewConfig<AuthUser, UserDto>()
             .Map(dest => dest.FirstName, src => src.UserProfile.FirstName)
-            .Map(dest => dest.LastName, src => src.UserProfile.LastName);
+            .Map(dest => dest.LastName, src => src.UserProfile.LastName)
+            .Map(dest => dest.Patronymic, src => src.UserProfile.Patronymic)
+            .Map(dest => dest.PhoneNumber, src => src.UserProfile.PhoneNumber)
+            .Map(dest => dest.Country, src => src.UserProfile.Country)
+            .Map(dest => dest.EmergencyContact, src => src.UserProfile.EmergencyContact)
+            .Map(dest => dest.Pronouns, src => src.UserProfile.Pronouns)
+            .Map(dest => dest.PronounCategory, src => src.UserProfile.PronounCategory)
+            .Map(dest => dest.AvatarUrl, src => src.UserProfile.Avatar)
+            .Ignore(dest => dest.Roles);
 
         config.NewConfig<AuthUser, UserStatusDto>()
             .Map(dest => dest.IsActive, src => src.UserProfile.IsActive);

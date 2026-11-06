@@ -21,6 +21,7 @@ public enum AccessRight
     ManageRole = 9,
 
     // --- Ngo ---
+    // TODO: Drop ViewNgo right
     ViewNgo = 10,
     CreateNgo = 11,
     UpdateNgo = 12,

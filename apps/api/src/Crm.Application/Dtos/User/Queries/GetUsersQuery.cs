@@ -13,8 +13,8 @@ namespace Crm.Application.Dtos.User.Queries;
 /// If null or whitespace, no text filtering is applied.
 /// </param>
 /// <param name="OrderBy">
-/// The name of the entity property by which the collection should be sorted (e.g., "Email", "FirstName").
-/// Default is "Email".
+/// The name of the entity property or alias by which the collection should be sorted (e.g., "FirstName", "LastName", "FullName", "Email").
+/// Default is "FirstName".
 /// </param>
 /// <param name="SortOrder">
 /// The direction of sorting. Use <see cref="SortOrderConstants.Ascending"/>

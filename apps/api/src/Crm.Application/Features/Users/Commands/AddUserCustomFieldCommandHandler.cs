@@ -18,6 +18,7 @@ public partial class AddUserCustomFieldCommandHandler(
 {
     public async Task Handle(AddUserCustomFieldCommand request, CancellationToken cancellationToken)
     {
+        // TODO: Make another handler to add a custom field to many users at once and implement bulk delete for that as well.
         LogAddingCustomField(logger, request.Key, request.UserId);
 
         await userRepository.EnsureExistsAsync(request.UserId, cancellationToken);
