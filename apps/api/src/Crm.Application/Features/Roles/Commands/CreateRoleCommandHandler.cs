@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Role.Commands;
 using Crm.Application.Interfaces;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Roles.Commands;
@@ -15,7 +15,7 @@ public partial class CreateRoleCommandHandler(
     IRoleIdentityService identityService,
     ILogger<CreateRoleCommandHandler> logger) : IRequestHandler<CreateRoleCommand, Guid>
 {
-    public async Task<Guid> Handle(CreateRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateRoleCommand request, CancellationToken cancellationToken)
     {
         LogCreatingRole(logger, request.Name);
 

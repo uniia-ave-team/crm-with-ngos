@@ -3,7 +3,7 @@ using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -16,9 +16,9 @@ public partial class AddUserCustomFieldCommandHandler(
     IUserRepository userRepository,
     ILogger<AddUserCustomFieldCommandHandler> logger) : IRequestHandler<AddUserCustomFieldCommand>
 {
-    public async Task Handle(AddUserCustomFieldCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(AddUserCustomFieldCommand request, CancellationToken cancellationToken)
     {
-        // TODO: Make another handler to add a custom field to many users at once and implement bulk delete for that as well.
+        // TODO: Make another handler to add a custom field to many users at once (or introduce a global user schema / field definition) and implement bulk delete for that as well.
         LogAddingCustomField(logger, request.Key, request.UserId);
 
         await userRepository.EnsureExistsAsync(request.UserId, cancellationToken);
@@ -28,6 +28,8 @@ public partial class AddUserCustomFieldCommandHandler(
         await customFieldRepository.CreateAsync(request.Adapt<UserCustomField>(), cancellationToken);
 
         LogCustomFieldAddedSuccessfully(logger, request.Key, request.UserId);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.AddingUserCustomField, Level = LogLevel.Information, Message = "Adding custom field '{Key}' for user ID: {UserId}")]

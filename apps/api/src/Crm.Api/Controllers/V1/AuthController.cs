@@ -3,7 +3,7 @@ using Crm.Api.Dtos;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

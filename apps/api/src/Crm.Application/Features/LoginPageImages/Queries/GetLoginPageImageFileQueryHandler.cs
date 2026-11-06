@@ -4,7 +4,7 @@ using Crm.Application.Dtos.LoginPageImage.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.LoginPageImages.Queries;
@@ -20,7 +20,7 @@ public partial class GetLoginPageImageFileQueryHandler(
     IFileStorageService fileStorageService,
     ILogger<GetLoginPageImageFileQueryHandler> logger) : IRequestHandler<GetLoginPageImageFileQuery, FileDto>
 {
-    public async Task<FileDto> Handle(GetLoginPageImageFileQuery request, CancellationToken cancellationToken)
+    public async ValueTask<FileDto> Handle(GetLoginPageImageFileQuery request, CancellationToken cancellationToken)
     {
         LogFetchingLoginPageImageFile(logger, request.Id);
 

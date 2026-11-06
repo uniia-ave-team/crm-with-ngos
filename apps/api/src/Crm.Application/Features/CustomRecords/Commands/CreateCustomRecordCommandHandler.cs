@@ -4,7 +4,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomRecords.Commands;
@@ -23,7 +23,7 @@ public partial class CreateCustomRecordCommandHandler(
     ICustomRecordRepository customRecordRepository,
     ILogger<CreateCustomRecordCommandHandler> logger) : IRequestHandler<CreateCustomRecordCommand, Guid>
 {
-    public async Task<Guid> Handle(CreateCustomRecordCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateCustomRecordCommand request, CancellationToken cancellationToken)
     {
         LogCreatingCustomRecord(logger, request.CustomTableId);
 

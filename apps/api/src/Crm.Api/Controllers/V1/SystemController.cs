@@ -2,7 +2,7 @@ using Asp.Versioning;
 using Crm.Application.Dtos.Common;
 using Crm.Application.Dtos.System;
 using Crm.Application.Dtos.System.Queries;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Crm.Api.Controllers.V1;

@@ -144,7 +144,7 @@ public class UpdateCustomTableCommandHandlerTests
 
         // Act & Assert
         await Should.ThrowAsync<EntityNotFoundException<CustomTable>>(() =>
-            _handler.Handle(command, CancellationToken.None));
+            _handler.Handle(command, CancellationToken.None).AsTask());
     }
 
     /// <summary>
@@ -182,7 +182,7 @@ public class UpdateCustomTableCommandHandlerTests
 
         // Act & Assert
         await Should.ThrowAsync<FieldDataTypeChangeNotAllowedException>(() =>
-            _handler.Handle(command, CancellationToken.None));
+            _handler.Handle(command, CancellationToken.None).AsTask());
 
         await _customRecordRepository.DidNotReceive()
             .SyncRecordSchemaAsync(Arg.Any<Guid>(), Arg.Any<SchemaDiffResult>(), Arg.Any<CancellationToken>());

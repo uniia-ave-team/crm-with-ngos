@@ -3,7 +3,7 @@ using Crm.Application.Dtos.Role;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -19,7 +19,7 @@ public partial class AssignUserRoleCommandHandler(
     IIdentityService identityService,
     ILogger<AssignUserRoleCommandHandler> logger) : IRequestHandler<AssignUserRoleCommand>
 {
-    public async Task Handle(AssignUserRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(AssignUserRoleCommand request, CancellationToken cancellationToken)
     {
         LogAssigningRole(logger, request.RoleId, request.UserId);
 
@@ -28,6 +28,8 @@ public partial class AssignUserRoleCommandHandler(
         await identityService.AddToRoleAsync(request.UserId, role.Name, cancellationToken);
 
         LogRoleAssignedSuccessfully(logger, request.RoleId, request.UserId);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.AssigningRole, Level = LogLevel.Information, Message = "Initiating assignment of role ID '{RoleId}' to user ID: {UserId}")]

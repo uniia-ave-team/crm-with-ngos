@@ -143,6 +143,7 @@ public class AuthUserRepository(
                 ? query.OrderByDescending(u => u.UserProfile.CreatedAt).ThenBy(u => u.Id)
                 : query.OrderBy(u => u.UserProfile.CreatedAt).ThenBy(u => u.Id),
 
+            // TODO: Support dynamic sorting on user custom fields with SQL type casting (Date, Number, Text) similar to CustomRecordRepository.
             _ => base.ApplyOrdering<TResult>(query, normalizedOrderBy, sortOrder),
         };
     }

@@ -5,7 +5,7 @@ using Crm.Application.Dtos.User.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Queries;
@@ -21,7 +21,7 @@ public partial class ValidateInvitationTokenQueryHandler(
     IAuthUserRepository authUserRepository,
     ILogger<ValidateInvitationTokenQueryHandler> logger) : IRequestHandler<ValidateInvitationTokenQuery, InvitationDetailsDto>
 {
-    public async Task<InvitationDetailsDto> Handle(ValidateInvitationTokenQuery request, CancellationToken cancellationToken)
+    public async ValueTask<InvitationDetailsDto> Handle(ValidateInvitationTokenQuery request, CancellationToken cancellationToken)
     {
         LogValidatingToken(logger);
 

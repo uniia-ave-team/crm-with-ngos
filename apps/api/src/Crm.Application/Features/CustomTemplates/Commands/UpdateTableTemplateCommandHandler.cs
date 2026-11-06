@@ -6,7 +6,7 @@ using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTemplates.Commands;
@@ -20,7 +20,7 @@ public partial class UpdateTableTemplateCommandHandler(
     ITableTemplateRepository tableTemplateRepository,
     ILogger<UpdateTableTemplateCommandHandler> logger) : IRequestHandler<UpdateTableTemplateCommand>
 {
-    public async Task Handle(UpdateTableTemplateCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateTableTemplateCommand request, CancellationToken cancellationToken)
     {
         LogUpdatingTableTemplate(logger, request.Id, request.Name);
 
@@ -44,6 +44,8 @@ public partial class UpdateTableTemplateCommandHandler(
         template.Fields.EnsureValidFieldSchema();
 
         LogTableTemplateUpdatedSuccessfully(logger, template.Id);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.UpdatingTableTemplate, Level = LogLevel.Information, Message = "Initiating update for table template ID: {TemplateId} with Name: {TemplateName}")]

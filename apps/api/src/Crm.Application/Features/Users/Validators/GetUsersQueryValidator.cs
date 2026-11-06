@@ -12,6 +12,7 @@ namespace Crm.Application.Features.Users.Validators;
 /// </summary>
 public class GetUsersQueryValidator : AbstractValidator<GetUsersQuery>
 {
+    // TODO: Support dynamic sorting by custom field keys with DataType resolution (Date, Number, Text) once UserCustomField has DataType support.
     private static readonly HashSet<string> AllowedSortFields = new(StringComparer.OrdinalIgnoreCase)
     {
         nameof(UserDto.Id),

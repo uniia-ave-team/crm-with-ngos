@@ -2,7 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Common;
 using Crm.Application.Dtos.System.Queries;
 using Crm.Application.Interfaces;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.System.Queries;
@@ -22,7 +22,7 @@ public sealed partial class GetIdentityOptionsQueryHandler(
     /// <param name="request">The query request.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the operation, containing the identity options.</returns>
-    public Task<IdentityOptionsDto> Handle(GetIdentityOptionsQuery request, CancellationToken cancellationToken)
+    public ValueTask<IdentityOptionsDto> Handle(GetIdentityOptionsQuery request, CancellationToken cancellationToken)
     {
         LogRetrievingIdentityOptions(logger);
 
@@ -30,7 +30,7 @@ public sealed partial class GetIdentityOptionsQueryHandler(
 
         LogIdentityOptionsRetrieved(logger);
 
-        return Task.FromResult(options);
+        return ValueTask.FromResult(options);
     }
 
     [LoggerMessage(EventId = LogEventIds.RetrievingIdentityOptions, Level = LogLevel.Information, Message = "Retrieving system identity options and password requirements.")]

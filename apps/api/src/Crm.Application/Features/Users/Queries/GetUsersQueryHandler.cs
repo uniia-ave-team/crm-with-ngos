@@ -7,7 +7,7 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Queries;
@@ -23,7 +23,7 @@ public partial class GetUsersQueryHandler(
     IFileUrlProvider fileUrlProvider,
     ILogger<GetUsersQueryHandler> logger) : IRequestHandler<GetUsersQuery, PagedResult<UserDto>>
 {
-    public async Task<PagedResult<UserDto>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<UserDto>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
     {
         LogFetchingUsers(logger, request.PageNumber, request.PageSize, request.SearchTerm != null);
 

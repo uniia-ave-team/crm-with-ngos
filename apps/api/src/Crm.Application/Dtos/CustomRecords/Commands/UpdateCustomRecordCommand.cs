@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 using Crm.Application.Interfaces;
-using MediatR;
+using Mediator;
 
 namespace Crm.Application.Dtos.CustomRecords.Commands;
 

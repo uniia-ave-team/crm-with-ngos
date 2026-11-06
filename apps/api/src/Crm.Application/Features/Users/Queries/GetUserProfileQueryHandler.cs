@@ -6,7 +6,7 @@ using Crm.Application.Features.Users.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Queries;
@@ -22,7 +22,7 @@ public partial class GetUserProfileQueryHandler(
     IFileUrlProvider fileUrlProvider,
     ILogger<GetUserProfileQueryHandler> logger) : IRequestHandler<GetUserProfileQuery, UserProfileDto>
 {
-    public async Task<UserProfileDto> Handle(GetUserProfileQuery request, CancellationToken cancellationToken)
+    public async ValueTask<UserProfileDto> Handle(GetUserProfileQuery request, CancellationToken cancellationToken)
     {
         LogFetchingUserProfile(logger, request.UserId);
 
