@@ -24,7 +24,8 @@ describe('AppRoutingModule', () => {
     }
   });
 
-  it('has no guards on the login page', () => {
+  it('has no guards on the login page and on the page of the invitation', () => {
     expect(guards('login')).toBe(0);
+    expect(guards('join')).toBe(0);
   });
 });

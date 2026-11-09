@@ -1,0 +1,148 @@
+:host {
+  display: block;
+}
+
+// Зміст вікна запрошення (`app-modal`): посилання, яким адмін ділиться з колегою.
+.invitation {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--nav-fg-active);
+  font-family: var(--font-menu);
+}
+
+// Заголовок і хрестик в одному рядку, хрестик такий самий, як у бічного вікна.
+.invitation__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.invitation__title {
+  margin: 0;
+  font-family: var(--font-login-title);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.invitation__close,
+.invitation__copy,
+.invitation__share {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+.invitation__close {
+  width: 40px;
+  height: 40px;
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-inactive);
+  font-size: 24px;
+
+  &:hover {
+    color: var(--nav-fg-active);
+  }
+}
+
+.invitation__hint {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+// Рядок посилання: поле з прокруткою й кнопка копіювання в кінці.
+.invitation__link-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0px 0px 0px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--nav-bg);
+}
+
+// Одне рядкове поле: довге посилання не переноситься, а прокручується; виділяється одним кліком.
+.invitation__link {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  overflow-x: auto;
+  color: var(--nav-fg-active);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+  margin-right: 4px;
+  user-select: all;
+  outline: none;
+  scrollbar-width: thin;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+// Кнопки в кінці рядка: приєднані до правого краю, з лінією зліва; закруглення справа лише в
+// останньої (копіювання, коли «Поділитися» нема, чи сама «Поділитися»).
+.invitation__copy,
+.invitation__share {
+  width: 36px;
+  height: 36px;
+  background: var(--nav-active-bg);
+  border-radius: 0;
+  border-left: 1px solid var(--nav-border);
+  color: var(--nav-fg-inactive);
+  font-size: 20px;
+
+  &:last-child {
+    border-radius: 0 10px 10px 0;
+  }
+
+  &:hover {
+    color: var(--nav-fg-active);
+  }
+}
+
+.invitation__status {
+  // Порожній рядок стану не займає місця; повідомлення про копіювання зʼявляється під посиланням.
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-size: 13px;
+
+  &--error {
+    color: var(--nav-unavailable-icon);
+  }
+}
+
+.invitation__details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  margin: 0;
+  font-size: 14px;
+
+  dt {
+    color: var(--nav-fg-inactive);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}

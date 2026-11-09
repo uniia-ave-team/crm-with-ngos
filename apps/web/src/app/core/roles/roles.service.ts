@@ -22,6 +22,27 @@ export interface Role {
   readonly pluralName: string | null;
 }
 
+/** Дані нової ролі для `POST /api/v1/roles`: порожні необовʼязкові назви — `null`. */
+export interface RoleDraft {
+  readonly name: string;
+  readonly feminitiveName: string | null;
+  readonly pluralName: string | null;
+}
+
+/**
+ * Результат створення ролі: або причина невдачі (роль не створено), або `id` створеної
+ * ролі разом із правами, які не вдалося додати (`failedClaims`; порожньо — усе додано).
+ */
+export type CreateRoleResult =
+  | RequestFailure
+  | { readonly id: string; readonly failedClaims: readonly string[] };
+
+/**
+ * Результат оновлення ролі: або причина невдачі (дані ролі не збережено, права не чіпали),
+ * або перелік прав, зміну яких не вдалося застосувати (`failedClaims`; порожньо — усе зроблено).
+ */
+export type UpdateRoleResult = RequestFailure | { readonly failedClaims: readonly string[] };
+
 /** Роль з правами (`GET /api/v1/roles/{id}`): `claims` — рядки прав, як їх віддає сервер. */
 export interface RoleDetails extends Role {
   readonly claims: readonly string[];
@@ -73,6 +94,99 @@ export class RolesService {
       }
     }
     return roles;
+  }
+
+  /**
+   * Створює роль із правами: `POST /api/v1/roles` (потрібне право `ManageRole`; у відповіді `id`
+   * нової ролі), а потім для кожного права окремо `POST /api/v1/roles/{id}/claims/{право}` — іншого
+   * способу задати права сервер не має. Права додаються по черзі (кожне змінює ту саму роль),
+   * невдачі окремого права не зупиняють решту: їх повертає `failedClaims`. Якщо роль не створено
+   * — причина невдачі.
+   */
+  async create(draft: RoleDraft, claims: readonly string[]): Promise<CreateRoleResult> {
+    const url = `${this.connection.serverUrl()}${API_ROLES_PATH}`;
+    console.log(`[RolesService] Створюю роль: ${url}`);
+    let id: string;
+    try {
+      const body = await firstValueFrom(this.http.post<unknown>(url, draft).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      const created = typeof body === 'string' ? body : (body as Record<string, unknown> | null)?.['id'] ?? (body as Record<string, unknown> | null)?.['Id'];
+      if (typeof created !== 'string' || !created) {
+        console.warn('[RolesService] Відповідь без id створеної ролі', body);
+        return 'error';
+      }
+      id = created;
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[RolesService] Не вдалося створити роль (${failure})`, error);
+      return failure;
+    }
+
+    const failedClaims: string[] = [];
+    for (const claim of claims) {
+      if ((await this.addClaim(id, claim)) !== 'added') {
+        failedClaims.push(claim);
+      }
+    }
+    return { id, failedClaims };
+  }
+
+  /**
+   * Оновлює роль: `PUT /api/v1/roles/{id}` з новими назвами (потрібне право `ManageRole`; тіло
+   * `{newName, feminitiveName, pluralName}`, у відповідь 204), а потім для кожного права з `change`
+   * окремий запит `POST /api/v1/roles/{id}/claims/{право}` (додати) чи `DELETE` (прибрати), по
+   * черзі. Невдача окремого права не зупиняє решту: їх повертає `failedClaims`. Якщо назви не
+   * збережено — причина невдачі, права не чіпаються.
+   */
+  async update(id: string, draft: RoleDraft, change: { readonly add: readonly string[]; readonly remove: readonly string[] }): Promise<UpdateRoleResult> {
+    const url = `${this.connection.serverUrl()}${API_ROLES_PATH}/${encodeURIComponent(id)}`;
+    console.log(`[RolesService] Оновлюю роль: ${url}`);
+    try {
+      const body = { newName: draft.name, feminitiveName: draft.feminitiveName, pluralName: draft.pluralName };
+      await firstValueFrom(this.http.put(url, body).pipe(timeout(REQUEST_TIMEOUT_MS)));
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[RolesService] Не вдалося оновити роль (${failure})`, error);
+      return failure;
+    }
+
+    const failedClaims: string[] = [];
+    for (const claim of change.add) {
+      if ((await this.addClaim(id, claim)) !== 'added') {
+        failedClaims.push(claim);
+      }
+    }
+    for (const claim of change.remove) {
+      if ((await this.removeClaim(id, claim)) !== 'removed') {
+        failedClaims.push(claim);
+      }
+    }
+    return { failedClaims };
+  }
+
+  /** `DELETE /api/v1/roles/{id}/claims/{право}` — прибирає одне право ролі (204 без тіла). */
+  private async removeClaim(roleId: string, claim: string): Promise<'removed' | RequestFailure> {
+    const url = `${this.connection.serverUrl()}${API_ROLES_PATH}/${encodeURIComponent(roleId)}/claims/${encodeURIComponent(claim)}`;
+    try {
+      await firstValueFrom(this.http.delete(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      return 'removed';
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[RolesService] Не вдалося прибрати право ${claim} ролі ${roleId} (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /** `POST /api/v1/roles/{id}/claims/{право}` — додає одне право ролі (204 без тіла). */
+  private async addClaim(roleId: string, claim: string): Promise<'added' | RequestFailure> {
+    const url = `${this.connection.serverUrl()}${API_ROLES_PATH}/${encodeURIComponent(roleId)}/claims/${encodeURIComponent(claim)}`;
+    try {
+      await firstValueFrom(this.http.post(url, null).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      return 'added';
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[RolesService] Не вдалося додати право ${claim} ролі ${roleId} (${failure})`, error);
+      return failure;
+    }
   }
 
   /**

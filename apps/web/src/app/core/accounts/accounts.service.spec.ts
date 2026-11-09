@@ -105,6 +105,61 @@ describe('AccountsService', () => {
       expect(service.active()).toMatchObject({ accessToken: 'new', firstName: 'Перший', ngoName: 'Організація', addedAt: first.addedAt });
     });
 
+    describe('overwriting the account of a key', () => {
+      it('puts the new data into that record and keeps its id, order and moment of adding', () => {
+        const first = service.add({ server, ...tokens, identity: 'user-1', email: 'a@b.org' });
+        const second = service.add({ server: other, ...tokens, identity: 'user-2' });
+
+        const replaced = service.add({ server, accessToken: 'new', refreshToken: 'new-refresh', identity: 'user-9', email: 'a@b.org' }, first.id);
+
+        expect(replaced).toMatchObject({ id: first.id, identity: 'user-9', accessToken: 'new', refreshToken: 'new-refresh', addedAt: first.addedAt });
+        expect(service.accounts().map((account) => account.id)).toEqual([first.id, second.id]);
+        expect(service.activeId()).toBe(first.id);
+        expect(record(first.id)).toMatchObject({ identity: 'user-9', refreshToken: 'new-refresh' });
+      });
+
+      it('moves the record to another server when the sign-in was on another one', () => {
+        const account = service.add({ server, ...tokens, identity: 'user-1' });
+        const replaced = service.add({ server: other, ...tokens, identity: 'user-1' }, account.id);
+
+        expect(replaced).toMatchObject({ id: account.id, server: other });
+        expect(service.accounts()).toHaveLength(1);
+      });
+
+      it('keeps the snapshot of the profile for the same user on the same server', () => {
+        const account = service.add({ server, ...tokens, identity: 'user-1', firstName: 'Перший', permissions: ['A'] });
+        const replaced = service.add({ server, accessToken: 'new', refreshToken: 'new-refresh', identity: 'user-1' }, account.id);
+
+        expect(replaced).toMatchObject({ firstName: 'Перший', permissions: ['A'] });
+      });
+
+      it('drops the snapshot of another user, it was not his', () => {
+        const account = service.add({ server, ...tokens, identity: 'user-1', firstName: 'Перший', ngoName: 'Організація', permissions: ['A'] });
+        const replaced = service.add({ server, ...tokens, identity: 'user-2' }, account.id);
+
+        expect(replaced).toMatchObject({ id: account.id, firstName: '', ngoName: null, permissions: [] });
+      });
+
+      it('leaves one account for a user on a server, when another record already has this user', () => {
+        const target = service.add({ server, ...tokens, identity: 'user-1' });
+        const duplicate = service.add({ server, ...tokens, identity: 'user-2' });
+
+        service.add({ server, accessToken: 'new', refreshToken: 'new-refresh', identity: 'user-2' }, target.id);
+
+        expect(service.accounts().map((account) => account.id)).toEqual([target.id]);
+        expect(localStorage.getItem(`yavir.account.${duplicate.id}`)).toBeNull();
+        expect(JSON.parse(localStorage.getItem('yavir.accounts')!)).toEqual([target.id]);
+        expect(service.activeId()).toBe(target.id);
+      });
+
+      it('adds an account as usual for a key that no account has', () => {
+        service.add({ server, ...tokens, identity: 'user-1' });
+        service.add({ server: other, ...tokens, identity: 'user-2' }, 'unknown-key');
+
+        expect(service.accounts()).toHaveLength(2);
+      });
+    });
+
     it('updates the fields of a record, in memory and in storage', () => {
       const account = service.add({ server, ...tokens, identity: 'a' });
       service.update(account.id, { firstName: 'Перший', ngoName: 'Організація', refreshToken: 'r2' });

@@ -1,0 +1,17 @@
+<ion-modal
+  class="app-modal"
+  [isOpen]="isOpen()"
+  [backdropDismiss]="dismissOnBackdrop()"
+  [attr.aria-label]="label()"
+  [style.--app-modal-width]="effectiveWidth()"
+  (didPresent)="onPresented()"
+  (didDismiss)="onDismissed()"
+>
+  <!-- Angular-обгортка ion-modal показує лише зміст з ng-template: його монтують при
+       відкритті, а при закритті прибирають. -->
+  <ng-template>
+    <div class="app-modal__content">
+      <ng-content />
+    </div>
+  </ng-template>
+</ion-modal>

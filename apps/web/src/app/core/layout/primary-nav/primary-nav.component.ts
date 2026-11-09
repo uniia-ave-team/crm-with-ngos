@@ -3,8 +3,10 @@ import { Router } from '@angular/router';
 
 import { PopoverComponent } from '../../../shared/popover/popover.component';
 import { AccountTile } from '../account-menu/account-menu.component';
+import { AddAccountComponent } from '../add-account/add-account.component';
+import { AccountRestoreService } from '../../accounts/account-restore.service';
 import { AccountThumbnail, AccountsService } from '../../accounts/accounts.service';
-import { AuthService } from '../../auth/auth.service';
+import { AuthService, REDIRECT_URL } from '../../auth/auth.service';
 import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
 import { mobileLogoBase } from '../../i18n/mobile-logo';
@@ -38,6 +40,7 @@ export class PrimaryNavComponent {
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
   private readonly accountsStore = inject(AccountsService);
+  private readonly restore = inject(AccountRestoreService);
 
   private static readonly ITEMS: readonly NavItem[] = [
     { labelKey: 'nav.calendar', url: '/calendar', icon: 'calendar-outline', iconActive: 'calendar' },
@@ -97,6 +100,45 @@ export class PrimaryNavComponent {
       unavailable: account.unavailable,
     }));
   });
+
+  /**
+   * «+» у вікні акаунта: закриває вікно й відкриває «Додати акаунт». Нове вікно
+   * відкривається, коли попереднє зникло остаточно (як при виході).
+   */
+  protected async openAddAccount(popover: PopoverComponent, dialog: AddAccountComponent): Promise<void> {
+    await popover.close();
+    dialog.open();
+  }
+
+  /**
+   * Клацання по плитці акаунта (вікно закривається):
+   * - активний — нічого;
+   * - застарілий через відхилені токени (`outdated`, не `unavailable`) — вікно «Додати
+   *   акаунт» із його сервером, поштою й ключем: увійти знову (збіглася пошта — акаунт
+   *   перезапишеться);
+   * - чинний або застарілий через недоступний сервер — перемикаємось (`activate`: перевірка,
+   *   у тому числі повторне оновлення токенів) і відкриваємо `REDIRECT_URL`. Не вдалось —
+   *   те саме вікно «Додати акаунт»; активним лишається попередній акаунт.
+   */
+  protected async selectAccount(popover: PopoverComponent, dialog: AddAccountComponent, tile: AccountTile): Promise<void> {
+    await popover.close();
+    if (tile.active) {
+      return;
+    }
+    const account = this.accountsStore.accounts().find((candidate) => candidate.id === tile.id);
+    if (!account) {
+      return;
+    }
+    if (account.outdated && !account.unavailable) {
+      dialog.open(account.email, account.id, account.server);
+      return;
+    }
+    if ((await this.restore.activate(account.id)) === 'ok') {
+      void this.router.navigateByUrl(REDIRECT_URL, { onSameUrlNavigation: 'reload' });
+      return;
+    }
+    dialog.open(account.email, account.id, account.server);
+  }
 
   /** «Налаштування профілю»: закриває вікно й веде на сторінку налаштувань. */
   protected openSettings(popover: PopoverComponent): void {

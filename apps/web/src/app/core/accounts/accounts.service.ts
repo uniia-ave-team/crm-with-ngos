@@ -216,33 +216,44 @@ export class AccountsService {
   /**
    * Додає акаунт і робить його активним. Якщо такий (той самий сервер і
    * користувач) уже є — оновлює його токени, знімок лишається.
+   *
+   * `replaceId` — ключ акаунта, який треба перезаписати новими даними (сервер, користувач,
+   * токени), а не створювати новий: запис і його `id` лишаються. Знімок профілю (імʼя,
+   * аватар, ГО, права) лишається, лише якщо це той самий сервер і користувач; інакше він
+   * очищається, бо належав комусь іншому. Якщо новий сервер і користувач уже мають інший
+   * запис, той зникає: один користувач на сервері — один акаунт. Невідомий ключ ігнорується.
    */
-  add(input: NewAccount): StoredAccount {
+  add(input: NewAccount, replaceId?: string): StoredAccount {
     const now = Date.now();
     // Той самий сервер і користувач — це той самий акаунт, хоч би який у нього `id`.
-    const existing = this.accountsSignal().find(
+    const same = this.accountsSignal().find(
       (account) => account.server === input.server && account.identity === input.identity,
     );
+    const target = replaceId === undefined ? undefined : this.accountsSignal().find((account) => account.id === replaceId);
+    const existing = target ?? same;
+    const duplicate = target && same && same.id !== target.id ? same : undefined;
+    // Знімок профілю лишається тільки тому самому користувачеві на тому ж сервері.
+    const snapshot = existing && existing.server === input.server && existing.identity === input.identity ? existing : undefined;
     const id = existing?.id ?? this.freeId(AccountsService.accountId(input.server, input.identity));
     const account: StoredAccount = {
       version: ACCOUNT_SCHEMA_VERSION,
       id,
       server: input.server,
       identity: input.identity,
-      userId: input.userId ?? existing?.userId ?? '',
-      email: input.email ?? existing?.email ?? '',
+      userId: input.userId ?? snapshot?.userId ?? '',
+      email: input.email ?? snapshot?.email ?? '',
       // Вхід (нові токени) повертає акаунт у чинні.
       outdated: false,
       unavailable: false,
-      firstName: input.firstName ?? existing?.firstName ?? '',
-      lastName: input.lastName ?? existing?.lastName ?? '',
-      avatarUrl: input.avatarUrl !== undefined ? input.avatarUrl : (existing?.avatarUrl ?? null),
-      ngoName: input.ngoName !== undefined ? input.ngoName : (existing?.ngoName ?? null),
-      ngoLogoUrl: input.ngoLogoUrl !== undefined ? input.ngoLogoUrl : (existing?.ngoLogoUrl ?? null),
-      avatarThumb: existing?.avatarThumb ?? null,
-      ngoLogoThumb: existing?.ngoLogoThumb ?? null,
-      permissions: input.permissions ?? existing?.permissions ?? [],
-      roles: existing?.roles ?? [],
+      firstName: input.firstName ?? snapshot?.firstName ?? '',
+      lastName: input.lastName ?? snapshot?.lastName ?? '',
+      avatarUrl: input.avatarUrl !== undefined ? input.avatarUrl : (snapshot?.avatarUrl ?? null),
+      ngoName: input.ngoName !== undefined ? input.ngoName : (snapshot?.ngoName ?? null),
+      ngoLogoUrl: input.ngoLogoUrl !== undefined ? input.ngoLogoUrl : (snapshot?.ngoLogoUrl ?? null),
+      avatarThumb: snapshot?.avatarThumb ?? null,
+      ngoLogoThumb: snapshot?.ngoLogoThumb ?? null,
+      permissions: input.permissions ?? snapshot?.permissions ?? [],
+      roles: snapshot?.roles ?? [],
       accessToken: input.accessToken,
       refreshToken: input.refreshToken,
       tokensIssuedAt: now,
@@ -250,10 +261,14 @@ export class AccountsService {
       lastUsedAt: now,
     };
     this.writeRecord(account);
-    const accounts = existing
+    let accounts = existing
       ? this.accountsSignal().map((current) => (current.id === id ? account : current))
       : [...this.accountsSignal(), account];
-    if (!existing) {
+    if (duplicate) {
+      this.removeKey(`${ACCOUNT_KEY_PREFIX}${duplicate.id}`);
+      accounts = accounts.filter((current) => current.id !== duplicate.id);
+    }
+    if (!existing || duplicate) {
       this.writeIndex(accounts.map((current) => current.id));
     }
     this.accountsSignal.set(accounts);

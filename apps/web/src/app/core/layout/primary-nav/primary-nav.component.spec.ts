@@ -2,12 +2,13 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { IonicModule } from '@ionic/angular/lazy';
 import { provideTranslateService } from '@ngx-translate/core';
 
+import { AccountRestoreService } from '../../accounts/account-restore.service';
 import { AccountsService } from '../../accounts/accounts.service';
-import { AuthService } from '../../auth/auth.service';
+import { AuthService, REDIRECT_URL } from '../../auth/auth.service';
 import { ConnectionService } from '../../connection/connection.service';
 import { CurrentUserService } from '../../users/current-user.service';
 import { LayoutModule } from '../layout.module';
@@ -360,3 +361,123 @@ describe('PrimaryNavComponent colleagues item', () => {
     expect(urls(element, '.rail__item')).not.toContain('/colleagues');
   });
 });
+
+describe('PrimaryNavComponent: a click on the tile of an account', () => {
+  const first = 'https://first.example:5065';
+  const second = 'https://second.example:5065';
+  let accounts: AccountsService;
+  let activate: ReturnType<typeof vi.spyOn>;
+  let navigate: ReturnType<typeof vi.spyOn>;
+  const popover = { close: vi.fn().mockResolvedValue(undefined) };
+  const dialog = { open: vi.fn() };
+
+  beforeEach(async () => {
+    localStorage.clear();
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    popover.close.mockClear();
+    dialog.open.mockClear();
+    await TestBed.configureTestingModule({
+      schemas: [CUSTOM_ELEMENTS_SCHEMA],
+      imports: [IonicModule.forRoot(), LayoutModule],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
+      ],
+    }).compileComponents();
+    accounts = TestBed.inject(AccountsService);
+    navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  /** Два акаунти; перший активний. */
+  function setup(patch: { outdated?: boolean; unavailable?: boolean } = {}) {
+    const other = accounts.add({ server: second, accessToken: 'a2', refreshToken: 'r2', identity: 'u2', email: 'b@b.org' });
+    const active = accounts.add({ server: first, accessToken: 'a1', refreshToken: 'r1', identity: 'u1', email: 'a@b.org' });
+    if (patch.outdated) {
+      accounts.update(other.id, { outdated: true, unavailable: patch.unavailable ?? false });
+    }
+    TestBed.inject(HttpTestingController).match(() => true);
+    const fixture = TestBed.createComponent(PrimaryNavComponent);
+    fixture.detectChanges();
+    const nav = fixture.componentInstance as unknown as {
+      selectAccount(popover: unknown, dialog: unknown, tile: { id: string; active?: boolean }): Promise<void>;
+    };
+    const click = (id: string, isActive = false) => nav.selectAccount(popover, dialog, { id, active: isActive });
+    return { other, active, click };
+  }
+
+  function mockActivate(result: 'ok' | 'stale' | 'unavailable') {
+    activate = vi.spyOn(TestBed.inject(AccountRestoreService), 'activate').mockResolvedValue(result);
+  }
+
+  it('closes the window and does nothing more for the active account', async () => {
+    const { active, click } = setup();
+    mockActivate('ok');
+    await click(active.id, true);
+
+    expect(popover.close).toHaveBeenCalled();
+    expect(activate).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(dialog.open).not.toHaveBeenCalled();
+  });
+
+  it('switches to a valid account and opens the first page, reloading it', async () => {
+    const { other, click } = setup();
+    mockActivate('ok');
+    await click(other.id);
+
+    expect(activate).toHaveBeenCalledWith(other.id);
+    expect(navigate).toHaveBeenCalledWith(REDIRECT_URL, { onSameUrlNavigation: 'reload' });
+    expect(dialog.open).not.toHaveBeenCalled();
+  });
+
+  it('opens the form of adding an account with the server, the e-mail and the key, without a try, when the tokens were rejected', async () => {
+    const { other, click } = setup({ outdated: true, unavailable: false });
+    mockActivate('ok');
+    await click(other.id);
+
+    expect(dialog.open).toHaveBeenCalledWith('b@b.org', other.id, second);
+    expect(activate).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('tries to switch to an account whose server did not answer, and goes there when it works', async () => {
+    const { other, click } = setup({ outdated: true, unavailable: true });
+    mockActivate('ok');
+    await click(other.id);
+
+    expect(activate).toHaveBeenCalledWith(other.id);
+    expect(navigate).toHaveBeenCalledWith(REDIRECT_URL, { onSameUrlNavigation: 'reload' });
+    expect(dialog.open).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an outdated account whose server still does not answer', { outdated: true, unavailable: true }, 'unavailable'],
+    ['a valid account that has just turned out to be outdated', {}, 'stale'],
+  ] as const)('opens the form of adding an account with its data when the switch to %s fails', async (_name, patch, result) => {
+    const { other, click } = setup(patch);
+    mockActivate(result);
+    await click(other.id);
+
+    expect(dialog.open).toHaveBeenCalledWith('b@b.org', other.id, second);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('ignores a tile of an account that is no longer stored', async () => {
+    const { click } = setup();
+    mockActivate('ok');
+    await click('gone');
+
+    expect(activate).not.toHaveBeenCalled();
+    expect(dialog.open).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+});
+

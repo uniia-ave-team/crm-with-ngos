@@ -41,10 +41,13 @@ const REFRESH_TOKEN_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 /** Токени неактивного акаунта оновлюються, коли минула половина терміну refresh-токена. */
 const REFRESH_DUE_AFTER_MS = REFRESH_TOKEN_LIFETIME_MS / 2;
 
-interface LoginResponse {
+/** Пара токенів, яку віддають вхід і завершення реєстрації за запрошенням. */
+export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
 }
+
+type LoginResponse = AuthTokens;
 
 export type LoginResult = 'ok' | RequestFailure;
 export type RefreshResult = 'ok' | RequestFailure;
@@ -176,11 +179,18 @@ export class AuthService {
   }
 
   /**
-   * `POST <сервер>/api/v1/auth/login`; при успіху додає акаунт (поточний сервер +
-   * користувач із токена) зі збереженням токенів і робить його активним.
+   * `POST <сервер>/api/v1/auth/login`; при успіху додає акаунт (сервер + користувач із
+   * токена) зі збереженням токенів і робить його активним. `server` — origin сервера
+   * (за замовчуванням поточний): інший потрібен, коли додають акаунт на іншому сервері.
+   * `replaceAccountId` — ключ збереженого акаунта, який перезаписується цим входом (див.
+   * `AccountsService.add`), а не додається новий.
    */
-  async login(email: string, password: string): Promise<LoginResult> {
-    const server = this.connection.serverUrl();
+  async login(
+    email: string,
+    password: string,
+    server: string = this.connection.serverUrl(),
+    replaceAccountId?: string,
+  ): Promise<LoginResult> {
     const url = `${server}${API_LOGIN_PATH}`;
     console.log(`[AuthService] Входжу: ${url}`);
 
@@ -188,17 +198,7 @@ export class AuthService {
       const tokens = await firstValueFrom(
         this.http.post<LoginResponse>(url, { email, password }).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      const userId = readJwtSubject(tokens.accessToken);
-      this.accounts.add({
-        server,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        userId: userId ?? '',
-        // Без `sub` у токені акаунт впізнаємо за поштою.
-        identity: userId ?? email.trim().toLowerCase(),
-        // Пошту з /users/me не отримати — запамʼятовуємо ту, з якою ввійшли.
-        email: email.trim(),
-      });
+      this.adoptTokens(server, tokens, email, replaceAccountId);
       console.log('[AuthService] Вхід виконано, токени отримано');
       return 'ok';
     } catch (error) {
@@ -206,6 +206,25 @@ export class AuthService {
       console.warn(`[AuthService] Не вдалося увійти (${failure})`, error);
       return failure;
     }
+  }
+
+  /**
+   * Додає акаунт (`server` + користувач із токена) зі збереженням токенів і робить його
+   * активним. Це спільний кінець входу й завершення реєстрації за запрошенням: обидва
+   * запити віддають ту саму пару токенів. `replaceAccountId` — акаунт, який перезаписується.
+   */
+  adoptTokens(server: string, tokens: AuthTokens, email: string, replaceAccountId?: string): void {
+    const userId = readJwtSubject(tokens.accessToken);
+    this.accounts.add({
+      server,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      userId: userId ?? '',
+      // Без `sub` у токені акаунт впізнаємо за поштою.
+      identity: userId ?? email.trim().toLowerCase(),
+      // Пошту з /users/me не отримати — запамʼятовуємо ту, з якою ввійшли.
+      email: email.trim(),
+    }, replaceAccountId);
   }
 
   /**

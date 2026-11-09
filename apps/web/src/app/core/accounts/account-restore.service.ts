@@ -17,6 +17,13 @@ export type RestoreResult = 'restored' | 'none' | 'unavailable';
 type AccountCheck = 'ok' | 'stale' | 'unavailable';
 
 /**
+ * Чим закінчилося перемикання на акаунт (`activate`): `ok` — акаунт активний; `stale` —
+ * сервер відхилив його токени; `unavailable` — сервер не відповів. У двох останніх випадках
+ * активним лишається попередній акаунт.
+ */
+export type ActivateResult = AccountCheck;
+
+/**
  * Пошук чинного акаунта (сторінка входу та захисні перевірки інших сторінок):
  * проходить акаунти по черзі (активний першим, далі за порядком додавання) і
  * бере перший, що пройшов перевірку.
@@ -58,6 +65,49 @@ export class AccountRestoreService {
       });
     }
     return this.inFlight;
+  }
+
+  /**
+   * Перемикає на акаунт `id` (клацання по його плитці): перевіряє його так само, як пошук
+   * чинного акаунта (сервер відповідає → токени придатні, за потреби оновлюються → сервер
+   * підтверджує вхід), а під час перевірки він активний — підключення й токени беруться
+   * від активного.
+   * - перевірка пройшла → акаунт лишається активним і стає чинним (`outdated: false`), якщо
+   *   був застарілим: так «сервер не відповідав» знімається, коли сервер знову відповів;
+   * - не пройшла → активним повертається попередній акаунт, а цей позначається застарілим
+   *   з причиною (`markOutdated`); підключення й профіль знову належать попередньому.
+   * На час перевірки так само, як і під час пошуку, вмикається `searching`: тимчасове
+   * перемикання активного акаунта не вважається виходом. Невідомий `id` — `unavailable`
+   * без жодних змін.
+   */
+  async activate(id: string): Promise<ActivateResult> {
+    if (!this.accounts.accounts().some((account) => account.id === id)) {
+      return 'unavailable';
+    }
+    // Іде пошук чинного акаунта (старт застосунку) — дочекаємось його, щоб не перемикати паралельно.
+    await this.inFlight?.catch(() => undefined);
+
+    const previous = this.accounts.activeId();
+    this.searchingSignal.set(true);
+    try {
+      this.accounts.setActive(id);
+      const check = await this.check();
+      if (check === 'ok') {
+        this.accounts.update(id, { outdated: false, unavailable: false, lastUsedAt: Date.now() });
+        return 'ok';
+      }
+      // Спершу повертаємо попередній, інакше позначення активного акаунта застарілим
+      // саме підбере «перший чинний».
+      this.accounts.setActive(previous);
+      this.accounts.markOutdated(id, check === 'unavailable');
+      await this.connection.checkApi();
+      // Профіль скинувся при перемиканні на цей акаунт — повертаємо профіль попереднього
+      // (у фоні: чекати на нього не треба).
+      void this.currentUser.ensure();
+      return check;
+    } finally {
+      this.searchingSignal.set(false);
+    }
   }
 
   private async search(): Promise<RestoreResult> {

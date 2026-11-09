@@ -1,0 +1,80 @@
+<app-modal width="min(356px, calc(100vw - 32px))" [label]="'nav.account.add' | translate">
+  <div class="add-account">
+    <header class="add-account__header">
+      <h2 class="add-account__title">{{ 'nav.account.add' | translate }}</h2>
+      <button
+        type="button"
+        class="add-account__close"
+        tabindex="0"
+        [attr.aria-label]="'common.close' | translate"
+        [attr.title]="'common.close' | translate"
+        (click)="close()"
+      >
+        <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+      </button>
+    </header>
+
+    @if (banner(); as error) {
+      <div class="add-account__error" role="alert">{{ error.key | translate: error.params }}</div>
+    }
+
+    <label class="add-account__label" for="add-account-address">{{ 'login.step1.label' | translate }}</label>
+    <ion-input
+      id="add-account-address"
+      tabindex="0"
+      class="add-account__input"
+      fill="outline"
+      type="text"
+      inputmode="url"
+      [placeholder]="'login.step1.placeholder' | translate"
+      [attr.aria-label]="'login.step1.label' | translate"
+      [ngModel]="address()"
+      (ngModelChange)="onFieldChange(address, $event)"
+      (keyup.enter)="submit()"
+    ></ion-input>
+    @if (addressError(); as fieldError) {
+      <p class="add-account__field-error" role="alert">{{ fieldError | translate }}</p>
+    }
+
+    <label class="add-account__label" for="add-account-email">{{ 'login.form.email' | translate }}</label>
+    <ion-input
+      id="add-account-email"
+      tabindex="0"
+      class="add-account__input"
+      fill="outline"
+      type="email"
+      autocomplete="email"
+      [attr.aria-label]="'login.form.email' | translate"
+      [ngModel]="email()"
+      (ngModelChange)="onFieldChange(email, $event)"
+      (keyup.enter)="submit()"
+    ></ion-input>
+    @if (emailError(); as fieldError) {
+      <p class="add-account__field-error" role="alert">{{ fieldError | translate }}</p>
+    }
+
+    <label class="add-account__label" for="add-account-password">{{ 'login.form.password' | translate }}</label>
+    <ion-input
+      id="add-account-password"
+      tabindex="0"
+      class="add-account__input"
+      fill="outline"
+      type="password"
+      autocomplete="current-password"
+      [attr.aria-label]="'login.form.password' | translate"
+      [ngModel]="password()"
+      (ngModelChange)="onFieldChange(password, $event)"
+      (keyup.enter)="submit()"
+    ></ion-input>
+    @if (passwordError(); as fieldError) {
+      <p class="add-account__field-error" role="alert">{{ fieldError | translate }}</p>
+    }
+
+    <div class="add-account__actions">
+      <ion-button tabindex="0" class="add-account__submit" type="button" [disabled]="saving()" (click)="submit()">
+        {{ (saving() ? 'login.form.saving' : 'login.form.submit') | translate }}
+      </ion-button>
+      <button tabindex="0" class="add-account__forgot" type="button">{{ 'login.form.forgot' | translate }}</button>
+    </div>
+  </div>
+</app-modal>

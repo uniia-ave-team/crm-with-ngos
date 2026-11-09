@@ -42,7 +42,7 @@ export interface SystemStatus {
  * hash відкидаються — береться лише origin. Повертає `null`, якщо це не
  * схоже на адресу http(s)-сервера.
  */
-function parseServerAddress(raw: string | null): URL | null {
+export function parseServerAddress(raw: string | null): URL | null {
   const trimmed = raw?.trim();
   if (!trimmed) {
     return null;
@@ -102,8 +102,15 @@ export class ConnectionService {
     () =>
       this.accounts.active()?.server ??
       parseServerAddress(this.serverAddressSignal())?.origin ??
-      `${location.protocol}//${this.domain}:${API_PORT}`,
+      this.pageServerUrl,
   );
+
+  /**
+   * Сервер за доменом сторінки (`<протокол>://<домен>:5065`) — незалежно від акаунтів і
+   * наданої адреси. Це сервер, на який веде посилання-запрошення (`/join`): колега може
+   * вже мати акаунт на іншому сервері, але запрошення стосується саме цього.
+   */
+  readonly pageServerUrl: string = `${location.protocol}//${this.domain}:${API_PORT}`;
   readonly apiHealthUrl: Signal<string> = computed(() => `${this.serverUrl()}${API_HEALTH_PATH}`);
 
   private readonly apiStatusSignal = signal<ApiStatus>('unknown');
@@ -187,10 +194,11 @@ export class ConnectionService {
   /**
    * Одноразова перевірка поточного сервера (`GET /health`, відповідь
    * «Healthy»), що не чіпає стан сервісу (`apiStatus`, статус системи): сторінка
-   * лишається такою, як була, поки триває запит.
+   * лишається такою, як була, поки триває запит. `server` — origin, який перевіряти
+   * (за замовчуванням поточний сервер).
    */
-  async probeApi(): Promise<boolean> {
-    const url = this.apiHealthUrl();
+  async probeApi(server?: string): Promise<boolean> {
+    const url = server ? `${server}${API_HEALTH_PATH}` : this.apiHealthUrl();
     console.log(`[ConnectionService] Одноразова перевірка API: ${url}`);
     try {
       const body = await firstValueFrom(this.http.get<{ status?: string }>(url).pipe(timeout(API_CHECK_TIMEOUT_MS)));

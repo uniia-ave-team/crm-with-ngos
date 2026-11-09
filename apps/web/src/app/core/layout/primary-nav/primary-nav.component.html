@@ -86,7 +86,10 @@
     [accounts]="accounts()"
     (settings)="openSettings(accountPopover)"
     (signOut)="signOut(accountPopover)"
-    (addAccount)="accountPopover.close()"
-    (selectAccount)="accountPopover.close()"
+    (addAccount)="openAddAccount(accountPopover, addAccountDialog)"
+    (selectAccount)="selectAccount(accountPopover, addAccountDialog, $event)"
   />
 </app-popover>
+
+<!-- Вікно «Додати акаунт» (кнопка «+» у вікні акаунта). -->
+<app-add-account #addAccountDialog />

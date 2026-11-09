@@ -1,5 +1,9 @@
 <h2 class="roles__title">{{ 'colleagues.rolesPanel.title' | translate }}</h2>
 
+@if (notice(); as noticeKey) {
+  <p class="roles__message roles__message--warning" role="status">{{ noticeKey | translate }}</p>
+}
+
 @if (view().failure; as failure) {
   <p class="roles__message roles__message--error" role="alert">{{ 'colleagues.rolesPanel.error.' + failure | translate }}</p>
 }

@@ -65,3 +65,13 @@
     color: var(--nav-unavailable-icon);
   }
 }
+
+.colleague-form__roles-error {
+  margin-top: 10px;
+}
+
+// Кнопка, поки іде відправка.
+.settings-submit:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}

@@ -61,6 +61,22 @@ describe('AuthService', () => {
     expect(JSON.parse(localStorage.getItem(`yavir.account.${id}`)!)).toMatchObject({ server: serverUrl, refreshToken: 'refresh' });
   });
 
+  it('adopts a pair of tokens for the given server as the active account, whichever server is current', () => {
+    const accounts = TestBed.inject(AccountsService);
+    accounts.add({ server: 'https://other.example:5065', accessToken: 'a0', refreshToken: 'r0', identity: 'someone' });
+
+    service.adoptTokens('https://invited.example:5065', { accessToken: 'access', refreshToken: 'refresh' }, ' New@B.org ');
+
+    expect(accounts.accounts()).toHaveLength(2);
+    expect(accounts.active()).toMatchObject({
+      server: 'https://invited.example:5065',
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      email: 'New@B.org',
+      identity: 'new@b.org',
+    });
+  });
+
   it('remembers the e-mail the user signed in with, because /users/me does not return it', async () => {
     const result = service.login('  A@B.org ', 'Abcde1');
     http.expectOne(url).flush({ accessToken: 'access', refreshToken: 'refresh' });

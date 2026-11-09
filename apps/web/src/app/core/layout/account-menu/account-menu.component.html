@@ -2,7 +2,7 @@
   <!-- Усі акаунти й кнопка додавання — один flex-контейнер: рядки наповнюються
        суцільно (без порожніх місць), а максимум акаунтів у рядку обмежує його
        ширина (5 плиток). -->
-  <div class="account-menu__accounts planned" role="group" [attr.aria-label]="'nav.account.accounts' | translate">
+  <div class="account-menu__accounts" role="group" [attr.aria-label]="'nav.account.accounts' | translate">
     @for (account of accounts(); track account.id) {
       <button
         tabindex="0"

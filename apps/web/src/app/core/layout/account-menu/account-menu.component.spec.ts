@@ -46,11 +46,6 @@ describe('AccountMenuComponent', () => {
     },
   );
 
-  it('hides the accounts block with the global planned class while the feature is not ready', () => {
-    const { element } = render(2);
-    expect(element.querySelector('.account-menu__accounts')!.classList).toContain('planned');
-  });
-
   it('shows no logo badge at all when an account has no logoUrl', () => {
     const { element } = render(3);
     expect(element.querySelectorAll('.account-tile__badge')).toHaveLength(0);
@@ -116,8 +111,7 @@ describe('AccountMenuComponent', () => {
   it('has the settings item, a divider and the sign-out item, in that order', () => {
     const { element } = render(1);
     const parts = Array.from(element.querySelector('.account-menu')!.children).map((c) => c.className);
-    // Блок акаунтів поки прихований класом `planned`.
-    expect(parts).toEqual(['account-menu__accounts planned', 'account-menu__item', 'account-menu__divider', 'account-menu__item']);
+    expect(parts).toEqual(['account-menu__accounts', 'account-menu__item', 'account-menu__divider', 'account-menu__item']);
     const icons = Array.from(element.querySelectorAll('.account-menu__item ion-icon')).map((i) => i.getAttribute('name'));
     expect(icons).toEqual(['cog-outline', 'log-out-outline']);
   });

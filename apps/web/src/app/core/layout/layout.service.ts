@@ -23,7 +23,7 @@ const COLLAPSE_STORAGE_KEY = 'yavir.secondaryPanelCollapsed';
 // Порожній рядок — корінь '/', який завжди редіректить на 'login' (див.
 // app-routing.module.ts) — на цю ж мить синхронного читання він ще не встиг
 // розгорнутись, тож підстраховка мусить трактувати корінь так само.
-const NO_SHELL_PATHS = new Set(['login', '']);
+const NO_SHELL_PATHS = new Set(['login', 'join', '']);
 
 /**
  * Стан бічного меню: яку контекстну панель показувати (за поточним
@@ -42,7 +42,7 @@ export class LayoutService {
   private readonly collapsedSignal = signal<boolean>(this.readCollapsed());
   readonly collapsed: Signal<boolean> = this.collapsedSignal.asReadonly();
 
-  // Сторінки без бічного меню взагалі (наразі — тільки /login).
+  // Сторінки без бічного меню взагалі (наразі — /login і /join).
   // Прив'язується через `data: { layout: 'none' }` у app-routing.module.ts.
   private readonly hideShellSignal = signal<boolean>(this.readHideShell());
   readonly hideShell: Signal<boolean> = this.hideShellSignal.asReadonly();

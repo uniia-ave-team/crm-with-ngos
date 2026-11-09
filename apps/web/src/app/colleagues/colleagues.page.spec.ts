@@ -14,6 +14,7 @@ import { UsersService } from '../core/users/users.service';
 import { avatarColor } from '../shared/avatar/avatar-color';
 import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
+import { ModalComponent } from '../shared/modal/modal.component';
 import { ColleagueActionsComponent } from './colleague-actions/colleague-actions.component';
 import { ColleaguesPageModule } from './colleagues.module';
 import { ColleaguesPage } from './colleagues.page';
@@ -1170,9 +1171,9 @@ describe('ColleaguesPage', () => {
         expect(choices(element).map((c) => c.textContent?.trim())).toEqual(['Куратор', 'Член']);
       });
 
-      it('gives the data to createColleague with the button "Add", and sends nothing', async () => {
+      it('gives the data to createColleague with the button "Add"', async () => {
         const { fixture, element } = await openAdd();
-        const spy = vi.spyOn(fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>, 'createColleague');
+        const spy = vi.spyOn(fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>, 'createColleague').mockImplementation(() => undefined);
         const email = element.querySelector('#colleague-form-email') as HTMLInputElement;
         email.value = 'a@b.org';
         email.dispatchEvent(new Event('input'));
@@ -1181,6 +1182,248 @@ describe('ColleaguesPage', () => {
 
         expect(spy).toHaveBeenCalledWith({ email: 'a@b.org', roleIds: ['r1'] });
         http.expectNone((request) => request.method !== 'GET');
+      });
+
+      describe('sending the form (POST /invitations) and the token in the modal', () => {
+        const invitationsUrl = () => `${TestBed.inject(ConnectionService).serverUrl()}/api/v1/invitations`;
+        const postInvitation = () => http.expectOne((request) => request.url === invitationsUrl() && request.method === 'POST');
+        const sidePanelOf = (fixture: ComponentFixture<ColleaguesPage>) =>
+          fixture.debugElement.query(By.directive(SidePanelComponent)).componentInstance as SidePanelComponent;
+        const modalOf = (fixture: ComponentFixture<ColleaguesPage>) =>
+          fixture.debugElement.query(By.directive(ModalComponent)).componentInstance as ModalComponent;
+        const state = (fixture: ComponentFixture<ColleaguesPage>) =>
+          fixture.componentInstance as unknown as {
+          invitation(): { email: string; token: string; expiresAt: string } | null;
+          invitationStatus(): string;
+          copyInvitationLink(link: string): Promise<void>;
+          shareInvitation(data: { title: string; text: string; url: string }): Promise<void>;
+          closeInvitation(): void;
+        };
+        const send = (ctx: { fixture: ComponentFixture<ColleaguesPage>; element: HTMLElement }, email = 'a@b.org', role = 1) => {
+          const field = ctx.element.querySelector('#colleague-form-email') as HTMLInputElement;
+          field.value = email;
+          field.dispatchEvent(new Event('input'));
+          choices(ctx.element)[role].click();
+          (ctx.element.querySelector('app-colleague-form form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
+          ctx.fixture.detectChanges();
+        };
+        const submitButton = (element: HTMLElement) => element.querySelector('app-colleague-form button[type=submit]') as HTMLButtonElement;
+        const answer = { token: 'tok-1', expiresAt: '2026-11-20T10:00:00Z' };
+        const shown = (ctx: { fixture: ComponentFixture<ColleaguesPage> }) =>
+          vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(modalOf(ctx.fixture).isOpen()).toBe(true);
+          });
+
+        it('asks for the invitation with the email and the ids of the chosen roles', async () => {
+          const ctx = await openAdd();
+          send(ctx, 'a@b.org', 1);
+          const request = postInvitation();
+          expect(request.request.body).toEqual({ email: 'a@b.org', roleIds: ['r1'] });
+          request.flush(answer);
+        });
+
+        it('opens the modal with the invitation (token, email, date from the answer), and closes the side panel', async () => {
+          const ctx = await openAdd();
+          send(ctx);
+          postInvitation().flush(answer);
+          await shown(ctx);
+
+          expect(state(ctx.fixture).invitation()).toEqual({ email: 'a@b.org', token: 'tok-1', expiresAt: '2026-11-20T10:00:00Z' });
+          expect(state(ctx.fixture).invitationStatus()).toBe('idle');
+          await vi.waitFor(() => expect(sidePanelOf(ctx.fixture).isOpen()).toBe(false));
+        });
+
+        it('gives the dialog its name from the language file', async () => {
+          const ctx = await openAdd();
+          expect((ctx.element.querySelector('ion-modal') as HTMLElement).getAttribute('aria-label')).toBe(uk.colleagues.invitation.title);
+        });
+
+        it('clears the form after it: the next opening of "Add" has an empty email and no chosen role', async () => {
+          const ctx = await openAdd();
+          send(ctx);
+          postInvitation().flush(answer);
+          await shown(ctx);
+
+          addButton(ctx.element).click();
+          ctx.fixture.detectChanges();
+          rolesRequest().flush(body('Куратор', 'Член'));
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(choices(ctx.element)).toHaveLength(2);
+          });
+          expect((ctx.element.querySelector('#colleague-form-email') as HTMLInputElement).value).toBe('');
+          expect(choices(ctx.element).every((c) => c.getAttribute('aria-checked') === 'false')).toBe(true);
+        });
+
+        it('locks the button while it sends, and does not send a second time', async () => {
+          const ctx = await openAdd();
+          send(ctx);
+          expect(submitButton(ctx.element).disabled).toBe(true);
+          send(ctx, 'other@b.org', 0);
+          postInvitation().flush(answer);
+          http.expectNone((request) => request.url === invitationsUrl() && request.method === 'POST');
+        });
+
+        it('does not send without a role, and says so', async () => {
+          const ctx = await openAdd();
+          const field = ctx.element.querySelector('#colleague-form-email') as HTMLInputElement;
+          field.value = 'a@b.org';
+          field.dispatchEvent(new Event('input'));
+          (ctx.element.querySelector('app-colleague-form form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
+          ctx.fixture.detectChanges();
+          http.expectNone((request) => request.url === invitationsUrl());
+          expect(ctx.element.querySelector('.colleague-form__roles-error')?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.error.rolesRequired);
+        });
+
+        it.each([
+          [400, 'invalid'],
+          [403, 'forbidden'],
+          [500, 'error'],
+        ] as const)('keeps the form with the error from the language file when it fails with HTTP %i, shows no modal, and the button is free again', async (status, failure) => {
+          const ctx = await openAdd();
+          send(ctx);
+          postInvitation().flush({}, { status, statusText: 'x' });
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-colleague-form form > .settings-field__error')).not.toBeNull();
+          });
+          expect(ctx.element.querySelector('app-colleague-form form > .settings-field__error')?.textContent?.trim()).toBe(
+            uk.colleagues.colleagueForm.saveError[failure],
+          );
+          expect(submitButton(ctx.element).disabled).toBe(false);
+          expect((ctx.element.querySelector('#colleague-form-email') as HTMLInputElement).value).toBe('a@b.org');
+          expect(modalOf(ctx.fixture).isOpen()).toBe(false);
+          expect(sidePanelOf(ctx.fixture).isOpen()).toBe(true);
+        });
+
+        it('takes the error away when "Add" is opened again', async () => {
+          const ctx = await openAdd();
+          send(ctx);
+          postInvitation().flush({}, { status: 403, statusText: 'Forbidden' });
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-colleague-form form > .settings-field__error')).not.toBeNull();
+          });
+          (ctx.element.querySelector('.side-panel__close') as HTMLButtonElement).click();
+          ctx.fixture.detectChanges();
+          addButton(ctx.element).click();
+          ctx.fixture.detectChanges();
+          rolesRequest().flush(body('Куратор', 'Член'));
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-colleague-form form > .settings-field__error')).toBeNull();
+          });
+        });
+
+        describe('the buttons of the modal (copy the link, close)', () => {
+          const withToken = async () => {
+            const ctx = await openAdd();
+            send(ctx);
+            postInvitation().flush(answer);
+            await shown(ctx);
+            return ctx;
+          };
+          const clipboard = (writeText: () => Promise<void>) => {
+            const spy = vi.fn(writeText);
+            Object.defineProperty(navigator, 'clipboard', { value: { writeText: spy }, configurable: true });
+            return spy;
+          };
+
+          it('copies the link to the clipboard and says so', async () => {
+            const ctx = await withToken();
+            const write = clipboard(() => Promise.resolve());
+            await state(ctx.fixture).copyInvitationLink('http://localhost/join?token=tok-1');
+            expect(write).toHaveBeenCalledWith('http://localhost/join?token=tok-1');
+            expect(state(ctx.fixture).invitationStatus()).toBe('copied');
+          });
+
+          it('says that the copying failed when the browser does not allow it', async () => {
+            const ctx = await withToken();
+            clipboard(() => Promise.reject(new Error('denied')));
+            await state(ctx.fixture).copyInvitationLink('http://localhost/join?token=tok-1');
+            expect(state(ctx.fixture).invitationStatus()).toBe('failed');
+          });
+
+          it('forgets the copying of the previous link when a new invitation is made', async () => {
+            const ctx = await withToken();
+            clipboard(() => Promise.resolve());
+            await state(ctx.fixture).copyInvitationLink('http://localhost/join?token=tok-1');
+            expect(state(ctx.fixture).invitationStatus()).toBe('copied');
+
+            state(ctx.fixture).closeInvitation();
+            addButton(ctx.element).click();
+            ctx.fixture.detectChanges();
+            rolesRequest().flush(body('Куратор', 'Член'));
+            await vi.waitFor(() => {
+              ctx.fixture.detectChanges();
+              expect(choices(ctx.element)).toHaveLength(2);
+            });
+            send(ctx, 'next@b.org', 0);
+            postInvitation().flush({ token: 'tok-2', expiresAt: '' });
+            await vi.waitFor(() => expect(state(ctx.fixture).invitation()?.token).toBe('tok-2'));
+            expect(state(ctx.fixture).invitationStatus()).toBe('idle');
+          });
+
+                    describe('sharing by the share button of the browser or the system', () => {
+            const data = { title: 'Запрошення', text: 'Підпис', url: 'http://localhost/join?token=tok-1' };
+            const setShare = (impl: (d: unknown) => Promise<void>) => {
+              const spy = vi.fn(impl);
+              Object.defineProperty(navigator, 'share', { value: spy, configurable: true, writable: true });
+              return spy;
+            };
+            afterEach(() => Reflect.deleteProperty(navigator, 'share'));
+
+            it('gives the title, the signature and the link to navigator.share as they are', async () => {
+              const ctx = await withToken();
+              const share = setShare(() => Promise.resolve());
+              await state(ctx.fixture).shareInvitation(data);
+              expect(share).toHaveBeenCalledWith(data);
+              expect(state(ctx.fixture).invitationStatus()).toBe('idle');
+            });
+
+            it('does not take it for an error when the user closes the window of sharing by himself', async () => {
+              const ctx = await withToken();
+              setShare(() => Promise.reject(Object.assign(new Error('closed'), { name: 'AbortError' })));
+              await state(ctx.fixture).shareInvitation(data);
+              expect(state(ctx.fixture).invitationStatus()).toBe('idle');
+            });
+
+            it('says that the sharing failed for any other failure', async () => {
+              const ctx = await withToken();
+              setShare(() => Promise.reject(Object.assign(new Error('no'), { name: 'NotAllowedError' })));
+              await state(ctx.fixture).shareInvitation(data);
+              expect(state(ctx.fixture).invitationStatus()).toBe('shareFailed');
+            });
+
+            it('forgets the failure of the former sharing when a new invitation is made', async () => {
+              const ctx = await withToken();
+              setShare(() => Promise.reject(new Error('no')));
+              await state(ctx.fixture).shareInvitation(data);
+              expect(state(ctx.fixture).invitationStatus()).toBe('shareFailed');
+
+              state(ctx.fixture).closeInvitation();
+              addButton(ctx.element).click();
+              ctx.fixture.detectChanges();
+              rolesRequest().flush(body('Куратор', 'Член'));
+              await vi.waitFor(() => {
+                ctx.fixture.detectChanges();
+                expect(choices(ctx.element)).toHaveLength(2);
+              });
+              send(ctx, 'next@b.org', 0);
+              postInvitation().flush({ token: 'tok-2', expiresAt: '' });
+              await vi.waitFor(() => expect(state(ctx.fixture).invitation()?.token).toBe('tok-2'));
+              expect(state(ctx.fixture).invitationStatus()).toBe('idle');
+            });
+          });
+
+          it('closes the modal by the cross (closeInvitation)', async () => {
+            const ctx = await withToken();
+            state(ctx.fixture).closeInvitation();
+            ctx.fixture.detectChanges();
+            expect(modalOf(ctx.fixture).isOpen()).toBe(false);
+          });
+        });
       });
     });
 
@@ -1350,10 +1593,10 @@ describe('ColleaguesPage', () => {
         expect(element.querySelector('app-roles-panel')).not.toBeNull();
       });
 
-      it('gives the data of the form to createRole with the button "Add", and sends nothing', async () => {
+      it('gives the data of the form to createRole with the button "Add"', async () => {
         const { fixture, element } = await openRoles();
         const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
-        const spy = vi.spyOn(page, 'createRole');
+        const spy = vi.spyOn(page, 'createRole').mockImplementation(() => undefined);
         headerStart(element)!.click();
         fixture.detectChanges();
 
@@ -1366,8 +1609,141 @@ describe('ColleaguesPage', () => {
         type('role-form-plural', 'Куратори');
         (element.querySelector('app-role-form form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
 
-        expect(spy).toHaveBeenCalledWith({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори' });
+        expect(spy).toHaveBeenCalledWith({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори', permissions: [] });
         http.expectNone((request) => request.method !== 'GET');
+      });
+
+      describe('sending the form (POST /roles, then the permissions one by one)', () => {
+        const postRole = () => http.expectOne((request) => request.url === rolesUrl && request.method === 'POST');
+        const claimRequest = (id: string, claim: string) => http.expectOne(`${rolesUrl}/${id}/claims/${claim}`);
+        const noContent = { status: 204, statusText: 'No Content' };
+
+        async function openForm() {
+          const ctx = await openRoles(['Permissions.ViewUser', 'Permissions.ManageRole']);
+          headerStart(ctx.element)!.click();
+          ctx.fixture.detectChanges();
+          return ctx;
+        }
+        const type = (element: HTMLElement, id: string, value: string) => {
+          const field = element.querySelector(`#${id}`) as HTMLInputElement;
+          field.value = value;
+          field.dispatchEvent(new Event('input'));
+        };
+        const send = (ctx: { fixture: ComponentFixture<ColleaguesPage>; element: HTMLElement }) => {
+          (ctx.element.querySelector('app-role-form form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
+          ctx.fixture.detectChanges();
+        };
+        const submitButton = (element: HTMLElement) => element.querySelector('app-role-form button[type=submit]') as HTMLButtonElement;
+
+        it('creates the role with the names, then adds the chosen permissions and the ones without settings, and goes back to the updated list', async () => {
+          const ctx = await openForm();
+          type(ctx.element, 'role-form-name', 'Куратор');
+          type(ctx.element, 'role-form-plural', 'Куратори');
+          (ctx.element.querySelector('app-role-form input[role=switch]') as HTMLInputElement).click();
+          send(ctx);
+
+          const created = postRole();
+          expect(created.request.body).toEqual({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори' });
+          created.flush({ id: 'new1' }, { status: 201, statusText: 'Created' });
+
+          (await vi.waitFor(() => claimRequest('new1', 'Permissions.ViewUser'))).flush(null, noContent);
+          (await vi.waitFor(() => claimRequest('new1', 'Permissions.ViewNgo'))).flush(null, noContent);
+          (await vi.waitFor(() => claimRequest('new1', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
+
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form')).toBeNull();
+          });
+          rolesRequest().flush(body('Куратор', 'Нова'));
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(pills(ctx.element)).toEqual(['Куратор', 'Нова']);
+          });
+          expect(ctx.element.querySelector('.roles__message--warning')).toBeNull();
+          expect(headerStart(ctx.element)!.textContent?.trim()).toBe(uk.colleagues.rolesPanel.add);
+        });
+
+        it('adds the permissions without settings even when no group is chosen', async () => {
+          const ctx = await openForm();
+          type(ctx.element, 'role-form-name', 'Член');
+          send(ctx);
+          postRole().flush({ id: 'new2' }, { status: 201, statusText: 'Created' });
+
+          (await vi.waitFor(() => claimRequest('new2', 'Permissions.ViewNgo'))).flush(null, noContent);
+          (await vi.waitFor(() => claimRequest('new2', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
+          // CreateNgo є лише в першого користувача: його не додаємо.
+          http.expectNone((request) => request.url.endsWith('/claims/Permissions.CreateNgo'));
+        });
+
+        it('locks the button while it sends, and does not send a second time', async () => {
+          const ctx = await openForm();
+          type(ctx.element, 'role-form-name', 'Член');
+          send(ctx);
+          expect(submitButton(ctx.element).disabled).toBe(true);
+
+          send(ctx);
+          postRole().flush({ id: 'new3' }, { status: 201, statusText: 'Created' });
+          http.expectNone((request) => request.url === rolesUrl && request.method === 'POST');
+        });
+
+        it.each([
+          [403, 'forbidden'],
+          [400, 'invalid'],
+          [500, 'error'],
+        ] as const)('keeps the form with the error from the language file when the creating fails with HTTP %i, and the button is free again', async (status, failure) => {
+          const ctx = await openForm();
+          type(ctx.element, 'role-form-name', 'Член');
+          send(ctx);
+          postRole().flush({}, { status, statusText: 'x' });
+
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form form > .settings-field__error')).not.toBeNull();
+          });
+          expect(ctx.element.querySelector('app-role-form form > .settings-field__error')?.textContent?.trim()).toBe(
+            uk.colleagues.roleForm.saveError[failure],
+          );
+          expect(submitButton(ctx.element).disabled).toBe(false);
+          expect((ctx.element.querySelector('#role-form-name') as HTMLInputElement).value).toBe('Член');
+          http.expectNone((request) => request.url.includes('/claims/'));
+        });
+
+        it('goes back to the list with a warning when some permissions could not be added, the role is there anyway', async () => {
+          const ctx = await openForm();
+          type(ctx.element, 'role-form-name', 'Член');
+          send(ctx);
+          postRole().flush({ id: 'new4' }, { status: 201, statusText: 'Created' });
+          (await vi.waitFor(() => claimRequest('new4', 'Permissions.ViewNgo'))).flush({}, { status: 400, statusText: 'Bad Request' });
+          (await vi.waitFor(() => claimRequest('new4', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
+
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form')).toBeNull();
+          });
+          rolesRequest().flush(body('Куратор', 'Член'));
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('.roles__message--warning')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.noticePartial);
+            expect(pills(ctx.element)).toEqual(['Куратор', 'Член']);
+          });
+        });
+
+        it('takes the error away when the form is left and opened again, and the warning when the roles are opened again', async () => {
+          const ctx = await openForm();
+          type(ctx.element, 'role-form-name', 'Член');
+          send(ctx);
+          postRole().flush({}, { status: 403, statusText: 'Forbidden' });
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form form > .settings-field__error')).not.toBeNull();
+          });
+
+          headerStart(ctx.element)!.click();
+          ctx.fixture.detectChanges();
+          headerStart(ctx.element)!.click();
+          ctx.fixture.detectChanges();
+          expect(ctx.element.querySelector('app-role-form form > .settings-field__error')).toBeNull();
+        });
       });
 
       it('shows the list again when the user loses the right while the form is open', async () => {
@@ -1447,6 +1823,56 @@ describe('ColleaguesPage', () => {
         expect(element.querySelector('.colleagues__panel-message')).toBeNull();
       });
 
+      describe('the switches of the permissions follow the claims of the role', () => {
+        const switches = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLInputElement>('app-role-form input[role=switch]'));
+
+        async function openEdit(claims: string[]) {
+          const ctx = await withRoles();
+          pencil(ctx.element, 0).click();
+          http.expectOne(roleUrl('r0')).flush(detail('r0', 'Куратор', { claims }));
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form')).not.toBeNull();
+          });
+          return ctx;
+        }
+
+        it('switches on the groups the role has all the permissions of, and the rest stay off', async () => {
+          const { element } = await openEdit(['Permissions.ViewUser', 'Permissions.CreateUser', 'Permissions.UpdateUser', 'Permissions.ViewNgo']);
+          // Групи за порядком: viewUsers, editUsers (обидва права), решта вимкнені; ViewNgo — не в групах.
+          expect(switches(element).map((input) => input.checked)).toEqual([true, true, false, false, false, false, false, false, false, false]);
+        });
+
+        it('keeps a group off when the role has only a part of its permissions', async () => {
+          const { element } = await openEdit(['Permissions.CreateUser']);
+          expect(switches(element)[1].checked).toBe(false);
+        });
+
+        it('puts the warning icon on a group the role has only a part of, and on no other', async () => {
+          const { element } = await openEdit(['Permissions.CreateUser', 'Permissions.ViewUser']);
+          const warned = Array.from(element.querySelectorAll('app-role-form .role-form__permission')).flatMap((row, index) =>
+            row.querySelector('.role-form__partial') ? [index] : [],
+          );
+          expect(warned).toEqual([1]);
+        });
+
+        it('has every switch off for a role without claims', async () => {
+          const { element } = await openEdit([]);
+          expect(switches(element).every((input) => !input.checked)).toBe(true);
+        });
+
+        it('locks the switches by the rights of the user, but shows the state of the role in the locked ones too', async () => {
+          // FULL_RIGHTS не має CreateTableTemplate тощо: група «Редагування організації» заблокована, але ввімкнена в ролі.
+          const claims = ['Permissions.UpdateNgo', 'Permissions.ViewLoginPageImages', 'Permissions.CreateLoginPageImages', 'Permissions.DeleteLoginPageImages', 'Permissions.CreateTableTemplate', 'Permissions.UpdateTableTemplate', 'Permissions.DeleteTableTemplate'];
+          const { element } = await openEdit(claims);
+          const editNgo = switches(element)[7];
+          expect(editNgo.disabled).toBe(true);
+          expect(editNgo.checked).toBe(true);
+          // Група, на яку в користувача є всі права, вільна.
+          expect(switches(element)[0].disabled).toBe(false);
+        });
+      });
+
       it('has "Back" in the header like the form of a new role, and it returns to the list without a new request', async () => {
         const { fixture, element } = await withRoles();
         pencil(element, 0).click();
@@ -1504,9 +1930,9 @@ describe('ColleaguesPage', () => {
         });
       });
 
-      it('gives the saved data to updateRole with the role, and sends nothing', async () => {
+      it('gives the saved data to updateRole with the role', async () => {
         const { fixture, element } = await withRoles();
-        const spy = vi.spyOn(fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>, 'updateRole');
+        const spy = vi.spyOn(fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>, 'updateRole').mockImplementation(() => undefined);
         pencil(element, 0).click();
         http.expectOne(roleUrl('r0')).flush(detail('r0', 'Куратор', { claims: ['Permissions.ViewUser'] }));
         await vi.waitFor(() => {
@@ -1520,8 +1946,161 @@ describe('ColleaguesPage', () => {
 
         expect(spy).toHaveBeenCalledTimes(1);
         expect(spy.mock.calls[0][0]).toMatchObject({ id: 'r0', claims: ['Permissions.ViewUser'] });
-        expect(spy.mock.calls[0][1]).toEqual({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори' });
+        expect(spy.mock.calls[0][1]).toEqual({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори', permissions: ['Permissions.ViewUser'] });
         http.expectNone((request) => request.method !== 'GET');
+      });
+
+      describe('sending the form (PUT /roles/{id}, then the permissions by the difference)', () => {
+        const putRole = (id: string) => http.expectOne((request) => request.url === roleUrl(id) && request.method === 'PUT');
+        const claim = (id: string, right: string) => http.expectOne(`${rolesUrl}/${id}/claims/${right}`);
+        const noContent = { status: 204, statusText: 'No Content' };
+        const switches = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLInputElement>('app-role-form input[role=switch]'));
+        const submitButton = (element: HTMLElement) => element.querySelector('app-role-form button[type=submit]') as HTMLButtonElement;
+
+        async function openEdit(claims: string[]) {
+          const ctx = await withRoles();
+          pencil(ctx.element, 0).click();
+          http.expectOne(roleUrl('r0')).flush(detail('r0', 'Куратор', { claims }));
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form')).not.toBeNull();
+          });
+          return ctx;
+        }
+        const send = (ctx: { fixture: ComponentFixture<ColleaguesPage>; element: HTMLElement }) => {
+          (ctx.element.querySelector('app-role-form form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
+          ctx.fixture.detectChanges();
+        };
+        const backToList = (ctx: { fixture: ComponentFixture<ColleaguesPage>; element: HTMLElement }) =>
+          vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form')).toBeNull();
+          });
+
+        it('saves the names, adds the permissions of the groups switched on, takes away the ones of the groups switched off, and goes back to the updated list', async () => {
+          const ctx = await openEdit(['Permissions.ViewUser']);
+          switches(ctx.element)[0].click();
+          switches(ctx.element)[3].click();
+          field(ctx.element, 'role-form-plural').value = 'Куратори';
+          field(ctx.element, 'role-form-plural').dispatchEvent(new Event('input'));
+          ctx.fixture.detectChanges();
+          send(ctx);
+
+          const saved = putRole('r0');
+          expect(saved.request.body).toEqual({ newName: 'Куратор', feminitiveName: null, pluralName: 'Куратори' });
+          saved.flush(null, noContent);
+          // Спершу додаємо (право групи, потім права без налаштування), потім прибираємо.
+          (await vi.waitFor(() => claim('r0', 'Permissions.CanResetPassword'))).flush(null, noContent);
+          (await vi.waitFor(() => claim('r0', 'Permissions.ViewNgo'))).flush(null, noContent);
+          (await vi.waitFor(() => claim('r0', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
+          const removed = await vi.waitFor(() => claim('r0', 'Permissions.ViewUser'));
+          expect(removed.request.method).toBe('DELETE');
+          removed.flush(null, noContent);
+
+          await backToList(ctx);
+          rolesRequest().flush(body('Куратор', 'Член'));
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(pills(ctx.element)).toEqual(['Куратор', 'Член']);
+          });
+          expect(ctx.element.querySelector('.roles__message--warning')).toBeNull();
+        });
+
+        it('fixes a partial group by saving: its leftover is taken away when the switch stays off', async () => {
+          const ctx = await openEdit(['Permissions.CreateUser', 'Permissions.ViewNgo', 'Permissions.ViewTableTemplate']);
+          send(ctx);
+          putRole('r0').flush(null, noContent);
+          const removed = await vi.waitFor(() => claim('r0', 'Permissions.CreateUser'));
+          expect(removed.request.method).toBe('DELETE');
+          removed.flush(null, noContent);
+          await backToList(ctx);
+          http.expectNone((request) => request.url.includes('/claims/') && request.method === 'POST');
+        });
+
+        it('does not touch a group the user cannot give: no request for its permissions, whichever the state', async () => {
+          // Користувач із FULL_RIGHTS не має прав шаблонів таблиць: «Редагування організації» для нього недоступне.
+          const ctx = await openEdit(['Permissions.CreateTableTemplate', 'Permissions.ViewNgo', 'Permissions.ViewTableTemplate']);
+          send(ctx);
+          putRole('r0').flush(null, noContent);
+          await backToList(ctx);
+          http.expectNone((request) => request.url.includes('/claims/'));
+        });
+
+        it('adds the permissions without settings when the role has not them', async () => {
+          const ctx = await openEdit([]);
+          send(ctx);
+          putRole('r0').flush(null, noContent);
+          (await vi.waitFor(() => claim('r0', 'Permissions.ViewNgo'))).flush(null, noContent);
+          (await vi.waitFor(() => claim('r0', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
+          await backToList(ctx);
+          http.expectNone((request) => request.url.endsWith('/claims/Permissions.CreateNgo'));
+        });
+
+        it('locks the button while it sends, and does not send a second time', async () => {
+          const ctx = await openEdit(['Permissions.ViewNgo', 'Permissions.ViewTableTemplate']);
+          send(ctx);
+          expect(submitButton(ctx.element).disabled).toBe(true);
+          send(ctx);
+          putRole('r0').flush(null, noContent);
+          http.expectNone((request) => request.url === roleUrl('r0') && request.method === 'PUT');
+        });
+
+        it.each([
+          [403, 'forbidden'],
+          [400, 'invalid'],
+          [500, 'error'],
+        ] as const)('keeps the form with the error from the language file when the saving fails with HTTP %i, and touches no permission', async (status, failure) => {
+          const ctx = await openEdit(['Permissions.ViewUser']);
+          switches(ctx.element)[0].click();
+          ctx.fixture.detectChanges();
+          send(ctx);
+          putRole('r0').flush({}, { status, statusText: 'x' });
+
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form form > .settings-field__error')).not.toBeNull();
+          });
+          expect(ctx.element.querySelector('app-role-form form > .settings-field__error')?.textContent?.trim()).toBe(
+            uk.colleagues.roleForm.updateError[failure],
+          );
+          expect(submitButton(ctx.element).disabled).toBe(false);
+          expect(switches(ctx.element)[0].checked).toBe(false);
+          http.expectNone((request) => request.url.includes('/claims/'));
+        });
+
+        it('goes back to the list with a warning when some permissions could not be changed', async () => {
+          const ctx = await openEdit([]);
+          send(ctx);
+          putRole('r0').flush(null, noContent);
+          (await vi.waitFor(() => claim('r0', 'Permissions.ViewNgo'))).flush({}, { status: 400, statusText: 'Bad Request' });
+          (await vi.waitFor(() => claim('r0', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
+          await backToList(ctx);
+          rolesRequest().flush(body('Куратор', 'Член'));
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('.roles__message--warning')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.noticePartialUpdate);
+          });
+        });
+
+        it('takes the error away when the form is left and the role is opened again', async () => {
+          const ctx = await openEdit([]);
+          send(ctx);
+          putRole('r0').flush({}, { status: 403, statusText: 'Forbidden' });
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form form > .settings-field__error')).not.toBeNull();
+          });
+
+          headerStart(ctx.element)!.click();
+          ctx.fixture.detectChanges();
+          pencil(ctx.element, 0).click();
+          http.expectOne(roleUrl('r0')).flush(detail('r0', 'Куратор'));
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelector('app-role-form')).not.toBeNull();
+          });
+          expect(ctx.element.querySelector('app-role-form form > .settings-field__error')).toBeNull();
+        });
       });
 
       it('opens "Roles" on the list again after editing was left open', async () => {
