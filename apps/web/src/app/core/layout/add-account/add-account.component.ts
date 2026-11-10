@@ -5,7 +5,7 @@ import { ModalComponent } from '../../../shared/modal/modal.component';
 import { AccountsService } from '../../accounts/accounts.service';
 import { AuthService, REDIRECT_URL } from '../../auth/auth.service';
 import { ConnectionService, parseServerAddress } from '../../connection/connection.service';
-import { RequestFailure } from '../../http/request-failure';
+import { accountToReplace, loginErrorKey } from '../../accounts/account-login';
 
 const EMAIL_REQUIRED = 'login.form.error.emailRequired';
 const PASSWORD_REQUIRED = 'login.form.error.passwordRequired';
@@ -33,6 +33,9 @@ interface BannerError {
  * закривається, підключення перевіряється вже на сервері нового акаунта, а застосунок
  * переходить на `REDIRECT_URL`. Помилка лишає вікно відкритим, щоб надіслати форму ще раз.
  * «Забули пароль?» поки лише на місці (як на сторінці входу).
+ *
+ * Якщо вікно відкрито для збереженого акаунта (є ключ), заголовок «Ввійти в акаунт» (а не «Додати
+ * акаунт»), а поруч із хрестиком стоїть смітник: він видаляє цей акаунт з памʼяті й закриває вікно.
  */
 @Component({
   selector: 'app-add-account',
@@ -47,8 +50,14 @@ export class AddAccountComponent {
   private readonly router = inject(Router);
 
   private readonly modal = viewChild.required(ModalComponent);
-  /** Ключ акаунта, який вхід може перезаписати (`open(…, accountId)`). */
-  private accountId: string | undefined;
+  /**
+   * Ключ акаунта, який вхід може перезаписати (`open(…, accountId)`). Якщо він є, у вікні
+   * показується смітник, що забуває цей акаунт.
+   */
+  protected readonly accountId = signal<string | undefined>(undefined);
+
+  /** Заголовок вікна (ключ перекладу): для збереженого акаунта «Ввійти в акаунт», для нового «Додати акаунт». */
+  protected readonly titleKey = computed(() => (this.accountId() ? 'nav.account.signIn' : 'nav.account.add'));
 
   protected readonly address = signal('');
   protected readonly email = signal('');
@@ -73,7 +82,7 @@ export class AddAccountComponent {
    *   в акаунт, сесію якого завершено). Сам ключ нічого не підставляє у форму.
    */
   open(email?: string, accountId?: string, server?: string): void {
-    this.accountId = accountId;
+    this.accountId.set(accountId);
     this.address.set(server ?? this.connection.serverUrl());
     this.email.set(email ?? '');
     this.password.set('');
@@ -88,18 +97,20 @@ export class AddAccountComponent {
     return this.modal().close();
   }
 
-  protected onFieldChange(field: { set(value: string): void }, value: string | number | null | undefined): void {
-    field.set(value == null ? '' : String(value));
+  /**
+   * Смітник: забуває акаунт, який відкрито вікном (його запис і токени зникають з памʼяті), і
+   * закриває вікно. Так прибирають застарілий чи недоступний акаунт, що вже не потрібен.
+   */
+  protected async remove(): Promise<void> {
+    const id = this.accountId();
+    if (id) {
+      this.accounts.remove(id);
+    }
+    await this.modal().close();
   }
 
-  /**
-   * Ключ акаунта, який цей вхід перезапише: переданий ключ вказує на збережений акаунт, і в
-   * нього така сама пошта, як у тієї, з якою входять. Інакше — `undefined` (вхід додасть
-   * акаунт або оновить той, що вже є для цього користувача на сервері).
-   */
-  private accountToReplace(email: string): string | undefined {
-    const saved = this.accountId === undefined ? undefined : this.accounts.accounts().find((a) => a.id === this.accountId);
-    return saved && sameEmail(saved.email, email) ? saved.id : undefined;
+  protected onFieldChange(field: { set(value: string): void }, value: string | number | null | undefined): void {
+    field.set(value == null ? '' : String(value));
   }
 
   protected async submit(): Promise<void> {
@@ -121,7 +132,7 @@ export class AddAccountComponent {
     }
 
     const email = this.email().trim();
-    const login = await this.auth.login(email, this.password(), server, this.accountToReplace(email));
+    const login = await this.auth.login(email, this.password(), server, accountToReplace(this.accounts.accounts(), this.accountId(), email));
     this.saving.set(false);
     if (login !== 'ok') {
       this.banner.set({ key: `login.form.error.${loginErrorKey(login)}` });
@@ -134,22 +145,5 @@ export class AddAccountComponent {
     await this.modal().close();
     await this.connection.checkApi();
     void this.router.navigateByUrl(REDIRECT_URL, { onSameUrlNavigation: 'reload' });
-  }
-}
-
-function sameEmail(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
-}
-
-function loginErrorKey(result: RequestFailure): string {
-  switch (result) {
-    case 'invalid':
-      return 'invalid';
-    case 'unauthorized':
-      return 'unauthorized';
-    case 'unreachable':
-      return 'unreachable';
-    default:
-      return 'error';
   }
 }

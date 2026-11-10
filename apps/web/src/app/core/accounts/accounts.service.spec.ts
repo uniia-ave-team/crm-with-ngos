@@ -353,6 +353,16 @@ describe('AccountsService', () => {
       expect(service.activeId()).toBe(account.id);
     });
 
+    it('reads records without a patronymic as having an empty one, and keeps the snapshot patronymic on a repeated sign-in', () => {
+      localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
+      localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r' }));
+      expect(reopen().accounts()[0].patronymic).toBe('');
+
+      const account = service.add({ server, ...tokens, identity: 'a', patronymic: 'Третій' });
+      service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'a' });
+      expect(record(account.id).patronymic).toBe('Третій');
+    });
+
     it('reads records without the new fields as valid accounts with no e-mail', () => {
       localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
       localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r' }));

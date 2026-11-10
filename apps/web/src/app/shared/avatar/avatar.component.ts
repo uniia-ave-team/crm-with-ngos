@@ -29,7 +29,7 @@ export class AvatarComponent {
   readonly ngoName = input<string | null | undefined>('');
   /**
    * Застарілий акаунт (сесію завершено): літери на сірій заливці, а зображення
-   * (якщо є) затемнене напівпрозорим сірим шаром.
+   * (якщо є) показується в градаціях сірого.
    */
   readonly outdated = input(false);
 

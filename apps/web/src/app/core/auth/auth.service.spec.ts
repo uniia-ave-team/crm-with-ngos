@@ -316,6 +316,54 @@ describe('AuthService', () => {
         expect(record).toMatchObject({ outdated: false, accessToken: 'ia', refreshToken: 'ir' });
       });
 
+      describe('refreshStored (at once, whatever the age of the tokens)', () => {
+        it('exchanges the tokens of a fresh unavailable account and makes it available again', async () => {
+          const { inactive, active } = withInactive(0);
+          accountsStore().update(inactive, { unavailable: true });
+
+          const result = service.refreshStored(inactive);
+          const request = http.expectOne(otherRefreshUrl);
+          expect(request.request.body).toEqual({ accessToken: 'ia', refreshToken: 'ir' });
+          request.flush({ accessToken: 'ia2', refreshToken: 'ir2' });
+          expect(await result).toBe('ok');
+
+          const record = JSON.parse(localStorage.getItem(`yavir.account.${inactive}`)!);
+          expect(record).toMatchObject({ accessToken: 'ia2', refreshToken: 'ir2', outdated: false, unavailable: false });
+          expect(accountsStore().activeId()).toBe(active);
+        });
+
+        it('leaves the account unavailable, with its tokens, when the server still does not answer', async () => {
+          const { inactive } = withInactive(0);
+          accountsStore().update(inactive, { unavailable: true });
+          const result = service.refreshStored(inactive);
+          http.expectOne(otherRefreshUrl).error(new ProgressEvent('error'));
+          expect(await result).toBe('unreachable');
+          expect(accountsStore().accounts().find((a) => a.id === inactive)).toMatchObject({
+            unavailable: true,
+            outdated: false,
+            refreshToken: 'ir',
+          });
+        });
+
+        it('marks the account outdated when the server rejects its tokens', async () => {
+          const { inactive } = withInactive(0);
+          accountsStore().update(inactive, { unavailable: true });
+          const result = service.refreshStored(inactive);
+          http.expectOne(otherRefreshUrl).flush({}, { status: 401, statusText: 'Unauthorized' });
+          expect(await result).toBe('unauthorized');
+          expect(accountsStore().accounts().find((a) => a.id === inactive)).toMatchObject({ outdated: true, unavailable: false });
+        });
+
+        it('skips the active account, an outdated one and an unknown one, without a request', async () => {
+          const { inactive, active } = withInactive(0);
+          expect(await service.refreshStored(active)).toBe('skipped');
+          expect(await service.refreshStored('unknown')).toBe('skipped');
+          accountsStore().update(inactive, { outdated: true });
+          expect(await service.refreshStored(inactive)).toBe('skipped');
+          http.expectNone(otherRefreshUrl);
+        });
+      });
+
       it('takes the pair another tab already exchanged, without a request', async () => {
         const { inactive } = withInactive(5 * DAY);
         const record = JSON.parse(localStorage.getItem(`yavir.account.${inactive}`)!);

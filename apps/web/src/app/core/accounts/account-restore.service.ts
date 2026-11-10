@@ -107,8 +107,10 @@ export class AccountRestoreService {
       this.markFailed(id, check);
       await this.connection.checkApi();
       // Профіль скинувся при перемиканні на цей акаунт — повертаємо профіль попереднього
-      // (у фоні: чекати на нього не треба).
-      void this.currentUser.ensure();
+      // (у фоні: чекати на нього не треба). Попереднього не було — повертати нічого.
+      if (previous) {
+        void this.currentUser.ensure();
+      }
       return check;
     } finally {
       this.searchingSignal.set(false);

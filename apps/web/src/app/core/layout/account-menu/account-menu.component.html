@@ -12,60 +12,13 @@
         [class.outdated]="account.outdated"
         [class.unavailable]="account.unavailable"
         [attr.aria-label]="
-          (account.unavailable ? 'nav.account.unavailable' : account.outdated ? 'nav.account.outdated' : 'nav.account.account')
-            | translate
+          tooltip(account, 'nav.account.unavailable' | translate, 'nav.account.outdated' | translate) ??
+            ('nav.account.account' | translate)
         "
-        [attr.title]="
-          account.unavailable || account.outdated
-            ? ((account.unavailable ? 'nav.account.unavailable' : 'nav.account.outdated') | translate)
-            : null
-        "
+        [attr.title]="tooltip(account, 'nav.account.unavailable' | translate, 'nav.account.outdated' | translate)"
         (click)="selectAccount.emit(account)"
       >
-        <app-avatar
-          class="account-tile__avatar"
-          [firstName]="account.firstName"
-          [lastName]="account.lastName"
-          [avatarUrl]="account.avatarUrl"
-          [ngoName]="account.ngoName"
-          [outdated]="account.outdated ?? false"
-        />
-        <!-- Значок стану ліворуч унизу (дзеркально до лого ГО справа), контур за
-             альфа-каналом, як у лого. Прапорці незалежні: застарілий (токени
-             відхилено) — жовтий «alert», недоступний (сервер не відповів) — жовтий
-             «sync», обидва разом — червоний «alert». -->
-        @if (account.outdated && account.unavailable) {
-          <ion-icon
-            class="account-tile__status account-tile__status--both"
-            name="alert-circle"
-            aria-hidden="true"
-            appAlphaOutline="2"
-            outlineColor="var(--nav-avatar-bg)"
-          ></ion-icon>
-        } @else if (account.outdated) {
-          <ion-icon
-            class="account-tile__status account-tile__status--outdated"
-            name="alert-circle"
-            aria-hidden="true"
-            appAlphaOutline="2"
-            outlineColor="var(--nav-avatar-bg)"
-          ></ion-icon>
-        } @else if (account.unavailable) {
-          <ion-icon
-            class="account-tile__status account-tile__status--unavailable"
-            name="sync-circle"
-            aria-hidden="true"
-            appAlphaOutline="2"
-            outlineColor="var(--nav-avatar-bg)"
-          ></ion-icon>
-        }
-        <!-- Логотип ГО цього акаунта (довільна форма, контур за альфа-каналом).
-             Немає посилання на логотип — значка немає взагалі. -->
-        @if (account.logoUrl; as logo) {
-          <span class="account-tile__badge" aria-hidden="true">
-            <img [appProtectedSrc]="logo" alt="" appAlphaOutline="2" outlineColor="var(--nav-avatar-bg)" />
-          </span>
-        }
+        <app-account-avatar [account]="account" />
       </button>
     }
     <button

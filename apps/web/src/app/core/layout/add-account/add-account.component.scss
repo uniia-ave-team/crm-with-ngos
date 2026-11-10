@@ -30,6 +30,39 @@
   color: var(--nav-fg-active);
 }
 
+// Смітник (для збереженого акаунта) і хрестик поряд.
+.add-account__tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-account__remove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-inactive);
+  font-size: 22px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--nav-unavailable-icon);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
 .add-account__close {
   display: inline-flex;
   flex: none;

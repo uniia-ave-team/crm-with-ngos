@@ -28,7 +28,7 @@
   padding: 0 0 12px;
 }
 
-// Плитка акаунта: аватар 44px і маленьке лого Явору в правому нижньому куті.
+// Плитка акаунта: аватар 44px зі значками (`app-account-avatar`).
 .account-tile,
 .account-add {
   position: relative;
@@ -55,48 +55,6 @@
   // Активний акаунт: біла рамка навколо аватара (повторює форму аватара).
   &.active {
     box-shadow: 0 0 0 2px #fff;
-  }
-}
-
-// Значок стану акаунта: у лівому нижньому куті, дзеркально до лого.
-.account-tile__status {
-  position: absolute;
-  left: -5px;
-  bottom: -5px;
-  display: block;
-  width: 18px;
-  height: 18px;
-  font-size: 18px;
-
-  // Сесію завершено (`alert-circle`) або сервер не відповів (`sync-circle`): жовтий
-  // (у світлій темі помаранчевий, 7:1 до білого).
-  &--outdated,
-  &--unavailable {
-    color: var(--nav-outdated-icon);
-  }
-
-  // І те, й те разом: червоний.
-  &--both {
-    color: var(--nav-unavailable-icon);
-  }
-}
-
-.account-tile__badge {
-  position: absolute;
-  right: -5px;
-  bottom: -5px;
-  display: block;
-  width: 18px;
-  height: 18px;
-
-  // Контур навколо лого малює appAlphaOutline за альфа-каналом самого
-  // зображення (його форма довільна: растр із прозорістю чи вектор), а не
-  // рамка чи тінь прямокутного елемента.
-  img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
   }
 }
 

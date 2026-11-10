@@ -288,6 +288,36 @@ export class AuthService {
     });
   }
 
+  /**
+   * Те саме, що `refreshStoredIfDue`, але одразу, не чекаючи половини терміну: обмін токенів
+   * неактивного акаунта, що не застарів. Так повторно перевіряють акаунти, чий сервер не відповідав
+   * (сторінка повторного входу): вдалося — токени нові, `unavailable` знято; відхилено — акаунт
+   * `outdated`; мережева помилка — нічого не змінюється. `'skipped'` — акаунт активний,
+   * застарілий чи невідомий.
+   */
+  refreshStored(accountId: string): Promise<RefreshResult | 'skipped'> {
+    if (!this.isStoredRefreshable(accountId)) {
+      return Promise.resolve('skipped');
+    }
+    return this.runExclusive(async () => {
+      this.accounts.syncFromStorage(accountId);
+      if (!this.isStoredRefreshable(accountId)) {
+        return 'skipped' as const;
+      }
+      const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
+      return account ? this.exchange(account) : ('skipped' as const);
+    });
+  }
+
+  /** Неактивний акаунт, що не застарів. */
+  private isStoredRefreshable(accountId: string): boolean {
+    if (accountId === this.accounts.activeId()) {
+      return false;
+    }
+    const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
+    return !!account && !account.outdated;
+  }
+
   /** Неактивний чинний акаунт, у якого минула половина терміну refresh-токена. */
   private isStoredRefreshDue(accountId: string): boolean {
     if (accountId === this.accounts.activeId()) {
@@ -330,6 +360,8 @@ export class AuthService {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         tokensIssuedAt: Date.now(),
+        // Сервер відповів: якщо акаунт вважався недоступним, це знімається.
+        unavailable: false,
         // «Востаннє використано» чіпаємо лише для активного: фонове оновлення
         // неактивного акаунта його не «використовує».
         ...(account.id === this.accounts.activeId() ? { lastUsedAt: Date.now() } : {}),

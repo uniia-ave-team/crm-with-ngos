@@ -28,7 +28,7 @@ export const authGuard: CanActivateFn = async () => {
   const router = inject(Router);
 
   accounts.reload();
-  if (accounts.active() && currentUser.user()) {
+  if (accounts.active() && currentUser.profileLoaded()) {
     void currentUser.reload();
     return true;
   }

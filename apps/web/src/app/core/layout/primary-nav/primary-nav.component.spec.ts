@@ -118,6 +118,80 @@ describe('PrimaryNavComponent avatar initials', () => {
       expect(byId[first.id]).toMatchObject({ active: false, outdated: true, unavailable: true });
     });
 
+    describe('while another account is being switched to (the search for an account and the click on a tile)', () => {
+      const searching = (value: boolean) =>
+        (TestBed.inject(AccountRestoreService) as unknown as { searchingSignal: { set(v: boolean): void } }).searchingSignal.set(value);
+      const ngoName = (fixture: ReturnType<typeof TestBed.createComponent<PrimaryNavComponent>>) =>
+        (fixture.componentInstance as unknown as { ngoName(): string }).ngoName();
+      const activeTiles = (fixture: ReturnType<typeof TestBed.createComponent<PrimaryNavComponent>>) =>
+        tiles(fixture).filter((tile) => tile['active']).map((tile) => tile['id']);
+
+      function twoAccounts() {
+        const store = TestBed.inject(AccountsService);
+        const first = store.add({ server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity: 'u1', ngoName: 'Перша організація' });
+        const second = store.add({ server: 'http://two.example:5065', accessToken: 'a2', refreshToken: 'r2', identity: 'u2', ngoName: 'Друга організація' });
+        store.setActive(first.id);
+        return { store, first: first.id, second: second.id };
+      }
+
+      it('keeps showing the previous account: the active tile and the name of the NGO do not follow the temporary switch', () => {
+        const { store, first, second } = twoAccounts();
+        const fixture = TestBed.createComponent(PrimaryNavComponent);
+        fixture.detectChanges();
+        expect(activeTiles(fixture)).toEqual([first]);
+        expect(ngoName(fixture)).toBe('Перша організація');
+
+        searching(true);
+        store.setActive(second);
+        TestBed.tick();
+        fixture.detectChanges();
+        expect(activeTiles(fixture)).toEqual([first]);
+        expect(ngoName(fixture)).toBe('Перша організація');
+      });
+
+      it('goes back to the same account untouched when the switch did not succeed', () => {
+        const { store, first, second } = twoAccounts();
+        const fixture = TestBed.createComponent(PrimaryNavComponent);
+        fixture.detectChanges();
+
+        searching(true);
+        store.setActive(second);
+        TestBed.tick();
+        store.setActive(first);
+        searching(false);
+        TestBed.tick();
+        fixture.detectChanges();
+        expect(activeTiles(fixture)).toEqual([first]);
+        expect(ngoName(fixture)).toBe('Перша організація');
+      });
+
+      it('shows the new account once the switch is over', () => {
+        const { store, second } = twoAccounts();
+        const fixture = TestBed.createComponent(PrimaryNavComponent);
+        fixture.detectChanges();
+
+        searching(true);
+        store.setActive(second);
+        TestBed.tick();
+        searching(false);
+        TestBed.tick();
+        fixture.detectChanges();
+        expect(activeTiles(fixture)).toEqual([second]);
+        expect(ngoName(fixture)).toBe('Друга організація');
+      });
+
+      it('follows the active account at once outside of a switch (for instance, another tab changed it)', () => {
+        const { store, second } = twoAccounts();
+        const fixture = TestBed.createComponent(PrimaryNavComponent);
+        fixture.detectChanges();
+
+        store.setActive(second);
+        TestBed.tick();
+        fixture.detectChanges();
+        expect(activeTiles(fixture)).toEqual([second]);
+      });
+    });
+
     describe('the pictures on the tiles (they come from the thumbnails in the snapshot of the account, with no requests)', () => {
       const add = (identity: string, extra: Record<string, unknown> = {}) =>
         TestBed.inject(AccountsService).add({ server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity, ...extra });

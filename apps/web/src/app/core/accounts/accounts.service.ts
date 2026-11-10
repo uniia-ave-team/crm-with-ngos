@@ -46,6 +46,8 @@ export interface StoredAccount {
   readonly unavailable: boolean;
   readonly firstName: string;
   readonly lastName: string;
+  /** По батькові (для підказки на плитці в меню акаунтів); порожній рядок, якщо нема. */
+  readonly patronymic: string;
   readonly avatarUrl: string | null;
   /** Назва ГО (`GET /api/v1/ngo`); `null` — ще нема або немає права на перегляд. */
   readonly ngoName: string | null;
@@ -100,6 +102,7 @@ export interface NewAccount {
   readonly email?: string;
   readonly firstName?: string;
   readonly lastName?: string;
+  readonly patronymic?: string;
   readonly avatarUrl?: string | null;
   readonly ngoName?: string | null;
   readonly ngoLogoUrl?: string | null;
@@ -126,6 +129,7 @@ export type AccountPatch = Partial<
     | 'unavailable'
     | 'firstName'
     | 'lastName'
+    | 'patronymic'
     | 'avatarUrl'
     | 'ngoName'
     | 'ngoLogoUrl'
@@ -248,6 +252,7 @@ export class AccountsService {
       unavailable: false,
       firstName: input.firstName ?? snapshot?.firstName ?? '',
       lastName: input.lastName ?? snapshot?.lastName ?? '',
+      patronymic: input.patronymic ?? snapshot?.patronymic ?? '',
       avatarUrl: input.avatarUrl !== undefined ? input.avatarUrl : (snapshot?.avatarUrl ?? null),
       ngoName: input.ngoName !== undefined ? input.ngoName : (snapshot?.ngoName ?? null),
       ngoLogoUrl: input.ngoLogoUrl !== undefined ? input.ngoLogoUrl : (snapshot?.ngoLogoUrl ?? null),
@@ -463,6 +468,7 @@ function normalize(account: StoredAccount): StoredAccount {
     unavailable: account.unavailable === true,
     firstName: account.firstName ?? '',
     lastName: account.lastName ?? '',
+    patronymic: typeof account.patronymic === 'string' ? account.patronymic : '',
     avatarUrl: account.avatarUrl ?? null,
     ngoName: account.ngoName ?? null,
     ngoLogoUrl: account.ngoLogoUrl ?? null,

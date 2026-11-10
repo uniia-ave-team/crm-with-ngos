@@ -9,7 +9,7 @@ import { ConnectionService } from '../core/connection/connection.service';
 import { AppLanguage, LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
 import { NGO_LOGO_MAX_BYTES, NGO_LOGO_TYPES, NGO_NAME_MAX_LENGTH } from '../core/ngo/logo-rules';
-import { LoginPageImagesService } from '../core/login-page-images/login-page-images.service';
+import { DEFAULT_LOGIN_IMAGE, LoginPageImagesService } from '../core/login-page-images/login-page-images.service';
 import { CreateNgoResult, NgoService, UploadNgoLogoResult } from '../core/ngo/ngo.service';
 import { CreateUserResult, UsersService } from '../core/users/users.service';
 import { isStrongPassword } from '../shared/password-fields/password-rules';
@@ -22,7 +22,6 @@ import { isStrongPassword } from '../shared/password-fields/password-rules';
 type LoginView = 'loading' | 'step1' | 'ngo' | 'admin' | 'setup-error' | 'login';
 
 /** Зображення форми входу за замовчуванням: його лишаємо, коли в системі нема власних. */
-const DEFAULT_LOGIN_IMAGE = 'assets/login_image.jpg';
 
 /** Помилка поля назви або логотипа у формі організації. */
 type NgoNameError = 'required' | 'too-long';

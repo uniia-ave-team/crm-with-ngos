@@ -1,0 +1,36 @@
+<app-avatar
+  class="account-avatar__avatar"
+  [firstName]="account().firstName"
+  [lastName]="account().lastName"
+  [avatarUrl]="account().avatarUrl"
+  [ngoName]="account().ngoName"
+  [outdated]="account().outdated ?? false"
+/>
+<!-- Значок стану ліворуч унизу (дзеркально до лого ГО справа), контур за
+     альфа-каналом, як у лого. Прапорці незалежні: застарілий (токени відхилено),
+     з недоступним сервером чи без, — червоний «alert»; лише недоступний (сервер не
+     відповів) — жовтий «sync». -->
+@if (account().outdated) {
+  <ion-icon
+    class="account-avatar__status account-avatar__status--outdated"
+    name="alert-circle"
+    aria-hidden="true"
+    appAlphaOutline="2"
+    outlineColor="var(--nav-avatar-bg)"
+  ></ion-icon>
+} @else if (account().unavailable) {
+  <ion-icon
+    class="account-avatar__status account-avatar__status--unavailable"
+    name="sync-circle"
+    aria-hidden="true"
+    appAlphaOutline="2"
+    outlineColor="var(--nav-avatar-bg)"
+  ></ion-icon>
+}
+<!-- Логотип ГО цього акаунта (довільна форма, контур за альфа-каналом).
+     Немає посилання на логотип — значка немає взагалі. -->
+@if (account().logoUrl; as logo) {
+  <span class="account-avatar__badge" aria-hidden="true">
+    <img [appProtectedSrc]="logo" alt="" appAlphaOutline="2" outlineColor="var(--nav-avatar-bg)" />
+  </span>
+}

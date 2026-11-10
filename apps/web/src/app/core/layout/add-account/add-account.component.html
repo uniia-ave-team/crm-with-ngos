@@ -1,17 +1,31 @@
-<app-modal width="min(356px, calc(100vw - 32px))" [label]="'nav.account.add' | translate">
+<app-modal width="min(356px, calc(100vw - 32px))" [label]="titleKey() | translate">
   <div class="add-account">
     <header class="add-account__header">
-      <h2 class="add-account__title">{{ 'nav.account.add' | translate }}</h2>
-      <button
-        type="button"
-        class="add-account__close"
-        tabindex="0"
-        [attr.aria-label]="'common.close' | translate"
-        [attr.title]="'common.close' | translate"
-        (click)="close()"
-      >
-        <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
-      </button>
+      <h2 class="add-account__title">{{ titleKey() | translate }}</h2>
+      <div class="add-account__tools">
+        @if (accountId()) {
+          <button
+            type="button"
+            class="add-account__remove"
+            tabindex="0"
+            [attr.aria-label]="'nav.account.remove' | translate"
+            [attr.title]="'nav.account.remove' | translate"
+            (click)="remove()"
+          >
+            <ion-icon name="trash-outline" aria-hidden="true"></ion-icon>
+          </button>
+        }
+        <button
+          type="button"
+          class="add-account__close"
+          tabindex="0"
+          [attr.aria-label]="'common.close' | translate"
+          [attr.title]="'common.close' | translate"
+          (click)="close()"
+        >
+          <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+        </button>
+      </div>
     </header>
 
     @if (banner(); as error) {

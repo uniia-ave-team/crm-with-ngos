@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { ConnectionService } from '../connection/connection.service';
+import { CurrentUserService } from '../users/current-user.service';
 import { AccountRestoreService } from './account-restore.service';
 import { AccountsService } from './accounts.service';
 
@@ -101,7 +102,24 @@ describe('AccountRestoreService', () => {
       expect(accounts.accounts().find((a) => a.id === idOf(second))).toMatchObject({ outdated: true, unavailable: false });
     });
 
-    it('does nothing for an account that is not stored', async () => {
+    it('without a previous active account, does not ask for any profile after a failed switch', async () => {
+    accounts.setActive(null);
+    const ensure = vi.spyOn(TestBed.inject(CurrentUserService), 'ensure');
+    const result = restore.activate(idOf(second));
+
+    let done = false;
+    void result.then(() => (done = true));
+    await vi.waitFor(() => {
+      http.match(() => true).forEach((request) => request.error(new ProgressEvent('error')));
+      expect(done).toBe(true);
+    });
+
+    expect(await result).toBe('unavailable');
+    expect(accounts.activeId()).toBeNull();
+    expect(ensure).not.toHaveBeenCalled();
+  });
+
+  it('does nothing for an account that is not stored', async () => {
       const previous = accounts.activeId();
       expect(await restore.activate('unknown-key')).toBe('unavailable');
       expect(accounts.activeId()).toBe(previous);

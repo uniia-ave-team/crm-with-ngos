@@ -64,7 +64,16 @@ export class CurrentUserService {
   /** Останнє оновлення прав у знімку акаунта (завершене, якщо його не було). */
   private permissionsPromise: Promise<void> = Promise.resolve();
   /** Акаунт (`AuthService.sessionId`), для якого завантажено `user`. */
-  private loadedForSession: string | null = null;
+  private readonly profileSession = signal<string | null>(null);
+  /**
+   * Профіль завантажено саме для активного акаунта. Тимчасове перемикання (пошук акаунта,
+   * `activate`) профіль попереднього акаунта не скидає: він лишається в `user`, поки перемикання
+   * не вдалося, але для нового активного акаунта вважається чужим (`false`).
+   */
+  readonly profileLoaded: Signal<boolean> = computed(() => {
+    const session = this.auth.sessionId();
+    return session !== null && this.userSignal() !== null && this.profileSession() === session;
+  });
   /** Активний акаунт, яким ми були востаннє поза пошуком акаунта: з нього видно, що саме змінилось. */
   private previousSession: string | null = null;
 
@@ -76,29 +85,31 @@ export class CurrentUserService {
       // акаунт змінюється тимчасово й ці зміни не наші: профіль для них вантажить сам пошук.
       const searching = this.injector.get(AccountRestoreService).searching();
       untracked(() => {
-        // Профіль, завантажений уже для цього акаунта, не чіпаємо (effect може
-        // спрацювати вже після відповіді сервера).
-        if (this.loadedForSession !== session) {
-          this.userSignal.set(null);
-        }
+        // Тимчасове перемикання профіль не скидає: аватар і меню лишаються попередніми, доки
+        // перемикання не вдалося (тоді профіль новий, а коли ні — попередній лишається як був).
         if (searching) {
           return;
+        }
+        // Профіль, завантажений уже для цього акаунта, не чіпаємо (effect може
+        // спрацювати вже після відповіді сервера).
+        if (this.profileSession() !== session) {
+          this.userSignal.set(null);
         }
         const previous = this.previousSession;
         this.previousSession = session;
         // Активним став інший акаунт без нашої участі (вкладка не змінювала сторінку: інша
         // вкладка перемкнула акаунт, і подія `storage` дійшла сюди): без нового запиту профіль
         // лишився б порожнім аж до наступної зміни сторінки, а аватар — без імені й зображення.
-        if (previous && session && previous !== session && this.loadedForSession !== session && this.auth.hasTokens()) {
+        if (previous && session && previous !== session && this.profileSession() !== session && this.auth.hasTokens()) {
           void this.ensure();
         }
       });
     });
   }
 
-  /** Перевіряє вхід: профіль уже завантажено — `ok` без запиту, інакше `GET /users/me`. */
+  /** Перевіряє вхід: профіль активного акаунта вже завантажено — `ok` без запиту, інакше `GET /users/me`. */
   ensure(): Promise<CurrentUserResult> {
-    if (this.userSignal() && this.auth.hasTokens()) {
+    if (this.profileLoaded() && this.auth.hasTokens()) {
       return Promise.resolve('ok');
     }
     return this.request();
@@ -150,7 +161,7 @@ export class CurrentUserService {
       if (session === null || session !== this.auth.sessionId()) {
         return 'unauthorized';
       }
-      this.loadedForSession = session;
+      this.profileSession.set(session);
       this.applyProfile(session, user);
       void this.syncNgo(session);
       this.permissionsPromise = this.syncPermissions(session);
@@ -174,7 +185,7 @@ export class CurrentUserService {
   applyLocal(changes: Partial<UserProfile>): void {
     const session = this.auth.sessionId();
     const current = this.userSignal();
-    if (!session || !current) {
+    if (!session || !current || this.profileSession() !== session) {
       return;
     }
     this.applyProfile(session, { ...current, ...changes });
@@ -195,6 +206,7 @@ export class CurrentUserService {
     this.accounts.update(session, {
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
+      patronymic: user.patronymic ?? '',
       avatarUrl: user.avatarUrl ?? null,
       userId: user.id,
       roles: sanitizeRoles(user.roles),

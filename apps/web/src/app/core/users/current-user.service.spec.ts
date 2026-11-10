@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
+import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
@@ -64,6 +65,19 @@ describe('CurrentUserService', () => {
     http.expectOne(url).flush({ ...profile, roles: [roles[1]] });
     await next;
     expect(stored().roles).toEqual([roles[1]]);
+  });
+
+  it('writes the patronymic to the account record (for the tooltip of the tile), and an empty string when the profile has none', async () => {
+    const stored = () => JSON.parse(localStorage.getItem(`yavir.account.${TestBed.inject(AccountsService).activeId()}`)!);
+    const first = service.ensure();
+    http.expectOne(url).flush({ ...profile, patronymic: 'Третій' });
+    await first;
+    expect(stored().patronymic).toBe('Третій');
+
+    const next = service.reload();
+    http.expectOne(url).flush({ ...profile, patronymic: null });
+    await next;
+    expect(stored().patronymic).toBe('');
   });
 
   it('shares one request between simultaneous checks', async () => {
@@ -167,6 +181,77 @@ describe('CurrentUserService', () => {
       auth.clearTokens(second);
       otherTabSwitchesTo(second);
       http.expectNone(url);
+    });
+  });
+
+  describe('a temporary switch of the active account (the search for an account, the click on a tile)', () => {
+    const searching = (value: boolean) =>
+      (TestBed.inject(AccountRestoreService) as unknown as { searchingSignal: { set(v: boolean): void } }).searchingSignal.set(value);
+    let first: string;
+
+    async function loadedFirst(): Promise<void> {
+      first = TestBed.inject(AccountsService).activeId()!;
+      const loading = service.ensure();
+      http.expectOne(url).flush(profile);
+      await loading;
+      TestBed.tick();
+    }
+
+    const addSecond = () =>
+      TestBed.inject(AccountsService).add({ server: TestBed.inject(ConnectionService).serverUrl(), accessToken: 'a2', refreshToken: 'r2', identity: 'u2' });
+
+    it('keeps the profile of the previous account, which is not the profile of the new active one, so a check asks the server', async () => {
+      await loadedFirst();
+      searching(true);
+      addSecond();
+      TestBed.tick();
+
+      expect(service.user()?.id).toBe('u1');
+      expect(service.profileLoaded()).toBe(false);
+
+      const checking = service.ensure();
+      http.expectOne(url).flush({ ...profile, id: 'u2' });
+      expect(await checking).toBe('ok');
+      expect(service.user()?.id).toBe('u2');
+      expect(service.profileLoaded()).toBe(true);
+    });
+
+    it('still has the profile, with no request, when the switch is undone', async () => {
+      await loadedFirst();
+      searching(true);
+      addSecond();
+      TestBed.tick();
+      TestBed.inject(AccountsService).setActive(first);
+      searching(false);
+      TestBed.tick();
+
+      expect(service.user()?.id).toBe('u1');
+      expect(service.profileLoaded()).toBe(true);
+      expect(await service.ensure()).toBe('ok');
+      http.expectNone(url);
+    });
+
+    it('forgets the profile once the search is over without an active account', async () => {
+      await loadedFirst();
+      searching(true);
+      TestBed.inject(AccountsService).setActive(null);
+      TestBed.tick();
+      expect(service.user()?.id).toBe('u1');
+
+      searching(false);
+      TestBed.tick();
+      expect(service.user()).toBeNull();
+      expect(service.profileLoaded()).toBe(false);
+    });
+
+    it('does not write the changes of the previous profile into the new active account', async () => {
+      await loadedFirst();
+      searching(true);
+      const second = addSecond();
+      TestBed.tick();
+
+      service.applyLocal({ firstName: 'Змінене' });
+      expect(TestBed.inject(AccountsService).accounts().find((a) => a.id === second.id)?.firstName).toBe('');
     });
   });
 

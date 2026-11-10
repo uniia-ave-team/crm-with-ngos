@@ -24,8 +24,11 @@ interface AddAccountInternals {
   addressError: { (): string | null };
   emailError: { (): string | null };
   passwordError: { (): string | null };
+  accountId: { (): string | undefined };
+  titleKey: { (): string };
   onFieldChange(field: unknown, value: string): void;
   submit(): Promise<void>;
+  remove(): Promise<void>;
 }
 
 describe('AddAccountComponent', () => {
@@ -171,6 +174,63 @@ describe('AddAccountComponent', () => {
 
       expect(page.address()).toBe(current);
       expect(page.email()).toBe('');
+    });
+
+    describe('the title of the window', () => {
+      it('is "Add account" for a new account and "Sign in to the account" when a key of a saved one is given', () => {
+        const { component, page } = create();
+        const translate = TestBed.inject(TranslateService);
+
+        component.open();
+        expect(translate.instant(page.titleKey())).toBe(uk.nav.account.add);
+        component.open('a@b.org', 'some-key');
+        expect(translate.instant(page.titleKey())).toBe(uk.nav.account.signIn);
+        expect(uk.nav.account.signIn).toBe('Ввійти в акаунт');
+        component.open();
+        expect(translate.instant(page.titleKey())).toBe(uk.nav.account.add);
+      });
+    });
+
+    describe('the trash button (it shows only when a key is given)', () => {
+      it('knows the key after open(), and forgets it when the window is opened again without a key', () => {
+        const { component, page } = create();
+        component.open(undefined, 'some-key');
+        expect(page.accountId()).toBe('some-key');
+        component.open();
+        expect(page.accountId()).toBeUndefined();
+      });
+
+      it('forgets the account of the key with its tokens, leaves the others and the rest of the memory, and closes the window', async () => {
+        localStorage.setItem('yavir.language', 'uk');
+        const accounts = TestBed.inject(AccountsService);
+        const outdated = accounts.add({ ...savedAccount(), server: other });
+        accounts.update(outdated.id, { outdated: true });
+        const active = accounts.add({ server: current, accessToken: 'a', refreshToken: 'r', identity: 'active' });
+        const { component, page } = create();
+        component.open(outdated.email, outdated.id, outdated.server);
+
+        await page.remove();
+
+        expect(accounts.accounts().map((a) => a.id)).toEqual([active.id]);
+        expect(localStorage.getItem(`yavir.account.${outdated.id}`)).toBeNull();
+        expect(accounts.activeId()).toBe(active.id);
+        expect(localStorage.getItem('yavir.language')).toBe('uk');
+        expect(closeModal).toHaveBeenCalled();
+      });
+
+      it('only closes the window when there is no key, or no account has it', async () => {
+        const accounts = TestBed.inject(AccountsService);
+        accounts.add({ server: current, accessToken: 'a', refreshToken: 'r', identity: 'active' });
+        const { component, page } = create();
+
+        component.open();
+        await page.remove();
+        component.open(undefined, 'unknown');
+        await page.remove();
+
+        expect(accounts.accounts()).toHaveLength(1);
+        expect(closeModal).toHaveBeenCalledTimes(2);
+      });
     });
 
     it('overwrites the account of the key, instead of adding one, when the e-mail is the same', async () => {

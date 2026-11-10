@@ -5,11 +5,10 @@ import { RouterModule } from '@angular/router';
 import { IonicModule } from '@ionic/angular/lazy';
 import { TranslatePipe } from '@ngx-translate/core';
 
-import { AlphaOutlineModule } from '../../shared/alpha-outline/alpha-outline.module';
+import { AccountAvatarModule } from '../../shared/account-avatar/account-avatar.module';
 import { AvatarModule } from '../../shared/avatar/avatar.module';
 import { ModalModule } from '../../shared/modal/modal.module';
 import { PopoverModule } from '../../shared/popover/popover.module';
-import { ProtectedSrcModule } from '../../shared/protected-src/protected-src.module';
 import { AccountMenuComponent } from './account-menu/account-menu.component';
 import { AddAccountComponent } from './add-account/add-account.component';
 import { PrimaryNavComponent } from './primary-nav/primary-nav.component';
@@ -25,11 +24,10 @@ import { SecondaryPanelComponent } from './secondary-panel/secondary-panel.compo
     RouterModule,
     IonicModule,
     TranslatePipe,
+    AccountAvatarModule,
     AvatarModule,
     ModalModule,
     PopoverModule,
-    AlphaOutlineModule,
-    ProtectedSrcModule,
   ],
   exports: [PrimaryNavComponent, SecondaryPanelComponent],
 })

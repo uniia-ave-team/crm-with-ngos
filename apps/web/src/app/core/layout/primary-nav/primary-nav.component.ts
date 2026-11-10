@@ -1,11 +1,11 @@
-import { Component, Signal, computed, inject } from '@angular/core';
+import { Component, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { PopoverComponent } from '../../../shared/popover/popover.component';
-import { AccountTile } from '../account-menu/account-menu.component';
+import { AccountTile, toAccountTiles } from '../../../shared/account-avatar/account-tile';
 import { AddAccountComponent } from '../add-account/add-account.component';
 import { AccountRestoreService } from '../../accounts/account-restore.service';
-import { AccountThumbnail, AccountsService } from '../../accounts/accounts.service';
+import { AccountsService } from '../../accounts/accounts.service';
 import { AuthService, REDIRECT_URL } from '../../auth/auth.service';
 import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
@@ -63,43 +63,57 @@ export class PrimaryNavComponent {
   ];
 
   /**
+   * Акаунт, який показують рейл і меню: слідує за активним, але не під час пошуку акаунта й
+   * перемикання по плитці (`AccountRestoreService.searching`). Там активним на мить стає
+   * акаунт, на який перемикаються, і якби меню йшло за ним, аватар і пункти мигтіли б чужими,
+   * а коли перемикання не вдалось — ще й лишились би порожніми. Змінюється лише після завершення.
+   */
+  private readonly shownAccountId = signal<string | null>(this.accountsStore.activeId());
+
+  /** Запис акаунта, який показується (`null` — акаунта нема). */
+  private readonly shownAccount = computed(
+    () => this.accountsStore.accounts().find((account) => account.id === this.shownAccountId()) ?? null,
+  );
+
+  constructor() {
+    effect(() => {
+      const id = this.accountsStore.activeId();
+      const searching = this.restore.searching();
+      untracked(() => {
+        if (!searching) {
+          this.shownAccountId.set(id);
+        }
+      });
+    });
+  }
+
+  /**
    * Пункти меню, доступні користувачеві: ті, для яких є хоча б одне з потрібних прав
-   * (права активного акаунта, оновлюються при кожній зміні сторінки). Поки прав
+   * (права показаного акаунта зі знімка, оновлюються при кожній зміні сторінки). Поки прав
    * не отримано, пункти з вимогою не показуються.
    */
   protected readonly navItems: Signal<readonly NavItem[]> = computed(() => {
-    const granted = this.currentUser.permissions();
+    const granted = this.shownAccount()?.permissions ?? [];
     return PrimaryNavComponent.ITEMS.filter((item) => !item.requiresAny || hasAnyPermission(granted, item.requiresAny));
   });
 
-  /** Поточний користувач (профіль із `GET /api/v1/users/me`) для аватара; `null`, доки не завантажено. */
+  /**
+   * Поточний користувач (профіль із `GET /api/v1/users/me`) для аватара; `null`, доки не завантажено.
+   * Під час невдалого перемикання лишається профілем попереднього акаунта (див. `CurrentUserService`).
+   */
   protected readonly user = this.currentUser.user;
 
-  /** Назва організації активного акаунта (з його знімка): входить у колір аватара. */
-  protected readonly ngoName: Signal<string> = computed(() => this.accountsStore.active()?.ngoName ?? '');
+  /** Назва організації показаного акаунта (з його знімка): входить у колір аватара. */
+  protected readonly ngoName: Signal<string> = computed(() => this.shownAccount()?.ngoName ?? '');
 
   /**
    * Акаунти у вікні аватара: усі збережені (`AccountsService`, за порядком
    * додавання), у тому числі застарілі. Дані плитки беруться зі знімка, що
    * лежить у записі акаунта, тож жодних запитів немає.
    */
-  protected readonly accounts: Signal<readonly AccountTile[]> = computed(() => {
-    const activeId = this.accountsStore.activeId();
-    return this.accountsStore.accounts().map((account) => ({
-      id: account.id,
-      firstName: account.firstName,
-      lastName: account.lastName,
-      // Плитка малюється з мініатюр у знімку акаунта (`data:`-посилання, без запитів):
-      // закрите зображення можна завантажити лише з токеном активного акаунта, а плитки
-      // показують і неактивні. Мініатюра, зроблена зі старого аватара чи логотипа, не годиться.
-      avatarUrl: thumbnailData(account.avatarThumb, account.avatarUrl),
-      ngoName: account.ngoName,
-      logoUrl: thumbnailData(account.ngoLogoThumb, account.ngoLogoUrl),
-      active: account.id === activeId,
-      outdated: account.outdated,
-      unavailable: account.unavailable,
-    }));
-  });
+  protected readonly accounts: Signal<readonly AccountTile[]> = computed(() =>
+    toAccountTiles(this.accountsStore.accounts(), this.shownAccountId()),
+  );
 
   /**
    * «+» у вікні акаунта: закриває вікно й відкриває «Додати акаунт». Нове вікно
@@ -163,9 +177,4 @@ export class PrimaryNavComponent {
   protected readonly mobileLogoBase: Signal<string> = computed(
     () => mobileLogoBase(this.languageService.language()),
   );
-}
-
-/** `data:`-посилання мініатюри, якщо вона зроблена з поточної адреси зображення; інакше `null` (на плитці будуть літери чи не буде значка). */
-function thumbnailData(thumbnail: AccountThumbnail | null, url: string | null): string | null {
-  return thumbnail && url && thumbnail.url === url ? thumbnail.data : null;
 }
