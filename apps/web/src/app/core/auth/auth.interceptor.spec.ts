@@ -137,21 +137,25 @@ describe('authInterceptor', () => {
     http.expectNone(`${server}/api/v1/auth/refresh-token`);
   });
 
-  it('signs out and goes to the login page when the refresh fails', async () => {
+  it('keeps the account, marks it outdated, leaves no active one and goes to /relogin when the server rejects the refresh', async () => {
     storeTokens(jwt(600), 'refresh');
+    const accounts = TestBed.inject(AccountsService);
+    const id = accounts.activeId()!;
     let status = 0;
     client.get(`${server}/api/v1/ngo`).subscribe({ error: (e) => (status = e.status) });
     (await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`))).flush({}, { status: 401, statusText: 'Unauthorized' });
     const refresh = await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`));
     refresh.flush({}, { status: 401, statusText: 'Unauthorized' });
 
-    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
     expect(status).toBe(401);
     expect(auth.hasTokens()).toBe(false);
     expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
+    // Акаунт не забуто: його можна відновити повторним входом.
+    expect(accounts.accounts().map((a) => [a.id, a.outdated, a.unavailable])).toEqual([[id, true, false]]);
   });
 
-  it('forgets only the account whose refresh failed, and keeps another valid account as the active one', async () => {
+  it('keeps every account, with none active, and does not pick another valid one, when the refresh of the active one fails', async () => {
     const accounts = TestBed.inject(AccountsService);
     const other = accounts.add({ server, accessToken: jwt(600), refreshToken: 'refresh-other', identity: 'user-2' });
     storeTokens(jwt(600), 'refresh');
@@ -162,24 +166,24 @@ describe('authInterceptor', () => {
     (await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`))).flush({}, { status: 401, statusText: 'Unauthorized' });
     (await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`))).flush({}, { status: 401, statusText: 'Unauthorized' });
 
-    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
     expect(status).toBe(401);
-    // Невдалий забуто, а активним лишився інший чинний — його не зачеплено.
-    expect(accounts.accounts().map((a) => a.id)).toEqual([other.id]);
-    expect(accounts.activeId()).toBe(other.id);
-    expect(accounts.accounts().some((a) => a.id === failed)).toBe(false);
-    expect(accounts.active()?.refreshToken).toBe('refresh-other');
+    expect(accounts.activeId()).toBeNull();
+    expect(accounts.accounts().find((a) => a.id === failed)).toMatchObject({ outdated: true });
+    // Інший акаунт не зачеплено і не обрано.
+    expect(accounts.accounts().find((a) => a.id === other.id)).toMatchObject({ outdated: false, unavailable: false, refreshToken: 'refresh-other' });
   });
 
-  it('signs out when the refresh fails because the server does not answer', async () => {
+  it('marks the account unavailable, not outdated, when the refresh fails because the server does not answer', async () => {
     storeTokens(jwt(600), 'refresh');
     client.get(`${server}/api/v1/ngo`).subscribe({ error: () => undefined });
     (await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`))).flush({}, { status: 401, statusText: 'Unauthorized' });
     const refresh = await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`));
     refresh.error(new ProgressEvent('error'));
 
-    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
     expect(auth.hasTokens()).toBe(false);
+    expect(TestBed.inject(AccountsService).accounts()[0]).toMatchObject({ outdated: false, unavailable: true });
   });
 
   it('shares one refresh between simultaneous requests', async () => {

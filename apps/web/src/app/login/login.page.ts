@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { NO_CONNECTION_ERROR } from '../core/connection/connection.guard';
 import { AccountRestoreService } from '../core/accounts/account-restore.service';
 import { AccountsService } from '../core/accounts/accounts.service';
-import { AuthService, LoginResult, REDIRECT_URL } from '../core/auth/auth.service';
+import { AuthService, LoginResult, REDIRECT_URL, RELOGIN_URL } from '../core/auth/auth.service';
 import { ConnectionService } from '../core/connection/connection.service';
 import { AppLanguage, LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
@@ -369,13 +369,19 @@ export class LoginPage implements OnDestroy {
 
   /**
    * Шукає чинний акаунт серед збережених (`AccountRestoreService`; застарілі
-   * чистить). Знайшовся — переходимо на `REDIRECT_URL`; ні — відкриваємо форми.
+   * чистить). Знайшовся — переходимо на `REDIRECT_URL`; ні — на повторний вхід (збережені акаунти лишились) або відкриваємо форми.
    */
   private async restoreAccounts(): Promise<void> {
     const result = await this.restoreService.restore();
     if (result === 'restored') {
       // `restoreDone` лишається `false`: до переходу сторінка показує «завантаження».
       void this.router.navigateByUrl(REDIRECT_URL);
+      return;
+    }
+    // Доступного акаунта нема, але збережені лишились (застарілі чи недоступні) — їх відновлюють
+    // на сторінці повторного входу; форми тут лишаються, коли акаунтів нема взагалі.
+    if (this.accounts.accounts().length > 0) {
+      void this.router.navigateByUrl(RELOGIN_URL);
       return;
     }
     this.restoreDone.set(true);

@@ -10,13 +10,13 @@
         [class.active]="account.active"
         type="button"
         [class.outdated]="account.outdated"
-        [class.unavailable]="account.outdated && account.unavailable"
+        [class.unavailable]="account.unavailable"
         [attr.aria-label]="
-          (account.outdated ? (account.unavailable ? 'nav.account.unavailable' : 'nav.account.outdated') : 'nav.account.account')
+          (account.unavailable ? 'nav.account.unavailable' : account.outdated ? 'nav.account.outdated' : 'nav.account.account')
             | translate
         "
         [attr.title]="
-          account.outdated
+          account.unavailable || account.outdated
             ? ((account.unavailable ? 'nav.account.unavailable' : 'nav.account.outdated') | translate)
             : null
         "
@@ -30,27 +30,34 @@
           [ngoName]="account.ngoName"
           [outdated]="account.outdated ?? false"
         />
-        <!-- Застарілий акаунт: значок ліворуч унизу (дзеркально до лого ГО
-             справа), контур за альфа-каналом, як у лого. Сервер не відповів —
-             червоний значок помилки, інакше жовтий «потрібна синхронізація». -->
-        @if (account.outdated) {
-          @if (account.unavailable) {
-            <ion-icon
-              class="account-tile__status account-tile__status--unavailable"
-              name="alert-circle"
-              aria-hidden="true"
-              appAlphaOutline="2"
-              outlineColor="var(--nav-avatar-bg)"
-            ></ion-icon>
-          } @else {
-            <ion-icon
-              class="account-tile__status account-tile__status--outdated"
-              name="sync-circle"
-              aria-hidden="true"
-              appAlphaOutline="2"
-              outlineColor="var(--nav-avatar-bg)"
-            ></ion-icon>
-          }
+        <!-- Значок стану ліворуч унизу (дзеркально до лого ГО справа), контур за
+             альфа-каналом, як у лого. Прапорці незалежні: застарілий (токени
+             відхилено) — жовтий «alert», недоступний (сервер не відповів) — жовтий
+             «sync», обидва разом — червоний «alert». -->
+        @if (account.outdated && account.unavailable) {
+          <ion-icon
+            class="account-tile__status account-tile__status--both"
+            name="alert-circle"
+            aria-hidden="true"
+            appAlphaOutline="2"
+            outlineColor="var(--nav-avatar-bg)"
+          ></ion-icon>
+        } @else if (account.outdated) {
+          <ion-icon
+            class="account-tile__status account-tile__status--outdated"
+            name="alert-circle"
+            aria-hidden="true"
+            appAlphaOutline="2"
+            outlineColor="var(--nav-avatar-bg)"
+          ></ion-icon>
+        } @else if (account.unavailable) {
+          <ion-icon
+            class="account-tile__status account-tile__status--unavailable"
+            name="sync-circle"
+            aria-hidden="true"
+            appAlphaOutline="2"
+            outlineColor="var(--nav-avatar-bg)"
+          ></ion-icon>
         }
         <!-- Логотип ГО цього акаунта (довільна форма, контур за альфа-каналом).
              Немає посилання на логотип — значка немає взагалі. -->

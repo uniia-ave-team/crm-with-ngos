@@ -38,9 +38,10 @@ export interface StoredAccount {
    */
   readonly outdated: boolean;
   /**
-   * Застарілим (`outdated`) акаунт став через те, що його сервер не відповів, а
-   * не через відхилені токени. Лише причина для показу (меню акаунтів); на
-   * решту логіки не впливає. Повторний вхід скидає в `false`.
+   * Сервер акаунта не відповів (мережа, 5xx). Незалежний від `outdated`: токени можуть бути
+   * чинними, просто до сервера не дістатись. Такий акаунт пропускається при першому проході
+   * пошуку чинного, а перевіряється лише коли доступних не знайшлось. Успішна перевірка (чи
+   * повторний вхід) скидає в `false`.
    */
   readonly unavailable: boolean;
   readonly firstName: string;
@@ -298,24 +299,33 @@ export class AccountsService {
   }
 
   /**
-   * Позначає акаунт застарілим (`outdated: true`; `unavailable` — причина: сервер
-   * не відповів, а не відхилив токени): його не видаляємо. Якщо він
-   * був активним, активним стає перший чинний акаунт за порядком додавання.
-   * Чинних не лишилося (застарілими стали **всі**) — памʼять очищається
-   * повністю (`wipe`).
+   * Позначає акаунт застарілим (`outdated: true`): сервер відповів, але відхилив його токени.
+   * Сервер при цьому відповів, тож `unavailable` скидається. Акаунт не видаляємо. Якщо він
+   * був активним, активного акаунта більше нема (`keepActiveAccount`).
    */
-  markOutdated(id: string, unavailable = false): void {
+  markOutdated(id: string): void {
     if (!this.accountsSignal().some((account) => account.id === id)) {
       return;
     }
-    this.update(id, { outdated: true, unavailable });
+    this.update(id, { outdated: true, unavailable: false });
     this.keepActiveAccount(id);
   }
 
   /**
-   * Видаляє акаунт. Якщо він був активним, активним стає перший чинний акаунт
-   * за порядком додавання; чинних не лишилося — памʼять очищається повністю
-   * (`wipe`).
+   * Позначає акаунт недоступним (`unavailable: true`): його сервер не відповів (мережа,
+   * 5xx). `outdated` лишається як був: токени тут ні до чого. Якщо акаунт був активним,
+   * активного більше нема, як у `markOutdated`.
+   */
+  markUnavailable(id: string): void {
+    if (!this.accountsSignal().some((account) => account.id === id)) {
+      return;
+    }
+    this.update(id, { unavailable: true });
+    this.keepActiveAccount(id);
+  }
+
+  /**
+   * Видаляє акаунт. Якщо він був активним, активного акаунта більше нема (`keepActiveAccount`).
    */
   remove(id: string): void {
     const accounts = this.accountsSignal().filter((account) => account.id !== id);
@@ -329,18 +339,15 @@ export class AccountsService {
   }
 
   /**
-   * Після того як акаунт `changedId` застарів чи був видалений: чинних акаунтів
-   * нема взагалі — `wipe()` (як при виході; тимчасово, згодом це буде замінено);
-   * цей акаунт був активним — активним стає перший чинний.
+   * Після того як акаунт `changedId` застарів, став недоступним чи був видалений: якщо він був
+   * активним, активного акаунта більше нема (`null`). Інший акаунт саме не підхоплюється:
+   * користувач обирає його сам (сторінка повторного входу, меню акаунтів), а пошук чинного
+   * (`AccountRestoreService`) вибирає його явно. Самі акаунти лишаються в памʼяті, її не
+   * очищає нічого, крім виходу.
    */
   private keepActiveAccount(changedId: string): void {
-    const valid = this.accountsSignal().find((account) => !account.outdated);
-    if (!valid) {
-      this.wipe();
-      return;
-    }
     if (this.activeIdSignal() === changedId) {
-      this.setActive(valid.id);
+      this.setActive(null);
     }
   }
 

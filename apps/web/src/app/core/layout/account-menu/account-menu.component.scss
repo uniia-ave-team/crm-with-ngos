@@ -68,13 +68,15 @@
   height: 18px;
   font-size: 18px;
 
-  // Сесію завершено: жовтий (у світлій темі помаранчевий, 7:1 до білого).
-  &--outdated {
+  // Сесію завершено (`alert-circle`) або сервер не відповів (`sync-circle`): жовтий
+  // (у світлій темі помаранчевий, 7:1 до білого).
+  &--outdated,
+  &--unavailable {
     color: var(--nav-outdated-icon);
   }
 
-  // Сервер не відповів: червоний.
-  &--unavailable {
+  // І те, й те разом: червоний.
+  &--both {
     color: var(--nav-unavailable-icon);
   }
 }

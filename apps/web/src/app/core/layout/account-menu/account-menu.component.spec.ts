@@ -52,60 +52,44 @@ describe('AccountMenuComponent', () => {
     expect(element.querySelectorAll('.account-tile img')).toHaveLength(0);
   });
 
-  it('marks an outdated account: yellow sync icon on the left and its own label', () => {
+  function statusOf(tile: AccountTile): { tile: HTMLElement; icon: Element | null } {
     const fixture = TestBed.createComponent(AccountMenuComponent);
-    fixture.componentRef.setInput('accounts', [
-      { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null },
-      { id: 'b', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, outdated: true },
-    ]);
+    fixture.componentRef.setInput('accounts', [tile]);
     fixture.detectChanges();
-    const tiles = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.account-tile'));
+    const element = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.account-tile')!;
+    return { tile: element, icon: element.querySelector('.account-tile__status') };
+  }
 
-    // Сірий аватар (клас на самому аватарі) перевіряє avatar.component.spec.ts.
-    expect(tiles[0].querySelector('.account-tile__status')).toBeNull();
-    expect(tiles[0].classList).not.toContain('outdated');
+  const base: AccountTile = { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null };
 
-    expect(tiles[1].classList).toContain('outdated');
-    expect(tiles[1].classList).not.toContain('unavailable');
-    const icon = tiles[1].querySelector('.account-tile__status')!;
-    expect(icon.classList).toContain('account-tile__status--outdated');
-    expect(icon.getAttribute('name')).toBe('sync-circle');
-    // Значок — лише візуальний: статус для допоміжних технологій у підписі плитки.
-    expect(icon.getAttribute('aria-hidden')).toBe('true');
-    expect(tiles[1].getAttribute('aria-label')).not.toBe(tiles[0].getAttribute('aria-label'));
-  });
-
-  it('shows a red alert icon, not the sync one, for an account whose server did not answer', () => {
-    const fixture = TestBed.createComponent(AccountMenuComponent);
-    fixture.componentRef.setInput('accounts', [
-      { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, outdated: true },
-      { id: 'b', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, outdated: true, unavailable: true },
-    ]);
-    fixture.detectChanges();
-    const tiles = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.account-tile'));
-
-    const rejected = tiles[0].querySelector('.account-tile__status')!;
-    expect(rejected.getAttribute('name')).toBe('sync-circle');
-
-    const down = tiles[1].querySelector('.account-tile__status')!;
-    expect(down.getAttribute('name')).toBe('alert-circle');
-    expect(down.classList).toContain('account-tile__status--unavailable');
-    expect(down.getAttribute('aria-hidden')).toBe('true');
-    expect(tiles[1].classList).toContain('unavailable');
-    // Свій підпис і підказка, відмінні від «сесію завершено».
-    expect(tiles[1].getAttribute('aria-label')).not.toBe(tiles[0].getAttribute('aria-label'));
-    expect(tiles[1].getAttribute('title')).toBe(tiles[1].getAttribute('aria-label'));
-  });
-
-  it('shows no unavailable mark for a valid account, whatever its flag says', () => {
-    const fixture = TestBed.createComponent(AccountMenuComponent);
-    fixture.componentRef.setInput('accounts', [
-      { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, unavailable: true },
-    ]);
-    fixture.detectChanges();
-    const tile = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.account-tile')!;
-    expect(tile.querySelector('.account-tile__status')).toBeNull();
+  it('shows no status icon and no extra label for a valid account', () => {
+    const { tile, icon } = statusOf(base);
+    expect(icon).toBeNull();
+    expect(tile.classList).not.toContain('outdated');
     expect(tile.classList).not.toContain('unavailable');
+    expect(tile.getAttribute('title')).toBeNull();
+  });
+
+  it.each([
+    ['outdated (the tokens were rejected)', { outdated: true }, 'alert-circle', 'account-tile__status--outdated'],
+    ['unavailable (the server did not answer)', { unavailable: true }, 'sync-circle', 'account-tile__status--unavailable'],
+    ['outdated and unavailable', { outdated: true, unavailable: true }, 'alert-circle', 'account-tile__status--both'],
+  ])('draws the icon for an account that is %s', (_state, flags, name, cssClass) => {
+    const { tile, icon } = statusOf({ ...base, ...flags });
+    expect(icon!.getAttribute('name')).toBe(name);
+    expect(icon!.classList).toContain(cssClass);
+    // Значок — лише візуальний: статус для допоміжних технологій у підписі плитки.
+    expect(icon!.getAttribute('aria-hidden')).toBe('true');
+    expect(tile.getAttribute('title')).toBe(tile.getAttribute('aria-label'));
+  });
+
+  it('labels an account whose session ended differently from one whose server is down, and from a valid one', () => {
+    const valid = statusOf(base).tile.getAttribute('aria-label');
+    const outdated = statusOf({ ...base, outdated: true }).tile.getAttribute('aria-label');
+    const unavailable = statusOf({ ...base, unavailable: true }).tile.getAttribute('aria-label');
+    expect(new Set([valid, outdated, unavailable]).size).toBe(3);
+    // Сервер не відповів — той самий підпис, чи токени відхилено, чи ні.
+    expect(statusOf({ ...base, outdated: true, unavailable: true }).tile.getAttribute('aria-label')).toBe(unavailable);
   });
 
   it('has the settings item, a divider and the sign-out item, in that order', () => {

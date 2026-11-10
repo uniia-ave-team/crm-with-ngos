@@ -23,7 +23,7 @@ const COLLAPSE_STORAGE_KEY = 'yavir.secondaryPanelCollapsed';
 // Порожній рядок — корінь '/', який завжди редіректить на 'login' (див.
 // app-routing.module.ts) — на цю ж мить синхронного читання він ще не встиг
 // розгорнутись, тож підстраховка мусить трактувати корінь так само.
-const NO_SHELL_PATHS = new Set(['login', 'join', '']);
+const NO_SHELL_PATHS = new Set(['login', 'join', 'relogin', '']);
 
 /**
  * Стан бічного меню: яку контекстну панель показувати (за поточним

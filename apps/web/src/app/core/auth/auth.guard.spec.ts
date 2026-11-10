@@ -139,16 +139,17 @@ describe('authGuard', () => {
     expect(accounts.active()?.refreshToken).toBe('r2');
   });
 
-  it('redirects to /login when the only account is outdated (and the memory is cleared)', async () => {
+  it('redirects to /relogin when the only account is outdated (the account stays in the memory)', async () => {
     addAccount('user-1', jwtAt(-60), 'r1');
     const result = run();
     await answerHealth('healthy');
     (await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`))).flush({}, { status: 401, statusText: 'Unauthorized' });
     await answerHealth('healthy');
 
-    expect(((await result) as UrlTree).toString()).toBe('/login');
-    expect(localStorage.length).toBe(0);
-    expect(accounts.accounts()).toHaveLength(0);
+    expect(((await result) as UrlTree).toString()).toBe('/relogin');
+    expect(accounts.accounts()).toHaveLength(1);
+    expect(accounts.accounts()[0]).toMatchObject({ outdated: true, unavailable: false, refreshToken: 'r1' });
+    expect(accounts.activeId()).toBeNull();
   });
 
   it('takes the next account when the first one is outdated, leaving the first one marked', async () => {
@@ -171,36 +172,38 @@ describe('authGuard', () => {
     ]);
   });
 
-  it('redirects to /login when every account is outdated', async () => {
+  it('redirects to /relogin when every account is outdated', async () => {
     const first = addAccount('a', jwtAt(-60, 'a'), 'ra');
     addAccount('b', jwtAt(600, 'b'), 'rb');
     accounts.markOutdated(first.id);
     accounts.markOutdated(AccountsService.accountId(server, 'b'));
-    expect(((await run()) as UrlTree).toString()).toBe('/login');
+    expect(((await run()) as UrlTree).toString()).toBe('/relogin');
+    expect(accounts.accounts()).toHaveLength(2);
   });
 
-  it('treats an account whose server does not answer as outdated: the memory is wiped and the user goes to /login with the no-connection error', async () => {
+  it('marks an account whose server does not answer as unavailable (not outdated), keeps it, and goes to /relogin', async () => {
     addAccount('user-1', jwtAt(600), 'r1', 'http://down.example.org:5065');
     localStorage.setItem('yavir.language', 'uk');
     const result = run();
     await answerHealth('down', 'http://down.example.org:5065');
     await answerHealth('healthy');
 
-    expect(((await result) as UrlTree).toString()).toBe('/login?error=no-connection');
-    expect(accounts.accounts()).toHaveLength(0);
-    expect(localStorage.length).toBe(0);
+    expect(((await result) as UrlTree).toString()).toBe('/relogin');
+    expect(accounts.accounts()).toHaveLength(1);
+    expect(accounts.accounts()[0]).toMatchObject({ outdated: false, unavailable: true, refreshToken: 'r1' });
+    expect(localStorage.getItem('yavir.language')).toBe('uk');
   });
 
-  it('goes to /login without the error when the servers answered and rejected every account', async () => {
+  it('goes to /relogin when the servers answered and rejected every account', async () => {
     addAccount('user-1', jwtAt(-60), 'r1');
     const result = run();
     await answerHealth('healthy');
     (await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`))).flush({}, { status: 401, statusText: 'Unauthorized' });
     await answerHealth('healthy');
-    expect(((await result) as UrlTree).toString()).toBe('/login');
+    expect(((await result) as UrlTree).toString()).toBe('/relogin');
   });
 
-  it('shows the no-connection error when one account was rejected and another one did not answer', async () => {
+  it('goes to /relogin, with each account marked for its own reason, when one was rejected and another did not answer', async () => {
     addAccount('stale', jwtAt(-60, 'stale'), 'r-stale');
     addAccount('down', jwtAt(600, 'down'), 'r-down', 'http://down.example.org:5065');
     accounts.setActive(AccountsService.accountId(server, 'stale'));
@@ -210,11 +213,14 @@ describe('authGuard', () => {
     await answerHealth('down', 'http://down.example.org:5065');
     await answerHealth('healthy');
 
-    expect(((await result) as UrlTree).toString()).toBe('/login?error=no-connection');
-    expect(accounts.accounts()).toHaveLength(0);
+    expect(((await result) as UrlTree).toString()).toBe('/relogin');
+    expect(accounts.accounts().map((a) => [a.outdated, a.unavailable])).toEqual([
+      [true, false],
+      [false, true],
+    ]);
   });
 
-  it('wipes the memory when no account is valid and none was merely unreachable', async () => {
+  it('does not wipe the memory when no account is valid and none was merely unreachable: goes to /relogin', async () => {
     // Усі позначені застарілими ще до пошуку (напр., запис, залишений іншою вкладкою).
     const first = addAccount('a', jwtAt(600, 'a'), 'ra');
     const second = addAccount('b', jwtAt(600, 'b'), 'rb');
@@ -226,12 +232,12 @@ describe('authGuard', () => {
     expect(accounts.accounts().every((a) => a.outdated)).toBe(true);
 
     const result = run();
-    expect(((await result) as UrlTree).toString()).toBe('/login');
-    expect(localStorage.length).toBe(0);
-    expect(accounts.accounts()).toHaveLength(0);
+    expect(((await result) as UrlTree).toString()).toBe('/relogin');
+    expect(localStorage.getItem('yavir.language')).toBe('uk');
+    expect(accounts.accounts()).toHaveLength(2);
   });
 
-  it('moves on to the next account when the first one is unreachable, and keeps the first one marked', async () => {
+  it('moves on to the next account when the first one is unreachable, and keeps the first one marked as unavailable', async () => {
     addAccount('good', jwtAt(600, 'good'), 'r-good');
     addAccount('down', jwtAt(600, 'down'), 'r-down', 'http://down.example.org:5065');
     // Пошук починає з активного — недоступного.
@@ -243,9 +249,63 @@ describe('authGuard', () => {
 
     expect(await result).toBe(true);
     expect(accounts.activeId()).toBe(AccountsService.accountId(server, 'good'));
-    expect(accounts.accounts().map((a) => a.outdated)).toEqual([false, true]);
-    // Недоступний сервер лишає причину в записі (для меню акаунтів).
+    // Мовчазний сервер — це `unavailable`, а не `outdated`: токени ні до чого.
+    expect(accounts.accounts().map((a) => a.outdated)).toEqual([false, false]);
     expect(accounts.accounts().map((a) => a.unavailable)).toEqual([false, true]);
+  });
+
+  describe('accounts are stored, but none of them is chosen as the active one', () => {
+    const serverA = 'http://a.example.org:5065';
+    const serverB = 'http://b.example.org:5065';
+
+    it('picks an available account, never touching the unavailable one', async () => {
+      addAccount('a', jwtAt(600, 'a'), 'ra', serverA);
+      const second = addAccount('b', jwtAt(600, 'b'), 'rb', serverB);
+      accounts.markUnavailable(second.id);
+      expect(accounts.activeId()).toBeNull();
+
+      const result = run();
+      await answerHealth('healthy', serverA);
+      (await vi.waitFor(() => http.expectOne(`${serverA}/api/v1/users/me`))).flush({ ...profile, id: 'a' });
+
+      expect(await result).toBe(true);
+      expect(accounts.activeId()).toBe(AccountsService.accountId(serverA, 'a'));
+      http.expectNone(`${serverB}/health`);
+      expect(accounts.accounts().find((a) => a.id === second.id)).toMatchObject({ unavailable: true });
+    });
+
+    it('when none is available, asks the unavailable ones again and takes the first that answers', async () => {
+      const first = addAccount('a', jwtAt(600, 'a'), 'ra', serverA);
+      const second = addAccount('b', jwtAt(600, 'b'), 'rb', serverB);
+      accounts.markUnavailable(first.id);
+      accounts.markUnavailable(second.id);
+      expect(accounts.activeId()).toBeNull();
+
+      const result = run();
+      await answerHealth('down', serverA);
+      await answerHealth('healthy', serverB);
+      (await vi.waitFor(() => http.expectOne(`${serverB}/api/v1/users/me`))).flush({ ...profile, id: 'b' });
+
+      expect(await result).toBe(true);
+      expect(accounts.activeId()).toBe(second.id);
+      expect(accounts.accounts().map((a) => a.unavailable)).toEqual([true, false]);
+    });
+
+    it('goes to /relogin when none is available and none of the unavailable ones answers', async () => {
+      const first = addAccount('a', jwtAt(600, 'a'), 'ra', serverA);
+      const second = addAccount('b', jwtAt(600, 'b'), 'rb', serverB);
+      accounts.markUnavailable(first.id);
+      accounts.markUnavailable(second.id);
+
+      const result = run();
+      await answerHealth('down', serverA);
+      await answerHealth('down', serverB);
+      await answerHealth('healthy');
+
+      expect(((await result) as UrlTree).toString()).toBe('/relogin');
+      expect(accounts.activeId()).toBeNull();
+      expect(accounts.accounts()).toHaveLength(2);
+    });
   });
 
   it('shares one search between simultaneous navigations', async () => {

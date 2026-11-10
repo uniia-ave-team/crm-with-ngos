@@ -24,8 +24,9 @@ describe('AppRoutingModule', () => {
     }
   });
 
-  it('has no guards on the login page and on the page of the invitation', () => {
+  it('has no guards on the login page, on the page of the invitation and on the page of the repeated login', () => {
     expect(guards('login')).toBe(0);
     expect(guards('join')).toBe(0);
+    expect(guards('relogin')).toBe(0);
   });
 });

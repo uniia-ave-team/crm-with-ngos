@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Injector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
+import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountThumbnail, AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
@@ -64,16 +65,32 @@ export class CurrentUserService {
   private permissionsPromise: Promise<void> = Promise.resolve();
   /** Акаунт (`AuthService.sessionId`), для якого завантажено `user`. */
   private loadedForSession: string | null = null;
+  /** Активний акаунт, яким ми були востаннє поза пошуком акаунта: з нього видно, що саме змінилось. */
+  private previousSession: string | null = null;
 
   constructor() {
     // Інший акаунт (вихід, вхід, перемикання) — профіль попереднього забуваємо.
     effect(() => {
       const session = this.auth.sessionId();
+      // Під час пошуку акаунта (`AccountRestoreService`) і перемикання по плитці активний
+      // акаунт змінюється тимчасово й ці зміни не наші: профіль для них вантажить сам пошук.
+      const searching = this.injector.get(AccountRestoreService).searching();
       untracked(() => {
         // Профіль, завантажений уже для цього акаунта, не чіпаємо (effect може
         // спрацювати вже після відповіді сервера).
         if (this.loadedForSession !== session) {
           this.userSignal.set(null);
+        }
+        if (searching) {
+          return;
+        }
+        const previous = this.previousSession;
+        this.previousSession = session;
+        // Активним став інший акаунт без нашої участі (вкладка не змінювала сторінку: інша
+        // вкладка перемкнула акаунт, і подія `storage` дійшла сюди): без нового запиту профіль
+        // лишився б порожнім аж до наступної зміни сторінки, а аватар — без імені й зображення.
+        if (previous && session && previous !== session && this.loadedForSession !== session && this.auth.hasTokens()) {
+          void this.ensure();
         }
       });
     });

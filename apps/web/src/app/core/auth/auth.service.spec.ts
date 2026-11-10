@@ -215,17 +215,20 @@ describe('AuthService', () => {
       expect(storedRecord().refreshToken).toBe('r-other');
     });
 
-    it('marks the account outdated when the server rejects its tokens; as the only account it also clears the memory', async () => {
+    it('marks the account outdated when the server rejects its tokens; as the only account it stays in the memory, but is no longer active', async () => {
       store('a', 'r');
+      localStorage.setItem('yavir.language', 'uk');
       const result = service.refresh();
       http.expectOne(refreshUrl()).flush({}, { status: 401, statusText: 'Unauthorized' });
       expect(await result).toBe('unauthorized');
       expect(service.hasTokens()).toBe(false);
-      expect(accountsStore().accounts()).toHaveLength(0);
-      expect(localStorage.length).toBe(0);
+      expect(accountsStore().accounts()).toHaveLength(1);
+      expect(accountsStore().accounts()[0]).toMatchObject({ outdated: true, unavailable: false });
+      expect(accountsStore().activeId()).toBeNull();
+      expect(localStorage.getItem('yavir.language')).toBe('uk');
     });
 
-    it('makes the other valid account the active one when the active one is rejected', async () => {
+    it('leaves no active account when the active one is rejected, and does not pick another one', async () => {
       const other = accountsStore().add({ server: server(), accessToken: 'b', refreshToken: 'rb', identity: 'user-2' });
       store('a', 'r');
       const active = accountsStore().activeId()!;
@@ -234,10 +237,9 @@ describe('AuthService', () => {
       http.expectOne(refreshUrl()).flush({}, { status: 401, statusText: 'Unauthorized' });
       expect(await result).toBe('unauthorized');
 
-      // Застарілий більше не активний: активним став інший чинний акаунт.
-      expect(accountsStore().activeId()).toBe(other.id);
-      expect(service.accessToken()).toBe('b');
-      expect(service.hasTokens()).toBe(true);
+      // Застарілий більше не активний, а інший чинний сам не підхоплюється: активного нема.
+      expect(accountsStore().activeId()).toBeNull();
+      expect(service.hasTokens()).toBe(false);
       expect(JSON.parse(localStorage.getItem(`yavir.account.${active}`)!).outdated).toBe(true);
       expect(JSON.parse(localStorage.getItem(`yavir.account.${other.id}`)!).outdated).toBe(false);
       expect(localStorage.getItem('yavir.accounts')).not.toBeNull();
@@ -355,23 +357,37 @@ describe('AuthService', () => {
     describe('logout', () => {
       const logoutUrl = () => `${server()}/api/v1/auth/logout`;
       const validAccess = () => jwtWith(Math.floor(Date.now() / 1000) + 600);
+      const otherServer = 'http://other.example.org:5065';
       let navigate: ReturnType<typeof vi.spyOn>;
 
       beforeEach(() => {
         navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
       });
 
-      it('wipes the whole localStorage, forgets the tokens, goes to /login and revokes the refresh token', async () => {
+      /** Акаунт на іншому сервері, доданий до того, як `store` зробить активним основний. */
+      const addOther = (extra: Partial<{ outdated: boolean; unavailable: boolean }> = {}) => {
+        const other = accountsStore().add({ server: otherServer, accessToken: 'other-access', refreshToken: 'other-refresh', identity: 'user-2' });
+        if (extra.outdated || extra.unavailable) {
+          accountsStore().update(other.id, extra);
+        }
+        return other;
+      };
+
+      it('removes only the active account, leaves the rest of the memory, goes to /login when nothing is left, and revokes the refresh token', async () => {
         const access = validAccess();
         store(access, 'refresh-1');
+        const id = accountsStore().activeId()!;
         localStorage.setItem('yavir.language', 'uk');
         localStorage.setItem('yavir.serverAddress', 'somewhere');
 
         const result = service.logout();
-        // Очищення й перехід відбуваються до відповіді сервера.
-        expect(localStorage.length).toBe(0);
+        // Видалення відбувається до відповіді сервера.
+        expect(localStorage.getItem(`yavir.account.${id}`)).toBeNull();
+        expect(JSON.parse(localStorage.getItem('yavir.accounts')!)).toEqual([]);
+        expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
+        expect(localStorage.getItem('yavir.language')).toBe('uk');
+        expect(localStorage.getItem('yavir.serverAddress')).toBe('somewhere');
         expect(service.hasTokens()).toBe(false);
-        expect(navigate).toHaveBeenCalledWith('/login');
 
         const request = http.expectOne(logoutUrl());
         expect(request.request.method).toBe('POST');
@@ -379,6 +395,49 @@ describe('AuthService', () => {
         expect(request.request.headers.get('Authorization')).toBe(`Bearer ${access}`);
         request.flush(null, { status: 204, statusText: 'No Content' });
         expect(await result).toBe('ok');
+        await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
+      });
+
+      it('keeps the other accounts untouched and, as none of them is valid, goes to /relogin with no active account', async () => {
+        const other = addOther({ unavailable: true });
+        store(validAccess(), 'refresh-1');
+        const id = accountsStore().activeId()!;
+
+        const result = service.logout();
+        // Другий акаунт недоступний: його сервер перевіряється, але мовчить.
+        (await vi.waitFor(() => http.expectOne(`${otherServer}/health`))).error(new ProgressEvent('error'));
+        http.expectOne(logoutUrl()).flush(null, { status: 204, statusText: 'No Content' });
+        await result;
+        // Далі підключення вертається до звичайної цілі, і лише тоді пошук завершено.
+        await vi.waitFor(() => {
+          http.match(() => true).forEach((request) => request.error(new ProgressEvent('error')));
+          expect(navigate).toHaveBeenCalledWith('/relogin');
+        });
+
+        expect(accountsStore().accounts().map((a) => a.id)).toEqual([other.id]);
+        expect(accountsStore().accounts()[0]).toMatchObject({ unavailable: true, refreshToken: 'other-refresh' });
+        expect(accountsStore().activeId()).toBeNull();
+        expect(localStorage.getItem(`yavir.account.${id}`)).toBeNull();
+      });
+
+      it('makes another valid account the active one and opens the page again, when one is found', async () => {
+        const other = addOther();
+        store(validAccess(), 'refresh-1');
+        const id = accountsStore().activeId()!;
+
+        const result = service.logout();
+        http.expectOne(logoutUrl()).flush(null, { status: 204, statusText: 'No Content' });
+        (await vi.waitFor(() => http.expectOne(`${otherServer}/health`))).flush({ status: 'Healthy' });
+        (await vi.waitFor(() => http.expectOne(`${otherServer}/api/v1/users/me`))).flush({ id: 'u2', roles: [], customFields: [] });
+        http.match(() => true);
+        await result;
+
+        await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner', { onSameUrlNavigation: 'reload' }));
+        expect(accountsStore().activeId()).toBe(other.id);
+        expect(accountsStore().accounts().map((a) => a.id)).toEqual([other.id]);
+        expect(localStorage.getItem(`yavir.account.${id}`)).toBeNull();
+        expect(navigate).not.toHaveBeenCalledWith('/login');
+        expect(navigate).not.toHaveBeenCalledWith('/relogin');
       });
 
       it.each([
@@ -390,7 +449,7 @@ describe('AuthService', () => {
         const result = service.logout();
         http.expectOne(logoutUrl()).flush({}, { status, statusText: 'x' });
         expect(await result).toBe(expected);
-        expect(localStorage.length).toBe(0);
+        expect(accountsStore().accounts()).toHaveLength(0);
         expect(service.hasTokens()).toBe(false);
       });
 
@@ -399,15 +458,15 @@ describe('AuthService', () => {
         const result = service.logout();
         http.expectOne(logoutUrl()).error(new ProgressEvent('error'));
         expect(await result).toBe('unreachable');
-        expect(localStorage.length).toBe(0);
+        expect(accountsStore().accounts()).toHaveLength(0);
       });
 
-      it('sends no request when there were no tokens, but still wipes the storage and goes to /login', async () => {
+      it('sends no request when there is no account, and goes to /login', async () => {
         localStorage.setItem('yavir.language', 'uk');
         expect(await service.logout()).toBe('skipped');
         http.expectNone(logoutUrl());
-        expect(localStorage.length).toBe(0);
-        expect(navigate).toHaveBeenCalledWith('/login');
+        expect(localStorage.getItem('yavir.language')).toBe('uk');
+        await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
       });
 
       it('refreshes an expired access token first, so that the server accepts the logout and revokes the new refresh token', async () => {
@@ -425,23 +484,69 @@ describe('AuthService', () => {
         expect(await result).toBe('ok');
       });
 
-      it('goes on with the local logout when the refresh of an expired token fails', async () => {
+      it('goes on with the local logout, removing that very account, when the refresh of an expired token fails', async () => {
         store(jwtWith(Math.floor(Date.now() / 1000) - 60), 'refresh-1');
         const result = service.logout();
         http.expectOne(refreshUrl()).flush({}, { status: 401, statusText: 'Unauthorized' });
         expect(await result).toBe('skipped');
-        expect(localStorage.length).toBe(0);
-        expect(navigate).toHaveBeenCalledWith('/login');
+        // Невдале оновлення зняло з акаунта активність, але вийшли саме з нього.
+        expect(accountsStore().accounts()).toHaveLength(0);
+        http.expectNone(logoutUrl());
+        await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
       });
     });
 
-    it('signs out: forgets the tokens and goes to the login page', () => {
-      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
-      store('a', 'r');
-      service.signOut();
-      expect(service.hasTokens()).toBe(false);
-      expect(accountsStore().accounts()).toHaveLength(0);
-      expect(navigate).toHaveBeenCalledWith('/login');
+    describe('expireSession (the refresh of the active account failed)', () => {
+      let navigate: ReturnType<typeof vi.spyOn>;
+      beforeEach(() => {
+        navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      });
+
+      it('keeps the account, marks it outdated for rejected tokens, leaves no active account and goes to /relogin', () => {
+        localStorage.setItem('yavir.language', 'uk');
+        store('a', 'r');
+        const id = accountsStore().activeId()!;
+        service.expireSession(id, 'unauthorized');
+
+        expect(service.hasTokens()).toBe(false);
+        expect(accountsStore().accounts()).toHaveLength(1);
+        expect(accountsStore().accounts()[0]).toMatchObject({ id, outdated: true, unavailable: false, refreshToken: 'r' });
+        expect(accountsStore().activeId()).toBeNull();
+        expect(localStorage.getItem('yavir.language')).toBe('uk');
+        expect(navigate).toHaveBeenCalledWith('/relogin');
+      });
+
+      it('marks the account unavailable, not outdated, when the server did not answer', () => {
+        store('a', 'r');
+        const id = accountsStore().activeId()!;
+        service.expireSession(id, 'unreachable');
+        expect(accountsStore().accounts()[0]).toMatchObject({ outdated: false, unavailable: true });
+        expect(accountsStore().activeId()).toBeNull();
+        expect(navigate).toHaveBeenCalledWith('/relogin');
+      });
+
+      it('does not hand the activity to another valid account, which stays as it was', () => {
+        const other = accountsStore().add({ server: server(), accessToken: 'b', refreshToken: 'rb', identity: 'user-2' });
+        store('a', 'r');
+        const id = accountsStore().activeId()!;
+        service.expireSession(id, 'invalid');
+
+        expect(accountsStore().activeId()).toBeNull();
+        expect(accountsStore().accounts().find((a) => a.id === other.id)).toMatchObject({ outdated: false, unavailable: false });
+        expect(navigate).toHaveBeenCalledWith('/relogin');
+      });
+
+      it('goes nowhere when another account became active while the refresh of this one was running', () => {
+        store('a', 'r');
+        const failed = accountsStore().activeId()!;
+        const other = accountsStore().add({ server: server(), accessToken: 'b', refreshToken: 'rb', identity: 'user-2' });
+        expect(accountsStore().activeId()).toBe(other.id);
+
+        service.expireSession(failed, 'unauthorized');
+        expect(accountsStore().activeId()).toBe(other.id);
+        expect(accountsStore().accounts().find((a) => a.id === failed)?.outdated).toBe(true);
+        expect(navigate).not.toHaveBeenCalled();
+      });
     });
   });
 });

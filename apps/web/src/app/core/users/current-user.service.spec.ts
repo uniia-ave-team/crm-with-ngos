@@ -120,6 +120,56 @@ describe('CurrentUserService', () => {
     expect(service.user()?.id).toBe('u2');
   });
 
+  describe('when the active account is changed without this tab doing it (another tab switched it)', () => {
+    const activeKey = 'yavir.activeAccount';
+    let first: string;
+    let second: string;
+
+    /** Профіль першого акаунта завантажено; другий лежить у сховищі, але неактивний. */
+    async function twoAccounts(): Promise<void> {
+      const accounts = TestBed.inject(AccountsService);
+      first = accounts.activeId()!;
+      const server = TestBed.inject(ConnectionService).serverUrl();
+      second = accounts.add({ server, accessToken: 'access-2', refreshToken: 'refresh-2', identity: 'u2' }).id;
+      accounts.setActive(first);
+      TestBed.tick();
+      const loading = service.ensure();
+      http.expectOne(url).flush(profile);
+      await loading;
+      TestBed.tick();
+    }
+
+    /** Те, що робить інша вкладка: пише вказівник на активний акаунт, і сюди приходить `storage`. */
+    function otherTabSwitchesTo(id: string): void {
+      localStorage.setItem(activeKey, id);
+      window.dispatchEvent(new StorageEvent('storage', { key: activeKey }));
+      TestBed.tick();
+    }
+
+    it('asks for the profile of the new account, so the avatar is not left empty until the next page change', async () => {
+      await twoAccounts();
+
+      otherTabSwitchesTo(second);
+      expect(service.user()).toBeNull();
+      http.expectOne(url).flush({ ...profile, id: 'u2' });
+      await vi.waitFor(() => expect(service.user()?.id).toBe('u2'));
+    });
+
+    it('asks nothing when the other tab did not change the account', async () => {
+      await twoAccounts();
+      otherTabSwitchesTo(first);
+      http.expectNone(url);
+      expect(service.user()?.id).toBe('u1');
+    });
+
+    it('asks nothing for an account without tokens', async () => {
+      await twoAccounts();
+      auth.clearTokens(second);
+      otherTabSwitchesTo(second);
+      http.expectNone(url);
+    });
+  });
+
   it('does not take a profile that arrived after the user signed out', async () => {
     const result = service.ensure();
     const request = http.expectOne(url);
