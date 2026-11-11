@@ -26,6 +26,8 @@ export interface RolesView {
 })
 export class RolesPanelComponent {
   readonly view = input.required<RolesView>();
+  /** Ключ у мовному файлі повідомлення над списком (наприклад, після створення ролі); `null` — нема. */
+  readonly notice = input<string | null>(null);
   /** Показувати кнопки «Редагувати» й «Видалити» (за замовчуванням ні: їх відкриває право на керування ролями). */
   readonly canManage = input(false);
   /** Натиснули «Редагувати» (олівець) біля ролі. */

@@ -1,0 +1,43 @@
+// Вигляд вікна — як у спливаючого вікна (`app-popover`, меню акаунтів): тло й текст —
+// токени меню (світла/темна тема), великі заокруглення, м'яка тінь. Відмінність лише
+// в розташуванні: по центру екрана, а за вікном затемнення на весь екран.
+:host {
+  display: contents;
+}
+
+ion-modal.app-modal {
+  // Ширину задаємо власною змінною, а не `--width` у style: Ionic знімає з вікна inline
+  // `--width` при закритті (як і в `app-popover`), і наступне відкриття було б із типовою.
+  --width: var(--app-modal-width, fit-content);
+  // Явні ширина й висота потрібні й на телефоні: без них Ionic розтягує модальне вікно
+  // на весь екран, а нам потрібен діалог по центру.
+  --height: fit-content;
+  --min-width: 0;
+  --max-width: calc(100vw - 32px);
+  --max-height: calc(100vh - 32px);
+  --background: var(--nav-avatar-bg);
+  --color: var(--nav-fg-active);
+  --box-shadow: 0 4px 16px rgb(2 11 24 / 7%);
+  --border-radius: 20px;
+  // Затемнення всього, що під вікном (сторінка, меню, рейл).
+  --backdrop-opacity: 0.45;
+  font-family: var(--font-menu);
+}
+
+ion-modal.app-modal::part(content) {
+  border: 1px solid var(--nav-border);
+}
+
+.app-modal__content {
+  box-sizing: border-box;
+  max-height: calc(100vh - 32px);
+  padding: 18px 18px 26px;
+  overflow-y: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  ion-modal.app-modal {
+    --box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+    --backdrop-opacity: 0.6;
+  }
+}

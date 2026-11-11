@@ -6,6 +6,8 @@ import { AccountsService } from '../core/accounts/accounts.service';
 import { PERMISSIONS, hasAnyPermission } from '../core/auth/permissions';
 import { LanguageService } from '../core/i18n/language.service';
 import { RequestFailure } from '../core/http/request-failure';
+import { InvitationsService } from '../core/invitations/invitations.service';
+import { ALWAYS_GRANTED_PERMISSIONS, diffClaims } from '../core/roles/role-permissions';
 import { Role, RoleDetails, RolesService } from '../core/roles/roles.service';
 import { CurrentUserService } from '../core/users/current-user.service';
 import { PRONOUN_CATEGORY } from '../core/users/pronouns';
@@ -18,10 +20,12 @@ import {
   DataTableRowMenuEvent,
   DataTableSort,
 } from '../shared/data-table/data-table.component';
+import { ModalComponent } from '../shared/modal/modal.component';
 import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
 import { ColleagueAction, ColleagueActionItem } from './colleague-actions/colleague-actions.component';
-import { NewColleague } from './colleague-form/colleague-form.component';
+import { ColleagueFormComponent, NewColleague } from './colleague-form/colleague-form.component';
+import { InvitationShare, InvitationStatus } from './invitation-dialog/invitation-dialog.component';
 import { NewRole } from './role-form/role-form.component';
 import { RolesView } from './roles-panel/roles-panel.component';
 
@@ -164,6 +168,7 @@ export class ColleaguesPage implements OnInit {
   private readonly language = inject(LanguageService).language;
   private readonly roles = inject(RolesService);
   private readonly users = inject(UsersService);
+  private readonly invitations = inject(InvitationsService);
   private readonly currentUser = inject(CurrentUserService);
   private readonly permissions = this.currentUser.permissions;
   private readonly router = inject(Router);
@@ -189,6 +194,17 @@ export class ColleaguesPage implements OnInit {
 
   private readonly rowMenu = viewChild(PopoverComponent);
   private readonly sidePanel = viewChild(SidePanelComponent);
+  private readonly invitationModal = viewChild(ModalComponent);
+  private readonly colleagueForm = viewChild(ColleagueFormComponent);
+  /** Іде відправка форми нового колеги. */
+  protected readonly colleagueSaving = signal(false);
+  /** Ключ помилки відправки форми нового колеги (`null` — нема). */
+  protected readonly colleagueSaveError = signal<string | null>(null);
+  /** Створене запрошення для вікна з токеном (лишається, поки вікно закривається). */
+  protected readonly invitation = signal<{ readonly email: string; readonly token: string; readonly expiresAt: string } | null>(null);
+  /** Що вийшло з копіюванням чи поширенням посилання у вікні запрошення. */
+  protected readonly invitationStatus = signal<InvitationStatus>('idle');
+
   /** Що відкрито в бічному вікні (`null` — вікно закрите). */
   protected readonly panel = signal<ColleaguesPanelState | null>(null);
   /**
@@ -199,6 +215,12 @@ export class ColleaguesPage implements OnInit {
   /** Ролі для бічного вікна «Ролі» (запит іде при кожному його відкритті). */
   protected readonly rolesView = signal<RolesView>({ status: 'loading', roles: [], failure: null });
   private rolesLoading = false;
+  /** Іде відправка форми нової ролі. */
+  protected readonly roleSaving = signal(false);
+  /** Ключ помилки відправки форми нової ролі (`null` — нема). */
+  protected readonly roleSaveError = signal<string | null>(null);
+  /** Ключ повідомлення над списком ролей (наприклад, не всі права додалися); `null` — нема. */
+  protected readonly rolesNotice = signal<string | null>(null);
   /** Що показано у вікні «Ролі»: список, форма нової ролі («Додати роль») чи форма ролі, що редагується. */
   private readonly rolesMode = signal<'list' | 'add' | 'edit'>('list');
   /** Форми лише для того, хто може керувати ролями; інакше завжди список. */
@@ -417,11 +439,14 @@ export class ColleaguesPage implements OnInit {
     this.sidePanel()?.open();
     if (kind === 'add') {
       // Форма колеги вибирає ролі зі списку: він такий самий, як у вікні «Ролі».
+      this.colleagueSaveError.set(null);
       void this.loadRoles();
     }
     if (kind === 'roles') {
       // «Ролі» завжди відкривають на списку, а не на формі, де зупинились минулого разу.
       this.roleRequest++;
+      this.roleSaveError.set(null);
+      this.rolesNotice.set(null);
       this.rolesMode.set('list');
       void this.loadRoles();
     }
@@ -429,23 +454,99 @@ export class ColleaguesPage implements OnInit {
 
   /** «Додати роль» у шапці вікна «Ролі»: замість списку з'являється форма нової ролі. */
   protected addRole(): void {
+    this.roleSaveError.set(null);
     this.rolesMode.set('add');
   }
 
   /** «Назад» у шапці вікна на формі ролі: знову список ролей. */
   protected backToRoles(): void {
     this.roleRequest++;
+    this.roleSaveError.set(null);
     this.rolesMode.set('list');
   }
 
-  /** «Додати» у формі нового колеги. Заглушка: дані поки не надсилаємо. */
-  protected createColleague(colleague: NewColleague): void {
-    console.log(`[ColleaguesPage] Додати колегу: ${colleague.email}, ролей: ${colleague.roleIds.length} (відправку ще не зроблено)`);
+  /**
+   * «Додати» у формі нового колеги: створює запрошення (`POST /api/v1/invitations`, пошта й
+   * вибрані ролі). Поки йде відправка, кнопка вимкнена. Успіх очищає форму, закриває бічне
+   * вікно й показує в модальному вікні посилання для колеги з отриманим токеном
+   * (`<домен>/join?token=…`); невдача лишає форму з помилкою за причиною.
+   */
+  protected async createColleague(colleague: NewColleague): Promise<void> {
+    if (this.colleagueSaving()) {
+      return;
+    }
+    this.colleagueSaving.set(true);
+    this.colleagueSaveError.set(null);
+    const result = await this.invitations.invite(colleague.email, colleague.roleIds);
+    this.colleagueSaving.set(false);
+    if (typeof result === 'string') {
+      this.colleagueSaveError.set(`colleagues.colleagueForm.saveError.${result}`);
+      return;
+    }
+    this.invitation.set({ email: colleague.email, token: result.token, expiresAt: result.expiresAt });
+    this.invitationStatus.set('idle');
+    this.colleagueForm()?.reset();
+    void this.sidePanel()?.close();
+    this.invitationModal()?.open();
   }
 
-  /** «Додати» у формі нової ролі. Заглушка: дані поки не надсилаємо. */
-  protected createRole(role: NewRole): void {
-    console.log(`[ColleaguesPage] Додати роль: ${role.name} (відправку ще не зроблено)`);
+  /** Кнопка копіювання у вікні запрошення: кладе посилання для колеги в буфер обміну. */
+  protected async copyInvitationLink(link: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(link);
+      this.invitationStatus.set('copied');
+    } catch {
+      this.invitationStatus.set('failed');
+    }
+  }
+
+  /**
+   * Кнопка «Поділитися» у вікні запрошення: вбудований засіб поширення браузера чи системи
+   * (`navigator.share`) із заголовком, підписом і посиланням. Те, що користувач сам закрив
+   * вікно поширення, не помилка; інша невдача показується під посиланням.
+   */
+  protected async shareInvitation(data: InvitationShare): Promise<void> {
+    try {
+      await navigator.share(data);
+      this.invitationStatus.set('idle');
+    } catch (error) {
+      if ((error as { name?: string } | null)?.name !== 'AbortError') {
+        this.invitationStatus.set('shareFailed');
+      }
+    }
+  }
+
+  /** Хрестик у вікні запрошення. */
+  protected closeInvitation(): void {
+    void this.invitationModal()?.close();
+  }
+
+  /**
+   * «Додати» у формі нової ролі: створює роль (`POST /api/v1/roles`) і додає їй права
+   * вибраних груп та права без налаштування (`ALWAYS_GRANTED_PERMISSIONS`, у будь-якому
+   * випадку) окремими запитами. Поки йде відправка, кнопка вимкнена. Успіх повертає до
+   * списку ролей і оновлює його (якщо якісь права не додалися — з попередженням); невдача
+   * лишає форму з помилкою за причиною.
+   */
+  protected async createRole(role: NewRole): Promise<void> {
+    if (this.roleSaving()) {
+      return;
+    }
+    this.roleSaving.set(true);
+    this.roleSaveError.set(null);
+    const claims = [...new Set([...role.permissions, ...ALWAYS_GRANTED_PERMISSIONS])];
+    const result = await this.roles.create(
+      { name: role.name, feminitiveName: role.feminitiveName, pluralName: role.pluralName },
+      claims,
+    );
+    this.roleSaving.set(false);
+    if (typeof result === 'string') {
+      this.roleSaveError.set(`colleagues.roleForm.saveError.${result}`);
+      return;
+    }
+    this.rolesNotice.set(result.failedClaims.length > 0 ? 'colleagues.rolesPanel.noticePartial' : null);
+    this.rolesMode.set('list');
+    void this.loadRoles();
   }
 
   /**
@@ -455,6 +556,7 @@ export class ColleaguesPage implements OnInit {
    */
   protected async editRole(role: Role): Promise<void> {
     const request = ++this.roleRequest;
+    this.roleSaveError.set(null);
     this.roleEditView.set({ status: 'loading', role: null, failure: null });
     this.rolesMode.set('edit');
     const result = await this.roles.get(role.id);
@@ -466,9 +568,32 @@ export class ColleaguesPage implements OnInit {
     );
   }
 
-  /** «Зберегти» у формі редагування ролі. Заглушка: дані поки не надсилаємо. */
-  protected updateRole(role: RoleDetails, changes: NewRole): void {
-    console.log(`[ColleaguesPage] Зберегти роль ${role.id}: ${changes.name} (відправку ще не зроблено)`);
+  /**
+   * «Зберегти» у формі редагування ролі: оновлює назви (`PUT /api/v1/roles/{id}`) і окремими
+   * запитами додає та прибирає права за різницею з початковими `claims` ролі (`diffClaims`:
+   * лише групи, які користувач може надати; права без налаштування додаються, якщо їх нема).
+   * Поки йде відправка, кнопка вимкнена. Успіх повертає до оновленого списку (якщо якусь зміну
+   * прав не вдалося застосувати — з попередженням); невдача лишає форму з помилкою за причиною.
+   */
+  protected async updateRole(role: RoleDetails, changes: NewRole): Promise<void> {
+    if (this.roleSaving()) {
+      return;
+    }
+    this.roleSaving.set(true);
+    this.roleSaveError.set(null);
+    const result = await this.roles.update(
+      role.id,
+      { name: changes.name, feminitiveName: changes.feminitiveName, pluralName: changes.pluralName },
+      diffClaims(role.claims, changes.permissions, this.permissions()),
+    );
+    this.roleSaving.set(false);
+    if (typeof result === 'string') {
+      this.roleSaveError.set(`colleagues.roleForm.updateError.${result}`);
+      return;
+    }
+    this.rolesNotice.set(result.failedClaims.length > 0 ? 'colleagues.rolesPanel.noticePartialUpdate' : null);
+    this.rolesMode.set('list');
+    void this.loadRoles();
   }
 
   /** «Видалити» (смітник) біля ролі у вікні «Ролі». Заглушка: отримує роль. */

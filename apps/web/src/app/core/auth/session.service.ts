@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 
 import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountsService } from '../accounts/accounts.service';
-import { AuthService, LOGIN_URL } from './auth.service';
+import { AuthService, LOGIN_URL, RELOGIN_URL } from './auth.service';
 
 /** За скільки до кінця терміну access-токен оновлюється заздалегідь. */
 const REFRESH_LEAD_MS = 60_000;
@@ -23,7 +23,7 @@ const INACTIVE_CHECK_INTERVAL_MS = 60 * 60_000;
  *   refresh-токена (`AuthService.refreshStoredIfDue`): після завершення пошуку
  *   акаунта (старт), коли вкладка знову стає видимою й раз на годину;
  * - якщо токени зникли (вихід в іншій вкладці, невдале оновлення), а ми не на
- *   сторінці входу — переносить на /login.
+ *   сторінці входу чи повторного входу — переносить на /relogin (збережені акаунти ще є) або /login.
  */
 @Injectable({ providedIn: 'root' })
 export class SessionService {
@@ -53,8 +53,12 @@ export class SessionService {
         if (searching) {
           return;
         }
-        if (this.hadTokens && !hasTokens && !this.router.url.split('?')[0].startsWith(LOGIN_URL)) {
-          void this.router.navigateByUrl(LOGIN_URL);
+        const path = this.router.url.split('?')[0];
+        if (this.hadTokens && !hasTokens && !path.startsWith(LOGIN_URL) && !path.startsWith(RELOGIN_URL)) {
+          // Акаунти лишились, але жоден не доступний (застарілі чи недоступні) — на повторний
+          // вхід, інакше на вхід.
+          const noneAvailable = this.accounts.accounts().length > 0 && this.accounts.activeId() === null;
+          void this.router.navigateByUrl(noneAvailable ? RELOGIN_URL : LOGIN_URL);
         }
         this.hadTokens = hasTokens;
       });

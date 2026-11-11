@@ -4,12 +4,12 @@ import { Router } from '@angular/router';
 import { NO_CONNECTION_ERROR } from '../core/connection/connection.guard';
 import { AccountRestoreService } from '../core/accounts/account-restore.service';
 import { AccountsService } from '../core/accounts/accounts.service';
-import { AuthService, LoginResult, REDIRECT_URL } from '../core/auth/auth.service';
+import { AuthService, LoginResult, REDIRECT_URL, RELOGIN_URL } from '../core/auth/auth.service';
 import { ConnectionService } from '../core/connection/connection.service';
 import { AppLanguage, LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
 import { NGO_LOGO_MAX_BYTES, NGO_LOGO_TYPES, NGO_NAME_MAX_LENGTH } from '../core/ngo/logo-rules';
-import { LoginPageImagesService } from '../core/login-page-images/login-page-images.service';
+import { DEFAULT_LOGIN_IMAGE, LoginPageImagesService } from '../core/login-page-images/login-page-images.service';
 import { CreateNgoResult, NgoService, UploadNgoLogoResult } from '../core/ngo/ngo.service';
 import { CreateUserResult, UsersService } from '../core/users/users.service';
 import { isStrongPassword } from '../shared/password-fields/password-rules';
@@ -22,7 +22,6 @@ import { isStrongPassword } from '../shared/password-fields/password-rules';
 type LoginView = 'loading' | 'step1' | 'ngo' | 'admin' | 'setup-error' | 'login';
 
 /** Зображення форми входу за замовчуванням: його лишаємо, коли в системі нема власних. */
-const DEFAULT_LOGIN_IMAGE = 'assets/login_image.jpg';
 
 /** Помилка поля назви або логотипа у формі організації. */
 type NgoNameError = 'required' | 'too-long';
@@ -369,13 +368,19 @@ export class LoginPage implements OnDestroy {
 
   /**
    * Шукає чинний акаунт серед збережених (`AccountRestoreService`; застарілі
-   * чистить). Знайшовся — переходимо на `REDIRECT_URL`; ні — відкриваємо форми.
+   * чистить). Знайшовся — переходимо на `REDIRECT_URL`; ні — на повторний вхід (збережені акаунти лишились) або відкриваємо форми.
    */
   private async restoreAccounts(): Promise<void> {
     const result = await this.restoreService.restore();
     if (result === 'restored') {
       // `restoreDone` лишається `false`: до переходу сторінка показує «завантаження».
       void this.router.navigateByUrl(REDIRECT_URL);
+      return;
+    }
+    // Доступного акаунта нема, але збережені лишились (застарілі чи недоступні) — їх відновлюють
+    // на сторінці повторного входу; форми тут лишаються, коли акаунтів нема взагалі.
+    if (this.accounts.accounts().length > 0) {
+      void this.router.navigateByUrl(RELOGIN_URL);
       return;
     }
     this.restoreDone.set(true);

@@ -105,14 +105,51 @@ describe('UsersService', () => {
       });
     });
 
-    it('gives null (and an empty list of roles) for the fields the list does not give yet, even if the answer has them', async () => {
+    it('takes the phone, the country, the emergency contact, the pronouns with the category, the avatar and the roles from the answer', async () => {
       const result = service.list(1, 20);
       page(1).flush({
-        items: [{ id: 'u1', phoneNumber: '1', country: 'x', emergencyContact: 'y', pronouns: 'z', pronounCategory: 2, avatarUrl: 'a', roles: [{ id: 'r', name: 'n' }] }],
+        items: [
+          {
+            id: 'u1',
+            phoneNumber: '1',
+            country: 'x',
+            emergencyContact: 'y',
+            pronouns: 'z',
+            pronounCategory: 2,
+            avatarUrl: '/api/v1/users/u1/avatar',
+            roles: [{ id: 'r', name: 'n' }],
+          },
+        ],
         hasNextPage: false,
       });
       const [colleague] = ((await result) as UsersPage).items;
+      expect(colleague).toMatchObject({
+        phoneNumber: '1',
+        country: 'x',
+        emergencyContact: 'y',
+        pronouns: 'z',
+        pronounCategory: 2,
+        avatarUrl: '/api/v1/users/u1/avatar',
+        roles: [{ id: 'r', name: 'n' }],
+      });
+    });
+
+    it.each([
+      ['an older server that does not give them', {}],
+      ['null values', { phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: null }],
+      ['empty or blank texts', { phoneNumber: '', pronouns: '  ', avatarUrl: ' ' }],
+      ['values of a wrong type', { phoneNumber: 5, pronouns: {}, pronounCategory: '2', avatarUrl: 7, roles: 'x' }],
+    ])('gives null and an empty list of roles for %s', async (_name, extra) => {
+      const result = service.list(1, 20);
+      page(1).flush({ items: [{ id: 'u1', ...extra }], hasNextPage: false });
+      const [colleague] = ((await result) as UsersPage).items;
       expect(colleague).toMatchObject(NO_EXTRA);
+    });
+
+    it('keeps only the roles that have a text id and a text name', async () => {
+      const result = service.list(1, 20);
+      page(1).flush({ items: [{ id: 'u1', roles: [{ id: 'r', name: 'n' }, { id: 5, name: 'x' }, { name: 'y' }, null] }], hasNextPage: false });
+      expect(((await result) as UsersPage).items[0].roles).toEqual([{ id: 'r', name: 'n' }]);
     });
 
     it('skips the items without an id, and makes empty strings of the missing texts', async () => {

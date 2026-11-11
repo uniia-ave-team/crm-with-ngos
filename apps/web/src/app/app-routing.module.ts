@@ -6,7 +6,7 @@ import { requireAnyPermission } from './core/auth/permission.guard';
 import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS } from './core/auth/permissions';
 import { connectionGuard } from './core/connection/connection.guard';
 
-// Усі сторінки, крім /login, проходять два стражі. authGuard: шукає чинний
+// Усі сторінки, крім /login, /join і /relogin, проходять два стражі. authGuard: шукає чинний
 // акаунт серед збережених (як сторінка входу), перший знайдений стає поточним;
 // акаунтів нема чи всі застарілі — переадресація на /login. connectionGuard:
 // без підключення до API активного акаунта — переадресація на /login з помилкою.
@@ -65,6 +65,19 @@ const routes: Routes = [
     loadChildren: () => import('./login/login.module').then((m) => m.LoginPageModule),
     // Сторінка входу не має бічного меню взагалі (ні рейла, ні другої
     // панелі) — читається в app.component.ts через LayoutService.hideShell.
+    data: { layout: 'none' },
+  },
+  {
+    path: 'join',
+    loadChildren: () => import('./join/join.module').then((m) => m.JoinPageModule),
+    // Сторінка запрошення: без стражів (колега ще не має акаунта на цьому сервері) і
+    // без бічного меню — як /login.
+    data: { layout: 'none' },
+  },
+  {
+    path: 'relogin',
+    loadChildren: () => import('./relogin/relogin.module').then((m) => m.ReloginPageModule),
+    // Сторінка повторного входу: без стражів і без бічного меню, як /login й /join.
     data: { layout: 'none' },
   },
 ];

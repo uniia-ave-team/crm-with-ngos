@@ -1,11 +1,10 @@
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { TranslatePipe, provideTranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService, provideTranslateService } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { AlphaOutlineModule } from '../../../shared/alpha-outline/alpha-outline.module';
-import { AvatarModule } from '../../../shared/avatar/avatar.module';
+import uk from '../../../../assets/i18n/uk.json';
 import { AccountMenuComponent, AccountTile } from './account-menu.component';
 
 function accounts(count: number): AccountTile[] {
@@ -17,13 +16,16 @@ describe('AccountMenuComponent', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       declarations: [AccountMenuComponent],
-      imports: [AvatarModule, AlphaOutlineModule, TranslatePipe],
+      imports: [TranslatePipe],
       // Компонент тут оголошено напряму в TestBed, і його директиви в області видимості тесту
       // не діють: `[appProtectedSrc]` лягає звичайною властивістю елемента (сама директива —
       // у власному спеку); без NO_ERRORS_SCHEMA привʼязка до `img` була б помилкою.
       schemas: [NO_ERRORS_SCHEMA],
       providers: [provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }), provideHttpClient(), provideHttpClientTesting()],
     });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('uk', uk);
+    translate.use('uk');
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -46,78 +48,60 @@ describe('AccountMenuComponent', () => {
     },
   );
 
-  it('hides the accounts block with the global planned class while the feature is not ready', () => {
-    const { element } = render(2);
-    expect(element.querySelector('.account-menu__accounts')!.classList).toContain('planned');
-  });
-
-  it('shows no logo badge at all when an account has no logoUrl', () => {
-    const { element } = render(3);
-    expect(element.querySelectorAll('.account-tile__badge')).toHaveLength(0);
-    expect(element.querySelectorAll('.account-tile img')).toHaveLength(0);
-  });
-
-  it('marks an outdated account: yellow sync icon on the left and its own label', () => {
+  function statusOf(tile: AccountTile): { tile: HTMLElement } {
     const fixture = TestBed.createComponent(AccountMenuComponent);
-    fixture.componentRef.setInput('accounts', [
-      { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null },
-      { id: 'b', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, outdated: true },
-    ]);
+    fixture.componentRef.setInput('accounts', [tile]);
     fixture.detectChanges();
-    const tiles = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.account-tile'));
+    return { tile: (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.account-tile')! };
+  }
 
-    // Сірий аватар (клас на самому аватарі) перевіряє avatar.component.spec.ts.
-    expect(tiles[0].querySelector('.account-tile__status')).toBeNull();
-    expect(tiles[0].classList).not.toContain('outdated');
+  const base: AccountTile = { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null };
 
-    expect(tiles[1].classList).toContain('outdated');
-    expect(tiles[1].classList).not.toContain('unavailable');
-    const icon = tiles[1].querySelector('.account-tile__status')!;
-    expect(icon.classList).toContain('account-tile__status--outdated');
-    expect(icon.getAttribute('name')).toBe('sync-circle');
-    // Значок — лише візуальний: статус для допоміжних технологій у підписі плитки.
-    expect(icon.getAttribute('aria-hidden')).toBe('true');
-    expect(tiles[1].getAttribute('aria-label')).not.toBe(tiles[0].getAttribute('aria-label'));
-  });
+  describe('the tooltip of a tile (the title attribute that the browser shows on hover)', () => {
+    const named: AccountTile = { ...base, patronymic: 'Третій', ngoName: 'Організація' };
+    const titleOf = (tile: AccountTile) => statusOf(tile).tile.getAttribute('title');
 
-  it('shows a red alert icon, not the sync one, for an account whose server did not answer', () => {
-    const fixture = TestBed.createComponent(AccountMenuComponent);
-    fixture.componentRef.setInput('accounts', [
-      { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, outdated: true },
-      { id: 'b', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, outdated: true, unavailable: true },
-    ]);
-    fixture.detectChanges();
-    const tiles = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.account-tile'));
+    it('has the full name, a dash and the NGO name in the first line, and no second line for a valid account', () => {
+      expect(titleOf(named)).toBe('Другий Перший Третій — Організація');
+    });
 
-    const rejected = tiles[0].querySelector('.account-tile__status')!;
-    expect(rejected.getAttribute('name')).toBe('sync-circle');
+    it.each([
+      ['the session ended (outdated)', { outdated: true }, uk.nav.account.outdated],
+      ['the server did not answer (unavailable)', { unavailable: true }, uk.nav.account.unavailable],
+      ['both, where the server wins', { outdated: true, unavailable: true }, uk.nav.account.unavailable],
+    ])('adds the second line when %s', (_state, flags, status) => {
+      expect(titleOf({ ...named, ...flags })).toBe(`Другий Перший Третій — Організація\n${status}`);
+    });
 
-    const down = tiles[1].querySelector('.account-tile__status')!;
-    expect(down.getAttribute('name')).toBe('alert-circle');
-    expect(down.classList).toContain('account-tile__status--unavailable');
-    expect(down.getAttribute('aria-hidden')).toBe('true');
-    expect(tiles[1].classList).toContain('unavailable');
-    // Свій підпис і підказка, відмінні від «сесію завершено».
-    expect(tiles[1].getAttribute('aria-label')).not.toBe(tiles[0].getAttribute('aria-label'));
-    expect(tiles[1].getAttribute('title')).toBe(tiles[1].getAttribute('aria-label'));
-  });
+    it('uses the texts from the translations', () => {
+      expect(uk.nav.account.outdated).toBe('Сеанс закінчився');
+      expect(uk.nav.account.unavailable).toBe('Відсутнє підключення до серверу');
+    });
 
-  it('shows no unavailable mark for a valid account, whatever its flag says', () => {
-    const fixture = TestBed.createComponent(AccountMenuComponent);
-    fixture.componentRef.setInput('accounts', [
-      { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null, unavailable: true },
-    ]);
-    fixture.detectChanges();
-    const tile = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.account-tile')!;
-    expect(tile.querySelector('.account-tile__status')).toBeNull();
-    expect(tile.classList).not.toContain('unavailable');
+    it('leaves out what the account does not have: the patronymic, the NGO, or the whole name', () => {
+      expect(titleOf({ ...base, ngoName: 'Організація' })).toBe('Другий Перший — Організація');
+      expect(titleOf({ ...base, patronymic: ' ', ngoName: null })).toBe('Другий Перший');
+      expect(titleOf({ ...base, firstName: ' ', lastName: '', ngoName: 'Організація' })).toBe('Організація');
+    });
+
+    it('has only the status line when there is no name and no NGO, and no title at all for a valid account', () => {
+      const nameless: AccountTile = { id: 'a', firstName: ' ', lastName: ' ', avatarUrl: null };
+      expect(titleOf(nameless)).toBeNull();
+      expect(titleOf({ ...nameless, outdated: true })).toBe(uk.nav.account.outdated);
+    });
+
+    it('gives the screen readers the same text, or the plain "account" label when there is none', () => {
+      const withText = statusOf({ ...named, outdated: true }).tile;
+      expect(withText.getAttribute('aria-label')).toBe(withText.getAttribute('title'));
+      const nameless = statusOf({ id: 'a', firstName: ' ', lastName: ' ', avatarUrl: null }).tile;
+      expect(nameless.getAttribute('aria-label')).toBe(uk.nav.account.account);
+    });
   });
 
   it('has the settings item, a divider and the sign-out item, in that order', () => {
     const { element } = render(1);
     const parts = Array.from(element.querySelector('.account-menu')!.children).map((c) => c.className);
-    // Блок акаунтів поки прихований класом `planned`.
-    expect(parts).toEqual(['account-menu__accounts planned', 'account-menu__item', 'account-menu__divider', 'account-menu__item']);
+    expect(parts).toEqual(['account-menu__accounts', 'account-menu__item', 'account-menu__divider', 'account-menu__item']);
     const icons = Array.from(element.querySelectorAll('.account-menu__item ion-icon')).map((i) => i.getAttribute('name'));
     expect(icons).toEqual(['cog-outline', 'log-out-outline']);
   });
@@ -138,18 +122,6 @@ describe('AccountMenuComponent', () => {
     expect(events).toEqual(['select:1', 'add', 'settings', 'signOut']);
   });
 
-  it('marks the NGO logo for the alpha-channel outline, with no box-based border around it', () => {
-    // Сам контур малює AlphaOutlineDirective (перевіряється в її спеку й у браузері);
-    // тут — що логотип ним позначений.
-    const fixture = TestBed.createComponent(AccountMenuComponent);
-    fixture.componentRef.setInput('accounts', [{ ...accounts(1)[0], logoUrl: 'assets/custom.png' }]);
-    fixture.detectChanges();
-    const logos = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLImageElement>('.account-tile__badge img'));
-    expect(logos).toHaveLength(1);
-    expect(logos[0].hasAttribute('appalphaoutline')).toBe(true);
-    expect(logos[0].getAttribute('outlinecolor')).toBe('var(--nav-avatar-bg)');
-  });
-
   it('gives the active account the active class (the white ring is drawn by it) and no other tile', () => {
     const fixture = TestBed.createComponent(AccountMenuComponent);
     fixture.componentRef.setInput('accounts', accounts(3).map((a, i) => ({ ...a, active: i === 0 })));
@@ -158,18 +130,8 @@ describe('AccountMenuComponent', () => {
     expect(tiles.map((t) => t.classList.contains('active'))).toEqual([true, false, false]);
   });
 
-  it.each([[null], [undefined], ['']])('shows the logo of the account only when logoUrl is set (logoUrl: %s)', (empty) => {
-    const fixture = TestBed.createComponent(AccountMenuComponent);
-    fixture.componentRef.setInput('accounts', [
-      { id: 0, firstName: 'Перший', lastName: 'Другий', avatarUrl: null, logoUrl: empty },
-      { id: 1, firstName: 'Перший', lastName: 'Другий', avatarUrl: null, logoUrl: 'assets/custom.png' },
-    ]);
-    fixture.detectChanges();
-    const tiles = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.account-tile'));
-    expect(tiles[0].querySelector('.account-tile__badge')).toBeNull();
-    // Адреса логотипа лягає в `appProtectedSrc` (у `src` її кладе директива, яка бере файл із токеном).
-    expect(
-      Array.from(tiles[1].querySelectorAll('.account-tile__badge img')).map((i) => (i as unknown as { appProtectedSrc: string }).appProtectedSrc),
-    ).toEqual(['assets/custom.png']);
+  it('draws the avatar of every tile with the shared account avatar, giving it the account', () => {
+    const { element } = render(3);
+    expect(element.querySelectorAll('.account-tile app-account-avatar')).toHaveLength(3);
   });
 });

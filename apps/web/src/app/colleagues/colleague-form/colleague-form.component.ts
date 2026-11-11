@@ -10,11 +10,13 @@ export interface NewColleague {
 }
 
 /**
- * Форма нового колеги (зміст бічного вікна після «Додати»): пошта (обовʼязкова) і
- * вибір ролей плашками (`app-role-pill`: вибрана — заливка й `checkmark-circle`,
+ * Форма нового колеги (зміст бічного вікна після «Додати»): пошта й ролі (обидва
+ * обовʼязкові: сервер вимагає хоча б одну роль), ролі вибирають плашками (`app-role-pill`: вибрана — заливка й `checkmark-circle`,
  * невибрана — рамка й порожнє коло `ellipse-outline`).
  * Ролі приходять входом `roles` (стан запиту, як у вікні «Ролі»). «Додати»
- * перевіряє пошту й віддає дані подією `save`; сама нічого не надсилає.
+ * перевіряє пошту й роль і віддає дані подією `save`; сама нічого не надсилає. Поки
+ * іде відправка (`saving`), кнопка вимкнена; помилка відправки (`error`) стоїть над
+ * кнопкою; `reset()` очищає форму.
  */
 @Component({
   selector: 'app-colleague-form',
@@ -24,7 +26,11 @@ export interface NewColleague {
 })
 export class ColleagueFormComponent {
   readonly roles = input.required<RolesView>();
-  /** Дані з форми готові до відправки (пошту заповнено). */
+  /** Іде відправка: кнопка вимкнена, повторне натискання нічого не робить. */
+  readonly saving = input(false);
+  /** Ключ у мовному файлі помилки відправки (показується над кнопкою); `null` — без помилки. */
+  readonly error = input<string | null>(null);
+  /** Дані з форми готові до відправки (пошту заповнено, роль вибрано). */
   readonly save = output<NewColleague>();
 
   protected readonly email = signal('');
@@ -44,6 +50,18 @@ export class ColleagueFormComponent {
     return EMAIL_PATTERN.test(email) ? null : 'colleagues.colleagueForm.error.emailInvalid';
   });
 
+  /** Помилка ролей: після спроби відправки без жодної вибраної ролі. */
+  protected readonly rolesError = computed(() =>
+    this.attempted() && this.selected().size === 0 ? 'colleagues.colleagueForm.error.rolesRequired' : null,
+  );
+
+  /** Очищає форму: порожня пошта, жодної ролі, без помилок (після успішної відправки). */
+  reset(): void {
+    this.email.set('');
+    this.selected.set(new Set());
+    this.attempted.set(false);
+  }
+
   protected onEmailInput(event: Event): void {
     this.email.set((event.target as HTMLInputElement).value);
   }
@@ -57,8 +75,11 @@ export class ColleagueFormComponent {
   }
 
   protected submit(): void {
+    if (this.saving()) {
+      return;
+    }
     this.attempted.set(true);
-    if (this.emailError()) {
+    if (this.emailError() || this.rolesError()) {
       return;
     }
     this.save.emit({

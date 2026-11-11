@@ -76,4 +76,8 @@
   &--error {
     color: var(--nav-unavailable-icon);
   }
+
+  &--warning {
+    color: var(--nav-outdated-icon);
+  }
 }

@@ -27,8 +27,9 @@ const ANONYMOUS_REQUESTS: ReadonlyArray<{ method?: string; path: string }> = [
  * сам піклується про токени:
  * - якщо access-токен уже прострочений (за `exp`), спершу оновлює токени;
  * - якщо сервер відповів 401, оновлює токени й повторює запит один раз.
- * Якщо оновити токени не вдалося — вихід із системи (токени забуто,
- * перехід на сторінку входу).
+ * Якщо оновити токени не вдалося — сесія акаунта завершується (`AuthService.expireSession`):
+ * акаунт лишається в памʼяті з позначкою, активного акаунта більше нема, перехід на сторінку
+ * повторного входу.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   // Сервіси інжектимо лише для запитів до /api: перевірка /health йде з
@@ -80,14 +81,14 @@ function send(req: HttpRequest<unknown>, next: HttpHandlerFn, token: string | nu
   return next(token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req);
 }
 
-/** Токен для запиту: за потреби спершу оновлюємо прострочений; не вдалося — вихід. */
+/** Токен для запиту: за потреби спершу оновлюємо прострочений; не вдалося — сесія акаунта завершується. */
 async function currentToken(auth: AuthService): Promise<string | null> {
   if (auth.hasTokens() && auth.accessTokenExpired()) {
-    // Невдалий обмін позначає акаунт застарілим і передає активність іншому —
-    // забути треба саме той, чия сесія не вдалася.
+    // Поки йде обмін, активним міг стати інший акаунт — позначати треба саме той, чия сесія не вдалася.
     const accountId = auth.sessionId();
-    if ((await auth.refresh()) !== 'ok') {
-      auth.signOut(accountId);
+    const refreshed = await auth.refresh();
+    if (refreshed !== 'ok') {
+      auth.expireSession(accountId, refreshed);
       return null;
     }
   }
@@ -96,7 +97,7 @@ async function currentToken(auth: AuthService): Promise<string | null> {
 
 /**
  * Сервер відхилив токен `usedToken`. Якщо інший запит уже встиг оновити токени —
- * беремо новий; інакше оновлюємо самі. Не вдалося — вихід і `null`.
+ * беремо новий; інакше оновлюємо самі. Не вдалося — сесія акаунта завершується, `null`.
  */
 async function recoverFromUnauthorized(auth: AuthService, usedToken: string): Promise<string | null> {
   const latest = auth.accessToken();
@@ -104,9 +105,10 @@ async function recoverFromUnauthorized(auth: AuthService, usedToken: string): Pr
     return latest;
   }
   const accountId = auth.sessionId();
-  if ((await auth.refresh()) === 'ok') {
+  const refreshed = await auth.refresh();
+  if (refreshed === 'ok') {
     return auth.accessToken();
   }
-  auth.signOut(accountId);
+  auth.expireSession(accountId, refreshed);
   return null;
 }

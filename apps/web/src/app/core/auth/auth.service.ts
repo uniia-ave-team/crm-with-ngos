@@ -1,8 +1,9 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Injectable, Signal, computed, inject } from '@angular/core';
+import { Injectable, Injector, Signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom, timeout } from 'rxjs';
 
+import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountsService, StoredAccount } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
@@ -15,6 +16,8 @@ const REQUEST_TIMEOUT_MS = 10000;
 
 /** Куди переходить користувач, коли сесію завершено (вихід). */
 export const LOGIN_URL = '/login';
+/** Сторінка повторного входу: куди веде відсутність доступних акаунтів, коли збережені ще є. */
+export const RELOGIN_URL = '/relogin';
 
 /**
  * Куди переходить користувач, коли вхід у систему завершено (після входу, коли
@@ -41,10 +44,13 @@ const REFRESH_TOKEN_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 /** Токени неактивного акаунта оновлюються, коли минула половина терміну refresh-токена. */
 const REFRESH_DUE_AFTER_MS = REFRESH_TOKEN_LIFETIME_MS / 2;
 
-interface LoginResponse {
+/** Пара токенів, яку віддають вхід і завершення реєстрації за запрошенням. */
+export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
 }
+
+type LoginResponse = AuthTokens;
 
 export type LoginResult = 'ok' | RequestFailure;
 export type RefreshResult = 'ok' | RequestFailure;
@@ -68,6 +74,8 @@ export class AuthService {
   private readonly connection = inject(ConnectionService);
   private readonly accounts = inject(AccountsService);
   private readonly router = inject(Router);
+  // Сервіс пошуку акаунта залежить від цього, тож береться лише в момент виходу.
+  private readonly injector = inject(Injector);
 
   readonly accessToken: Signal<string | null> = computed(() => this.accounts.active()?.accessToken ?? null);
   readonly refreshToken: Signal<string | null> = computed(() => this.accounts.active()?.refreshToken ?? null);
@@ -121,38 +129,55 @@ export class AuthService {
   }
 
   /**
-   * Вихід без запиту на сервер (сесія застаріла): акаунт забуто, користувача
-   * перекинуто на сторінку входу. `accountId` — акаунт, чия сесія не вдалася
-   * (за замовчуванням активний). Його треба передавати, коли між невдалим
-   * оновленням і викликом активним міг стати інший акаунт: неуспішний обмін
-   * токенів позначає акаунт застарілим і передає активність іншому чинному, а
-   * забути треба саме невдалий, а не цей новий.
+   * Сесія акаунта не вдалася (оновити токени не вийшло): акаунт **лишається** в памʼяті, але
+   * позначений — токени відхилено (`failure` = `invalid`/`unauthorized`) → `outdated`, сервер
+   * мовчить чи помилився → `unavailable` — і, якщо він був активним, активного акаунта більше нема.
+   * Тоді користувача перекинуто на сторінку повторного входу (акаунти лишились). Акаунт не
+   * видаляється: його користувач зможе відновити. `accountId` — акаунт, чия сесія не вдалася
+   * (його треба передавати: поки йшло оновлення, активним міг стати інший, і тоді
+   * нікуди не переходимо).
    */
-  signOut(accountId: string | null = this.accounts.activeId()): void {
-    this.clearTokens(accountId);
-    void this.router.navigateByUrl(LOGIN_URL);
+  expireSession(accountId: string | null, failure: RefreshResult): void {
+    if (accountId) {
+      if (failure === 'invalid' || failure === 'unauthorized') {
+        this.accounts.markOutdated(accountId);
+      } else if (failure !== 'ok') {
+        this.accounts.markUnavailable(accountId);
+      }
+    }
+    if (this.accounts.activeId() === null) {
+      void this.router.navigateByUrl(this.accounts.accounts().length > 0 ? RELOGIN_URL : LOGIN_URL);
+    }
   }
 
   /**
-   * Вихід: повністю очищає `localStorage` і акаунти, переносить на сторінку входу
-   * й відкликає refresh-токен на сервері (`POST <сервер>/api/v1/auth/logout`).
+   * Вихід з активного акаунта: видаляє лише його (запис, місце в індексі, вказівник активного;
+   * мова, інші акаунти й решта памʼяті лишаються) і відкликає його refresh-токен на сервері
+   * (`POST <сервер>/api/v1/auth/logout`). Після цього йде та сама перевірка, що й при вході на
+   * сторінку (`AccountRestoreService`): знайшовся інший чинний акаунт — він стає активним і
+   * відкривається `REDIRECT_URL`; нема — `/relogin`, якщо збережені акаунти ще є, інакше `/login`.
    *
-   * Спершу беремо токени (прострочений access-токен тихо оновлюємо — сервер
-   * вимагає авторизований запит), далі очищаємо, і лише потім шлемо запит із
-   * заголовком, зібраним уже з цих токенів: результат запиту ні на що не
-   * впливає, локально користувач вийшов у будь-якому разі.
+   * Спершу беремо токени (прострочений access-токен тихо оновлюємо — сервер вимагає
+   * авторизований запит), далі видаляємо акаунт, і лише потім шлемо запит із заголовком,
+   * зібраним уже з цих токенів: результат запиту ні на що не впливає, локально користувач
+   * вийшов у будь-якому разі.
    */
   async logout(): Promise<LogoutResult> {
+    // Виходимо саме з цього акаунта, навіть якщо невдале оновлення токенів зніме з нього активність.
+    const id = this.accounts.activeId();
     if (this.hasTokens() && this.accessTokenExpired()) {
       await this.refresh();
     }
-    const account = this.accounts.active();
+    const account = this.accounts.accounts().find((candidate) => candidate.id === id);
     const url = `${account?.server ?? this.connection.serverUrl()}${API_LOGOUT_PATH}`;
 
-    this.accounts.wipe();
-    void this.router.navigateByUrl(LOGIN_URL);
+    if (id) {
+      this.accounts.remove(id);
+    }
+    void this.moveOnAfterLogout();
 
-    if (!account?.accessToken || !account.refreshToken) {
+    // Токени, які сервер уже відхилив (оновлення не вдалося), відкликати нічого.
+    if (!account?.accessToken || !account.refreshToken || account.outdated) {
       return 'skipped';
     }
     console.log(`[AuthService] Виходжу: ${url}`);
@@ -176,11 +201,32 @@ export class AuthService {
   }
 
   /**
-   * `POST <сервер>/api/v1/auth/login`; при успіху додає акаунт (поточний сервер +
-   * користувач із токена) зі збереженням токенів і робить його активним.
+   * Після виходу: шукає інший чинний акаунт (як `authGuard`; на час пошуку `SessionService`
+   * мовчить). Знайшовся — на `REDIRECT_URL` зі стражами заново; ні — на `/relogin`, якщо
+   * акаунти ще є, інакше на `/login`.
    */
-  async login(email: string, password: string): Promise<LoginResult> {
-    const server = this.connection.serverUrl();
+  private async moveOnAfterLogout(): Promise<void> {
+    const result = await this.injector.get(AccountRestoreService).restore();
+    if (result === 'restored') {
+      void this.router.navigateByUrl(REDIRECT_URL, { onSameUrlNavigation: 'reload' });
+    } else {
+      void this.router.navigateByUrl(this.accounts.accounts().length > 0 ? RELOGIN_URL : LOGIN_URL);
+    }
+  }
+
+  /**
+   * `POST <сервер>/api/v1/auth/login`; при успіху додає акаунт (сервер + користувач із
+   * токена) зі збереженням токенів і робить його активним. `server` — origin сервера
+   * (за замовчуванням поточний): інший потрібен, коли додають акаунт на іншому сервері.
+   * `replaceAccountId` — ключ збереженого акаунта, який перезаписується цим входом (див.
+   * `AccountsService.add`), а не додається новий.
+   */
+  async login(
+    email: string,
+    password: string,
+    server: string = this.connection.serverUrl(),
+    replaceAccountId?: string,
+  ): Promise<LoginResult> {
     const url = `${server}${API_LOGIN_PATH}`;
     console.log(`[AuthService] Входжу: ${url}`);
 
@@ -188,17 +234,7 @@ export class AuthService {
       const tokens = await firstValueFrom(
         this.http.post<LoginResponse>(url, { email, password }).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      const userId = readJwtSubject(tokens.accessToken);
-      this.accounts.add({
-        server,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        userId: userId ?? '',
-        // Без `sub` у токені акаунт впізнаємо за поштою.
-        identity: userId ?? email.trim().toLowerCase(),
-        // Пошту з /users/me не отримати — запамʼятовуємо ту, з якою ввійшли.
-        email: email.trim(),
-      });
+      this.adoptTokens(server, tokens, email, replaceAccountId);
       console.log('[AuthService] Вхід виконано, токени отримано');
       return 'ok';
     } catch (error) {
@@ -206,6 +242,25 @@ export class AuthService {
       console.warn(`[AuthService] Не вдалося увійти (${failure})`, error);
       return failure;
     }
+  }
+
+  /**
+   * Додає акаунт (`server` + користувач із токена) зі збереженням токенів і робить його
+   * активним. Це спільний кінець входу й завершення реєстрації за запрошенням: обидва
+   * запити віддають ту саму пару токенів. `replaceAccountId` — акаунт, який перезаписується.
+   */
+  adoptTokens(server: string, tokens: AuthTokens, email: string, replaceAccountId?: string): void {
+    const userId = readJwtSubject(tokens.accessToken);
+    this.accounts.add({
+      server,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      userId: userId ?? '',
+      // Без `sub` у токені акаунт впізнаємо за поштою.
+      identity: userId ?? email.trim().toLowerCase(),
+      // Пошту з /users/me не отримати — запамʼятовуємо ту, з якою ввійшли.
+      email: email.trim(),
+    }, replaceAccountId);
   }
 
   /**
@@ -231,6 +286,36 @@ export class AuthService {
       const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
       return account ? this.exchange(account) : ('skipped' as const);
     });
+  }
+
+  /**
+   * Те саме, що `refreshStoredIfDue`, але одразу, не чекаючи половини терміну: обмін токенів
+   * неактивного акаунта, що не застарів. Так повторно перевіряють акаунти, чий сервер не відповідав
+   * (сторінка повторного входу): вдалося — токени нові, `unavailable` знято; відхилено — акаунт
+   * `outdated`; мережева помилка — нічого не змінюється. `'skipped'` — акаунт активний,
+   * застарілий чи невідомий.
+   */
+  refreshStored(accountId: string): Promise<RefreshResult | 'skipped'> {
+    if (!this.isStoredRefreshable(accountId)) {
+      return Promise.resolve('skipped');
+    }
+    return this.runExclusive(async () => {
+      this.accounts.syncFromStorage(accountId);
+      if (!this.isStoredRefreshable(accountId)) {
+        return 'skipped' as const;
+      }
+      const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
+      return account ? this.exchange(account) : ('skipped' as const);
+    });
+  }
+
+  /** Неактивний акаунт, що не застарів. */
+  private isStoredRefreshable(accountId: string): boolean {
+    if (accountId === this.accounts.activeId()) {
+      return false;
+    }
+    const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
+    return !!account && !account.outdated;
   }
 
   /** Неактивний чинний акаунт, у якого минула половина терміну refresh-токена. */
@@ -275,6 +360,8 @@ export class AuthService {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         tokensIssuedAt: Date.now(),
+        // Сервер відповів: якщо акаунт вважався недоступним, це знімається.
+        unavailable: false,
         // «Востаннє використано» чіпаємо лише для активного: фонове оновлення
         // неактивного акаунта його не «використовує».
         ...(account.id === this.accounts.activeId() ? { lastUsedAt: Date.now() } : {}),

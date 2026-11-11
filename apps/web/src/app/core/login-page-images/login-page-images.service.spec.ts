@@ -108,6 +108,13 @@ describe('LoginPageImagesService', () => {
       expect(await result).toEqual({ id: 'abc', url: `${server}/files/login/abc.jpg` });
     });
 
+    it('asks the given server instead of the current one, and resolves a relative link against it', async () => {
+      const other = 'https://other.example:5065';
+      const result = service.random(other);
+      http.expectOne(`${other}/api/v1/loginpageimages/random`).flush({ id: 'abc', url: '/files/login/abc.jpg' });
+      expect(await result).toEqual({ id: 'abc', url: `${other}/files/login/abc.jpg` });
+    });
+
     it('keeps a link that is already absolute', async () => {
       const result = service.random();
       http.expectOne(randomUrl()).flush({ id: 'abc', url: 'https://cdn.example.org/abc.jpg' });

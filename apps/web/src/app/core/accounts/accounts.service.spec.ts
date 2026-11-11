@@ -105,6 +105,61 @@ describe('AccountsService', () => {
       expect(service.active()).toMatchObject({ accessToken: 'new', firstName: 'Перший', ngoName: 'Організація', addedAt: first.addedAt });
     });
 
+    describe('overwriting the account of a key', () => {
+      it('puts the new data into that record and keeps its id, order and moment of adding', () => {
+        const first = service.add({ server, ...tokens, identity: 'user-1', email: 'a@b.org' });
+        const second = service.add({ server: other, ...tokens, identity: 'user-2' });
+
+        const replaced = service.add({ server, accessToken: 'new', refreshToken: 'new-refresh', identity: 'user-9', email: 'a@b.org' }, first.id);
+
+        expect(replaced).toMatchObject({ id: first.id, identity: 'user-9', accessToken: 'new', refreshToken: 'new-refresh', addedAt: first.addedAt });
+        expect(service.accounts().map((account) => account.id)).toEqual([first.id, second.id]);
+        expect(service.activeId()).toBe(first.id);
+        expect(record(first.id)).toMatchObject({ identity: 'user-9', refreshToken: 'new-refresh' });
+      });
+
+      it('moves the record to another server when the sign-in was on another one', () => {
+        const account = service.add({ server, ...tokens, identity: 'user-1' });
+        const replaced = service.add({ server: other, ...tokens, identity: 'user-1' }, account.id);
+
+        expect(replaced).toMatchObject({ id: account.id, server: other });
+        expect(service.accounts()).toHaveLength(1);
+      });
+
+      it('keeps the snapshot of the profile for the same user on the same server', () => {
+        const account = service.add({ server, ...tokens, identity: 'user-1', firstName: 'Перший', permissions: ['A'] });
+        const replaced = service.add({ server, accessToken: 'new', refreshToken: 'new-refresh', identity: 'user-1' }, account.id);
+
+        expect(replaced).toMatchObject({ firstName: 'Перший', permissions: ['A'] });
+      });
+
+      it('drops the snapshot of another user, it was not his', () => {
+        const account = service.add({ server, ...tokens, identity: 'user-1', firstName: 'Перший', ngoName: 'Організація', permissions: ['A'] });
+        const replaced = service.add({ server, ...tokens, identity: 'user-2' }, account.id);
+
+        expect(replaced).toMatchObject({ id: account.id, firstName: '', ngoName: null, permissions: [] });
+      });
+
+      it('leaves one account for a user on a server, when another record already has this user', () => {
+        const target = service.add({ server, ...tokens, identity: 'user-1' });
+        const duplicate = service.add({ server, ...tokens, identity: 'user-2' });
+
+        service.add({ server, accessToken: 'new', refreshToken: 'new-refresh', identity: 'user-2' }, target.id);
+
+        expect(service.accounts().map((account) => account.id)).toEqual([target.id]);
+        expect(localStorage.getItem(`yavir.account.${duplicate.id}`)).toBeNull();
+        expect(JSON.parse(localStorage.getItem('yavir.accounts')!)).toEqual([target.id]);
+        expect(service.activeId()).toBe(target.id);
+      });
+
+      it('adds an account as usual for a key that no account has', () => {
+        service.add({ server, ...tokens, identity: 'user-1' });
+        service.add({ server: other, ...tokens, identity: 'user-2' }, 'unknown-key');
+
+        expect(service.accounts()).toHaveLength(2);
+      });
+    });
+
     it('updates the fields of a record, in memory and in storage', () => {
       const account = service.add({ server, ...tokens, identity: 'a' });
       service.update(account.id, { firstName: 'Перший', ngoName: 'Організація', refreshToken: 'r2' });
@@ -197,7 +252,7 @@ describe('AccountsService', () => {
       expect(record(account.id).outdated).toBe(false);
     });
 
-    it('marks an account outdated without deleting it, and another valid account becomes the active one', () => {
+    it('marks an account outdated without deleting it; it stops being active and no other account is picked instead', () => {
       const first = service.add({ server, ...tokens, identity: 'a' });
       const second = service.add({ server, ...tokens, identity: 'b' });
 
@@ -206,46 +261,55 @@ describe('AccountsService', () => {
       expect(record(second.id).outdated).toBe(true);
       expect(record(second.id).refreshToken).toBe('refresh');
       expect(record(first.id).outdated).toBe(false);
-      expect(service.activeId()).toBe(first.id);
-      expect(localStorage.getItem('yavir.activeAccount')).toBe(first.id);
+      expect(service.activeId()).toBeNull();
+      expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
     });
 
-    it('marks an account outdated for a rejected session by default (the unavailable reason is false)', () => {
-      const first = service.add({ server, ...tokens, identity: 'a' });
-      const second = service.add({ server, ...tokens, identity: 'b' });
-
-      service.markOutdated(first.id);
-      expect(record(first.id)).toMatchObject({ outdated: true, unavailable: false });
-
-      service.markOutdated(second.id, true);
-      // Чинних не лишилося (перший теж застарів), тож памʼять очищена.
-      expect(service.accounts()).toHaveLength(0);
-    });
-
-    it('stores the unavailable reason while another valid account keeps the memory', () => {
+    it('marks a rejected session as outdated, and an account whose server did not answer as unavailable: independent flags', () => {
       const first = service.add({ server, ...tokens, identity: 'a' });
       const second = service.add({ server, ...tokens, identity: 'b' });
       service.add({ server, ...tokens, identity: 'c' });
 
-      service.markOutdated(second.id, true);
-      expect(record(second.id)).toMatchObject({ outdated: true, unavailable: true });
-      expect(record(first.id)).toMatchObject({ outdated: false, unavailable: false });
+      service.markOutdated(first.id);
+      expect(record(first.id)).toMatchObject({ outdated: true, unavailable: false });
 
-      // Повторний вхід у цей акаунт повертає його в чинні й скидає причину.
-      service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'b' });
+      service.markUnavailable(second.id);
+      expect(record(second.id)).toMatchObject({ outdated: false, unavailable: true });
+
+      // Токени відхилили й сервер мовчить: обидва прапорці.
+      service.markUnavailable(first.id);
+      expect(record(first.id)).toMatchObject({ outdated: true, unavailable: true });
+    });
+
+    it('resets unavailable when the server answered but rejected the tokens', () => {
+      const account = service.add({ server, ...tokens, identity: 'a' });
+      service.add({ server, ...tokens, identity: 'b' });
+      service.markUnavailable(account.id);
+      service.markOutdated(account.id);
+      expect(record(account.id)).toMatchObject({ outdated: true, unavailable: false });
+    });
+
+    it('signing in again to an outdated or unavailable account makes it valid and clears both flags', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      const second = service.add({ server, ...tokens, identity: 'b' });
+      service.add({ server, ...tokens, identity: 'c' });
+      service.markOutdated(first.id);
+      service.markUnavailable(first.id);
+      service.markUnavailable(second.id);
+
+      service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'a' });
+      service.add({ server, accessToken: 'new', refreshToken: 'r3', identity: 'b' });
+      expect(record(first.id)).toMatchObject({ outdated: false, unavailable: false });
       expect(record(second.id)).toMatchObject({ outdated: false, unavailable: false });
     });
 
-    it('takes the first valid account in the order of adding, skipping the outdated ones', () => {
-      const first = service.add({ server, ...tokens, identity: 'a' });
+    it('also leaves an unavailable active account, with no other one picked', () => {
+      service.add({ server, ...tokens, identity: 'a' });
       const second = service.add({ server, ...tokens, identity: 'b' });
-      const third = service.add({ server, ...tokens, identity: 'c' });
-      const fourth = service.add({ server, ...tokens, identity: 'd' });
-      service.markOutdated(first.id);
-      service.markOutdated(third.id);
+      service.setActive(second.id);
 
-      service.markOutdated(fourth.id);
-      expect(service.activeId()).toBe(second.id);
+      service.markUnavailable(second.id);
+      expect(service.activeId()).toBeNull();
     });
 
     it('keeps the active account when another one is marked outdated', () => {
@@ -256,24 +320,26 @@ describe('AccountsService', () => {
       expect(service.activeId()).toBe(first.id);
     });
 
-    it('clears the whole memory once every account is outdated', () => {
+    it('keeps every account, with no active one, and does not touch the rest of the memory once none is available', () => {
       const first = service.add({ server, ...tokens, identity: 'a' });
       const second = service.add({ server, ...tokens, identity: 'b' });
       localStorage.setItem('yavir.language', 'uk');
 
       service.markOutdated(first.id);
-      expect(localStorage.length).toBeGreaterThan(0);
-      service.markOutdated(second.id);
+      service.markUnavailable(second.id);
 
-      expect(localStorage.length).toBe(0);
-      expect(service.accounts()).toHaveLength(0);
+      expect(service.accounts().map((a) => a.id)).toEqual([first.id, second.id]);
       expect(service.activeId()).toBeNull();
+      expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
+      expect(localStorage.getItem('yavir.language')).toBe('uk');
+      expect(record(first.id).refreshToken).toBe('refresh');
     });
 
     it('ignores marking an unknown account', () => {
       service.add({ server, ...tokens, identity: 'a' });
       service.markOutdated('ghost');
-      expect(service.accounts()[0].outdated).toBe(false);
+      service.markUnavailable('ghost');
+      expect(service.accounts()[0]).toMatchObject({ outdated: false, unavailable: false });
     });
 
     it('makes an outdated account valid again when the user signs in to it again', () => {
@@ -287,6 +353,16 @@ describe('AccountsService', () => {
       expect(service.activeId()).toBe(account.id);
     });
 
+    it('reads records without a patronymic as having an empty one, and keeps the snapshot patronymic on a repeated sign-in', () => {
+      localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
+      localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r' }));
+      expect(reopen().accounts()[0].patronymic).toBe('');
+
+      const account = service.add({ server, ...tokens, identity: 'a', patronymic: 'Третій' });
+      service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'a' });
+      expect(record(account.id).patronymic).toBe('Третій');
+    });
+
     it('reads records without the new fields as valid accounts with no e-mail', () => {
       localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
       localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r' }));
@@ -295,7 +371,7 @@ describe('AccountsService', () => {
   });
 
   describe('removing and switching', () => {
-    it('removes the record and the index entry, and another valid account becomes the active one', () => {
+    it('removes the record and the index entry; the removed active account is replaced by nothing', () => {
       const first = service.add({ server, ...tokens, identity: 'a' });
       const second = service.add({ server, ...tokens, identity: 'b' });
 
@@ -303,28 +379,29 @@ describe('AccountsService', () => {
       expect(service.accounts().map((a) => a.id)).toEqual([first.id]);
       expect(localStorage.getItem(`yavir.account.${second.id}`)).toBeNull();
       expect(JSON.parse(localStorage.getItem('yavir.accounts')!)).toEqual([first.id]);
-      expect(service.activeId()).toBe(first.id);
-      expect(localStorage.getItem('yavir.activeAccount')).toBe(first.id);
+      expect(service.activeId()).toBeNull();
+      expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
     });
 
-    it('wipes the whole memory when the removed account was the last valid one', () => {
+    it('keeps the others, with no active account, when the last available one is removed', () => {
       const first = service.add({ server, ...tokens, identity: 'a' });
       const second = service.add({ server, ...tokens, identity: 'b' });
       localStorage.setItem('yavir.language', 'uk');
       service.markOutdated(first.id);
 
       service.remove(second.id);
-      expect(localStorage.length).toBe(0);
-      expect(service.accounts()).toHaveLength(0);
+      expect(service.accounts().map((a) => a.id)).toEqual([first.id]);
       expect(service.activeId()).toBeNull();
+      expect(localStorage.getItem('yavir.language')).toBe('uk');
     });
 
-    it('wipes the memory when the only account is removed', () => {
+    it('leaves no accounts and no active one when the only account is removed, but does not wipe the rest of the memory', () => {
       const only = service.add({ server, ...tokens, identity: 'a' });
       localStorage.setItem('yavir.language', 'uk');
       service.remove(only.id);
-      expect(localStorage.length).toBe(0);
+      expect(service.accounts()).toHaveLength(0);
       expect(service.activeId()).toBeNull();
+      expect(localStorage.getItem('yavir.language')).toBe('uk');
     });
 
     it('keeps the active account when another one is removed', () => {

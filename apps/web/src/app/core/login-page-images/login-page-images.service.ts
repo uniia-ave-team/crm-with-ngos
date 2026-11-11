@@ -5,6 +5,9 @@ import { firstValueFrom, timeout } from 'rxjs';
 import { ConnectionService } from '../connection/connection.service';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
 
+/** Зображення збоку форм входу, поки з сервера нічого не отримано (або його нема). */
+export const DEFAULT_LOGIN_IMAGE = 'assets/login_image.jpg';
+
 const API_LOGIN_PAGE_IMAGES_PATH = '/api/v1/loginpageimages';
 const REQUEST_TIMEOUT_MS = 10000;
 /** Завантаження файлу триває довше за звичайний запит. */
@@ -76,10 +79,12 @@ export class LoginPageImagesService {
    * `GET <сервер>/api/v1/loginpageimages/random` — випадкове зображення для форми
    * входу (запит публічний, токен не потрібен). `null`, якщо зображень нема
    * (`404`) або отримати його не вдалося: форма входу тоді лишає своє
-   * зображення за замовчуванням, тож це не помилка для користувача.
+   * зображення за замовчуванням, тож це не помилка для користувача. `server` — origin
+   * сервера (за замовчуванням поточний): інший потрібен, коли форма входу показується для
+   * сервера, що ще не став поточним.
    */
-  async random(): Promise<LoginPageImage | null> {
-    const url = `${this.connection.serverUrl()}${API_LOGIN_PAGE_IMAGES_PATH}/random`;
+  async random(server: string = this.connection.serverUrl()): Promise<LoginPageImage | null> {
+    const url = `${server}${API_LOGIN_PAGE_IMAGES_PATH}/random`;
     console.log(`[LoginPageImagesService] Запитую випадкове зображення для форми входу: ${url}`);
 
     try {
@@ -91,7 +96,7 @@ export class LoginPageImagesService {
         console.warn('[LoginPageImagesService] Відповідь без зображення', body);
         return null;
       }
-      return { id: body.id, url: this.absolute(link) };
+      return { id: body.id, url: this.absolute(link, server) };
     } catch (error) {
       if (error instanceof HttpErrorResponse && error.status === 404) {
         console.log('[LoginPageImagesService] Зображень для форми входу нема');
@@ -149,9 +154,9 @@ export class LoginPageImagesService {
   }
 
   /** Відносне посилання — від адреси сервера; некоректне лишається як є. */
-  private absolute(url: string): string {
+  private absolute(url: string, server: string = this.connection.serverUrl()): string {
     try {
-      return new URL(url, `${this.connection.serverUrl()}/`).toString();
+      return new URL(url, `${server}/`).toString();
     } catch {
       return url;
     }
