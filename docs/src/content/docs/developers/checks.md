@@ -90,6 +90,17 @@ ASP.NET Core та EF Core, тестові пакети, інструменти l
 Мажорні версії PostgreSQL Dependabot не пропонує: нова мажорна версія не
 відкриває наявний том з даними без `pg_upgrade`.
 
+Мажорні версії Node і .NET Dependabot теж не пропонує:
+
+- **Node.** Образ збірки вебклієнта використовує ту саму LTS-версію, що
+  `.nvmrc` і CI.
+- **.NET.** Пакети ASP.NET Core, EF Core, `Microsoft.Extensions.*`, Npgsql і
+  образи .NET тримаються версії з `global.json`. Пакет нової мажорної версії
+  потребує її SDK і runtime: наприклад, `Microsoft.Extensions.ApiDescription.Server`
+  11 без .NET 11 ламає генерацію `openapi.json`.
+
+На нову мажорну версію переходять вручну, змінюючи все разом.
+
 TypeScript Dependabot оновлює лише в межах патч-версій: Angular підтримує
 вузький діапазон TypeScript, тож мінорні й мажорні оновлення приходять
 разом з `ng update`.

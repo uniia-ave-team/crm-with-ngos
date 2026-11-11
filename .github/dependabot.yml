@@ -9,6 +9,18 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # The API runs on .NET 10 (global.json, Docker images). A new .NET major needs
+    # its SDK and runtime, e.g. ApiDescription.Server 11 fails the build without them,
+    # so it moves together with global.json and the images, by hand.
+    ignore:
+      - dependency-name: 'Microsoft.AspNetCore.*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'Microsoft.EntityFrameworkCore*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'Microsoft.Extensions.*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'Npgsql*'
+        update-types: ['version-update:semver-major']
     groups:
       aspnetcore-efcore:
         patterns:
@@ -89,6 +101,15 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # The web build image follows .nvmrc and stays on an LTS line, and the .NET images
+    # follow global.json; a new major moves together with them and CI, by hand.
+    ignore:
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'dotnet/*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'mcr.microsoft.com/dotnet/*'
+        update-types: ['version-update:semver-major']
     groups:
       docker-images:
         patterns:
