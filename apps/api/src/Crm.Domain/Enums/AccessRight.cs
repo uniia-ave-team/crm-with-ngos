@@ -21,31 +21,29 @@ public enum AccessRight
     ManageRole = 9,
 
     // --- Ngo ---
-    // TODO: Drop ViewNgo right
-    ViewNgo = 10,
-    CreateNgo = 11,
-    UpdateNgo = 12,
+    CreateNgo = 10,
+    UpdateNgo = 11,
 
     // --- Login Page Images ---
-    ViewLoginPageImages = 13,
-    CreateLoginPageImages = 14,
-    DeleteLoginPageImages = 15,
+    ViewLoginPageImages = 12,
+    CreateLoginPageImages = 13,
+    DeleteLoginPageImages = 14,
 
     // --- Table Templates ---
-    ViewTableTemplate = 16,
-    CreateTableTemplate = 17,
-    UpdateTableTemplate = 18,
-    DeleteTableTemplate = 19,
+    ViewTableTemplate = 15,
+    CreateTableTemplate = 16,
+    UpdateTableTemplate = 17,
+    DeleteTableTemplate = 18,
 
     // --- Custom Tables & Schema ---
-    ViewCustomTable = 20,
-    CreateCustomTable = 21,
-    UpdateCustomTable = 22,
-    DeleteCustomTable = 23,
+    ViewCustomTable = 19,
+    CreateCustomTable = 20,
+    UpdateCustomTable = 21,
+    DeleteCustomTable = 22,
 
     // --- Custom Records ---
-    ViewCustomRecord = 24,
-    CreateCustomRecord = 25,
-    UpdateCustomRecord = 26,
-    DeleteCustomRecord = 27,
+    ViewCustomRecord = 23,
+    CreateCustomRecord = 24,
+    UpdateCustomRecord = 25,
+    DeleteCustomRecord = 26,
 }
