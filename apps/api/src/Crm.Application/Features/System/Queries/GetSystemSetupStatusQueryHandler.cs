@@ -2,7 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.System;
 using Crm.Application.Dtos.System.Queries;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.System.Queries;
@@ -18,7 +18,7 @@ public sealed partial class GetSystemSetupStatusQueryHandler(
     INgoRepository ngoRepository,
     ILogger<GetSystemSetupStatusQueryHandler> logger) : IRequestHandler<GetSystemSetupStatusQuery, SystemSetupStatusDto>
 {
-    public async Task<SystemSetupStatusDto> Handle(GetSystemSetupStatusQuery request, CancellationToken cancellationToken)
+    public async ValueTask<SystemSetupStatusDto> Handle(GetSystemSetupStatusQuery request, CancellationToken cancellationToken)
     {
         LogCheckingSystemSetupStatus(logger);
 

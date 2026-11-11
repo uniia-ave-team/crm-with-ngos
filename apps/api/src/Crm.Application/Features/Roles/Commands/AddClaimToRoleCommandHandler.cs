@@ -5,7 +5,7 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Roles.Commands;
@@ -23,7 +23,7 @@ public partial class AddClaimToRoleCommandHandler(
     IRolePermissionsCache rolesCache,
     ILogger<AddClaimToRoleCommandHandler> logger) : IRequestHandler<AddClaimToRoleCommand>
 {
-    public async Task Handle(AddClaimToRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(AddClaimToRoleCommand request, CancellationToken cancellationToken)
     {
         LogAddingClaim(logger, request.ClaimValue, request.RoleId);
 
@@ -48,6 +48,8 @@ public partial class AddClaimToRoleCommandHandler(
         var permissions = await identityService.GetRolePermissionsAsync(request.RoleId, cancellationToken);
 
         await rolesCache.SetRolePermissionsAsync(request.RoleId, permissions, cancellationToken);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.AddingClaim, Level = LogLevel.Information, Message = "Initiating addition of claim '{ClaimValue}' to role ID: {RoleId}")]

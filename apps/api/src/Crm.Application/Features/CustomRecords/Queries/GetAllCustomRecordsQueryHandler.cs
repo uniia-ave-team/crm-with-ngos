@@ -4,7 +4,7 @@ using Crm.Application.Dtos.CustomRecords.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomRecords.Queries;
@@ -22,7 +22,7 @@ public partial class GetAllCustomRecordsQueryHandler(
     ICustomRecordRepository customRecordRepository,
     ILogger<GetAllCustomRecordsQueryHandler> logger) : IRequestHandler<GetAllCustomRecordsQuery, PagedResult<CustomRecordDto>>
 {
-    public async Task<PagedResult<CustomRecordDto>> Handle(GetAllCustomRecordsQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<CustomRecordDto>> Handle(GetAllCustomRecordsQuery request, CancellationToken cancellationToken)
     {
         LogFetchingCustomRecords(logger, request.CustomTableId, request.SearchTerm != null, request.PageNumber, request.PageSize);
 

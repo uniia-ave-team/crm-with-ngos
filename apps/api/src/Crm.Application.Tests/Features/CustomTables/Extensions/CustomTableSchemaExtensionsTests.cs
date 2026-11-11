@@ -1,19 +1,26 @@
 using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Features.CustomTables.Extensions;
+using Crm.Application.Features.CustomTables.Mappings;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
+using Mapster;
 using Shouldly;
 
 namespace Crm.Application.Tests.Features.CustomTables.Extensions;
 
 /// <summary>
-/// Contains unit tests for <see cref="CustomTableSchemaExtensions.ComputeSchemaDiff"/>
+/// Contains unit tests for <see cref="CustomTableSchemaExtensions.ComputeSchemaDiff{TDto}"/>
 /// validating field addition, deletion, key rename detection, backfill tracking, and data type validation.
 /// </summary>
 public class CustomTableSchemaExtensionsTests
 {
+    static CustomTableSchemaExtensionsTests()
+    {
+        new CustomTableMappingRegister().Register(TypeAdapterConfig.GlobalSettings);
+    }
+
     /// <summary>
     /// Verifies that removing existing fields and adding new fields are accurately categorized in the schema diff.
     /// </summary>
@@ -253,5 +260,106 @@ public class CustomTableSchemaExtensionsTests
         diff.FieldsToRemove.ShouldBeEmpty();
         diff.FieldsToAdd.ShouldBeEmpty();
         table.Fields.Single(f => f.Id == fieldId).DataType.ShouldBe(FieldDataType.Text);
+    }
+
+    /// <summary>
+    /// Verifies that when an incoming field DTO has a <see langword="null"/> identifier and matches an existing field by key,
+    /// the existing field's primary key and foreign key are preserved rather than overwritten with <see cref="Guid.Empty"/>.
+    /// </summary>
+    [Fact]
+    public void ComputeSchemaDiffWhenMatchedByKeyWithoutIdShouldPreserveExistingFieldId()
+    {
+        // Arrange
+        var tableId = Guid.NewGuid();
+        var existingFieldId = Guid.NewGuid();
+        var table = new CustomTable
+        {
+            Id = tableId,
+            Name = "Contacts",
+            Fields =
+            [
+                new CustomField
+                {
+                    Id = existingFieldId,
+                    CustomTableId = tableId,
+                    Key = "city",
+                    Name = "City",
+                    DataType = FieldDataType.Text,
+                    IsRequired = false,
+                    Order = 0,
+                },
+            ],
+        };
+
+        var incoming = new List<UpdateCustomFieldDto>
+        {
+            new(null, "City Name", "city", FieldDataType.Text, true, 0),
+        };
+
+        // Act
+        var diff = table.ComputeSchemaDiff(incoming, hasExistingRecords: true);
+
+        // Assert
+        diff.FieldsToAdd.ShouldBeEmpty();
+        diff.FieldsToRemove.ShouldBeEmpty();
+        diff.FieldsNeedingBackfill.ShouldHaveSingleItem();
+
+        var field = table.Fields.Single();
+        field.Id.ShouldBe(existingFieldId);
+        field.CustomTableId.ShouldBe(tableId);
+        field.Name.ShouldBe("City Name");
+        field.IsRequired.ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// Verifies that when an incoming field DTO has a <see langword="null"/> identifier, shares a key with an existing field,
+    /// but specifies a different <see cref="FieldDataType"/>, it is treated as removing the old field and adding a new field
+    /// rather than throwing <see cref="FieldDataTypeChangeNotAllowedException"/>.
+    /// </summary>
+    [Fact]
+    public void ComputeSchemaDiffWhenIdIsNullAndKeyMatchesWithDifferentDataTypeShouldReplaceField()
+    {
+        // Arrange
+        var tableId = Guid.NewGuid();
+        var existingFieldId = Guid.NewGuid();
+        var table = new CustomTable
+        {
+            Id = tableId,
+            Name = "Locations",
+            Fields =
+            [
+                new CustomField
+                {
+                    Id = existingFieldId,
+                    CustomTableId = tableId,
+                    Key = "city",
+                    Name = "City",
+                    DataType = FieldDataType.Text,
+                    IsRequired = false,
+                    Order = 0,
+                },
+            ],
+        };
+
+        var incoming = new List<UpdateCustomFieldDto>
+        {
+            new(null, "City ID", "city", FieldDataType.Number, true, 0),
+        };
+
+        // Act
+        var diff = table.ComputeSchemaDiff(incoming, hasExistingRecords: true);
+
+        // Assert
+        diff.FieldsToRemove.ShouldHaveSingleItem();
+        diff.FieldsToRemove[0].Id.ShouldBe(existingFieldId);
+        diff.FieldsToRemove[0].DataType.ShouldBe(FieldDataType.Text);
+
+        diff.FieldsToAdd.ShouldHaveSingleItem();
+        diff.FieldsToAdd[0].Key.ShouldBe("city");
+        diff.FieldsToAdd[0].DataType.ShouldBe(FieldDataType.Number);
+        diff.FieldsToAdd[0].IsRequired.ShouldBeTrue();
+
+        diff.KeyRenames.ShouldBeEmpty();
+        diff.FieldsNeedingBackfill.ShouldBeEmpty();
     }
 }

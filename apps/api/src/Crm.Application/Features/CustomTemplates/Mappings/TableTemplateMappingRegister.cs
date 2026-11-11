@@ -1,6 +1,7 @@
 using Crm.Application.Dtos.CustomTemplates;
 using Crm.Application.Dtos.CustomTemplates.Commands;
 using Crm.Domain.Entities;
+using Crm.Domain.Interfaces;
 using Mapster;
 
 namespace Crm.Application.Features.CustomTemplates.Mappings;
@@ -28,6 +29,11 @@ public class TableTemplateMappingRegister : IRegister
             .Ignore(dest => dest.Template);
 
         config.NewConfig<UpdateTemplateFieldDto, TemplateField>()
+            .Ignore(dest => dest.Id)
+            .Ignore(dest => dest.TemplateId)
+            .Ignore(dest => dest.Template);
+
+        config.NewConfig<IIdentifiableField, TemplateField>()
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.TemplateId)
             .Ignore(dest => dest.Template);

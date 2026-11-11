@@ -4,7 +4,7 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -20,7 +20,7 @@ public partial class DeleteUserCommandHandler(
     IFileTransactionTracker fileTransactionTracker,
     ILogger<DeleteUserCommandHandler> logger) : IRequestHandler<DeleteUserCommand>
 {
-    public async Task Handle(DeleteUserCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteUserCommand request, CancellationToken cancellationToken)
     {
         LogDeletingUser(logger, request.UserId);
 
@@ -31,6 +31,8 @@ public partial class DeleteUserCommandHandler(
         await identityService.DeleteUserAsync(request.UserId, cancellationToken);
 
         LogUserDeletedSuccessfully(logger, request.UserId);
+
+        return Unit.Value;
     }
 
     /// <summary>

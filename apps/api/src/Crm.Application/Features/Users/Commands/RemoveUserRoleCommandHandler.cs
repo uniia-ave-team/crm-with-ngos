@@ -3,7 +3,7 @@ using Crm.Application.Dtos.Role;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -18,7 +18,7 @@ public partial class RemoveUserRoleCommandHandler(
     IAuthRoleRepository authRoleRepository,
     ILogger<RemoveUserRoleCommandHandler> logger) : IRequestHandler<RemoveUserRoleCommand>
 {
-    public async Task Handle(RemoveUserRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(RemoveUserRoleCommand request, CancellationToken cancellationToken)
     {
         LogRemovingRole(logger, request.RoleId, request.UserId);
 
@@ -27,6 +27,8 @@ public partial class RemoveUserRoleCommandHandler(
         await identityService.RemoveFromRoleAsync(request.UserId, role.Name, cancellationToken);
 
         LogRoleRemovedSuccessfully(logger, request.RoleId, request.UserId);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.RemovingRole, Level = LogLevel.Information, Message = "Initiating removal of role ID '{RoleId}' from user ID: {UserId}")]

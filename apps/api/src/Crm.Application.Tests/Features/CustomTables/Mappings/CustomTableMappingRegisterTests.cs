@@ -3,6 +3,7 @@ using Crm.Application.Dtos.CustomTables.Commands;
 using Crm.Application.Features.CustomTables.Mappings;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
+using Crm.Domain.Interfaces;
 using Mapster;
 using Shouldly;
 
@@ -139,5 +140,45 @@ public class CustomTableMappingRegisterTests
         existingTable.Description.ShouldBe("New Description");
         existingTable.Fields.ShouldBeSameAs(existingFields);
         existingTable.Fields.Count.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Verifies that adapting an <see cref="IIdentifiableField"/> reference with a <see langword="null"/> ID
+    /// onto an existing <see cref="CustomField"/> preserves the target entity's existing identifier.
+    /// </summary>
+    [Fact]
+    public void AdaptIdentifiableFieldInterfaceWhenIdIsNullShouldPreserveTargetId()
+    {
+        // Arrange
+        var existingId = Guid.NewGuid();
+        var tableId = Guid.NewGuid();
+        var existingField = new CustomField
+        {
+            Id = existingId,
+            CustomTableId = tableId,
+            Key = "city",
+            Name = "City",
+            DataType = FieldDataType.Text,
+            IsRequired = false,
+            Order = 0,
+        };
+
+        IIdentifiableField dto = new UpdateCustomFieldDto(
+            null,
+            "Updated City",
+            "city",
+            FieldDataType.Text,
+            true,
+            1);
+
+        // Act
+        dto.Adapt(existingField, _config);
+
+        // Assert
+        existingField.Id.ShouldBe(existingId);
+        existingField.CustomTableId.ShouldBe(tableId);
+        existingField.Name.ShouldBe("Updated City");
+        existingField.IsRequired.ShouldBeTrue();
+        existingField.Order.ShouldBe((byte)1);
     }
 }

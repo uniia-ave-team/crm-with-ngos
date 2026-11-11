@@ -24,6 +24,7 @@ public class UserCustomField : BaseEntity
     /// <summary>
     /// Gets or sets the string value of the custom field.
     /// </summary>
+    // TODO: Support FieldDataType (Date, Number, Text, etc.) similar to CustomField in Custom Tables, replacing flat string with typed validation and storage.
     public string Value { get; set; } = string.Empty;
 
     /// <summary>

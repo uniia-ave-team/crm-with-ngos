@@ -2,7 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.CustomTemplates.Commands;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTemplates.Commands;
@@ -17,7 +17,7 @@ public partial class DeleteTableTemplateCommandHandler(
     ITableTemplateRepository tableTemplateRepository,
     ILogger<DeleteTableTemplateCommandHandler> logger) : IRequestHandler<DeleteTableTemplateCommand>
 {
-    public async Task Handle(DeleteTableTemplateCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteTableTemplateCommand request, CancellationToken cancellationToken)
     {
         LogDeletingTableTemplate(logger, request.Id);
 
@@ -32,6 +32,8 @@ public partial class DeleteTableTemplateCommandHandler(
         await tableTemplateRepository.DeleteAsync(request.Id, cancellationToken);
 
         LogTableTemplateDeletedSuccessfully(logger, request.Id);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.DeletingTableTemplate, Level = LogLevel.Information, Message = "Initiating deletion of table template ID: {TemplateId}")]

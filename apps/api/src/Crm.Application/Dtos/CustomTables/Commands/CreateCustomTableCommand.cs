@@ -1,5 +1,5 @@
 using Crm.Application.Interfaces;
-using MediatR;
+using Mediator;
 
 namespace Crm.Application.Dtos.CustomTables.Commands;
 

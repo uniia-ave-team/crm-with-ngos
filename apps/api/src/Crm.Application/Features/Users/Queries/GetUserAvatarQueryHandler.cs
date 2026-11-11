@@ -4,7 +4,7 @@ using Crm.Application.Dtos.User.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Queries;
@@ -20,7 +20,7 @@ public partial class GetUserAvatarQueryHandler(
     IFileStorageService fileStorageService,
     ILogger<GetUserAvatarQueryHandler> logger) : IRequestHandler<GetUserAvatarQuery, FileDto>
 {
-    public async Task<FileDto> Handle(GetUserAvatarQuery request, CancellationToken cancellationToken)
+    public async ValueTask<FileDto> Handle(GetUserAvatarQuery request, CancellationToken cancellationToken)
     {
         LogFetchingUserAvatar(logger, request.UserId);
 

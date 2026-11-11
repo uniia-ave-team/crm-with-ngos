@@ -15,7 +15,7 @@ CRM з відкритим кодом для громадських органі�
 
 | Частина   | Технології                                                        |
 | --------- | ----------------------------------------------------------------- |
-| API       | .NET 10, ASP.NET Core, EF Core 10, PostgreSQL 17, MediatR, FluentValidation, Mapster, Serilog |
+| API       | .NET 10, ASP.NET Core, EF Core 10, PostgreSQL 17, Mediator, FluentValidation, Mapster, Serilog |
 | Вебклієнт | Angular 22, Ionic 9, TypeScript, Vitest                           |
 | Розробка  | just, Docker Compose (база, API й вебклієнт)                      |
 
