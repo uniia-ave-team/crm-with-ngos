@@ -1543,7 +1543,6 @@
           "Ngo"
         ],
         "summary": "Retrieves the details of an NGO by its unique identifier.",
-        "description": "> 🔒 **Required Permissions:** `Permissions.ViewNgo`",
         "operationId": "NgoGet",
         "responses": {
           "401": {
@@ -1710,7 +1709,6 @@
           "Ngo"
         ],
         "summary": "Retrieves the NGO's logo as a file stream.",
-        "description": "> 🔒 **Required Permissions:** `Permissions.ViewNgo`",
         "operationId": "NgoGetLogo",
         "responses": {
           "401": {
@@ -5597,7 +5595,16 @@
           "id",
           "email",
           "firstName",
-          "lastName"
+          "lastName",
+          "patronymic",
+          "phoneNumber",
+          "country",
+          "emergencyContact",
+          "pronouns",
+          "pronounCategory",
+          "avatarUrl",
+          "isActive",
+          "roles"
         ],
         "type": "object",
         "properties": {
@@ -5613,6 +5620,61 @@
           },
           "lastName": {
             "type": "string"
+          },
+          "patronymic": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "phoneNumber": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "country": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "emergencyContact": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pronouns": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pronounCategory": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PronounCategory"
+              }
+            ]
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleUserDto"
+            }
           }
         }
       },
@@ -5629,6 +5691,7 @@
           "preferredLanguage",
           "pronouns",
           "avatarUrl",
+          "isActive",
           "roles",
           "customFields"
         ],
@@ -5688,6 +5751,9 @@
               "null",
               "string"
             ]
+          },
+          "isActive": {
+            "type": "boolean"
           },
           "roles": {
             "type": "array",
