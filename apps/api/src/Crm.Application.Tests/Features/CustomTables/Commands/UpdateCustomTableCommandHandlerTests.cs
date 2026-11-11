@@ -187,4 +187,69 @@ public class UpdateCustomTableCommandHandlerTests
         await _customRecordRepository.DidNotReceive()
             .SyncRecordSchemaAsync(Arg.Any<Guid>(), Arg.Any<SchemaDiffResult>(), Arg.Any<CancellationToken>());
     }
+
+    /// <summary>
+    /// Verifies that when an incoming field has <see langword="null"/> ID, shares a key with an existing field,
+    /// and specifies a different <see cref="FieldDataType"/> while records exist, the handler replaces the field
+    /// and synchronizes record schemas instead of throwing <see cref="FieldDataTypeChangeNotAllowedException"/>.
+    /// </summary>
+    [Fact]
+    public async Task HandleWhenFieldWithNullIdHasSameKeyAndDifferentDataTypeWithRecordsShouldReplaceFieldAndSyncRecords()
+    {
+        // Arrange
+        var tableId = Guid.NewGuid();
+        var oldFieldId = Guid.NewGuid();
+        var customTable = new CustomTable
+        {
+            Id = tableId,
+            Name = "Locations",
+            Fields =
+            [
+                new CustomField
+                {
+                    Id = oldFieldId,
+                    Key = "city",
+                    Name = "City",
+                    DataType = FieldDataType.Text,
+                    IsRequired = true,
+                    Order = 0,
+                },
+            ],
+        };
+
+        _customTableRepository.GetForUpdateWithFieldsAsync(tableId, Arg.Any<CancellationToken>())
+            .Returns(customTable);
+
+        _customRecordRepository.AnyAsync(tableId, Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var command = new UpdateCustomTableCommand(
+            tableId,
+            "Locations",
+            null,
+            [
+                new UpdateCustomFieldDto(null, "City Code", "city", FieldDataType.Number, true, 0),
+            ]);
+
+        // Act
+        await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        customTable.Fields.ShouldHaveSingleItem();
+        var currentField = customTable.Fields.Single();
+        currentField.Id.ShouldNotBe(oldFieldId);
+        currentField.Key.ShouldBe("city");
+        currentField.DataType.ShouldBe(FieldDataType.Number);
+
+        await _customRecordRepository.Received(1)
+            .SyncRecordSchemaAsync(
+                tableId,
+                Arg.Is<SchemaDiffResult>(d =>
+                    d.FieldsToRemove.Count == 1 && d.FieldsToRemove[0].Id == oldFieldId &&
+                    d.FieldsToAdd.Count == 1 && d.FieldsToAdd[0].Key == "city" && d.FieldsToAdd[0].DataType == FieldDataType.Number),
+                Arg.Any<CancellationToken>());
+
+        await _customTableRepository.Received(1)
+            .ResolveFieldKeyCollisionsAsync(customTable.Id, Arg.Any<CancellationToken>());
+    }
 }

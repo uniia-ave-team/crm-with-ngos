@@ -41,17 +41,9 @@ public partial class UpdateCustomTableCommandHandler(
         var hasRecords = await customRecordRepository.AnyAsync(customTable.Id, cancellationToken);
         var diff = customTable.ComputeSchemaDiff(request.Fields, hasRecords);
 
-        foreach (var field in diff.FieldsToRemove)
-        {
-            customTable.Fields.Remove(field);
-        }
-
-        foreach (var field in diff.FieldsToAdd)
-        {
-            customTable.Fields.Add(field);
-        }
-
         customTable.Fields.EnsureValidFieldSchema();
+
+        await customTableRepository.ResolveFieldKeyCollisionsAsync(customTable.Id, cancellationToken);
 
         if (hasRecords)
         {

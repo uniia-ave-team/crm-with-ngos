@@ -33,4 +33,48 @@ public static class StringExtensions
 
         return $"%{escaped}%";
     }
+
+    /// <summary>
+    /// Builds a sanitized PostgreSQL <c>to_tsquery</c> prefix query expression (e.g., <c>"kyi:*"</c> or <c>"kyi:* &amp; don:*"</c>)
+    /// from raw user search input. Non-alphanumeric characters are treated as token delimiters to avoid tsquery syntax errors.
+    /// </summary>
+    /// <param name="searchTerm">The raw search string provided by the caller.</param>
+    /// <returns>A formatted tsquery string with prefix wildcards, or <see langword="null"/> if no searchable tokens exist.</returns>
+    public static string? BuildPrefixTsQuery(this string? searchTerm)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return null;
+        }
+
+        var span = searchTerm.AsSpan().Trim();
+        var tokens = new List<string>();
+        int start = -1;
+
+        for (int i = 0; i < span.Length; i++)
+        {
+            char c = span[i];
+            bool isTokenChar = char.IsLetterOrDigit(c);
+
+            if (isTokenChar)
+            {
+                if (start < 0)
+                {
+                    start = i;
+                }
+            }
+            else if (start >= 0)
+            {
+                tokens.Add($"{span[start..i].ToString().ToLowerInvariant()}:*");
+                start = -1;
+            }
+        }
+
+        if (start >= 0)
+        {
+            tokens.Add($"{span[start..].ToString().ToLowerInvariant()}:*");
+        }
+
+        return tokens.Count == 0 ? null : string.Join(" & ", tokens);
+    }
 }

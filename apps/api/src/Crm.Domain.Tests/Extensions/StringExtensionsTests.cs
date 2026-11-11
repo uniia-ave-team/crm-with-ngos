@@ -91,4 +91,34 @@ public class StringExtensionsTests
         // Assert
         result.ShouldBe(string.Empty);
     }
+
+    [Theory]
+    [InlineData("Kyi", "kyi:*")]
+    [InlineData("  Kyiv   Donor ", "kyiv:* & donor:*")]
+    [InlineData("2026-10", "2026:* & 10:*")]
+    [InlineData("150.50", "150:* & 50:*")]
+    [InlineData("non-profit", "non:* & profit:*")]
+    [InlineData("foo & bar | !baz", "foo:* & bar:* & baz:*")]
+    public void BuildPrefixTsQueryWithValidSearchTermsShouldFormatPrefixQuery(string searchTerm, string expectedQuery)
+    {
+        // Act
+        var result = searchTerm.BuildPrefixTsQuery();
+
+        // Assert
+        result.ShouldBe(expectedQuery);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("&&& !!! ::: ***")]
+    public void BuildPrefixTsQueryWithEmptyOrOperatorOnlyInputShouldReturnNull(string? searchTerm)
+    {
+        // Act
+        var result = searchTerm.BuildPrefixTsQuery();
+
+        // Assert
+        result.ShouldBeNull();
+    }
 }

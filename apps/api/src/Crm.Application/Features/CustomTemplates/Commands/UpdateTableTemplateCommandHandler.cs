@@ -35,13 +35,15 @@ public partial class UpdateTableTemplateCommandHandler(
         request.Adapt(template);
 
         FieldSchemaSynchronizer.Synchronize(
-                    template.Fields,
-                    request.Fields,
-                    id => new TemplateFieldNotFoundException(id, template.Id),
-                    dto => dto.Adapt<TemplateField>(),
-                    (existing, dto) => dto.Adapt(existing));
+            template.Fields,
+            request.Fields,
+            id => new TemplateFieldNotFoundException(id, template.Id),
+            dto => dto.Adapt<TemplateField>(),
+            (existing, dto) => dto.Adapt(existing));
 
         template.Fields.EnsureValidFieldSchema();
+
+        await tableTemplateRepository.ResolveFieldKeyCollisionsAsync(template.Id, cancellationToken);
 
         LogTableTemplateUpdatedSuccessfully(logger, template.Id);
 
