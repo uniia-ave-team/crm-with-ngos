@@ -39,9 +39,10 @@ describe('role-permissions', () => {
   });
 
   describe('the permissions without settings (they are given to every role)', () => {
-    it('are the ones that everybody has: the viewing of the organization and of the table templates, not the creating of an organization', () => {
-      expect(ALWAYS_GRANTED_PERMISSIONS).toEqual(['Permissions.ViewNgo', 'Permissions.ViewTableTemplate']);
+    it('are the ones that everybody has: the viewing of the table templates, not the creating of an organization nor the removed ViewNgo', () => {
+      expect(ALWAYS_GRANTED_PERMISSIONS).toEqual(['Permissions.ViewTableTemplate']);
       expect(ALWAYS_GRANTED_PERMISSIONS).not.toContain('Permissions.CreateNgo');
+      expect(ALWAYS_GRANTED_PERMISSIONS).not.toContain('Permissions.ViewNgo');
     });
 
     it('are not among the permissions that can be chosen', () => {
@@ -116,7 +117,7 @@ describe('role-permissions', () => {
 
     it('adds the permissions without settings when the role has not them, once', () => {
       expect(diffClaims([], [], ALL)).toEqual({ add: [...ALWAYS_GRANTED_PERMISSIONS], remove: [] });
-      expect(diffClaims([ALWAYS_GRANTED_PERMISSIONS[0]], [], ALL).add).toEqual([ALWAYS_GRANTED_PERMISSIONS[1]]);
+      expect(diffClaims([...ALWAYS_GRANTED_PERMISSIONS], [], ALL).add).toEqual([]);
     });
 
     it('lists the added permissions in the order of the groups, the permissions without settings last', () => {

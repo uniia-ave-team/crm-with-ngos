@@ -1647,7 +1647,6 @@ describe('ColleaguesPage', () => {
           created.flush({ id: 'new1' }, { status: 201, statusText: 'Created' });
 
           (await vi.waitFor(() => claimRequest('new1', 'Permissions.ViewUser'))).flush(null, noContent);
-          (await vi.waitFor(() => claimRequest('new1', 'Permissions.ViewNgo'))).flush(null, noContent);
           (await vi.waitFor(() => claimRequest('new1', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
 
           await vi.waitFor(() => {
@@ -1669,10 +1668,10 @@ describe('ColleaguesPage', () => {
           send(ctx);
           postRole().flush({ id: 'new2' }, { status: 201, statusText: 'Created' });
 
-          (await vi.waitFor(() => claimRequest('new2', 'Permissions.ViewNgo'))).flush(null, noContent);
           (await vi.waitFor(() => claimRequest('new2', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
-          // CreateNgo є лише в першого користувача: його не додаємо.
+          // CreateNgo є лише в першого користувача, а ViewNgo сервер прибрав: їх не додаємо.
           http.expectNone((request) => request.url.endsWith('/claims/Permissions.CreateNgo'));
+          http.expectNone((request) => request.url.endsWith('/claims/Permissions.ViewNgo'));
         });
 
         it('locks the button while it sends, and does not send a second time', async () => {
@@ -1713,8 +1712,7 @@ describe('ColleaguesPage', () => {
           type(ctx.element, 'role-form-name', 'Член');
           send(ctx);
           postRole().flush({ id: 'new4' }, { status: 201, statusText: 'Created' });
-          (await vi.waitFor(() => claimRequest('new4', 'Permissions.ViewNgo'))).flush({}, { status: 400, statusText: 'Bad Request' });
-          (await vi.waitFor(() => claimRequest('new4', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
+          (await vi.waitFor(() => claimRequest('new4', 'Permissions.ViewTableTemplate'))).flush({}, { status: 400, statusText: 'Bad Request' });
 
           await vi.waitFor(() => {
             ctx.fixture.detectChanges();
@@ -1991,7 +1989,6 @@ describe('ColleaguesPage', () => {
           saved.flush(null, noContent);
           // Спершу додаємо (право групи, потім права без налаштування), потім прибираємо.
           (await vi.waitFor(() => claim('r0', 'Permissions.CanResetPassword'))).flush(null, noContent);
-          (await vi.waitFor(() => claim('r0', 'Permissions.ViewNgo'))).flush(null, noContent);
           (await vi.waitFor(() => claim('r0', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
           const removed = await vi.waitFor(() => claim('r0', 'Permissions.ViewUser'));
           expect(removed.request.method).toBe('DELETE');
@@ -2030,10 +2027,10 @@ describe('ColleaguesPage', () => {
           const ctx = await openEdit([]);
           send(ctx);
           putRole('r0').flush(null, noContent);
-          (await vi.waitFor(() => claim('r0', 'Permissions.ViewNgo'))).flush(null, noContent);
           (await vi.waitFor(() => claim('r0', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
           await backToList(ctx);
           http.expectNone((request) => request.url.endsWith('/claims/Permissions.CreateNgo'));
+          http.expectNone((request) => request.url.endsWith('/claims/Permissions.ViewNgo'));
         });
 
         it('locks the button while it sends, and does not send a second time', async () => {
@@ -2072,8 +2069,7 @@ describe('ColleaguesPage', () => {
           const ctx = await openEdit([]);
           send(ctx);
           putRole('r0').flush(null, noContent);
-          (await vi.waitFor(() => claim('r0', 'Permissions.ViewNgo'))).flush({}, { status: 400, statusText: 'Bad Request' });
-          (await vi.waitFor(() => claim('r0', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
+          (await vi.waitFor(() => claim('r0', 'Permissions.ViewTableTemplate'))).flush({}, { status: 400, statusText: 'Bad Request' });
           await backToList(ctx);
           rolesRequest().flush(body('Куратор', 'Член'));
           await vi.waitFor(() => {

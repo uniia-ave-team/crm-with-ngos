@@ -21,9 +21,10 @@ export function canGrantGroup(group: PermissionGroup, own: readonly string[]): b
 /**
  * Права без налаштування (внизу таблиці «Назви прав»), які мають усі: їх додають до
  * кожної нової ролі в будь-якому випадку. `CreateNgo` сюди не входить: воно лише в
- * першого користувача, а не в усіх.
+ * першого користувача, а не в усіх. Організацію бачить кожен, хто ввійшов, без окремого
+ * права (`ViewNgo` сервер прибрав і відхиляє).
  */
-export const ALWAYS_GRANTED_PERMISSIONS: readonly string[] = ['Permissions.ViewNgo', 'Permissions.ViewTableTemplate'];
+export const ALWAYS_GRANTED_PERMISSIONS: readonly string[] = ['Permissions.ViewTableTemplate'];
 
 /**
  * Права нової ролі: усі права вибраних груп (у порядку груп) і права без налаштування,
@@ -67,7 +68,7 @@ export function diffClaims(original: readonly string[], permissions: readonly st
 
 /**
  * Права, які вибирають у ролі, у порядку форми. Права, що є в усіх чи
- * видаються автоматично (`ViewNgo`, `CreateNgo`, `ViewTableTemplate`), сюди не
+ * видаються автоматично (`CreateNgo`, `ViewTableTemplate`), сюди не
  * входять.
  */
 export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
