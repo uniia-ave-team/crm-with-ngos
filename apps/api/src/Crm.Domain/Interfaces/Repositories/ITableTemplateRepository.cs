@@ -44,4 +44,12 @@ public interface ITableTemplateRepository : IGenericRepository<TableTemplate>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A list of system preset names.</returns>
     Task<List<string>> GetSystemPresetNamesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resolves unique key constraint cycles when existing template fields swap or chain-rename keys within the same template.
+    /// </summary>
+    /// <param name="templateId">The unique identifier of the table template.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task ResolveFieldKeyCollisionsAsync(Guid templateId, CancellationToken cancellationToken = default);
 }

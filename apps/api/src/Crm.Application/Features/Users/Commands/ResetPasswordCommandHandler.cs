@@ -6,9 +6,8 @@ using Crm.Application.Exceptions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Crm.Application.Features.Users.Commands;
 
@@ -32,7 +31,7 @@ public partial class ResetPasswordCommandHandler(
     /// <exception cref="InvalidCredentialException">Thrown when the token is invalid, expired, or missing required claims.</exception>
     /// <exception cref="NotFoundException">Thrown when the user referenced in the token does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown when the underlying identity provider fails to reset the password.</exception>
-    public async Task Handle(ResetPasswordCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(ResetPasswordCommand request, CancellationToken cancellationToken)
     {
         LogResettingPassword(logger);
 
@@ -43,7 +42,7 @@ public partial class ResetPasswordCommandHandler(
             throw new InvalidCredentialException("The password reset token is invalid or has expired.");
         }
 
-        var userIdString = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+        var userIdString = principal.FindFirst(CustomClaimTypes.Sub)?.Value
             ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
         var rawResetToken = principal.FindFirst(CustomClaimTypes.PasswordResetToken)?.Value;
@@ -57,6 +56,8 @@ public partial class ResetPasswordCommandHandler(
         await identityService.ResetPasswordAsync(userId, rawResetToken, request.NewPassword, cancellationToken);
 
         LogPasswordResetSuccessfully(logger, userId);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.ResettingPassword, Level = LogLevel.Information, Message = "Initiating password reset attempt.")]

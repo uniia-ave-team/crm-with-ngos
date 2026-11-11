@@ -6,7 +6,7 @@ using Crm.Application.Dtos.CustomTemplates.Commands;
 using Crm.Application.Dtos.CustomTemplates.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Crm.Api.Controllers.V1;

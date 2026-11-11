@@ -19,4 +19,6 @@ public interface IUserCustomFieldRepository : IGenericRepository<UserCustomField
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <exception cref="EntityAlreadyExistsException">Thrown if the key already exists for the user.</exception>
     Task EnsureKeyDoesNotExistAsync(Guid userId, string key, CancellationToken cancellationToken = default);
+
+    // TODO: Add Task<IReadOnlyList<string>> GetDistinctKeysAsync(CancellationToken cancellationToken = default); for frontend table columns.
 }

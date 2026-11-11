@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -13,7 +13,7 @@ public partial class ActivateUserCommandHandler(
     IUserRepository userRepository,
     ILogger<ActivateUserCommandHandler> logger) : IRequestHandler<ActivateUserCommand>
 {
-    public async Task Handle(ActivateUserCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(ActivateUserCommand request, CancellationToken cancellationToken)
     {
         if (request.UserId == request.CurrentUserId)
         {
@@ -28,12 +28,14 @@ public partial class ActivateUserCommandHandler(
         if (user.IsActive)
         {
             LogUserAlreadyActive(logger, request.UserId);
-            return;
+            return Unit.Value;
         }
 
         await userRepository.SetUserActivationStatusAsync(user.Id, isActive: true, cancellationToken);
 
         LogUserActivatedSuccessfully(logger, request.UserId);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.ActivatingUser, Level = LogLevel.Information, Message = "Activating user ID: {UserId}")]

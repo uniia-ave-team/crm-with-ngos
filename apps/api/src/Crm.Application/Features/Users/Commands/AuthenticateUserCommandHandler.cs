@@ -7,7 +7,7 @@ using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -22,7 +22,7 @@ public partial class AuthenticateUserCommandHandler(
     IAuthUserRepository authUserRepository,
     ILogger<AuthenticateUserCommandHandler> logger) : IRequestHandler<AuthenticateUserCommand, AuthTokensDto>
 {
-    public async Task<AuthTokensDto> Handle(AuthenticateUserCommand request, CancellationToken cancellationToken)
+    public async ValueTask<AuthTokensDto> Handle(AuthenticateUserCommand request, CancellationToken cancellationToken)
     {
         var maskedEmail = request.Email.MaskEmail();
 

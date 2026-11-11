@@ -4,7 +4,7 @@ using Crm.Application.Dtos.Role.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Roles.Queries;
@@ -17,7 +17,7 @@ public partial class GetRoleByIdQueryHandler(
     IRoleIdentityService identityService,
     ILogger<GetRoleByIdQueryHandler> logger) : IRequestHandler<GetRoleByIdQuery, RoleDetailsDto>
 {
-    public async Task<RoleDetailsDto> Handle(GetRoleByIdQuery request, CancellationToken cancellationToken)
+    public async ValueTask<RoleDetailsDto> Handle(GetRoleByIdQuery request, CancellationToken cancellationToken)
     {
         LogFetchingRoleDetails(logger, request.Id);
 

@@ -5,10 +5,10 @@ using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
+using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Crm.Application.Features.Users.Commands;
 
@@ -23,7 +23,7 @@ public partial class RefreshTokensCommandHandler(
     IUserRefreshTokenRepository userRefreshTokenRepository,
     ILogger<RefreshTokensCommandHandler> logger) : IRequestHandler<RefreshTokensCommand, AuthTokensDto>
 {
-    public async Task<AuthTokensDto> Handle(RefreshTokensCommand request, CancellationToken cancellationToken)
+    public async ValueTask<AuthTokensDto> Handle(RefreshTokensCommand request, CancellationToken cancellationToken)
     {
         LogInitiatingTokenRefresh(logger);
 
@@ -60,7 +60,7 @@ public partial class RefreshTokensCommandHandler(
 
     private Guid ExtractUserId(ClaimsPrincipal principal)
     {
-        string? userIdString = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        string? userIdString = principal.FindFirst(CustomClaimTypes.Sub)?.Value;
 
         if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
         {

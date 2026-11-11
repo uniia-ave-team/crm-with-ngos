@@ -39,6 +39,16 @@ public interface IAuthRoleRepository :
     Task<List<TRole>> GetRolesByUserAsync<TRole>(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Asynchronously retrieves all roles assigned to the specified users, grouped by user ID,
+    /// projected to the target type <typeparamref name="TRole"/>.
+    /// </summary>
+    /// <typeparam name="TRole">The type of the role DTO/model to project into.</typeparam>
+    /// <param name="userIds">The collection of unique identifiers of the users.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A lookup mapping each user ID to their assigned projected roles.</returns>
+    Task<ILookup<Guid, TRole>> GetRolesByUserIdsAsync<TRole>(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Asynchronously retrieves the unique identifiers of all roles assigned to a specific user.
     /// </summary>
     /// <param name="userId">The unique identifier of the user.</param>

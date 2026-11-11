@@ -2,7 +2,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
+using Crm.Domain.Consts.Entities.GeneralConstants;
+using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence;
@@ -96,6 +99,53 @@ public class AuthUserRepository(
         {
             throw new EntityAlreadyExistsException(nameof(AuthUser), email);
         }
+    }
+
+    /// <summary>
+    /// Applies dynamic ordering to the user query, adding custom support for composite full-name sorting.
+    /// </summary>
+    /// <typeparam name="TResult">The projection target type.</typeparam>
+    /// <param name="query">The input queryable sequence of users.</param>
+    /// <param name="orderBy">The property name to sort by.</param>
+    /// <param name="sortOrder">The sort direction specifier.</param>
+    /// <returns>The sorted queryable sequence.</returns>
+    protected override IQueryable<AuthUser> ApplyOrdering<TResult>(
+        IQueryable<AuthUser> query,
+        string orderBy,
+        string? sortOrder)
+    {
+        bool isDescending = string.Equals(sortOrder, SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
+        string normalizedOrderBy = orderBy.Trim();
+
+        return normalizedOrderBy switch
+        {
+            _ when normalizedOrderBy.EqualsAnyIgnoreCase(UserConstants.FullName, nameof(User.LastName)) => isDescending
+                ? query.OrderByDescending(u => u.UserProfile.LastName)
+                    .ThenByDescending(u => u.UserProfile.FirstName)
+                    .ThenByDescending(u => u.UserProfile.Patronymic)
+                    .ThenBy(u => u.Id)
+                : query.OrderBy(u => u.UserProfile.LastName)
+                    .ThenBy(u => u.UserProfile.FirstName)
+                    .ThenBy(u => u.UserProfile.Patronymic)
+                    .ThenBy(u => u.Id),
+
+            _ when normalizedOrderBy.EqualsAnyIgnoreCase(nameof(User.FirstName)) => isDescending
+                ? query.OrderByDescending(u => u.UserProfile.FirstName)
+                    .ThenByDescending(u => u.UserProfile.LastName)
+                    .ThenByDescending(u => u.UserProfile.Patronymic)
+                    .ThenBy(u => u.Id)
+                : query.OrderBy(u => u.UserProfile.FirstName)
+                    .ThenBy(u => u.UserProfile.LastName)
+                    .ThenBy(u => u.UserProfile.Patronymic)
+                    .ThenBy(u => u.Id),
+
+            _ when normalizedOrderBy.EqualsAnyIgnoreCase(nameof(User.CreatedAt)) => isDescending
+                ? query.OrderByDescending(u => u.UserProfile.CreatedAt).ThenBy(u => u.Id)
+                : query.OrderBy(u => u.UserProfile.CreatedAt).ThenBy(u => u.Id),
+
+            // TODO: Support dynamic sorting on user custom fields with SQL type casting (Date, Number, Text) similar to CustomRecordRepository.
+            _ => base.ApplyOrdering<TResult>(query, normalizedOrderBy, sortOrder),
+        };
     }
 
     /// <summary>

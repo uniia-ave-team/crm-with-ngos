@@ -6,6 +6,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -70,6 +71,12 @@ public class TableTemplateRepository(
             .Select(t => t.Name)
             .ToListAsync(cancellationToken);
     }
+
+    /// <inheritdoc />
+    public Task ResolveFieldKeyCollisionsAsync(
+        Guid templateId,
+        CancellationToken cancellationToken = default)
+        => Context.ResolveFieldKeyCollisionsAsync<TemplateField>(templateId, f => f.TemplateId, cancellationToken);
 
     /// <summary>
     /// Builds the filter expression for querying table templates based on search term and system preset flag.

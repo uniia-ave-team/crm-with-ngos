@@ -4,7 +4,7 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Ngos.Commands;
@@ -24,7 +24,7 @@ public partial class CreateNgoCommandHandler(
     TimeProvider timeProvider,
     ILogger<CreateNgoCommandHandler> logger) : IRequestHandler<CreateNgoCommand, Guid>
 {
-    public async Task<Guid> Handle(CreateNgoCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateNgoCommand request, CancellationToken cancellationToken)
     {
         LogCreatingNgo(logger, request.Name);
 

@@ -3,7 +3,7 @@ using Crm.Application.Dtos.Role;
 using Crm.Application.Dtos.Role.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Roles.Queries;
@@ -15,7 +15,7 @@ public partial class GetAllRolesQueryHandler(
     IAuthRoleRepository authRoleRepository,
     ILogger<GetAllRolesQueryHandler> logger) : IRequestHandler<GetAllRolesQuery, PagedResult<RoleDto>>
 {
-    public async Task<PagedResult<RoleDto>> Handle(GetAllRolesQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<RoleDto>> Handle(GetAllRolesQuery request, CancellationToken cancellationToken)
     {
         LogFetchingRoles(logger, request.PageNumber, request.PageSize, request.SearchTerm != null);
 

@@ -2,7 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -15,7 +15,7 @@ public partial class UpdateUserCustomFieldCommandHandler(
     IUserCustomFieldRepository customFieldRepository,
     ILogger<UpdateUserCustomFieldCommandHandler> logger) : IRequestHandler<UpdateUserCustomFieldCommand>
 {
-    public async Task Handle(UpdateUserCustomFieldCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateUserCustomFieldCommand request, CancellationToken cancellationToken)
     {
         LogUpdatingCustomField(logger, request.CustomFieldId, request.UserId);
 
@@ -30,6 +30,8 @@ public partial class UpdateUserCustomFieldCommandHandler(
         request.Adapt(customField);
 
         LogCustomFieldUpdatedSuccessfully(logger, request.CustomFieldId, request.UserId);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.UpdatingUserCustomField, Level = LogLevel.Information, Message = "Updating custom field ID: {CustomFieldId} for user ID: {UserId}")]

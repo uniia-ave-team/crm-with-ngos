@@ -2,7 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.CustomRecords.Commands;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomRecords.Commands;
@@ -25,7 +25,7 @@ public partial class UpdateCustomRecordCommandHandler(
     /// <param name="request">The command instance containing record ID and updated data payload.</param>
     /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task Handle(UpdateCustomRecordCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateCustomRecordCommand request, CancellationToken cancellationToken)
     {
         LogUpdatingCustomRecord(logger, request.Id);
 
@@ -38,6 +38,8 @@ public partial class UpdateCustomRecordCommandHandler(
         record.Data = alignedData;
 
         LogCustomRecordUpdatedSuccessfully(logger, record.Id, record.CustomTableId);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.UpdatingCustomRecord, Level = LogLevel.Information, Message = "Initiating update for custom record ID: {RecordId}")]

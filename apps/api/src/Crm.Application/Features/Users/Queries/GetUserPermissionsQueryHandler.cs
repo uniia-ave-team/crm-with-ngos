@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Queries;
 using Crm.Application.Interfaces;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Queries;
@@ -14,7 +14,7 @@ public partial class GetUserPermissionsQueryHandler(
     IRolePermissionsCache permissionsCache,
     ILogger<GetUserPermissionsQueryHandler> logger) : IRequestHandler<GetUserPermissionsQuery, List<string>>
 {
-    public async Task<List<string>> Handle(GetUserPermissionsQuery request, CancellationToken cancellationToken)
+    public async ValueTask<List<string>> Handle(GetUserPermissionsQuery request, CancellationToken cancellationToken)
     {
         if (request.RoleIds == null || request.RoleIds.Count == 0)
         {
