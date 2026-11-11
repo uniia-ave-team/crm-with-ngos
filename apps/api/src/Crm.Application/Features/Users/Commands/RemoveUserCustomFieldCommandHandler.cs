@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -14,7 +14,7 @@ public partial class RemoveUserCustomFieldCommandHandler(
     IUserCustomFieldRepository customFieldRepository,
     ILogger<RemoveUserCustomFieldCommandHandler> logger) : IRequestHandler<RemoveUserCustomFieldCommand>
 {
-    public async Task Handle(RemoveUserCustomFieldCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(RemoveUserCustomFieldCommand request, CancellationToken cancellationToken)
     {
         LogRemovingCustomField(logger, request.CustomFieldId, request.UserId);
 
@@ -29,6 +29,8 @@ public partial class RemoveUserCustomFieldCommandHandler(
         await customFieldRepository.DeleteAsync(request.CustomFieldId, cancellationToken);
 
         LogCustomFieldRemovedSuccessfully(logger, request.CustomFieldId, request.UserId);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.RemovingUserCustomField, Level = LogLevel.Information, Message = "Removing custom field ID: {CustomFieldId} for user ID: {UserId}")]

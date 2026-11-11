@@ -66,20 +66,23 @@ public static class FieldSchemaSynchronizer
     /// <param name="notFoundExceptionFactory">A delegate invoked when an incoming DTO references an entity ID not present in <paramref name="existingFields"/>.</param>
     /// <param name="createEntity">A delegate that converts an incoming DTO into a new domain entity instance.</param>
     /// <param name="updateEntity">A delegate that updates properties of an existing entity from an incoming DTO.</param>
+    /// <param name="onMatched">An optional callback executed for each matched entity/DTO pair <c>before</c> properties are updated.</param>
+    /// <returns>A <see cref="ReconciliationResult{TEntity}"/> instance containing categorized lists of removed, added, and matched entities.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="existingFields"/> or <paramref name="incomingDtos"/> is <see langword="null"/>.</exception>
-    public static void Synchronize<TEntity, TDto>(
+    public static ReconciliationResult<TEntity> Synchronize<TEntity, TDto>(
         ICollection<TEntity> existingFields,
         IEnumerable<TDto> incomingDtos,
         Func<Guid, NotFoundException> notFoundExceptionFactory,
         Func<TDto, TEntity> createEntity,
-        Action<TEntity, TDto> updateEntity)
+        Action<TEntity, TDto> updateEntity,
+        Action<TEntity, TDto>? onMatched = null)
         where TEntity : class, IIdentifiableField
         where TDto : IIdentifiableField
     {
         ArgumentNullException.ThrowIfNull(existingFields);
 
         var existingList = existingFields as IReadOnlyCollection<TEntity> ?? [.. existingFields];
-        var result = Reconcile(existingList, incomingDtos, notFoundExceptionFactory, createEntity, updateEntity);
+        var result = Reconcile(existingList, incomingDtos, notFoundExceptionFactory, createEntity, updateEntity, onMatched);
 
         foreach (var stale in result.Removed)
         {
@@ -90,6 +93,8 @@ public static class FieldSchemaSynchronizer
         {
             existingFields.Add(newEntity);
         }
+
+        return result;
     }
 
     private static Dictionary<Guid, TEntity> IndexExistingById<TEntity>(IReadOnlyCollection<TEntity> existingItems)
@@ -181,8 +186,11 @@ public static class FieldSchemaSynchronizer
             {
                 target = byId[id];
             }
-            else if (unclaimedByKey is not null && unclaimedByKey.Remove(dto.Key, out var hit))
+            else if (unclaimedByKey is not null
+                && unclaimedByKey.TryGetValue(dto.Key, out var hit)
+                && hit.DataType == dto.DataType)
             {
+                unclaimedByKey.Remove(dto.Key);
                 target = hit;
             }
 

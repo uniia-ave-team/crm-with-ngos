@@ -145,4 +145,26 @@ public class JsonbFunctionsExtensionsTests
         patch.FallbackJson.Length.ShouldBe(count);
         lambda.ShouldNotBeNull();
     }
+
+    /// <summary>
+    /// Verifies that when a field is removed and a new field with the same key and different data type is added,
+    /// the patch drops the old key and initializes the new required key with its new type default value.
+    /// </summary>
+    [Fact]
+    public void BuildSchemaPatchWhenFieldReplacedWithSameKeyAndDifferentTypeShouldDropAndReinitialize()
+    {
+        // Arrange
+        var removedTextCity = new CustomField { Key = "city", DataType = FieldDataType.Text, IsRequired = true };
+        var addedNumberCity = new CustomField { Key = "city", DataType = FieldDataType.Number, IsRequired = true };
+        var diff = new SchemaDiffResult([removedTextCity], [addedNumberCity], [], []);
+
+        // Act
+        var patch = JsonbFunctionsExtensions.BuildSchemaPatch(diff);
+
+        // Assert
+        patch.DropKeys.ShouldHaveSingleItem().ShouldBe("city");
+        patch.TargetKeys.ShouldHaveSingleItem().ShouldBe("city");
+        patch.SourceKeys.ShouldHaveSingleItem().ShouldBe(string.Empty);
+        patch.FallbackJson.ShouldHaveSingleItem().ShouldBe("0");
+    }
 }

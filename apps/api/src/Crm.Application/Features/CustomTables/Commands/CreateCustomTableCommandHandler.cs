@@ -4,7 +4,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTables.Commands;
@@ -20,7 +20,7 @@ public partial class CreateCustomTableCommandHandler(
     ICustomTableRepository customTableRepository,
     ILogger<CreateCustomTableCommandHandler> logger) : IRequestHandler<CreateCustomTableCommand, Guid>
 {
-    public async Task<Guid> Handle(CreateCustomTableCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateCustomTableCommand request, CancellationToken cancellationToken)
     {
         var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
 

@@ -3,7 +3,7 @@ using Crm.Application.Dtos.LoginPageImage.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.LoginPageImages.Commands;
@@ -20,7 +20,7 @@ public partial class DeleteLoginPageImageCommandHandler(
     IFileTransactionTracker fileTransactionTracker,
     ILogger<DeleteLoginPageImageCommandHandler> logger) : IRequestHandler<DeleteLoginPageImageCommand>
 {
-    public async Task Handle(DeleteLoginPageImageCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteLoginPageImageCommand request, CancellationToken cancellationToken)
     {
         LogDeletingImage(logger, request.Id);
 
@@ -29,6 +29,8 @@ public partial class DeleteLoginPageImageCommandHandler(
         await repository.DeleteAsync(request.Id, cancellationToken);
 
         LogImageDeletedSuccessfully(logger, request.Id);
+
+        return Unit.Value;
     }
 
     /// <summary>

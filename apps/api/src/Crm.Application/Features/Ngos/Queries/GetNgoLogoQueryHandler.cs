@@ -4,7 +4,7 @@ using Crm.Application.Dtos.Ngo.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Ngos.Queries;
@@ -20,7 +20,7 @@ public partial class GetNgoLogoQueryHandler(
     IFileStorageService fileStorageService,
     ILogger<GetNgoLogoQueryHandler> logger) : IRequestHandler<GetNgoLogoQuery, FileDto>
 {
-    public async Task<FileDto> Handle(GetNgoLogoQuery request, CancellationToken cancellationToken)
+    public async ValueTask<FileDto> Handle(GetNgoLogoQuery request, CancellationToken cancellationToken)
     {
         LogFetchingNgoLogo(logger);
 

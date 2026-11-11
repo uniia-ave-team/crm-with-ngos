@@ -1,6 +1,6 @@
 using Crm.Application.Interfaces;
 using Crm.Domain.Enums;
-using MediatR;
+using Mediator;
 
 namespace Crm.Application.Dtos.User.Commands;
 

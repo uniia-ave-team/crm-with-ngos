@@ -2,7 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.CustomTemplates;
 using Crm.Application.Dtos.CustomTemplates.Queries;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTemplates.Queries;
@@ -16,7 +16,7 @@ public partial class GetTableTemplateByIdQueryHandler(
     ITableTemplateRepository tableTemplateRepository,
     ILogger<GetTableTemplateByIdQueryHandler> logger) : IRequestHandler<GetTableTemplateByIdQuery, TableTemplateDto>
 {
-    public async Task<TableTemplateDto> Handle(GetTableTemplateByIdQuery request, CancellationToken cancellationToken)
+    public async ValueTask<TableTemplateDto> Handle(GetTableTemplateByIdQuery request, CancellationToken cancellationToken)
     {
         LogFetchingTableTemplateById(logger, request.Id);
 

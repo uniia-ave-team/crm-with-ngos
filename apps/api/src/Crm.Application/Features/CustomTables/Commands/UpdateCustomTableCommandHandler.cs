@@ -5,7 +5,7 @@ using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTables.Commands;
@@ -29,7 +29,7 @@ public partial class UpdateCustomTableCommandHandler(
     /// <returns>A task representing the completion of the command handler.</returns>
     /// <exception cref="EntityNotFoundException{CustomTable}">Thrown when table is not found by identifier.</exception>
     /// <exception cref="FieldDataTypeChangeNotAllowedException">Thrown when field data type is modified while records exist.</exception>
-    public async Task Handle(UpdateCustomTableCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateCustomTableCommand request, CancellationToken cancellationToken)
     {
         LogUpdatingCustomTable(logger, request.Id, request.Name);
 
@@ -41,17 +41,9 @@ public partial class UpdateCustomTableCommandHandler(
         var hasRecords = await customRecordRepository.AnyAsync(customTable.Id, cancellationToken);
         var diff = customTable.ComputeSchemaDiff(request.Fields, hasRecords);
 
-        foreach (var field in diff.FieldsToRemove)
-        {
-            customTable.Fields.Remove(field);
-        }
-
-        foreach (var field in diff.FieldsToAdd)
-        {
-            customTable.Fields.Add(field);
-        }
-
         customTable.Fields.EnsureValidFieldSchema();
+
+        await customTableRepository.ResolveFieldKeyCollisionsAsync(customTable.Id, cancellationToken);
 
         if (hasRecords)
         {
@@ -59,6 +51,8 @@ public partial class UpdateCustomTableCommandHandler(
         }
 
         LogCustomTableUpdatedSuccessfully(logger, customTable.Id);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.UpdatingCustomTable, Level = LogLevel.Information, Message = "Initiating update for custom table ID: {TableId} with Name: {TableName}")]

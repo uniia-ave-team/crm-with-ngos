@@ -3,7 +3,7 @@ using Crm.Application.Dtos.LoginPageImage.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.LoginPageImages.Commands;
@@ -19,7 +19,7 @@ public partial class CreateLoginPageImageCommandHandler(
     INgoRepository ngoRepository,
     ILogger<CreateLoginPageImageCommandHandler> logger) : IRequestHandler<CreateLoginPageImageCommand, Guid>
 {
-    public async Task<Guid> Handle(CreateLoginPageImageCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateLoginPageImageCommand request, CancellationToken cancellationToken)
     {
         LogCreatingImage(logger, request.Url);
 

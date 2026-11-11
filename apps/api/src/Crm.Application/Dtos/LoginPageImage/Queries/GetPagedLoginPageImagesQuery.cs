@@ -1,13 +1,13 @@
 using Crm.Application.Common.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
-using MediatR;
+using Mediator;
 
 namespace Crm.Application.Dtos.LoginPageImage.Queries;
 
 /// <summary>
 /// Represents a query to retrieve a paginated, filtered, and sorted list of login page images.
-/// Implements the MediatR query pattern returning a paginated collection of login page image data transfer objects.
+/// Implements the Mediator query pattern returning a paginated collection of login page image data transfer objects.
 /// </summary>
 /// <param name="SearchTerm">
 /// An optional search term to filter images by their URL.

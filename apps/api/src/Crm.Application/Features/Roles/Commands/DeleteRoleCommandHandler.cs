@@ -4,7 +4,7 @@ using Crm.Application.Dtos.Role.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Roles.Commands;
@@ -19,7 +19,7 @@ public partial class DeleteRoleCommandHandler(
     IRoleIdentityService identityService,
     ILogger<DeleteRoleCommandHandler> logger) : IRequestHandler<DeleteRoleCommand>
 {
-    public async Task Handle(DeleteRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteRoleCommand request, CancellationToken cancellationToken)
     {
         LogDeletingRole(logger, request.Id);
 
@@ -44,6 +44,8 @@ public partial class DeleteRoleCommandHandler(
         await rolesCache.RemoveRolePermissionsAsync(request.Id, cancellationToken);
 
         LogRoleDeletedSuccessfully(logger, request.Id);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.DeletingRole, Level = LogLevel.Information, Message = "Initiating deletion for role ID {RoleId}")]

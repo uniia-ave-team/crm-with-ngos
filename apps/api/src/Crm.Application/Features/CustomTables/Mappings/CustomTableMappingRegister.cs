@@ -2,6 +2,7 @@ using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Dtos.CustomTables.Commands;
 using Crm.Application.Dtos.CustomTemplates;
 using Crm.Domain.Entities;
+using Crm.Domain.Interfaces;
 using Mapster;
 
 namespace Crm.Application.Features.CustomTables.Mappings;
@@ -29,6 +30,11 @@ public class CustomTableMappingRegister : IRegister
             .Ignore(dest => dest.Fields);
 
         config.NewConfig<UpdateCustomFieldDto, CustomField>()
+            .Ignore(dest => dest.Id)
+            .Ignore(dest => dest.CustomTableId)
+            .Ignore(dest => dest.CustomTable);
+
+        config.NewConfig<IIdentifiableField, CustomField>()
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.CustomTableId)
             .Ignore(dest => dest.CustomTable);

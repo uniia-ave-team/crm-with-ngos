@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.CustomTables.Commands;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTables.Commands;
@@ -16,13 +16,15 @@ public partial class DeleteCustomTableCommandHandler(
     ICustomTableRepository customTableRepository,
     ILogger<DeleteCustomTableCommandHandler> logger) : IRequestHandler<DeleteCustomTableCommand>
 {
-    public async Task Handle(DeleteCustomTableCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteCustomTableCommand request, CancellationToken cancellationToken)
     {
         LogDeletingCustomTable(logger, request.Id);
 
         await customTableRepository.DeleteAsync(request.Id, cancellationToken);
 
         LogCustomTableDeletedSuccessfully(logger, request.Id);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.DeletingCustomTable, Level = LogLevel.Information, Message = "Initiating deletion of custom table ID: {TableId}")]

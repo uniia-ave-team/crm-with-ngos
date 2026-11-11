@@ -77,6 +77,39 @@ public class AuthRoleRepository(
             .ToListAsync(cancellationToken);
 
     /// <summary>
+    /// Asynchronously retrieves all roles assigned to the specified users, grouped by user ID,
+    /// projected to the target type <typeparamref name="TRole"/>.
+    /// </summary>
+    /// <typeparam name="TRole">The type of the role DTO/model to project into.</typeparam>
+    /// <param name="userIds">The collection of unique identifiers of the users.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A lookup mapping each user ID to their assigned projected roles.</returns>
+    public async Task<ILookup<Guid, TRole>> GetRolesByUserIdsAsync<TRole>(
+        IEnumerable<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var distinctUserIds = userIds.Distinct().ToList();
+        if (distinctUserIds.Count == 0)
+        {
+            return Enumerable.Empty<TRole>().ToLookup(_ => Guid.Empty);
+        }
+
+        var userRoles = await Context.Set<AuthUserRole>()
+            .AsNoTracking()
+            .Where(ur => distinctUserIds.Contains(ur.UserId))
+            .Select(ur => new
+            {
+                ur.UserId,
+                ur.Role,
+            })
+            .ToListAsync(cancellationToken);
+
+        return userRoles
+            .Select(ur => new { ur.UserId, Role = ur.Role.Adapt<TRole>() })
+            .ToLookup(x => x.UserId, x => x.Role);
+    }
+
+    /// <summary>
     /// Asynchronously retrieves the unique identifiers of all roles assigned to a specific user.
     /// </summary>
     /// <param name="userId">The unique identifier of the user.</param>

@@ -105,6 +105,53 @@ public class FieldSchemaSynchronizerTests
     }
 
     /// <summary>
+    /// Verifies that an incoming DTO without an identifier that shares a key with an unclaimed existing field
+    /// but specifies a different <see cref="FieldDataType"/> is treated as a separate new field (removing the old field and adding the new one).
+    /// </summary>
+    [Fact]
+    public void ReconcileWhenDtoHasNoIdAndDifferentDataTypeShouldTreatAsRemovedAndAdded()
+    {
+        // Arrange
+        var existingId = Guid.NewGuid();
+        var existing = new CustomField
+        {
+            Id = existingId,
+            Key = "city",
+            Name = "City",
+            DataType = FieldDataType.Text,
+        };
+
+        var dto = new UpdateCustomFieldDto(
+            null,
+            "City Code",
+            "city",
+            FieldDataType.Number,
+            true,
+            0);
+
+        // Act
+        var result = FieldSchemaSynchronizer.Reconcile(
+            [existing],
+            [dto],
+            id => new EntityNotFoundException<CustomField>(id),
+            createEntity: d => new CustomField { Key = d.Key, Name = d.Name, DataType = d.DataType, IsRequired = d.IsRequired },
+            updateEntity: (e, d) =>
+            {
+                e.Name = d.Name;
+                e.DataType = d.DataType;
+                e.IsRequired = d.IsRequired;
+            });
+
+        // Assert
+        result.Matched.ShouldBeEmpty();
+        result.Removed.ShouldHaveSingleItem();
+        result.Removed[0].ShouldBeSameAs(existing);
+        result.Added.ShouldHaveSingleItem();
+        result.Added[0].Key.ShouldBe("city");
+        result.Added[0].DataType.ShouldBe(FieldDataType.Number);
+    }
+
+    /// <summary>
     /// Verifies that when an existing field is claimed by ID and renamed, a new incoming DTO without an ID
     /// that uses the old key is treated as an addition rather than hijacking the existing field.
     /// </summary>

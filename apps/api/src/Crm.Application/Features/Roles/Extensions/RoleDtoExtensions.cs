@@ -27,4 +27,16 @@ public static class RoleDtoExtensions
 
         return new RoleUserDto(role.Id, resolvedName);
     }
+
+    /// <summary>
+    /// Projects an enumerable sequence of <see cref="RoleDto"/> instances into localized <see cref="RoleUserDto"/> instances
+    /// resolved according to the user's pronoun category.
+    /// </summary>
+    /// <param name="roles">The roles to resolve.</param>
+    /// <param name="pronounCategory">The grammatical category of the user's pronouns.</param>
+    /// <returns>A collection of localized <see cref="RoleUserDto"/> objects.</returns>
+    public static IEnumerable<RoleUserDto> ToRoleUserDtos(
+        this IEnumerable<RoleDto> roles,
+        PronounCategory? pronounCategory)
+        => roles.Select(r => r.ResolveNameForUser(pronounCategory));
 }

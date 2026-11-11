@@ -41,7 +41,7 @@ public static class CustomRecordQueryExtensions
         .GetMethod(nameof(JsonbFunctionsExtensions.JsonbExtractPathDateTime), [typeof(JsonObject), typeof(string)])!;
 
     /// <summary>
-    /// Filters custom records by table ID and an optional full-text search term across the JSON payload.
+    /// Filters custom records by table ID and an optional prefix full-text search term across the JSON payload values.
     /// </summary>
     /// <param name="query">The input custom record queryable sequence.</param>
     /// <param name="customTableId">The unique identifier of the target custom table.</param>
@@ -52,11 +52,17 @@ public static class CustomRecordQueryExtensions
         Guid customTableId,
         string? searchTerm)
     {
-        return string.IsNullOrWhiteSpace(searchTerm)
-            ? query.Where(r => r.CustomTableId == customTableId)
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return query.Where(r => r.CustomTableId == customTableId);
+        }
+
+        var prefixQuery = searchTerm.BuildPrefixTsQuery();
+        return prefixQuery is null
+            ? query.Where(_ => false)
             : query.Where(r => r.CustomTableId == customTableId
                 && EF.Property<NpgsqlTsVector>(r, CustomRecordConstants.SearchVectorPropertyName)
-                    .Matches(EF.Functions.WebSearchToTsQuery(CustomRecordConstants.SearchVectorConfiguration, searchTerm)));
+                    .Matches(EF.Functions.ToTsQuery(CustomRecordConstants.SearchVectorConfiguration, prefixQuery)));
     }
 
     /// <summary>

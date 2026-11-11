@@ -40,4 +40,12 @@ public interface ICustomTableRepository : IGenericRepository<CustomTable>
     /// <returns>The tracked <see cref="CustomTable"/> entity including its related fields.</returns>
     /// <exception cref="NotFoundException">Thrown if the custom table with the specified ID is not found.</exception>
     Task<CustomTable> GetForUpdateWithFieldsAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resolves unique key constraint cycles when existing custom fields swap or chain-rename keys within the same table.
+    /// </summary>
+    /// <param name="customTableId">The unique identifier of the custom table.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task ResolveFieldKeyCollisionsAsync(Guid customTableId, CancellationToken cancellationToken = default);
 }

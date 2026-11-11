@@ -1,10 +1,10 @@
 using FluentValidation;
-using MediatR;
+using Mediator;
 
 namespace Crm.Application.Common.Behaviors;
 
 /// <summary>
-/// Represents a MediatR pipeline behavior that intercepts incoming requests
+/// Represents a Mediator pipeline behavior that intercepts incoming requests
 /// and automatically validates them using all registered <see cref="IValidator{T}"/> instances
 /// for the given request type.
 /// </summary>
@@ -16,29 +16,29 @@ namespace Crm.Application.Common.Behaviors;
 /// <param name="validators">The collection of validators registered for the request type.</param>
 public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators)
     : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : notnull
+    where TRequest : IMessage
 {
     /// <summary>
     /// Handles the incoming request by executing all associated validators asynchronously in parallel.
     /// If any validation rules fail, a <see cref="ValidationException"/> containing all error details is thrown.
     /// Otherwise, the execution proceeds to the next handler in the pipeline.
     /// </summary>
-    /// <param name="request">The incoming request object being processed.</param>
-    /// <param name="next">The delegate representing the next behavior or handler in the MediatR pipeline.</param>
+    /// <param name="message">The incoming request object being processed.</param>
+    /// <param name="next">The delegate representing the next behavior or handler in the Mediator pipeline.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The response from the next handler if validation succeeds.</returns>
     /// <exception cref="ValidationException">Thrown when one or more validation errors occur during execution.</exception>
-    public async Task<TResponse> Handle(
-        TRequest request,
-        RequestHandlerDelegate<TResponse> next,
+    public async ValueTask<TResponse> Handle(
+        TRequest message,
+        MessageHandlerDelegate<TRequest, TResponse> next,
         CancellationToken cancellationToken)
     {
         if (!validators.Any())
         {
-            return await next(cancellationToken);
+            return await next(message, cancellationToken);
         }
 
-        var context = new ValidationContext<TRequest>(request);
+        var context = new ValidationContext<TRequest>(message);
 
         var validationResults = await Task.WhenAll(
             validators.Select(v => v.ValidateAsync(context, cancellationToken)));
@@ -48,6 +48,6 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
             .Where(f => f != null)
             .ToList();
 
-        return failures.Count != 0 ? throw new ValidationException(failures) : await next(cancellationToken);
+        return failures.Count != 0 ? throw new ValidationException(failures) : await next(message, cancellationToken);
     }
 }

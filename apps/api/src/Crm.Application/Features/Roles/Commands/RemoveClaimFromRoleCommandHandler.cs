@@ -5,7 +5,7 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Roles.Commands;
@@ -23,7 +23,7 @@ public partial class RemoveClaimFromRoleCommandHandler(
     IRolePermissionsCache rolesCache,
     ILogger<RemoveClaimFromRoleCommandHandler> logger) : IRequestHandler<RemoveClaimFromRoleCommand>
 {
-    public async Task Handle(RemoveClaimFromRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(RemoveClaimFromRoleCommand request, CancellationToken cancellationToken)
     {
         LogRemovingClaim(logger, request.ClaimValue, request.RoleId);
 
@@ -48,6 +48,8 @@ public partial class RemoveClaimFromRoleCommandHandler(
         var permissions = await identityService.GetRolePermissionsAsync(role.Id, cancellationToken);
 
         await rolesCache.SetRolePermissionsAsync(request.RoleId, permissions, cancellationToken);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.RemovingClaim, Level = LogLevel.Information, Message = "Initiating removal of claim '{ClaimValue}' from role ID: {RoleId}")]

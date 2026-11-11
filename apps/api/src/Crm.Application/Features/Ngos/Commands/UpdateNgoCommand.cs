@@ -2,7 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Ngo.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Ngos.Commands;
@@ -16,7 +16,7 @@ public partial class UpdateNgoCommandHandler(
     INgoRepository repository,
     ILogger<UpdateNgoCommandHandler> logger) : IRequestHandler<UpdateNgoCommand>
 {
-    public async Task Handle(UpdateNgoCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateNgoCommand request, CancellationToken cancellationToken)
     {
         var ngo = await repository.GetForUpdateAsync(cancellationToken);
 
@@ -25,6 +25,8 @@ public partial class UpdateNgoCommandHandler(
         request.Adapt(ngo);
 
         LogNgoUpdatedSuccessfully(logger, ngo.Id);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.UpdatingNgo, Level = LogLevel.Information, Message = "Updating details for NGO ID: {NgoId}")]

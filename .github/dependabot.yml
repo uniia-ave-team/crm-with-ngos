@@ -20,6 +20,10 @@ updates:
       skiasharp:
         patterns:
           - 'SkiaSharp*'
+      # The source generator must match the abstractions it generates code for.
+      mediator:
+        patterns:
+          - 'Mediator.*'
       testing:
         patterns:
           - 'xunit*'

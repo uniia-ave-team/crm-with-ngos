@@ -3,7 +3,7 @@ using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -22,7 +22,7 @@ public partial class UploadUserAvatarCommandHandler(
     IFileTransactionTracker fileTransactionTracker,
     ILogger<UploadUserAvatarCommandHandler> logger) : IRequestHandler<UploadUserAvatarCommand>
 {
-    public async Task Handle(UploadUserAvatarCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UploadUserAvatarCommand request, CancellationToken cancellationToken)
     {
         LogUploadingUserAvatar(logger, request.UserId, request.OriginalFileName);
 
@@ -44,6 +44,8 @@ public partial class UploadUserAvatarCommandHandler(
         user.Avatar = newFileName;
 
         LogUserAvatarUploadedSuccessfully(logger, request.UserId, newFileName);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.UploadingUserAvatar, Level = LogLevel.Information, Message = "Initiating avatar upload for user ID: {UserId}. Original file name: {OriginalFileName}")]

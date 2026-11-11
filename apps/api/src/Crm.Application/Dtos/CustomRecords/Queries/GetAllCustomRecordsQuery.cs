@@ -1,7 +1,7 @@
 using Crm.Application.Common.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
-using MediatR;
+using Mediator;
 
 namespace Crm.Application.Dtos.CustomRecords.Queries;
 

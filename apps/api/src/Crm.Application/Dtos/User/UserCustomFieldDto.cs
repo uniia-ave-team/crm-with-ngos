@@ -7,6 +7,7 @@ namespace Crm.Application.Dtos.User;
 /// <param name="Key">The unique key or name of the custom field.</param>
 /// <param name="Value">The string value of the custom field.</param>
 /// <param name="IsPublic">A value indicating whether the custom field is visible to other regular users.</param>
+// TODO: Include FieldDataType DataType when typed custom fields are supported.
 public record UserCustomFieldDto(
     Guid Id,
     string Key,

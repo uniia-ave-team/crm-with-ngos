@@ -10,7 +10,7 @@ using Crm.Application.Dtos.User.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -453,6 +453,9 @@ public class UsersController(
 
         return Ok(result);
     }
+
+    // TODO: Implement GET api/v1/users/custom-fields/keys endpoint to return distinct custom field keys across all users for dynamic frontend table columns.
+    // TODO: Implement bulk custom fields management (e.g. adding a custom field schema / field definition to all users at once).
 
     /// <summary>
     /// Adds a custom key-value field to a specific user's profile.

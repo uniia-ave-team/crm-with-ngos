@@ -1,20 +1,20 @@
 using Crm.Application.Common.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Consts;
-using MediatR;
+using Mediator;
 
 namespace Crm.Application.Dtos.User.Queries;
 /// <summary>
 /// Represents a query to retrieve a paginated, filtered, and sorted list of users in the organization.
-/// Implements the MediatR query pattern returning a paginated collection of user data transfer objects.
+/// Implements the Mediator query pattern returning a paginated collection of user data transfer objects.
 /// </summary>
 /// <param name="SearchTerm">
 /// An optional term to filter users by email, first name, or last name.
 /// If null or whitespace, no text filtering is applied.
 /// </param>
 /// <param name="OrderBy">
-/// The name of the entity property by which the collection should be sorted (e.g., "Email", "FirstName").
-/// Default is "Email".
+/// The name of the entity property or alias by which the collection should be sorted (e.g., "FirstName", "LastName", "FullName", "Email").
+/// Default is "FirstName".
 /// </param>
 /// <param name="SortOrder">
 /// The direction of sorting. Use <see cref="SortOrderConstants.Ascending"/>

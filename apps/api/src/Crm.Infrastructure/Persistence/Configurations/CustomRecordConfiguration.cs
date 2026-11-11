@@ -14,7 +14,7 @@ public class CustomRecordConfiguration : IEntityTypeConfiguration<CustomRecord>
 {
     private const string IndexMethodGin = "gin";
     private static readonly string ComputedSearchVectorSql =
-        $"to_tsvector('{CustomRecordConstants.SearchVectorConfiguration}', \"Data\"::text)";
+        $"jsonb_to_tsvector('{CustomRecordConstants.SearchVectorConfiguration}', \"Data\", '[\"string\",\"numeric\"]')";
 
     public void Configure(EntityTypeBuilder<CustomRecord> builder)
     {

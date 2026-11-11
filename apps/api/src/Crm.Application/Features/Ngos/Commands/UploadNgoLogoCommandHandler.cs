@@ -3,7 +3,7 @@ using Crm.Application.Dtos.Ngo.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Ngos.Commands;
@@ -22,7 +22,7 @@ public partial class UploadNgoLogoCommandHandler(
     IFileTransactionTracker fileTransactionTracker,
     ILogger<UploadNgoLogoCommandHandler> logger) : IRequestHandler<UploadNgoLogoCommand>
 {
-    public async Task Handle(UploadNgoLogoCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UploadNgoLogoCommand request, CancellationToken cancellationToken)
     {
         LogUploadingLogo(logger, request.OriginalFileName);
 
@@ -44,6 +44,8 @@ public partial class UploadNgoLogoCommandHandler(
         ngo.Logo = newFileName;
 
         LogLogoUploadedSuccessfully(logger, ngo.Id, newFileName);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.UploadingNgoLogo, Level = LogLevel.Information, Message = "Initiating logo upload for the NGO. Original file name: {OriginalFileName}")]

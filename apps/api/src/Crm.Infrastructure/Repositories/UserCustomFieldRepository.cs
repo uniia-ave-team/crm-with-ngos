@@ -34,4 +34,6 @@ public class UserCustomFieldRepository(
             throw new EntityAlreadyExistsException(nameof(UserCustomField), key);
         }
     }
+
+    // TODO: Implement Task<IReadOnlyList<string>> GetDistinctKeysAsync(CancellationToken cancellationToken = default) => await DbSet.AsNoTracking().Select(cf => cf.Key).Distinct().ToListAsync(cancellationToken);
 }

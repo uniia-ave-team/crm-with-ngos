@@ -5,6 +5,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Extensions;
 using Crm.Infrastructure.Repositories;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
@@ -330,6 +331,22 @@ public class CustomRecordOrderingTests
 
         // Assert
         exceptions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void FilterByTableAndSearchWhenSearchTermProvidedShouldGenerateToTsQueryWithPrefix()
+    {
+        // Arrange
+        using var context = CreateContext();
+        var query = context.Set<CustomRecord>().AsQueryable();
+
+        // Act
+        var filtered = query.FilterByTableAndSearch(Guid.NewGuid(), "Kyi");
+        var sql = filtered.ToQueryString();
+
+        // Assert
+        sql.ShouldContain("to_tsquery('simple'");
+        sql.ShouldContain("kyi:*");
     }
 
     private static ApplicationDbContext CreateContext()

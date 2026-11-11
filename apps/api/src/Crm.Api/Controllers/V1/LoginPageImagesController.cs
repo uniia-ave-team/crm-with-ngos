@@ -8,7 +8,7 @@ using Crm.Application.Dtos.LoginPageImage.Commands;
 using Crm.Application.Dtos.LoginPageImage.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

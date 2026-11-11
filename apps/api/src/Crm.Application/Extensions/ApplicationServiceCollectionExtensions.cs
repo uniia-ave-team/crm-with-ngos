@@ -11,7 +11,7 @@ namespace Crm.Application.Extensions;
 public static class ApplicationServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers application services including MediatR handlers, pipeline behaviors,
+    /// Registers application services including Mediator handlers, pipeline behaviors,
     /// and FluentValidation validators from the application assembly.
     /// </summary>
     /// <remarks>
@@ -25,11 +25,14 @@ public static class ApplicationServiceCollectionExtensions
     /// <returns>The original <see cref="IServiceCollection"/> instance for method chaining.</returns>
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-        services.AddMediatR(cfg =>
+        services.AddMediator(options =>
         {
-            cfg.RegisterServicesFromAssembly(typeof(ApplicationServiceCollectionExtensions).Assembly);
-            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
-            cfg.AddOpenBehavior(typeof(TransactionalBehavior<,>));
+            options.ServiceLifetime = ServiceLifetime.Scoped;
+            options.PipelineBehaviors =
+            [
+                typeof(ValidationBehavior<,>),
+                typeof(TransactionalBehavior<,>),
+            ];
         });
 
         services.AddValidatorsFromAssembly(typeof(ApplicationServiceCollectionExtensions).Assembly);

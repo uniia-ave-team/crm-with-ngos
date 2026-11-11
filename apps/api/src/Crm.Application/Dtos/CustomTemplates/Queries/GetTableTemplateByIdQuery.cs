@@ -1,4 +1,4 @@
-using MediatR;
+using Mediator;
 
 namespace Crm.Application.Dtos.CustomTemplates.Queries;
 

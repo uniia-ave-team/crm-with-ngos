@@ -12,7 +12,7 @@
 | Web Framework | ASP.NET Core Web API | 10.0 |
 | ORM | Entity Framework Core | 10.0 |
 | Database | PostgreSQL (via Npgsql) | 17+ |
-| CQRS / Mediator | MediatR | 14.x |
+| CQRS / Mediator | Mediator (source generator) | 3.x |
 | Validation | FluentValidation | 12.x |
 | Object Mapping | Mapster | 10.x |
 | Auth | ASP.NET Core Identity + JWT Bearer | 10.0 |
@@ -423,8 +423,8 @@ docker run \
 | **ASP.NET Core Web API** | HTTP REST API з підтримкою версіонування (`/api/v1/...`) |
 | **Entity Framework Core 10** | ORM для доступу до даних |
 | **PostgreSQL 17 (Npgsql)** | Реляційна база даних |
-| **MediatR** | Реалізація шаблону Mediator для CQRS (Commands / Queries) |
-| **FluentValidation** | Автоматична валідація запитів у конвеєрі MediatR |
+| **Mediator** | Реалізація шаблону Mediator для CQRS (Commands / Queries); обробники реєструє генератор коду під час збірки |
+| **FluentValidation** | Автоматична валідація запитів у конвеєрі Mediator |
 | **Mapster** | Високопродуктивний мапінг об'єктів (DTO ⇄ Domain Entities) |
 | **ASP.NET Core Identity + JWT** | Автентифікація, ролі, права доступу та генерація токенів |
 | **Scalar + OpenAPI 3.1** | Генерація специфікації API та інтерактивна документація |
@@ -448,7 +448,7 @@ apps/api/
 │   │   └── Interfaces/          # Інтерфейси репозиторіїв (IRepository, IFieldSchema)
 │   │
 │   ├── Crm.Application/         # Шар бізнес-логіки та сценаріїв
-│   │   ├── Behaviors/           # MediatR pipeline behaviors (валідація, транзакції)
+│   │   ├── Behaviors/           # Mediator pipeline behaviors (валідація, транзакції)
 │   │   ├── Dtos/                # Об'єкти передачі даних (Requests, Responses)
 │   │   ├── Features/            # Вертикальні зрізи функцій (Commands, Queries, Handlers)
 │   │   ├── Interfaces/          # Інтерфейси сервісів (IIdentityService, ITokenService тощо)

@@ -1,6 +1,6 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Interfaces;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Common.Behaviors;
@@ -12,11 +12,11 @@ public partial class TransactionalBehavior<TRequest, TResponse>(
     IUnitOfWork unitOfWork,
     IFileTransactionTracker fileTracker,
     ILogger<TransactionalBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : ITransactionalCommand
+    where TRequest : ITransactionalCommand, IMessage
 {
-    public async Task<TResponse> Handle(
-        TRequest request,
-        RequestHandlerDelegate<TResponse> next,
+    public async ValueTask<TResponse> Handle(
+        TRequest message,
+        MessageHandlerDelegate<TRequest, TResponse> next,
         CancellationToken cancellationToken)
     {
         LogBeginningTransaction(logger, typeof(TRequest).Name);
@@ -25,7 +25,7 @@ public partial class TransactionalBehavior<TRequest, TResponse>(
 
         try
         {
-            var response = await next(cancellationToken);
+            var response = await next(message, cancellationToken);
 
             await unitOfWork.CommitTransactionAsync(cancellationToken);
 

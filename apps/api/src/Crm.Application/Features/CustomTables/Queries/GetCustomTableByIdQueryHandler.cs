@@ -2,7 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Dtos.CustomTables.Queries;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTables.Queries;
@@ -16,7 +16,7 @@ public partial class GetCustomTableByIdQueryHandler(
     ICustomTableRepository customTableRepository,
     ILogger<GetCustomTableByIdQueryHandler> logger) : IRequestHandler<GetCustomTableByIdQuery, CustomTableDto>
 {
-    public async Task<CustomTableDto> Handle(GetCustomTableByIdQuery request, CancellationToken cancellationToken)
+    public async ValueTask<CustomTableDto> Handle(GetCustomTableByIdQuery request, CancellationToken cancellationToken)
     {
         LogFetchingCustomTable(logger, request.Id);
 

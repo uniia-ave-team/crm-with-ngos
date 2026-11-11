@@ -4,7 +4,7 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.LoginPageImages.Commands;
@@ -25,7 +25,7 @@ public partial class UploadLoginPageImageCommandHandler(
     IFileStorageService fileStorageService,
     ILogger<UploadLoginPageImageCommandHandler> logger) : IRequestHandler<UploadLoginPageImageCommand, Guid>
 {
-    public async Task<Guid> Handle(UploadLoginPageImageCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(UploadLoginPageImageCommand request, CancellationToken cancellationToken)
     {
         LogUploadingImage(logger, request.OriginalFileName);
 

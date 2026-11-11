@@ -7,7 +7,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -25,7 +25,7 @@ public partial class CreateUserCommandHandler(
 {
     private static readonly SemaphoreSlim _lock = new(1, 1);
 
-    public async Task<Guid> Handle(CreateUserCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateUserCommand request, CancellationToken cancellationToken)
     {
         LogCreatingUser(logger, request.Email);
 

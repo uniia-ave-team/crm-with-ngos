@@ -3,7 +3,7 @@ using Crm.Application.Dtos.CustomTemplates;
 using Crm.Application.Dtos.CustomTemplates.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTemplates.Queries;
@@ -17,7 +17,7 @@ public partial class GetTableTemplatesPagedQueryHandler(
     ITableTemplateRepository tableTemplateRepository,
     ILogger<GetTableTemplatesPagedQueryHandler> logger) : IRequestHandler<GetTableTemplatesPagedQuery, PagedResult<TableTemplateDto>>
 {
-    public async Task<PagedResult<TableTemplateDto>> Handle(GetTableTemplatesPagedQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<TableTemplateDto>> Handle(GetTableTemplatesPagedQuery request, CancellationToken cancellationToken)
     {
         LogFetchingTableTemplates(logger, request.OnlySystemPresets, request.SearchTerm != null, request.PageNumber, request.PageSize);
 

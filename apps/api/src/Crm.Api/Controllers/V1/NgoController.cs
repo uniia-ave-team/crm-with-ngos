@@ -7,7 +7,8 @@ using Crm.Application.Dtos.Ngo;
 using Crm.Application.Dtos.Ngo.Commands;
 using Crm.Application.Dtos.Ngo.Queries;
 using Crm.Domain.Enums;
-using MediatR;
+using Mediator;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Crm.Api.Controllers.V1;
@@ -28,7 +29,7 @@ public class NgoController(IMediator mediator) : ControllerBase
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A DTO containing the NGO details.</returns>
     [HttpGet(Name = nameof(Get))]
-    [HasAccessRight(AccessRight.ViewNgo)]
+    [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<NgoDto>> Get(CancellationToken cancellationToken)
@@ -43,7 +44,7 @@ public class NgoController(IMediator mediator) : ControllerBase
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A file stream containing the logo image.</returns>
     [HttpGet("logo")]
-    [HasAccessRight(AccessRight.ViewNgo)]
+    [Authorize]
     [ResponseCache(Duration = ResponseCacheConstants.ThirtyDays, Location = ResponseCacheLocation.Client)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

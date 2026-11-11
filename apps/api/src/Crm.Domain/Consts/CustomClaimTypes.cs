@@ -5,6 +5,7 @@ namespace Crm.Domain.Consts;
 /// </summary>
 public static class CustomClaimTypes
 {
+    public const string Sub = "sub";
     public const string Permission = "Permission";
     public const string InviteType = "invite_type";
     public const string NgoId = "ngo_id";

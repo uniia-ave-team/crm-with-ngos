@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -14,7 +14,7 @@ public partial class DeactivateUserCommandHandler(
     IAuthRoleRepository roleRepository,
     ILogger<DeactivateUserCommandHandler> logger) : IRequestHandler<DeactivateUserCommand>
 {
-    public async Task Handle(DeactivateUserCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeactivateUserCommand request, CancellationToken cancellationToken)
     {
         if (request.UserId == request.CurrentUserId)
         {
@@ -29,7 +29,7 @@ public partial class DeactivateUserCommandHandler(
         if (!user.IsActive)
         {
             LogUserAlreadyDeactivated(logger, request.UserId);
-            return;
+            return Unit.Value;
         }
 
         await EnsureUserIsNotLastAdminAsync(request.UserId, cancellationToken);
@@ -37,6 +37,8 @@ public partial class DeactivateUserCommandHandler(
         await userRepository.SetUserActivationStatusAsync(user.Id, isActive: false, cancellationToken);
 
         LogUserDeactivatedSuccessfully(logger, request.UserId);
+
+        return Unit.Value;
     }
 
     /// <summary>

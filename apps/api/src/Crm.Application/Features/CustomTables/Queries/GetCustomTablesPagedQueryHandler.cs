@@ -3,7 +3,7 @@ using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Dtos.CustomTables.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTables.Queries;
@@ -19,7 +19,7 @@ public partial class GetCustomTablesPagedQueryHandler(
     INgoRepository ngoRepository,
     ILogger<GetCustomTablesPagedQueryHandler> logger) : IRequestHandler<GetCustomTablesPagedQuery, PagedResult<CustomTableSummaryDto>>
 {
-    public async Task<PagedResult<CustomTableSummaryDto>> Handle(GetCustomTablesPagedQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<CustomTableSummaryDto>> Handle(GetCustomTablesPagedQuery request, CancellationToken cancellationToken)
     {
         var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
 

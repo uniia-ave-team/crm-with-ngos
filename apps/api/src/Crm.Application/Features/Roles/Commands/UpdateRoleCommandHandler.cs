@@ -4,7 +4,7 @@ using Crm.Application.Dtos.Role.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Roles.Commands;
@@ -17,7 +17,7 @@ public partial class UpdateRoleCommandHandler(
     IRoleIdentityService roleIdentityService,
     ILogger<UpdateRoleCommandHandler> logger) : IRequestHandler<UpdateRoleCommand>
 {
-    public async Task Handle(UpdateRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateRoleCommand request, CancellationToken cancellationToken)
     {
         LogUpdatingRole(logger, request.Id, request.NewName);
 
@@ -32,6 +32,8 @@ public partial class UpdateRoleCommandHandler(
         await roleIdentityService.UpdateRoleAsync(role.Id, request.NewName, request.FeminitiveName, request.PluralName, cancellationToken);
 
         LogRoleUpdatedSuccessfully(logger, request.Id);
+
+        return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.UpdatingRole, Level = LogLevel.Information, Message = "Initiating update for role ID {RoleId} to new name: {NewName}")]

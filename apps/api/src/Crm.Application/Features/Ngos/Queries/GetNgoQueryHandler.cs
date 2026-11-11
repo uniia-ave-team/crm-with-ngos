@@ -4,7 +4,7 @@ using Crm.Application.Dtos.Ngo.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Ngos.Queries;
@@ -27,7 +27,7 @@ public partial class GetNgoQueryHandler(
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation, containing the mapped <see cref="NgoDto"/>.</returns>
     /// <exception cref="NotFoundException">Thrown if the NGO is not found in the database.</exception>
-    public async Task<NgoDto?> Handle(GetNgoQuery request, CancellationToken cancellationToken)
+    public async ValueTask<NgoDto?> Handle(GetNgoQuery request, CancellationToken cancellationToken)
     {
         LogFetchingNgoDetails(logger);
 

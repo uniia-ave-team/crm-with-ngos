@@ -4,7 +4,7 @@ using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
-using MediatR;
+using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Users.Commands;
@@ -33,7 +33,7 @@ public partial class InviteUserCommandHandler(
     /// <exception cref="EntitiesNotFoundException">Thrown when any requested role is not found.</exception>
     /// <exception cref="NotFoundException">Thrown when the NGO is not found.</exception>
     /// <exception cref="EntityAlreadyExistsException">Thrown when a user with the specified email already exists.</exception>
-    public async Task<TokenResultDto> Handle(InviteUserCommand request, CancellationToken cancellationToken)
+    public async ValueTask<TokenResultDto> Handle(InviteUserCommand request, CancellationToken cancellationToken)
     {
         LogInvitingUser(logger, request.Email, request.RoleIds);
 

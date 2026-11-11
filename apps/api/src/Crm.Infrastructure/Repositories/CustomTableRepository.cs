@@ -6,6 +6,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -61,6 +62,12 @@ public class CustomTableRepository(
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new EntityNotFoundException<CustomTable>(id);
     }
+
+    /// <inheritdoc />
+    public Task ResolveFieldKeyCollisionsAsync(
+        Guid customTableId,
+        CancellationToken cancellationToken = default)
+        => Context.ResolveFieldKeyCollisionsAsync<CustomField>(customTableId, f => f.CustomTableId, cancellationToken);
 
     /// <summary>
     /// Builds the filter expression for querying custom tables based on search term and NGO ID.

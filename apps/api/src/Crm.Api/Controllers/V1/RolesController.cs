@@ -6,7 +6,7 @@ using Crm.Application.Dtos.Role.Commands;
 using Crm.Application.Dtos.Role.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

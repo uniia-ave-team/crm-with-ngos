@@ -5,7 +5,7 @@ using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Dtos.User.Queries;
 using Crm.Domain.Enums;
-using MediatR;
+using Mediator;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Crm.Api.Controllers.V1;

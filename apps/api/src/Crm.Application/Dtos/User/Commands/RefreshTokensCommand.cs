@@ -1,6 +1,6 @@
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Interfaces;
-using MediatR;
+using Mediator;
 
 namespace Crm.Application.Dtos.User.Commands;
 /// <summary>
