@@ -89,6 +89,11 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # The build image follows .nvmrc and stays on an LTS line; a new Node major
+    # moves together with .nvmrc and CI, by hand.
+    ignore:
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
     groups:
       docker-images:
         patterns:
