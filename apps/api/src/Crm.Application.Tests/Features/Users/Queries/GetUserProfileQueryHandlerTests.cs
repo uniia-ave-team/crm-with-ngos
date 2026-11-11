@@ -58,6 +58,7 @@ public class GetUserProfileQueryHandlerTests
             Pronouns: "she/her",
             PronounCategory: PronounCategory.Feminine,
             AvatarUrl: "avatars/self.png",
+            IsActive: true,
             Roles: [],
             CustomFields:
             [
@@ -85,6 +86,7 @@ public class GetUserProfileQueryHandlerTests
         result.FirstName.ShouldBe("Olena");
         result.EmergencyContact.ShouldBe("Mom: +380509998877");
         result.AvatarUrl.ShouldBe("https://api.crm.org/api/v1/users/me/avatar");
+        result.IsActive.ShouldBeTrue();
         result.Roles.Single().Name.ShouldBe("Volonterka");
         result.CustomFields.Count().ShouldBe(2);
 
@@ -115,6 +117,7 @@ public class GetUserProfileQueryHandlerTests
             Pronouns: "she/her",
             PronounCategory: PronounCategory.Feminine,
             AvatarUrl: "avatars/self.png",
+            IsActive: true,
             Roles: [],
             CustomFields:
             [
@@ -174,6 +177,7 @@ public class GetUserProfileQueryHandlerTests
             Pronouns: "he/him",
             PronounCategory: PronounCategory.Masculine,
             AvatarUrl: "avatars/target.png",
+            IsActive: true,
             Roles: [],
             CustomFields:
             [
@@ -232,6 +236,7 @@ public class GetUserProfileQueryHandlerTests
             Pronouns: null,
             PronounCategory: null,
             AvatarUrl: null,
+            IsActive: true,
             Roles: [],
             CustomFields:
             [
@@ -251,6 +256,50 @@ public class GetUserProfileQueryHandlerTests
         // Assert
         result.EmergencyContact.ShouldBe("Spouse: +380501112233");
         result.AvatarUrl.ShouldBeNull();
+        result.IsActive.ShouldBeTrue();
         result.CustomFields.Count().ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task HandleWhenUserIsDeactivatedShouldReturnProfileWithIsActiveFalse()
+    {
+        // Arrange
+        var targetUserId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
+        var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
+        var query = new GetUserProfileQuery(targetUserId, IsSelf: false);
+
+        _currentUserService.GetUserId().Returns(currentUserId);
+        _currentUserService.GetRoleIds().Returns(currentUserRoleIds);
+
+        var userResult = new UserProfileResult(
+            Id: targetUserId,
+            Email: "inactive@example.com",
+            FirstName: "Ivan",
+            LastName: "Franko",
+            Patronymic: null,
+            PhoneNumber: null,
+            Country: null,
+            EmergencyContact: null,
+            PreferredLanguage: "uk",
+            Pronouns: null,
+            PronounCategory: null,
+            AvatarUrl: null,
+            IsActive: false,
+            Roles: [],
+            CustomFields: []);
+
+        _authUserRepository.GetAsync<UserProfileResult>(targetUserId, Arg.Any<CancellationToken>())
+            .Returns(userResult);
+
+        _authRoleRepository.GetRolesByUserAsync<RoleDto>(targetUserId, Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.Id.ShouldBe(targetUserId);
+        result.IsActive.ShouldBeFalse();
     }
 }

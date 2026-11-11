@@ -157,6 +157,43 @@ public class AuthUserRepositoryOrderingTests
         sql.ShouldNotContain("DESC");
     }
 
+    [Theory]
+    [InlineData("IsActive")]
+    [InlineData("isactive")]
+    public void ApplyOrderingWhenSortingByIsActiveAscendingShouldOrderByIsActiveAscending(string sortField)
+    {
+        // Arrange
+        using var context = CreateContext();
+        var repository = new TestableAuthUserRepository(context);
+        var baseQuery = context.Set<AuthUser>().AsQueryable();
+
+        // Act
+        var orderedQuery = repository.ApplyOrderingPublic<UserDto>(baseQuery, sortField, SortOrderConstants.Ascending);
+        var sql = orderedQuery.ToQueryString();
+
+        // Assert
+        sql.ShouldContain("\"IsActive\"");
+        sql.ShouldNotContain("DESC");
+    }
+
+    [Theory]
+    [InlineData("IsActive")]
+    [InlineData("isactive")]
+    public void ApplyOrderingWhenSortingByIsActiveDescendingShouldOrderByIsActiveDescending(string sortField)
+    {
+        // Arrange
+        using var context = CreateContext();
+        var repository = new TestableAuthUserRepository(context);
+        var baseQuery = context.Set<AuthUser>().AsQueryable();
+
+        // Act
+        var orderedQuery = repository.ApplyOrderingPublic<UserDto>(baseQuery, sortField, SortOrderConstants.Descending);
+        var sql = orderedQuery.ToQueryString();
+
+        // Assert
+        sql.ShouldContain("\"IsActive\" DESC");
+    }
+
     private static ApplicationDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()

@@ -43,6 +43,8 @@ public class GetUsersQueryValidatorTests
     [InlineData("pronouns")]
     [InlineData("PronounCategory")]
     [InlineData("pronouncategory")]
+    [InlineData("IsActive")]
+    [InlineData("isactive")]
     [InlineData("FullName")]
     [InlineData("fullname")]
     [InlineData("CreatedAt")]

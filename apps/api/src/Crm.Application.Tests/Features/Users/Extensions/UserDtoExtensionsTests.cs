@@ -33,7 +33,27 @@ public class UserDtoExtensionsTests
         // Assert
         result.EmergencyContact.ShouldBe("contact-123");
         result.AvatarUrl.ShouldBe("https://api.crm.org/api/v1/users/me/avatar");
+        result.IsActive.ShouldBeTrue();
         result.Roles.Single().Name.ShouldBe("Adminka");
+    }
+
+    [Fact]
+    public void SecureAndEnrichWhenInactiveUserDtoShouldPreserveIsActiveFalse()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var baseUser = CreateTestUser(userId, null, null, null, isActive: false);
+        var roles = Array.Empty<RoleDto>();
+
+        // Act
+        var result = baseUser.SecureAndEnrich(
+            roles,
+            _fileUrlProvider,
+            currentUserId: Guid.NewGuid(),
+            hasGlobalEmergencyContactAccess: false);
+
+        // Assert
+        result.IsActive.ShouldBeFalse();
     }
 
     [Fact]
@@ -110,8 +130,29 @@ public class UserDtoExtensionsTests
         // Assert
         result.EmergencyContact.ShouldBe("contact-999");
         result.AvatarUrl.ShouldBe("https://api.crm.org/api/v1/users/me/avatar");
+        result.IsActive.ShouldBeTrue();
         result.Roles.Single().Name.ShouldBe("Adminka");
         result.CustomFields.Count().ShouldBe(2);
+    }
+
+    [Fact]
+    public void SecureAndEnrichWhenInactiveUserProfileShouldPreserveIsActiveFalse()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var baseProfile = CreateTestUserProfile(userId, null, null, null, [], isActive: false);
+        var roles = Array.Empty<RoleDto>();
+
+        // Act
+        var result = baseProfile.SecureAndEnrich(
+            roles,
+            _fileUrlProvider,
+            currentUserId: Guid.NewGuid(),
+            hasGlobalEmergencyContactAccess: false,
+            hasGlobalCustomFieldsAccess: false);
+
+        // Assert
+        result.IsActive.ShouldBeFalse();
     }
 
     [Fact]
@@ -200,7 +241,12 @@ public class UserDtoExtensionsTests
         result.CustomFields.ShouldHaveSingleItem().Key.ShouldBe("PrivateField");
     }
 
-    private static UserDto CreateTestUser(Guid id, string? emergencyContact, string? avatarUrl, PronounCategory? pronounCategory)
+    private static UserDto CreateTestUser(
+        Guid id,
+        string? emergencyContact,
+        string? avatarUrl,
+        PronounCategory? pronounCategory,
+        bool isActive = true)
     {
         return new UserDto(
             Id: id,
@@ -214,6 +260,7 @@ public class UserDtoExtensionsTests
             Pronouns: "they/them",
             PronounCategory: pronounCategory,
             AvatarUrl: avatarUrl,
+            IsActive: isActive,
             Roles: []);
     }
 
@@ -222,7 +269,8 @@ public class UserDtoExtensionsTests
         string? emergencyContact,
         string? avatarUrl,
         PronounCategory? pronounCategory,
-        IEnumerable<UserCustomFieldDto> customFields)
+        IEnumerable<UserCustomFieldDto> customFields,
+        bool isActive = true)
     {
         return new UserProfileResult(
             Id: id,
@@ -237,6 +285,7 @@ public class UserDtoExtensionsTests
             Pronouns: "she/her",
             PronounCategory: pronounCategory,
             AvatarUrl: avatarUrl,
+            IsActive: isActive,
             Roles: [],
             CustomFields: customFields);
     }

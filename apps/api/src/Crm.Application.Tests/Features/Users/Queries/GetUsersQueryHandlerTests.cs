@@ -92,6 +92,7 @@ public class GetUsersQueryHandlerTests
             Pronouns: "she/her",
             PronounCategory: PronounCategory.Feminine,
             AvatarUrl: "avatars/self.png",
+            IsActive: true,
             Roles: []);
 
         var userOther = new UserDto(
@@ -106,6 +107,7 @@ public class GetUsersQueryHandlerTests
             Pronouns: "he/him",
             PronounCategory: PronounCategory.Masculine,
             AvatarUrl: "avatars/other.png",
+            IsActive: true,
             Roles: []);
 
         var pagedUsers = new PagedResult<UserDto>([userSelf, userOther], 2, 1, 10);
@@ -149,12 +151,14 @@ public class GetUsersQueryHandlerTests
         var enrichedSelf = result.Items.First(u => u.Id == currentUserId);
         enrichedSelf.AvatarUrl.ShouldBe("https://api.crm.org/api/v1/users/me/avatar");
         enrichedSelf.EmergencyContact.ShouldBe("Mom: +380509998877"); // Retained because isSelf == true
+        enrichedSelf.IsActive.ShouldBeTrue();
         enrichedSelf.Roles.Count().ShouldBe(1);
         enrichedSelf.Roles.First().Name.ShouldBe("Adminka"); // Localized using Feminine
 
         var enrichedOther = result.Items.First(u => u.Id == otherUserId);
         enrichedOther.AvatarUrl.ShouldBe($"https://api.crm.org/api/v1/users/{otherUserId}/avatar");
         enrichedOther.EmergencyContact.ShouldBeNull(); // Masked because not self and no global permission
+        enrichedOther.IsActive.ShouldBeTrue();
         enrichedOther.Roles.Count().ShouldBe(1);
         enrichedOther.Roles.First().Name.ShouldBe("Volunteer"); // Localized using Masculine
 
@@ -190,6 +194,7 @@ public class GetUsersQueryHandlerTests
             Pronouns: "he/him",
             PronounCategory: PronounCategory.Masculine,
             AvatarUrl: null,
+            IsActive: true,
             Roles: []);
 
         var pagedUsers = new PagedResult<UserDto>([userOther], 1, 1, 10);
@@ -216,5 +221,77 @@ public class GetUsersQueryHandlerTests
         // Assert
         var enrichedOther = result.Items.Single();
         enrichedOther.EmergencyContact.ShouldBe("Sister: +380679998877");
+        enrichedOther.IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task HandleWhenShowDeletedIsTrueShouldForwardFlagAndPreserveIsActiveStatus()
+    {
+        // Arrange
+        var activeUserId = Guid.NewGuid();
+        var inactiveUserId = Guid.NewGuid();
+        var currentUserId = Guid.NewGuid();
+        var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
+
+        _currentUserService.GetUserId().Returns(currentUserId);
+        _currentUserService.GetRoleIds().Returns(currentUserRoleIds);
+        _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var activeUser = new UserDto(
+            Id: activeUserId,
+            Email: "active@example.com",
+            FirstName: "Active",
+            LastName: "User",
+            Patronymic: null,
+            PhoneNumber: null,
+            Country: null,
+            EmergencyContact: null,
+            Pronouns: null,
+            PronounCategory: null,
+            AvatarUrl: null,
+            IsActive: true,
+            Roles: []);
+
+        var inactiveUser = new UserDto(
+            Id: inactiveUserId,
+            Email: "inactive@example.com",
+            FirstName: "Inactive",
+            LastName: "User",
+            Patronymic: null,
+            PhoneNumber: null,
+            Country: null,
+            EmergencyContact: null,
+            Pronouns: null,
+            PronounCategory: null,
+            AvatarUrl: null,
+            IsActive: false,
+            Roles: []);
+
+        var pagedUsers = new PagedResult<UserDto>([activeUser, inactiveUser], 2, 1, 10);
+
+        _userRepository.GetPagedAsync<UserDto>(
+                searchTerm: Arg.Any<string?>(),
+                orderBy: Arg.Any<string?>(),
+                sortOrder: Arg.Any<string?>(),
+                pageNumber: 1,
+                pageSize: 10,
+                showDeleted: true,
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(pagedUsers);
+
+        var emptyRoleLookup = Enumerable.Empty<RoleDto>().ToLookup(_ => Guid.Empty);
+        _authRoleRepository.GetRolesByUserIdsAsync<RoleDto>(Arg.Any<IEnumerable<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(emptyRoleLookup);
+
+        var query = new GetUsersQuery(PageNumber: 1, PageSize: 10, ShowDeleted: true);
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.Items.Count.ShouldBe(2);
+        result.Items.Single(u => u.Id == activeUserId).IsActive.ShouldBeTrue();
+        result.Items.Single(u => u.Id == inactiveUserId).IsActive.ShouldBeFalse();
     }
 }

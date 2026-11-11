@@ -25,6 +25,7 @@ public class GetUsersQueryValidator : AbstractValidator<GetUsersQuery>
         nameof(UserDto.EmergencyContact),
         nameof(UserDto.Pronouns),
         nameof(UserDto.PronounCategory),
+        nameof(UserDto.IsActive),
         UserConstants.FullName,
         nameof(User.CreatedAt),
     };

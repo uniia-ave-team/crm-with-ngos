@@ -78,6 +78,7 @@ public static class UserDtoExtensions
             user.PreferredLanguage,
             user.Pronouns,
             fileUrlProvider.ResolveUserAvatarUrl(user.AvatarUrl, user.Id, isSelf),
+            user.IsActive,
             [.. roles.ToRoleUserDtos(user.PronounCategory)],
             [.. user.CustomFields.ProtectCustomFields(isSelf, hasGlobalCustomFieldsAccess)]);
     }

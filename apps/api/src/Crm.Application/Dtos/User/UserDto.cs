@@ -17,6 +17,7 @@ namespace Crm.Application.Dtos.User;
 /// <param name="Pronouns">The preferred pronouns of the user (e.g., "he/him", "she/her").</param>
 /// <param name="PronounCategory">The grammatical category of the user's pronouns.</param>
 /// <param name="AvatarUrl">The resolved URL or API endpoint to access the user's avatar image.</param>
+/// <param name="IsActive">Indicates whether the user account is active; if false, the account is deactivated.</param>
 /// <param name="Roles">The collection of roles assigned to the user, localized to their pronoun category.</param>
 public record UserDto(
     Guid Id,
@@ -30,4 +31,5 @@ public record UserDto(
     string? Pronouns,
     PronounCategory? PronounCategory,
     string? AvatarUrl,
+    bool IsActive,
     IEnumerable<RoleUserDto> Roles);

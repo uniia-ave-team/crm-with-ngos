@@ -21,6 +21,7 @@ public class AuthUserMappingRegister : IRegister
             .Map(dest => dest.Pronouns, src => src.UserProfile.Pronouns)
             .Map(dest => dest.PronounCategory, src => src.UserProfile.PronounCategory)
             .Map(dest => dest.AvatarUrl, src => src.UserProfile.Avatar)
+            .Map(dest => dest.IsActive, src => src.UserProfile.IsActive)
             .Ignore(dest => dest.Roles);
 
         config.NewConfig<AuthUser, UserStatusDto>()
@@ -37,6 +38,7 @@ public class AuthUserMappingRegister : IRegister
             .Map(dest => dest.Pronouns, src => src.UserProfile.Pronouns)
             .Map(dest => dest.PronounCategory, src => src.UserProfile.PronounCategory)
             .Map(dest => dest.AvatarUrl, src => src.UserProfile.Avatar)
+            .Map(dest => dest.IsActive, src => src.UserProfile.IsActive)
             .Map(dest => dest.CustomFields, src => src.UserProfile.CustomFields)
             .Ignore(dest => dest.Roles);
     }
