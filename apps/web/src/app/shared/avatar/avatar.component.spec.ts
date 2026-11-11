@@ -90,7 +90,7 @@ describe('AvatarComponent', () => {
       expect(avatar().textContent?.trim()).toBe('ЄВ');
     });
 
-    it('lays a grey layer over the picture when there is one', () => {
+    it('keeps the picture, which is drawn in grayscale by the style, when there is one', () => {
       const { avatar, image } = render({ firstName: 'Єдиний', lastName: 'Вишуканий', avatarUrl: 'http://x/a.png', outdated: true });
       expect(image()).not.toBeNull();
       expect(avatar().classList).toContain('avatar--outdated');

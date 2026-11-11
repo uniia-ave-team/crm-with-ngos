@@ -1,0 +1,70 @@
+<ion-content [fullscreen]="true" class="relogin">
+  <div class="relogin__wrap">
+    <div class="relogin-card">
+      <div class="relogin-card__media">
+        <img class="relogin-card__image" [src]="image()" alt="" (error)="onImageError()" />
+      </div>
+
+      <div class="relogin-card__panel">
+        <div class="relogin-card__content">
+          <img class="relogin-card__logo theme-light" [src]="'assets/' + logoBase() + '.svg'" [alt]="'login.form.logoAlt' | translate" />
+          <img class="relogin-card__logo theme-dark" [src]="'assets/' + logoBase() + '_dark.svg'" [alt]="'login.form.logoAlt' | translate" />
+
+          @if (view() === 'form' && formTarget(); as target) {
+            <app-relogin-form
+              [accountId]="target.id"
+              [initialServer]="target.server"
+              [initialEmail]="target.email"
+              (back)="backToList()"
+              (remove)="removeAccount()"
+              (imageChange)="image.set($event)"
+            />
+          } @else {
+            <h1 class="relogin-card__title">{{ 'relogin.title' | translate }}</h1>
+
+            <!-- Список акаунтів у стилі вибору акаунта Google: аватар зі значками, поруч підпис,
+                 як у підказці плитки меню (ПІБ — Назва ГО, другим рядком — стан). -->
+            <ul class="relogin-list">
+              @for (account of accounts(); track account.id) {
+                @let text = caption(account, 'nav.account.unavailable' | translate, 'nav.account.outdated' | translate);
+                <li>
+                  <button tabindex="0" class="relogin-account" type="button" [disabled]="switching()" (click)="choose(account)">
+                    <app-account-avatar class="relogin-account__avatar" [account]="account" />
+                    <span class="relogin-account__text">
+                      <span class="relogin-account__name">{{ text.heading || ('nav.account.account' | translate) }}</span>
+                      @if (text.status) {
+                        <span
+                          class="relogin-account__status"
+                          [class.relogin-account__status--outdated]="account.outdated"
+                        >{{ text.status }}</span>
+                      }
+                    </span>
+                  </button>
+                </li>
+              }
+              <li>
+                <!-- Додавання акаунта: той самий вигляд і той самий підпис (alt), що в меню акаунтів. -->
+                <button
+                  tabindex="0"
+                  class="relogin-account relogin-add"
+                  type="button"
+                  [disabled]="switching()"
+                  [attr.aria-label]="'nav.account.add' | translate"
+                  [title]="'nav.account.add' | translate"
+                  (click)="addAccount()"
+                >
+                  <span class="relogin-add__icon">
+                    <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+                  </span>
+                  <span class="relogin-account__text">
+                    <span class="relogin-account__name">{{ 'nav.account.add' | translate }}</span>
+                  </span>
+                </button>
+              </li>
+            </ul>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</ion-content>

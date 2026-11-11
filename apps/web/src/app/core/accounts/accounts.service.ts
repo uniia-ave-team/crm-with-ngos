@@ -38,13 +38,16 @@ export interface StoredAccount {
    */
   readonly outdated: boolean;
   /**
-   * Застарілим (`outdated`) акаунт став через те, що його сервер не відповів, а
-   * не через відхилені токени. Лише причина для показу (меню акаунтів); на
-   * решту логіки не впливає. Повторний вхід скидає в `false`.
+   * Сервер акаунта не відповів (мережа, 5xx). Незалежний від `outdated`: токени можуть бути
+   * чинними, просто до сервера не дістатись. Такий акаунт пропускається при першому проході
+   * пошуку чинного, а перевіряється лише коли доступних не знайшлось. Успішна перевірка (чи
+   * повторний вхід) скидає в `false`.
    */
   readonly unavailable: boolean;
   readonly firstName: string;
   readonly lastName: string;
+  /** По батькові (для підказки на плитці в меню акаунтів); порожній рядок, якщо нема. */
+  readonly patronymic: string;
   readonly avatarUrl: string | null;
   /** Назва ГО (`GET /api/v1/ngo`); `null` — ще нема або немає права на перегляд. */
   readonly ngoName: string | null;
@@ -99,6 +102,7 @@ export interface NewAccount {
   readonly email?: string;
   readonly firstName?: string;
   readonly lastName?: string;
+  readonly patronymic?: string;
   readonly avatarUrl?: string | null;
   readonly ngoName?: string | null;
   readonly ngoLogoUrl?: string | null;
@@ -125,6 +129,7 @@ export type AccountPatch = Partial<
     | 'unavailable'
     | 'firstName'
     | 'lastName'
+    | 'patronymic'
     | 'avatarUrl'
     | 'ngoName'
     | 'ngoLogoUrl'
@@ -216,33 +221,45 @@ export class AccountsService {
   /**
    * Додає акаунт і робить його активним. Якщо такий (той самий сервер і
    * користувач) уже є — оновлює його токени, знімок лишається.
+   *
+   * `replaceId` — ключ акаунта, який треба перезаписати новими даними (сервер, користувач,
+   * токени), а не створювати новий: запис і його `id` лишаються. Знімок профілю (імʼя,
+   * аватар, ГО, права) лишається, лише якщо це той самий сервер і користувач; інакше він
+   * очищається, бо належав комусь іншому. Якщо новий сервер і користувач уже мають інший
+   * запис, той зникає: один користувач на сервері — один акаунт. Невідомий ключ ігнорується.
    */
-  add(input: NewAccount): StoredAccount {
+  add(input: NewAccount, replaceId?: string): StoredAccount {
     const now = Date.now();
     // Той самий сервер і користувач — це той самий акаунт, хоч би який у нього `id`.
-    const existing = this.accountsSignal().find(
+    const same = this.accountsSignal().find(
       (account) => account.server === input.server && account.identity === input.identity,
     );
+    const target = replaceId === undefined ? undefined : this.accountsSignal().find((account) => account.id === replaceId);
+    const existing = target ?? same;
+    const duplicate = target && same && same.id !== target.id ? same : undefined;
+    // Знімок профілю лишається тільки тому самому користувачеві на тому ж сервері.
+    const snapshot = existing && existing.server === input.server && existing.identity === input.identity ? existing : undefined;
     const id = existing?.id ?? this.freeId(AccountsService.accountId(input.server, input.identity));
     const account: StoredAccount = {
       version: ACCOUNT_SCHEMA_VERSION,
       id,
       server: input.server,
       identity: input.identity,
-      userId: input.userId ?? existing?.userId ?? '',
-      email: input.email ?? existing?.email ?? '',
+      userId: input.userId ?? snapshot?.userId ?? '',
+      email: input.email ?? snapshot?.email ?? '',
       // Вхід (нові токени) повертає акаунт у чинні.
       outdated: false,
       unavailable: false,
-      firstName: input.firstName ?? existing?.firstName ?? '',
-      lastName: input.lastName ?? existing?.lastName ?? '',
-      avatarUrl: input.avatarUrl !== undefined ? input.avatarUrl : (existing?.avatarUrl ?? null),
-      ngoName: input.ngoName !== undefined ? input.ngoName : (existing?.ngoName ?? null),
-      ngoLogoUrl: input.ngoLogoUrl !== undefined ? input.ngoLogoUrl : (existing?.ngoLogoUrl ?? null),
-      avatarThumb: existing?.avatarThumb ?? null,
-      ngoLogoThumb: existing?.ngoLogoThumb ?? null,
-      permissions: input.permissions ?? existing?.permissions ?? [],
-      roles: existing?.roles ?? [],
+      firstName: input.firstName ?? snapshot?.firstName ?? '',
+      lastName: input.lastName ?? snapshot?.lastName ?? '',
+      patronymic: input.patronymic ?? snapshot?.patronymic ?? '',
+      avatarUrl: input.avatarUrl !== undefined ? input.avatarUrl : (snapshot?.avatarUrl ?? null),
+      ngoName: input.ngoName !== undefined ? input.ngoName : (snapshot?.ngoName ?? null),
+      ngoLogoUrl: input.ngoLogoUrl !== undefined ? input.ngoLogoUrl : (snapshot?.ngoLogoUrl ?? null),
+      avatarThumb: snapshot?.avatarThumb ?? null,
+      ngoLogoThumb: snapshot?.ngoLogoThumb ?? null,
+      permissions: input.permissions ?? snapshot?.permissions ?? [],
+      roles: snapshot?.roles ?? [],
       accessToken: input.accessToken,
       refreshToken: input.refreshToken,
       tokensIssuedAt: now,
@@ -250,10 +267,14 @@ export class AccountsService {
       lastUsedAt: now,
     };
     this.writeRecord(account);
-    const accounts = existing
+    let accounts = existing
       ? this.accountsSignal().map((current) => (current.id === id ? account : current))
       : [...this.accountsSignal(), account];
-    if (!existing) {
+    if (duplicate) {
+      this.removeKey(`${ACCOUNT_KEY_PREFIX}${duplicate.id}`);
+      accounts = accounts.filter((current) => current.id !== duplicate.id);
+    }
+    if (!existing || duplicate) {
       this.writeIndex(accounts.map((current) => current.id));
     }
     this.accountsSignal.set(accounts);
@@ -283,24 +304,33 @@ export class AccountsService {
   }
 
   /**
-   * Позначає акаунт застарілим (`outdated: true`; `unavailable` — причина: сервер
-   * не відповів, а не відхилив токени): його не видаляємо. Якщо він
-   * був активним, активним стає перший чинний акаунт за порядком додавання.
-   * Чинних не лишилося (застарілими стали **всі**) — памʼять очищається
-   * повністю (`wipe`).
+   * Позначає акаунт застарілим (`outdated: true`): сервер відповів, але відхилив його токени.
+   * Сервер при цьому відповів, тож `unavailable` скидається. Акаунт не видаляємо. Якщо він
+   * був активним, активного акаунта більше нема (`keepActiveAccount`).
    */
-  markOutdated(id: string, unavailable = false): void {
+  markOutdated(id: string): void {
     if (!this.accountsSignal().some((account) => account.id === id)) {
       return;
     }
-    this.update(id, { outdated: true, unavailable });
+    this.update(id, { outdated: true, unavailable: false });
     this.keepActiveAccount(id);
   }
 
   /**
-   * Видаляє акаунт. Якщо він був активним, активним стає перший чинний акаунт
-   * за порядком додавання; чинних не лишилося — памʼять очищається повністю
-   * (`wipe`).
+   * Позначає акаунт недоступним (`unavailable: true`): його сервер не відповів (мережа,
+   * 5xx). `outdated` лишається як був: токени тут ні до чого. Якщо акаунт був активним,
+   * активного більше нема, як у `markOutdated`.
+   */
+  markUnavailable(id: string): void {
+    if (!this.accountsSignal().some((account) => account.id === id)) {
+      return;
+    }
+    this.update(id, { unavailable: true });
+    this.keepActiveAccount(id);
+  }
+
+  /**
+   * Видаляє акаунт. Якщо він був активним, активного акаунта більше нема (`keepActiveAccount`).
    */
   remove(id: string): void {
     const accounts = this.accountsSignal().filter((account) => account.id !== id);
@@ -314,18 +344,15 @@ export class AccountsService {
   }
 
   /**
-   * Після того як акаунт `changedId` застарів чи був видалений: чинних акаунтів
-   * нема взагалі — `wipe()` (як при виході; тимчасово, згодом це буде замінено);
-   * цей акаунт був активним — активним стає перший чинний.
+   * Після того як акаунт `changedId` застарів, став недоступним чи був видалений: якщо він був
+   * активним, активного акаунта більше нема (`null`). Інший акаунт саме не підхоплюється:
+   * користувач обирає його сам (сторінка повторного входу, меню акаунтів), а пошук чинного
+   * (`AccountRestoreService`) вибирає його явно. Самі акаунти лишаються в памʼяті, її не
+   * очищає нічого, крім виходу.
    */
   private keepActiveAccount(changedId: string): void {
-    const valid = this.accountsSignal().find((account) => !account.outdated);
-    if (!valid) {
-      this.wipe();
-      return;
-    }
     if (this.activeIdSignal() === changedId) {
-      this.setActive(valid.id);
+      this.setActive(null);
     }
   }
 
@@ -441,6 +468,7 @@ function normalize(account: StoredAccount): StoredAccount {
     unavailable: account.unavailable === true,
     firstName: account.firstName ?? '',
     lastName: account.lastName ?? '',
+    patronymic: typeof account.patronymic === 'string' ? account.patronymic : '',
     avatarUrl: account.avatarUrl ?? null,
     ngoName: account.ngoName ?? null,
     ngoLogoUrl: account.ngoLogoUrl ?? null,

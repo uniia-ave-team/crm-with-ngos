@@ -105,7 +105,7 @@ describe('SessionService', () => {
     http.expectOne(refreshUrl()).flush({ accessToken: jwt(600), refreshToken: 'refresh-2' });
   });
 
-  it('goes to /login when the server rejects the tokens', async () => {
+  it('goes to /relogin when the server rejects the tokens: the account stays, but none is available', async () => {
     signIn(120);
     await vi.advanceTimersByTimeAsync(61_000);
     http.expectOne(refreshUrl()).flush({}, { status: 401, statusText: 'Unauthorized' });
@@ -113,7 +113,8 @@ describe('SessionService', () => {
     TestBed.tick();
 
     expect(auth.hasTokens()).toBe(false);
-    expect(navigate).toHaveBeenCalledWith('/login');
+    expect(navigate).toHaveBeenCalledWith('/relogin');
+    expect(navigate).not.toHaveBeenCalledWith('/login');
   });
 
   it('refreshes at once when the tab becomes visible again and the token is nearly expired', async () => {
@@ -185,6 +186,37 @@ describe('SessionService', () => {
     auth.clearTokens();
     TestBed.tick();
     expect(navigate).toHaveBeenCalledWith('/login');
+  });
+
+  it('moves to /relogin, not /login, when the active account stops being active while accounts are left', () => {
+    signIn(600);
+    const accounts = TestBed.inject(AccountsService);
+    const second = accounts.add({ server, accessToken: jwt(600), refreshToken: 'other', identity: 'user-2' }).id;
+    TestBed.tick();
+    expect(navigate).not.toHaveBeenCalled();
+
+    // Активний став застарілим, і інший акаунт сам не підхоплюється: активного нема.
+    accounts.markOutdated(second);
+    TestBed.tick();
+    expect(navigate).toHaveBeenCalledWith('/relogin');
+    expect(navigate).not.toHaveBeenCalledWith('/login');
+  });
+
+  it('moves to /relogin when another tab clears the active account while the others are kept', () => {
+    signIn(600);
+    TestBed.tick();
+    localStorage.removeItem('yavir.activeAccount');
+    window.dispatchEvent(new StorageEvent('storage', { key: 'yavir.activeAccount' }));
+    TestBed.tick();
+    expect(navigate).toHaveBeenCalledWith('/relogin');
+  });
+
+  it('does not redirect from /relogin when the tokens disappear there', () => {
+    Object.defineProperty(TestBed.inject(Router), 'url', { get: () => '/relogin', configurable: true });
+    signIn(600);
+    auth.clearTokens();
+    TestBed.tick();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('does not redirect from /login when the tokens disappear there', () => {

@@ -47,7 +47,64 @@
   }
 }
 
+// Право, яке користувач сам не має (або має не всі права групи): приглушене, перемикач вимкнений.
+.role-form__permission--locked {
+  cursor: not-allowed;
+  opacity: 0.5;
+
+  .role-form__switch {
+    cursor: not-allowed;
+  }
+}
+
+// Попередження: роль має лише частину прав пункту. Підказка зʼявляється при наведенні чи фокусі.
+.role-form__partial {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--nav-outdated-icon);
+  font-size: 22px;
+  cursor: help;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+    border-radius: 50%;
+  }
+}
+
+.role-form__partial-tip {
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: -8px;
+  z-index: 5;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 240px;
+  padding: 10px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--nav-bg);
+  box-shadow: 0 8px 24px rgb(2 11 24 / 18%);
+  color: var(--nav-fg-active);
+  font-family: var(--font-menu);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.35;
+  cursor: default;
+}
+
+.role-form__partial:hover .role-form__partial-tip,
+.role-form__partial:focus-visible .role-form__partial-tip,
+.role-form__partial:focus .role-form__partial-tip {
+  display: flex;
+}
+
 .role-form__permission-name {
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -96,4 +153,10 @@
   .role-form__switch::after {
     transition: none;
   }
+}
+
+// Кнопка, поки іде відправка.
+.settings-submit:disabled {
+  cursor: progress;
+  opacity: 0.6;
 }

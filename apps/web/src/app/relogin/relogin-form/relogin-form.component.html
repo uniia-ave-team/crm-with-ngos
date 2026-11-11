@@ -1,0 +1,92 @@
+<div class="relogin-form">
+  <button type="button" class="relogin-form__back" tabindex="0" (click)="back.emit()">
+    <ion-icon name="arrow-back-outline" aria-hidden="true"></ion-icon>
+    <span>{{ 'common.back' | translate }}</span>
+  </button>
+
+  <header class="relogin-form__header">
+    <h1 class="relogin-form__title">{{ 'relogin.form.title' | translate }}</h1>
+    <!-- Смітник забуває збережений акаунт; для нового акаунта його нема. -->
+    @if (accountId()) {
+      <button
+        type="button"
+        class="relogin-form__remove"
+        tabindex="0"
+        [attr.aria-label]="'nav.account.remove' | translate"
+        [attr.title]="'nav.account.remove' | translate"
+        (click)="remove.emit()"
+      >
+        <ion-icon name="trash-outline" aria-hidden="true"></ion-icon>
+      </button>
+    }
+  </header>
+
+  @if (banner(); as error) {
+    <div class="relogin-form__error" role="alert">{{ error.key | translate }}</div>
+  }
+
+  <label class="relogin-form__label" for="relogin-address">{{ 'login.step1.label' | translate }}</label>
+  <ion-input
+    id="relogin-address"
+    tabindex="0"
+    class="relogin-form__input"
+    fill="outline"
+    type="text"
+    inputmode="url"
+    [placeholder]="'login.step1.placeholder' | translate"
+    [attr.aria-label]="'login.step1.label' | translate"
+    [ngModel]="address()"
+    (ngModelChange)="onFieldChange(address, $event)"
+    (keyup.enter)="submit()"
+  ></ion-input>
+  @if (addressError(); as fieldError) {
+    <p class="relogin-form__field-error" role="alert">{{ fieldError.key | translate: fieldError.params }}</p>
+  }
+
+  <label class="relogin-form__label" for="relogin-email">{{ 'login.form.email' | translate }}</label>
+  <ion-input
+    id="relogin-email"
+    tabindex="0"
+    class="relogin-form__input"
+    fill="outline"
+    type="email"
+    autocomplete="email"
+    [attr.aria-label]="'login.form.email' | translate"
+    [ngModel]="email()"
+    (ngModelChange)="onFieldChange(email, $event)"
+    (keyup.enter)="submit()"
+  ></ion-input>
+  @if (emailError(); as fieldError) {
+    <p class="relogin-form__field-error" role="alert">{{ fieldError | translate }}</p>
+  }
+
+  <label class="relogin-form__label" for="relogin-password">{{ 'login.form.password' | translate }}</label>
+  <ion-input
+    id="relogin-password"
+    tabindex="0"
+    class="relogin-form__input"
+    fill="outline"
+    type="password"
+    autocomplete="current-password"
+    [attr.aria-label]="'login.form.password' | translate"
+    [ngModel]="password()"
+    (ngModelChange)="onFieldChange(password, $event)"
+    (keyup.enter)="submit()"
+  ></ion-input>
+  @if (passwordError(); as fieldError) {
+    <p class="relogin-form__field-error" role="alert">{{ fieldError | translate }}</p>
+  }
+
+  <div class="relogin-form__actions">
+    <ion-button
+      tabindex="0"
+      class="relogin-form__submit"
+      type="button"
+      [disabled]="saving() || serverState() !== 'ok'"
+      (click)="submit()"
+    >
+      {{ (saving() ? 'login.form.saving' : 'login.form.submit') | translate }}
+    </ion-button>
+    <button tabindex="0" class="relogin-form__forgot" type="button">{{ 'login.form.forgot' | translate }}</button>
+  </div>
+</div>

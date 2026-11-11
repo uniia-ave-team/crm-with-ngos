@@ -1,25 +1,8 @@
 import { Component, input, output } from '@angular/core';
 
-/** Акаунт у списку: знімок із запису акаунта (імʼя, аватар, назва й логотип ГО). */
-export interface AccountTile {
-  readonly id: string | number;
-  readonly firstName: string | null | undefined;
-  readonly lastName: string | null | undefined;
-  readonly avatarUrl: string | null | undefined;
-  /** Назва організації акаунта (впливає на колір аватара). */
-  readonly ngoName?: string | null;
-  /** Логотип ГО (будь-яке зображення з прозорістю); без нього значка на плитці нема. */
-  readonly logoUrl?: string | null;
-  /** Поточний (активний) акаунт: плитка отримує клас `active` і білу рамку. */
-  readonly active?: boolean;
-  /** Сесію акаунта завершено: сірий аватар і жовтий значок синхронізації ліворуч. */
-  readonly outdated?: boolean;
-  /**
-   * Акаунт застарів через те, що його сервер не відповів (разом з `outdated`):
-   * замість значка синхронізації — червоний значок помилки.
-   */
-  readonly unavailable?: boolean;
-}
+import { AccountTile, accountTooltip } from '../../../shared/account-avatar/account-tile';
+
+export type { AccountTile };
 
 /**
  * Зміст вікна акаунта (відкривається клацанням по аватару в меню): акаунти
@@ -40,4 +23,13 @@ export class AccountMenuComponent {
   readonly addAccount = output<void>();
   readonly settings = output<void>();
   readonly signOut = output<void>();
+
+  /**
+   * Підказка плитки (її показує сам браузер при наведенні): у першому рядку «ПІБ — Назва ГО»
+   * (що з цього є), у другому — стан акаунта, якщо з ним негаразд (`accountTooltip`). Нічого
+   * показати — `null`.
+   */
+  protected tooltip(account: AccountTile, unavailableText: string, outdatedText: string): string | null {
+    return accountTooltip(account, unavailableText, outdatedText);
+  }
 }

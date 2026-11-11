@@ -47,19 +47,46 @@
   <fieldset class="role-form__permissions">
     <legend class="settings-field__label">{{ 'colleagues.roleForm.permissionsTitle' | translate }}</legend>
     @for (group of permissionGroups; track group.id) {
-      <label class="role-form__permission">
+      @let locked = !grantable().has(group.id);
+      <label
+        class="role-form__permission"
+        [class.role-form__permission--locked]="locked"
+        [attr.title]="locked ? ('colleagues.roleForm.permissionLocked' | translate) : null"
+      >
         <span class="role-form__permission-name">{{ 'colleagues.roleForm.permissions.' + group.id | translate }}</span>
+        @if (partialGroups().has(group.id)) {
+          <!-- Роль має лише частину прав цього пункту: попередження з поясненням при наведенні чи фокусі.
+               Клік по іконці не перемикає тумблер (вона всередині мітки). -->
+          <span
+            class="role-form__partial"
+            role="img"
+            tabindex="0"
+            [attr.aria-label]="('colleagues.roleForm.partialTitle' | translate) + ' ' + ('colleagues.roleForm.partialNote' | translate)"
+            (click)="$event.preventDefault()"
+          >
+            <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+            <span class="role-form__partial-tip" role="tooltip">
+              <span>{{ 'colleagues.roleForm.partialTitle' | translate }}</span>
+              <span>{{ 'colleagues.roleForm.partialNote' | translate }}</span>
+            </span>
+          </span>
+        }
         <input
           type="checkbox"
           role="switch"
           class="role-form__switch"
           tabindex="0"
           [checked]="enabledGroups().has(group.id)"
+          [disabled]="locked"
           (change)="togglePermission(group.id, $event)"
         />
       </label>
     }
   </fieldset>
 
-  <button type="submit" class="settings-submit" tabindex="0">{{ (role() ? 'colleagues.roleForm.save' : 'colleagues.roleForm.submit') | translate }}</button>
+  @if (error(); as errorKey) {
+    <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+  }
+
+  <button type="submit" class="settings-submit" tabindex="0" [disabled]="saving()">{{ (role() ? 'colleagues.roleForm.save' : 'colleagues.roleForm.submit') | translate }}</button>
 </form>

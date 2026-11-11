@@ -4,7 +4,7 @@ import { firstValueFrom, timeout } from 'rxjs';
 
 import { ConnectionService } from '../connection/connection.service';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
-import { UserRole } from './user-profile';
+import { UserRole, sanitizeRoles } from './user-profile';
 
 const API_USERS_PATH = '/api/v1/users';
 const REQUEST_TIMEOUT_MS = 10000;
@@ -22,10 +22,10 @@ export interface NewUser {
 }
 
 /**
- * Колега зі списку `GET /api/v1/users`. Таблиця колег читає всі ці поля, але
- * сервер поки віддає лише `id`, пошту й імена: решта (`null` / порожній список)
- * виставляється в `toUserSummary` — коли відповідь їх міститиме, міняти треба
- * лише її.
+ * Колега зі списку `GET /api/v1/users`. Поля після прізвища (телефон, країна,
+ * екстрений контакт, займенники з категорією, аватар, ролі) сервер віддає не в усіх
+ * версіях: якщо відповідь їх не містить (чи вони не того типу), вони `null` / порожній
+ * список (`toUserSummary`), і таблиця показує свої запасні значення.
  */
 export interface UserSummary {
   readonly id: string;
@@ -229,6 +229,11 @@ export class UsersService {
  * тут сталі (`null` й порожній список): коли сервер почне їх віддавати, їх
  * читають звідси з `item`, а таблиця колег лишається як є.
  */
+/** Рядок із відповіді або `null`, якщо його нема (чи він не рядок, чи порожній). */
+function optionalText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
 function toUserSummary(item: Record<string, unknown> | null): UserSummary | null {
   if (typeof item?.['id'] !== 'string') {
     return null;
@@ -239,12 +244,12 @@ function toUserSummary(item: Record<string, unknown> | null): UserSummary | null
     email: text(item['email']),
     firstName: text(item['firstName']),
     lastName: text(item['lastName']),
-    phoneNumber: null,
-    country: null,
-    emergencyContact: null,
-    pronouns: null,
-    pronounCategory: null,
-    avatarUrl: null,
-    roles: [],
+    phoneNumber: optionalText(item['phoneNumber']),
+    country: optionalText(item['country']),
+    emergencyContact: optionalText(item['emergencyContact']),
+    pronouns: optionalText(item['pronouns']),
+    pronounCategory: typeof item['pronounCategory'] === 'number' ? item['pronounCategory'] : null,
+    avatarUrl: optionalText(item['avatarUrl']),
+    roles: sanitizeRoles(item['roles']),
   };
 }

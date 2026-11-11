@@ -30,13 +30,6 @@
     background: #767676;
   }
 
-  // Зображення застарілого акаунта: поверх нього напівпрозорий сірий шар.
-  &--outdated.avatar--photo::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgb(118 118 118 / 65%);
-  }
 }
 
 // Зображення замість літер: заповнює аватар і повторює його форму.
@@ -45,4 +38,9 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+// Зображення застарілого акаунта лишається видимим, але в градаціях сірого.
+.avatar--outdated .avatar__image {
+  filter: grayscale(1);
 }

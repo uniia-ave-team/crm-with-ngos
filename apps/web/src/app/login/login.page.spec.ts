@@ -769,28 +769,27 @@ describe('LoginPage', () => {
       expect(store.active()?.refreshToken).toBe('r2');
     });
 
-    it('marks a stale account outdated, clears the memory when it was the only one, and shows the sign-in form', async () => {
-      const { fixture, connection, element, request, store } = createWithAccounts([
+    it('marks a stale account outdated, keeps it, and goes to /relogin without showing the forms', async () => {
+      const { fixture, element, request, store } = createWithAccounts([
         { identity: 'user-1', access: jwtAt(-60), refresh: 'r1' },
       ]);
+      localStorage.setItem('yavir.language', 'uk');
       request.flush({ status: 'Healthy' });
       (await vi.waitFor(() => http.expectOne(refreshUrl()))).flush({}, { status: 401, statusText: 'Unauthorized' });
 
-      // Усі акаунти застаріли — памʼять очищено; підключення перевіряється заново для сторінки входу.
+      // Доступних акаунтів нема: підключення вертається до звичайної цілі, а користувач — на повторний вхід.
       (await vi.waitFor(() => http.expectOne(healthUrl()))).flush({ status: 'Healthy' });
-      await vi.waitFor(() => {
-        fixture.detectChanges();
-        http.expectOne(`${connection.serverUrl()}/api/v1/system/status`).flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
-      });
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
       fixture.detectChanges();
 
-      expect(store.accounts()).toHaveLength(0);
-      expect(localStorage.length).toBe(0);
-      expect(navigate).not.toHaveBeenCalled();
-      expect(element.querySelector('.login-form')).not.toBeNull();
+      expect(store.accounts()).toHaveLength(1);
+      expect(store.accounts()[0]).toMatchObject({ outdated: true, unavailable: false });
+      expect(localStorage.getItem('yavir.language')).toBe('uk');
+      expect(element.querySelector('.login-form')).toBeNull();
+      expect(navigate).not.toHaveBeenCalledWith('/planner');
     });
 
-    it('marks both a rejected account and one whose server does not answer, and wipes the memory since none is valid', async () => {
+    it('marks a rejected account as outdated and one whose server does not answer as unavailable, keeps both, and goes to /relogin', async () => {
       const { request, store } = createWithAccounts(
         [
           { identity: 'stale', access: jwtAt(-60), refresh: 'r1' },
@@ -801,11 +800,14 @@ describe('LoginPage', () => {
       request.flush({ status: 'Healthy' });
       (await vi.waitFor(() => http.expectOne(refreshUrl()))).flush({}, { status: 401, statusText: 'Unauthorized' });
       (await vi.waitFor(() => http.expectOne(healthUrl('http://down.example.org:5065')))).error(new ProgressEvent('error'));
-      await vi.waitFor(() => http.expectOne(healthUrl()));
+      (await vi.waitFor(() => http.expectOne(healthUrl()))).flush({ status: 'Healthy' });
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
 
-      // Недоступний сервер — теж застарілий акаунт, тож чинних нема: памʼять очищено.
-      expect(store.accounts()).toHaveLength(0);
-      expect(localStorage.length).toBe(0);
+      expect(store.accounts().map((a) => [a.outdated, a.unavailable])).toEqual([
+        [true, false],
+        [false, true],
+      ]);
+      expect(store.activeId()).toBeNull();
     });
 
     it('does not check accounts that are already marked outdated', async () => {
@@ -851,22 +853,21 @@ describe('LoginPage', () => {
       expect(store.activeId()).toBe(AccountsService.accountId(pageServer(), 'second'));
     });
 
-    it('treats an account whose server does not answer as outdated and wipes the memory', async () => {
-      const { fixture, element, request, store } = createWithAccounts([
+    it('marks an account whose server does not answer as unavailable (not outdated), keeps it, and goes to /relogin', async () => {
+      const { request, store } = createWithAccounts([
         { identity: 'user-1', access: jwtAt(600), refresh: 'r1', server: 'http://down.example.org:5065' },
       ]);
+      localStorage.setItem('yavir.language', 'uk');
       request.error(new ProgressEvent('error'));
 
-      // Чинних нема: переходимо до звичайного підключення (за доменом сторінки).
+      // Доступного нема: підключення вертається до звичайної цілі (за доменом сторінки).
       (await vi.waitFor(() => http.expectOne(healthUrl()))).error(new ProgressEvent('error'));
-      await vi.waitFor(() => {
-        fixture.detectChanges();
-        expect(element.textContent).toContain(uk.login.step1.title);
-      });
-      expect(store.accounts()).toHaveLength(0);
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
+
+      expect(store.accounts()).toHaveLength(1);
+      expect(store.accounts()[0]).toMatchObject({ outdated: false, unavailable: true, refreshToken: 'r1' });
       expect(store.activeId()).toBeNull();
-      expect(localStorage.length).toBe(0);
-      expect(navigate).not.toHaveBeenCalled();
+      expect(localStorage.getItem('yavir.language')).toBe('uk');
     });
 
     it('checks the active account first, then the others in the order they were added', async () => {

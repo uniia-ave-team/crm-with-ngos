@@ -29,7 +29,7 @@ export function requireAnyPermission(required: readonly string[]): CanActivateFn
     const router = inject(Router);
 
     accounts.reload();
-    if (accounts.active() && currentUser.user()) {
+    if (accounts.active() && currentUser.profileLoaded()) {
       await currentUser.reload();
     } else if ((await restore.restore()) !== 'restored') {
       return false;

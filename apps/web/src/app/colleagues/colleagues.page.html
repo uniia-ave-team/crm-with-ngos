@@ -75,11 +75,11 @@
     </button>
   }
   @if (panelContent() === 'roles' && rolesScreen() === 'add') {
-    <app-role-form (save)="createRole($event)" />
+    <app-role-form [saving]="roleSaving()" [error]="roleSaveError()" (save)="createRole($event)" />
   }
   @if (panelContent() === 'roles' && rolesScreen() === 'edit') {
     @if (roleEditView().role; as editedRole) {
-      <app-role-form [role]="editedRole" (save)="updateRole(editedRole, $event)" />
+      <app-role-form [role]="editedRole" [saving]="roleSaving()" [error]="roleSaveError()" (save)="updateRole(editedRole, $event)" />
     } @else if (roleEditView().failure; as failure) {
       <p class="colleagues__panel-message colleagues__panel-message--error" role="alert">{{ 'colleagues.roleForm.loadError.' + failure | translate }}</p>
     } @else {
@@ -87,12 +87,28 @@
     }
   }
   @if (panelContent() === 'add') {
-    <app-colleague-form [roles]="rolesView()" (save)="createColleague($event)" />
+    <app-colleague-form [roles]="rolesView()" [saving]="colleagueSaving()" [error]="colleagueSaveError()" (save)="createColleague($event)" />
   }
   @if (panelContent() === 'roles' && rolesScreen() === 'list') {
-    <app-roles-panel [view]="rolesView()" [canManage]="canManageRoles()" (roleEdit)="editRole($event)" (roleDelete)="deleteRole($event)" />
+    <app-roles-panel [view]="rolesView()" [notice]="rolesNotice()" [canManage]="canManageRoles()" (roleEdit)="editRole($event)" (roleDelete)="deleteRole($event)" />
   }
 </app-side-panel>
+
+<!-- Запрошення створено: посилання, яким адмін ділиться з колегою (по центру екрана, затемнює весь екран). -->
+<app-modal width="460px" [label]="'colleagues.invitation.title' | translate">
+  @if (invitation(); as invite) {
+    <app-invitation-dialog
+      [email]="invite.email"
+      [token]="invite.token"
+      [expiresAt]="invite.expiresAt"
+      [ngoName]="ngoName()"
+      [status]="invitationStatus()"
+      (copyLink)="copyInvitationLink($event)"
+      (shareLink)="shareInvitation($event)"
+      (dismiss)="closeInvitation()"
+    />
+  }
+</app-modal>
 
 <!-- ПІБ: аватар, імʼя й займенники. -->
 <ng-template #personCell let-row>

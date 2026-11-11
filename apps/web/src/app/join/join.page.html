@@ -1,0 +1,109 @@
+<ion-content [fullscreen]="true" class="join">
+  <div class="join__wrap">
+    @switch (view()) {
+      @case ('loading') {
+        <div class="join__card">
+          <p class="join__status">{{ 'join.loading' | translate }}</p>
+        </div>
+      }
+
+      @case ('no-server') {
+        <div class="join__error" role="alert">
+          <p class="join__error-line">{{ 'join.noServer' | translate }}</p>
+          <p class="join__error-line"><a class="join__link" routerLink="/login">{{ 'join.home' | translate }}</a></p>
+        </div>
+      }
+
+      @case ('invalid') {
+        <div class="join__error" role="alert">
+          <p class="join__error-line">{{ 'join.invalid' | translate }}</p>
+          <p class="join__error-line"><a class="join__link" routerLink="/login">{{ 'join.home' | translate }}</a></p>
+        </div>
+      }
+
+      @case ('form') {
+        @if (bannerErrors().length) {
+          <div class="join__error" role="alert">
+            @for (key of bannerErrors(); track key) {
+              <p class="join__error-line">{{ key | translate }}</p>
+            }
+          </div>
+        }
+
+        <div class="join__card">
+          <h1 class="join__title">{{ 'join.title' | translate }}</h1>
+          <p class="join__description">{{ 'join.description' | translate }}</p>
+
+          <!-- Пошту дає запрошення: змінити її не можна. -->
+          <ion-input
+            class="join__input"
+            fill="outline"
+            type="email"
+            autocomplete="email"
+            [disabled]="true"
+            [attr.aria-label]="'join.email' | translate"
+            [value]="email()"
+          ></ion-input>
+          <ion-input
+            tabindex="0"
+            class="join__input"
+            fill="outline"
+            type="text"
+            autocomplete="family-name"
+            required
+            [placeholder]="('join.lastName' | translate) + ' *'"
+            [attr.aria-label]="'join.lastName' | translate"
+            [ngModel]="lastName()"
+            (ngModelChange)="onFieldChange(lastName, $event)"
+            (keyup.enter)="submit()"
+          ></ion-input>
+          <ion-input
+            tabindex="0"
+            class="join__input"
+            fill="outline"
+            type="text"
+            autocomplete="given-name"
+            required
+            [placeholder]="('join.firstName' | translate) + ' *'"
+            [attr.aria-label]="'join.firstName' | translate"
+            [ngModel]="firstName()"
+            (ngModelChange)="onFieldChange(firstName, $event)"
+            (keyup.enter)="submit()"
+          ></ion-input>
+          @if (firstNameError(); as fieldError) {
+            <p class="join__field-error" role="alert">{{ ('join.error.' + fieldError) | translate }}</p>
+          }
+          <!-- По батькові необовʼязкове: без зірочки, без перевірки. -->
+          <ion-input
+            tabindex="0"
+            class="join__input"
+            fill="outline"
+            type="text"
+            autocomplete="additional-name"
+            [placeholder]="'join.patronymic' | translate"
+            [attr.aria-label]="'join.patronymic' | translate"
+            [ngModel]="patronymic()"
+            (ngModelChange)="onFieldChange(patronymic, $event)"
+            (keyup.enter)="submit()"
+          ></ion-input>
+          <app-password-fields
+            [password]="password()"
+            [repeat]="passwordRepeat()"
+            [required]="true"
+            [passwordLabel]="'join.password' | translate"
+            [repeatLabel]="'join.passwordRepeat' | translate"
+            [passwordError]="passwordError() ? 'join.error.' + passwordError() : null"
+            [repeatError]="passwordRepeatError() ? 'join.error.' + passwordRepeatError() : null"
+            (passwordChange)="onFieldChange(password, $event)"
+            (repeatChange)="onFieldChange(passwordRepeat, $event)"
+            (submitted)="submit()"
+          />
+
+          <ion-button tabindex="0" class="join__submit" type="button" expand="block" [disabled]="saving()" (click)="submit()">
+            {{ (saving() ? 'join.saving' : 'join.submit') | translate }}
+          </ion-button>
+        </div>
+      }
+    }
+  </div>
+</ion-content>

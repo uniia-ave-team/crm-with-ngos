@@ -1,0 +1,62 @@
+<div class="invitation">
+  <header class="invitation__header">
+    <h2 class="invitation__title">{{ 'colleagues.invitation.title' | translate }}</h2>
+    <button
+      type="button"
+      class="invitation__close"
+      tabindex="0"
+      [attr.aria-label]="'colleagues.invitation.close' | translate"
+      [attr.title]="'colleagues.invitation.close' | translate"
+      (click)="dismiss.emit()"
+    >
+      <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+    </button>
+  </header>
+
+  <p class="invitation__hint">{{ 'colleagues.invitation.hint' | translate }}</p>
+
+  <!-- Посилання в один рядок із прокруткою; кнопки копіювання й «Поділитися» стоять після нього й не прокручуються. -->
+  <div class="invitation__link-row">
+    <div class="invitation__link" tabindex="0" role="textbox" aria-readonly="true" [attr.aria-label]="'colleagues.invitation.link' | translate">{{ link() }}</div>
+    <button
+      type="button"
+      class="invitation__copy"
+      tabindex="0"
+      [attr.aria-label]="'colleagues.invitation.copy' | translate"
+      [attr.title]="'colleagues.invitation.copy' | translate"
+      (click)="copyLink.emit(link())"
+    >
+      <ion-icon name="copy-outline" aria-hidden="true"></ion-icon>
+    </button>
+    @if (canShare) {
+      <button
+        type="button"
+        class="invitation__share"
+        tabindex="0"
+        [attr.aria-label]="'colleagues.invitation.share' | translate"
+        [attr.title]="'colleagues.invitation.share' | translate"
+        (click)="share()"
+      >
+        <ion-icon name="share-social" aria-hidden="true"></ion-icon>
+      </button>
+    }
+  </div>
+  <p class="invitation__status" [class.invitation__status--error]="status() === 'failed' || status() === 'shareFailed'" role="status">
+    @if (status() === 'copied') {
+      {{ 'colleagues.invitation.copied' | translate }}
+    } @else if (status() === 'failed') {
+      {{ 'colleagues.invitation.copyFailed' | translate }}
+    } @else if (status() === 'shareFailed') {
+      {{ 'colleagues.invitation.shareFailed' | translate }}
+    }
+  </p>
+
+  <dl class="invitation__details">
+    <dt>{{ 'colleagues.invitation.forEmail' | translate }}</dt>
+    <dd>{{ email() }}</dd>
+    @if (expires(); as when) {
+      <dt>{{ 'colleagues.invitation.expires' | translate }}</dt>
+      <dd>{{ when }}</dd>
+    }
+  </dl>
+</div>

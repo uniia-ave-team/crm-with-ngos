@@ -93,6 +93,33 @@ describe('ConnectionService', () => {
     });
   });
 
+  describe('the server of the page domain and the one-off probe', () => {
+    it('keeps the server of the page domain even when an active account points elsewhere', () => {
+      const { service, request } = create();
+      request.flush({ status: 'Healthy' });
+      TestBed.inject(AccountsService).add({
+        server: 'https://other.example:5065',
+        accessToken: 'a',
+        refreshToken: 'r',
+        identity: 'someone',
+      });
+
+      expect(service.serverUrl()).toBe('https://other.example:5065');
+      expect(service.pageServerUrl).toBe(`${location.protocol}//${location.hostname}:5065`);
+    });
+
+    it('probes the given server without touching the state of the service', async () => {
+      const { service, request } = create();
+      request.flush({ status: 'Healthy' });
+
+      const probe = service.probeApi('https://invited.example:5065');
+      http.expectOne('https://invited.example:5065/health').error(new ProgressEvent('error'));
+
+      expect(await probe).toBe(false);
+      expect(service.apiStatus()).toBe('healthy');
+    });
+  });
+
   describe('with a provided server address', () => {
     it('re-runs the whole check against the provided address, not the page domain', () => {
       const { service, request } = create();
