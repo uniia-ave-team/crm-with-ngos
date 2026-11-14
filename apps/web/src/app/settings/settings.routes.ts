@@ -1,5 +1,4 @@
-import { NgModule } from '@angular/core';
-import { Routes, RouterModule } from '@angular/router';
+import { Routes } from '@angular/router';
 
 import { NotificationsPage } from './notifications/notifications.page';
 import { PasswordPage } from './password/password.page';
@@ -9,7 +8,7 @@ import { SettingsPage } from './settings.page';
 // Вкладки живуть усередині сторінки налаштувань (її router-outlet), але мають
 // власні адреси, на які можна вести звичайними посиланнями. Сама `/settings`
 // відкриває першу вкладку.
-const routes: Routes = [
+export const SETTINGS_ROUTES: Routes = [
   {
     path: '',
     component: SettingsPage,
@@ -21,9 +20,3 @@ const routes: Routes = [
     ],
   },
 ];
-
-@NgModule({
-  imports: [RouterModule.forChild(routes)],
-  exports: [RouterModule],
-})
-export class SettingsPageRoutingModule {}

@@ -1,10 +1,14 @@
 import { Component, computed, effect, inject, input, signal, untracked, WritableSignal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { IonButton, IonContent, IonInput } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { AuthService, REDIRECT_URL } from '../core/auth/auth.service';
 import { ConnectionService } from '../core/connection/connection.service';
 import { InvitationsService } from '../core/invitations/invitations.service';
 import { isStrongPassword } from '../shared/password-fields/password-rules';
+import { PasswordFieldsComponent } from '../shared/password-fields/password-fields.component';
 
 /**
  * Що показує сторінка: перевірку сервера й токена, помилку «сервера не знайдено»,
@@ -22,7 +26,7 @@ type JoinView = 'loading' | 'no-server' | 'invalid' | 'form';
   selector: 'app-join',
   templateUrl: './join.page.html',
   styleUrls: ['./join.page.scss'],
-  standalone: false,
+  imports: [IonButton, IonContent, IonInput, RouterLink, FormsModule, PasswordFieldsComponent, TranslatePipe],
 })
 export class JoinPage {
   private readonly connection = inject(ConnectionService);

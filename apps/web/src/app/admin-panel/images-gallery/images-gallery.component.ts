@@ -11,6 +11,8 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { IonIcon, IonSpinner } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { PERMISSIONS } from '../../core/auth/permissions';
 import { RequestFailure } from '../../core/http/request-failure';
@@ -88,7 +90,7 @@ const LOAD_AHEAD_PX = 400;
   selector: 'app-admin-images-gallery',
   templateUrl: './images-gallery.component.html',
   styleUrls: ['../../settings/settings-section.scss', './images-gallery.component.scss'],
-  standalone: false,
+  imports: [IonIcon, IonSpinner, TranslatePipe],
 })
 export class AdminImagesGalleryComponent {
   protected readonly accept = IMAGE_TYPES.join(',');

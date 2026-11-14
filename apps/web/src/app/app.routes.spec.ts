@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 
-import { AppRoutingModule } from './app-routing.module';
+import { routes } from './app.routes';
 
-describe('AppRoutingModule', () => {
-  beforeEach(() => TestBed.configureTestingModule({ imports: [AppRoutingModule] }));
+describe('app routes', () => {
+  beforeEach(() => TestBed.configureTestingModule({ providers: [provideRouter(routes)] }));
 
   /** Скільки стражів стоїть на маршруті. */
   const guards = (path: string) => {

@@ -3,25 +3,29 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
-import { Router, RouterModule } from '@angular/router';
-import { IonicModule } from '@ionic/angular/lazy';
+import { Router, provideRouter } from '@angular/router';
+import { provideIonicAngular } from '@ionic/angular';
+import { provideTranslateService } from '@ngx-translate/core';
 
 import { AppComponent } from './app.component';
 import { AccountsService } from './core/accounts/accounts.service';
-import { LayoutModule } from './core/layout/layout.module';
-import { PreloaderModule } from './shared/preloader/preloader.module';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [AppComponent],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
       // Реальний застосунок редіректить '' на 'login' (сторінку без
       // оболонки) — щоб цей тест перевіряв звичайну сторінку з оболонкою,
       // а не впирався в той самий фолбек кореня, що й LayoutService,
       // навігуємо на нейтральний маршрут перед створенням компонента.
-      imports: [IonicModule.forRoot(), LayoutModule, PreloaderModule, RouterModule.forRoot([{ path: 'calendar', children: [] }])],
+      providers: [
+        provideIonicAngular(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([{ path: 'calendar', children: [] }]),
+        provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
+      ],
+      imports: [AppComponent],
     }).compileComponents();
     await TestBed.inject(Router).navigateByUrl('/calendar');
   });

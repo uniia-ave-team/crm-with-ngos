@@ -8,14 +8,14 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 import uk from '../../../assets/i18n/uk.json';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { ConnectionService } from '../../core/connection/connection.service';
-import { ColleaguesPageModule } from '../colleagues.module';
 import { PERMISSION_GROUPS } from '../../core/roles/role-permissions';
 import { Role } from '../../core/roles/roles.service';
 import { NewRole } from './role-form.component';
+import { RoleFormComponent } from './role-form.component';
 
 @Component({
   template: `<app-role-form [role]="role" [saving]="saving()" [error]="error()" (save)="saved.push($event)" />`,
-  imports: [ColleaguesPageModule],
+  imports: [RoleFormComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {

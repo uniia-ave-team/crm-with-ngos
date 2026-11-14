@@ -1,4 +1,5 @@
 import { Component, computed, input } from '@angular/core';
+import { IonIcon } from '@ionic/angular';
 
 import { roleColor } from './role-color';
 
@@ -21,7 +22,7 @@ import { roleColor } from './role-color';
   selector: 'app-role-pill',
   templateUrl: './role-pill.component.html',
   styleUrls: ['./role-pill.component.scss'],
-  standalone: false,
+  imports: [IonIcon],
 })
 export class RolePillComponent {
   readonly name = input.required<string>();

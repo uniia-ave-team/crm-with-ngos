@@ -1,4 +1,7 @@
 import { Component, DestroyRef, computed, effect, inject, input, linkedSignal, output, signal, untracked } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { IonButton, IonInput } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { accountToReplace, loginErrorKey } from '../../accounts/account-login';
 import { AccountsService } from '../../accounts/accounts.service';
@@ -55,7 +58,7 @@ export type AfterSignIn = () => Promise<void>;
   selector: 'app-sign-in-form',
   templateUrl: './sign-in-form.component.html',
   styleUrls: ['./sign-in-form.component.scss'],
-  standalone: false,
+  imports: [IonButton, IonInput, FormsModule, TranslatePipe],
 })
 export class SignInFormComponent {
   private readonly connection = inject(ConnectionService);

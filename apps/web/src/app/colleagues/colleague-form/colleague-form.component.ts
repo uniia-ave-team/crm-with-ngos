@@ -1,6 +1,9 @@
 import { Component, computed, input, output, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { RolesView } from '../roles-panel/roles-panel.component';
+import { RolePillComponent } from '../../shared/role-pill/role-pill.component';
 
 /** Дані нового колеги з форми. */
 export interface NewColleague {
@@ -22,7 +25,7 @@ export interface NewColleague {
   selector: 'app-colleague-form',
   templateUrl: './colleague-form.component.html',
   styleUrls: ['../../settings/settings-section.scss', './colleague-form.component.scss'],
-  standalone: false,
+  imports: [FormsModule, RolePillComponent, TranslatePipe],
 })
 export class ColleagueFormComponent {
   readonly roles = input.required<RolesView>();

@@ -12,7 +12,6 @@ import { ConnectionService } from '../core/connection/connection.service';
 import { DEFAULT_LOGIN_IMAGE } from '../core/login-page-images/login-page-images.service';
 import { ReloginFormComponent } from './relogin-form/relogin-form.component';
 import { ReloginPage } from './relogin.page';
-import { ReloginPageModule } from './relogin.module';
 
 describe('ReloginPage', () => {
   let navigate: ReturnType<typeof vi.spyOn>;
@@ -23,7 +22,7 @@ describe('ReloginPage', () => {
     localStorage.clear();
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
-      imports: [ReloginPageModule],
+      imports: [ReloginPage],
       providers: [provideRouter([]), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }), provideHttpClient(), provideHttpClientTesting()],
     });
     const translate = TestBed.inject(TranslateService);

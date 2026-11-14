@@ -15,14 +15,13 @@ describe('AccountMenuComponent', () => {
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
-      declarations: [AccountMenuComponent],
-      imports: [TranslatePipe],
-      // Компонент тут оголошено напряму в TestBed, і його директиви в області видимості тесту
-      // не діють: `[appProtectedSrc]` лягає звичайною властивістю елемента (сама директива —
-      // у власному спеку); без NO_ERRORS_SCHEMA привʼязка до `img` була б помилкою.
-      schemas: [NO_ERRORS_SCHEMA],
-      providers: [provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }), provideHttpClient(), provideHttpClientTesting()],
-    });
+    imports: [TranslatePipe, AccountMenuComponent],
+    // Компонент тут оголошено напряму в TestBed, і його директиви в області видимості тесту
+    // не діють: `[appProtectedSrc]` лягає звичайною властивістю елемента (сама директива —
+    // у власному спеку); без NO_ERRORS_SCHEMA привʼязка до `img` була б помилкою.
+    schemas: [NO_ERRORS_SCHEMA],
+    providers: [provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }), provideHttpClient(), provideHttpClientTesting()],
+});
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('uk', uk);
     translate.use('uk');

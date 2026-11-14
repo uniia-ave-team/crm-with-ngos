@@ -1,5 +1,7 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Router } from '@angular/router';
+import { IonContent, IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { AccountRestoreService } from '../core/accounts/account-restore.service';
 import { AccountsService, StoredAccount } from '../core/accounts/accounts.service';
@@ -9,6 +11,8 @@ import { LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
 import { DEFAULT_LOGIN_IMAGE } from '../core/login-page-images/login-page-images.service';
 import { AccountCaption, AccountTile, accountCaption, toAccountTiles } from '../core/accounts/account-avatar/account-tile';
+import { ReloginFormComponent } from './relogin-form/relogin-form.component';
+import { AccountAvatarComponent } from '../core/accounts/account-avatar/account-avatar.component';
 
 /** Що показано справа: список акаунтів чи форма входу. */
 type ReloginView = 'list' | 'form';
@@ -39,7 +43,7 @@ interface FormTarget {
   selector: 'app-relogin',
   templateUrl: './relogin.page.html',
   styleUrls: ['./relogin.page.scss'],
-  standalone: false,
+  imports: [IonContent, IonIcon, ReloginFormComponent, AccountAvatarComponent, TranslatePipe],
 })
 export class ReloginPage {
   private readonly accountsStore = inject(AccountsService);

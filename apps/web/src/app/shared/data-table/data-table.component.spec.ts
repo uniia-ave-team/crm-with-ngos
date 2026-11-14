@@ -4,14 +4,14 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent, DataTableSort } from './data-table.component';
-import { DataTableModule } from './data-table.module';
+import { DataTableComponent } from './data-table.component';
 
 @Component({
   template: `
     <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [highlightedRowId]="highlighted()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
     <ng-template #custom let-row let-column="column"><b class="custom">{{ column.id }}:{{ row['title'] }}</b></ng-template>
   `,
-  imports: [DataTableModule],
+  imports: [DataTableComponent],
 })
 class HostComponent {
   readonly columns = signal<readonly DataTableColumn[]>([]);

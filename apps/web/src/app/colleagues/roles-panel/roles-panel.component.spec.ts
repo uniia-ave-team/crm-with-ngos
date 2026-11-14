@@ -4,13 +4,13 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { ColleaguesPageModule } from '../colleagues.module';
 import { Role } from '../../core/roles/roles.service';
 import { RolesView } from './roles-panel.component';
+import { RolesPanelComponent } from './roles-panel.component';
 
 @Component({
   template: `<app-roles-panel [view]="view()" [canManage]="canManage()" (roleEdit)="edits.push($event)" (roleDelete)="deletes.push($event)" />`,
-  imports: [ColleaguesPageModule],
+  imports: [RolesPanelComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {

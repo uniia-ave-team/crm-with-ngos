@@ -1,4 +1,6 @@
 import { Component, Signal, computed, inject, input } from '@angular/core';
+import { IonSpinner } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { LanguageService } from '../../core/i18n/language.service';
 import { mobileLogoBase } from '../../core/i18n/mobile-logo';
@@ -14,7 +16,7 @@ import { mobileLogoBase } from '../../core/i18n/mobile-logo';
   selector: 'app-preloader',
   templateUrl: './preloader.component.html',
   styleUrls: ['./preloader.component.scss'],
-  standalone: false,
+  imports: [IonSpinner, TranslatePipe],
 })
 export class PreloaderComponent {
   readonly visible = input(false);

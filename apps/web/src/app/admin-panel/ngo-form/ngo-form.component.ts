@@ -1,4 +1,6 @@
 import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { GALLERY_PERMISSIONS, PERMISSIONS, hasAnyPermission } from '../../core/auth/permissions';
@@ -7,6 +9,7 @@ import { NGO_LOGO_MAX_BYTES, NGO_LOGO_TYPES, NGO_NAME_MAX_LENGTH } from '../../c
 import { NgoService, UpdateNgoResult } from '../../core/ngo/ngo.service';
 import { CurrentUserService } from '../../core/users/current-user.service';
 import { AdminImagesGalleryComponent } from '../images-gallery/images-gallery.component';
+import { ProtectedSrcDirective } from '../../shared/protected-src/protected-src.directive';
 
 /** Чому обраний файл не підійшов (ключ у `admin.error.*`). */
 type LogoError = 'logoType' | 'logoSize';
@@ -45,7 +48,7 @@ interface ResultLine {
   selector: 'app-admin-ngo-form',
   templateUrl: './ngo-form.component.html',
   styleUrls: ['../../settings/settings-section.scss', '../../settings/avatar-block.scss', './ngo-form.component.scss'],
-  standalone: false,
+  imports: [FormsModule, ProtectedSrcDirective, AdminImagesGalleryComponent, TranslatePipe],
 })
 export class AdminNgoFormComponent {
   private readonly accounts = inject(AccountsService);

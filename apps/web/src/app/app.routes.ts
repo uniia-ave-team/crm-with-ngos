@@ -1,5 +1,4 @@
-import { NgModule } from '@angular/core';
-import { PreloadAllModules, RouterModule, Routes } from '@angular/router';
+import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { requireAnyPermission } from './core/auth/permission.guard';
@@ -13,7 +12,7 @@ import { connectionGuard } from './core/connection/connection.guard';
 // `runGuardsAndResolvers: 'always'`: стражі спрацьовують при кожній зміні сторінки
 // (також між вкладками налаштувань), а не лише коли маршрут активується вперше —
 // authGuard на цьому перепитує профіль (`GET /users/me`).
-const routes: Routes = [
+export const routes: Routes = [
   {
     path: '',
     redirectTo: 'login',
@@ -21,71 +20,63 @@ const routes: Routes = [
   },
   {
     path: 'calendar',
-    loadChildren: () => import('./calendar/calendar.module').then((m) => m.CalendarPageModule),
+    loadComponent: () => import('./calendar/calendar.page').then((m) => m.CalendarPage),
     canActivate: [authGuard, connectionGuard],
     runGuardsAndResolvers: 'always',
   },
   {
     path: 'planner',
-    loadChildren: () => import('./planner/planner.module').then((m) => m.PlannerPageModule),
+    loadComponent: () => import('./planner/planner.page').then((m) => m.PlannerPage),
     canActivate: [authGuard, connectionGuard],
     runGuardsAndResolvers: 'always',
     data: { layoutSection: 'planner' },
   },
   {
     path: 'knowledge-base',
-    loadChildren: () => import('./knowledge-base/knowledge-base.module').then((m) => m.KnowledgeBasePageModule),
+    loadComponent: () => import('./knowledge-base/knowledge-base.page').then((m) => m.KnowledgeBasePage),
     canActivate: [authGuard, connectionGuard],
     runGuardsAndResolvers: 'always',
     data: { layoutSection: 'knowledge-base' },
   },
   {
     path: 'colleagues',
-    loadChildren: () => import('./colleagues/colleagues.module').then((m) => m.ColleaguesPageModule),
+    loadComponent: () => import('./colleagues/colleagues.page').then((m) => m.ColleaguesPage),
     // Без права ViewUser — на REDIRECT_URL (те саме, що ховає пункт меню «Колеги»).
     canActivate: [authGuard, connectionGuard, requireAnyPermission(COLLEAGUES_PERMISSIONS)],
     runGuardsAndResolvers: 'always',
   },
   {
     path: 'admin-panel',
-    loadChildren: () => import('./admin-panel/admin-panel.module').then((m) => m.AdminPanelPageModule),
+    loadComponent: () => import('./admin-panel/admin-panel.page').then((m) => m.AdminPanelPage),
     // Без жодного з прав адмінки — на REDIRECT_URL (те саме, що ховає пункт меню «Адмін»).
     canActivate: [authGuard, connectionGuard, requireAnyPermission(ADMIN_PANEL_PERMISSIONS)],
     runGuardsAndResolvers: 'always',
   },
   {
     path: 'settings',
-    loadChildren: () => import('./settings/settings.module').then((m) => m.SettingsPageModule),
+    loadChildren: () => import('./settings/settings.routes').then((m) => m.SETTINGS_ROUTES),
     canActivate: [authGuard, connectionGuard],
     runGuardsAndResolvers: 'always',
     data: { layoutSection: 'settings' },
   },
   {
     path: 'login',
-    loadChildren: () => import('./login/login.module').then((m) => m.LoginPageModule),
+    loadComponent: () => import('./login/login.page').then((m) => m.LoginPage),
     // Сторінка входу не має бічного меню взагалі (ні рейла, ні другої
     // панелі) — читається в app.component.ts через LayoutService.hideShell.
     data: { layout: 'none' },
   },
   {
     path: 'join',
-    loadChildren: () => import('./join/join.module').then((m) => m.JoinPageModule),
+    loadComponent: () => import('./join/join.page').then((m) => m.JoinPage),
     // Сторінка запрошення: без стражів (колега ще не має акаунта на цьому сервері) і
     // без бічного меню — як /login.
     data: { layout: 'none' },
   },
   {
     path: 'relogin',
-    loadChildren: () => import('./relogin/relogin.module').then((m) => m.ReloginPageModule),
+    loadComponent: () => import('./relogin/relogin.page').then((m) => m.ReloginPage),
     // Сторінка повторного входу: без стражів і без бічного меню, як /login й /join.
     data: { layout: 'none' },
   },
 ];
-
-@NgModule({
-  imports: [
-    RouterModule.forRoot(routes, { preloadingStrategy: PreloadAllModules, bindToComponentInputs: true }),
-  ],
-  exports: [RouterModule],
-})
-export class AppRoutingModule {}

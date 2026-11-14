@@ -4,13 +4,12 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { ColleaguesPageModule } from '../colleagues.module';
 import { RolesView } from '../roles-panel/roles-panel.component';
 import { ColleagueFormComponent, NewColleague } from './colleague-form.component';
 
 @Component({
   template: `<app-colleague-form #form [roles]="roles()" [saving]="saving()" [error]="error()" (save)="saved.push($event)" />`,
-  imports: [ColleaguesPageModule],
+  imports: [ColleagueFormComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {

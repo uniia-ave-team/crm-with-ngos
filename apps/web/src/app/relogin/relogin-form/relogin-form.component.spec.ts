@@ -9,7 +9,6 @@ import uk from '../../../assets/i18n/uk.json';
 import { SignInFormComponent } from '../../core/auth/sign-in-form/sign-in-form.component';
 import { ConnectionService } from '../../core/connection/connection.service';
 import { DEFAULT_LOGIN_IMAGE } from '../../core/login-page-images/login-page-images.service';
-import { ReloginPageModule } from '../relogin.module';
 import { ReloginFormComponent } from './relogin-form.component';
 
 interface FormInternals {
@@ -30,7 +29,7 @@ describe('ReloginFormComponent', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
-      imports: [ReloginPageModule],
+      imports: [ReloginFormComponent],
       providers: [provideRouter([]), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }), provideHttpClient(), provideHttpClientTesting()],
     });
     const translate = TestBed.inject(TranslateService);

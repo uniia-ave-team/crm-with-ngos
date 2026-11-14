@@ -1,5 +1,7 @@
 import { Component, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { PopoverComponent } from '../../../shared/popover/popover.component';
 import { AccountTile, toAccountTiles } from '../../accounts/account-avatar/account-tile';
@@ -11,6 +13,8 @@ import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, hasAnyPermission } fro
 import { LanguageService } from '../../i18n/language.service';
 import { mobileLogoBase } from '../../i18n/mobile-logo';
 import { CurrentUserService } from '../../users/current-user.service';
+import { AvatarComponent } from '../../../shared/avatar/avatar.component';
+import { AccountMenuComponent } from '../account-menu/account-menu.component';
 
 interface NavItem {
   readonly labelKey: string;
@@ -32,7 +36,16 @@ interface NavItem {
   selector: 'app-primary-nav',
   templateUrl: './primary-nav.component.html',
   styleUrls: ['./primary-nav.component.scss'],
-  standalone: false,
+  imports: [
+    IonIcon,
+    RouterLink,
+    RouterLinkActive,
+    AvatarComponent,
+    PopoverComponent,
+    AccountMenuComponent,
+    AddAccountComponent,
+    TranslatePipe,
+  ],
 })
 export class PrimaryNavComponent {
   private readonly languageService = inject(LanguageService);

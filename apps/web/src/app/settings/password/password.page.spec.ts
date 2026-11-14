@@ -6,7 +6,6 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { ConnectionService } from '../../core/connection/connection.service';
-import { SettingsPageModule } from '../settings.module';
 import { PasswordPage } from './password.page';
 
 // Тексти сторінки живуть в uk.json — беремо їх звідти, а не дублюємо.
@@ -33,7 +32,7 @@ describe('PasswordPage', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [SettingsPageModule],
+      imports: [PasswordPage],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);
@@ -106,8 +105,13 @@ describe('PasswordPage', () => {
     });
 
     it('gives the controls a tabindex (Safari does not tab to the fields without it)', () => {
-      for (const control of Array.from(element.querySelectorAll('input, ion-input, button'))) {
-        expect(control.getAttribute('tabindex')).toBe('0');
+      // ion-input переносить tabindex зі свого елемента на внутрішнє поле, яке малює сам: рахуємо
+      // його один раз, де б tabindex не стояв у цю мить.
+      const controls = Array.from(element.querySelectorAll('input, ion-input, button')).filter((control) => !control.parentElement?.closest('ion-input'));
+      expect(controls.length).toBeGreaterThan(0);
+      for (const control of controls) {
+        const focusable = control.matches('ion-input') ? (control.querySelector('input[tabindex]') ?? control) : control;
+        expect(focusable.getAttribute('tabindex')).toBe('0');
       }
     });
 

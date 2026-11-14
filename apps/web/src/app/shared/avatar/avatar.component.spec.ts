@@ -4,11 +4,11 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { ConnectionService } from '../../core/connection/connection.service';
-import { AvatarModule } from './avatar.module';
+import { AvatarComponent } from './avatar.component';
 
 @Component({
   template: `<app-avatar [firstName]="firstName()" [lastName]="lastName()" [avatarUrl]="avatarUrl()" [ngoName]="ngoName()" [outdated]="outdated()" />`,
-  imports: [AvatarModule],
+  imports: [AvatarComponent],
 })
 class HostComponent {
   readonly firstName = signal<string | null | undefined>('');

@@ -3,7 +3,6 @@ import { TestBed } from '@angular/core/testing';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
 import { PopoverComponent } from './popover.component';
-import { PopoverModule } from './popover.module';
 
 @Component({
   template: `
@@ -12,7 +11,7 @@ import { PopoverModule } from './popover.module';
       <p class="content">зміст</p>
     </app-popover>
   `,
-  imports: [PopoverModule],
+  imports: [PopoverComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {
@@ -213,7 +212,7 @@ describe('PopoverComponent', () => {
     @Component({
       template: `<button id="a" (click)="p.open($event)">x</button>
         <app-popover #p width="300px" compactWidth="min(340px, calc(100vw - 24px))">y</app-popover>`,
-      imports: [PopoverModule],
+      imports: [PopoverComponent],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
     })
     class WidthHostComponent {}
@@ -243,7 +242,7 @@ describe('PopoverComponent', () => {
     @Component({
       template: `<button id="a" (click)="p.open($event)">x</button>
         <app-popover #p width="300px">y</app-popover>`,
-      imports: [PopoverModule],
+      imports: [PopoverComponent],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
     })
     class StripHostComponent {}

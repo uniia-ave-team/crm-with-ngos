@@ -5,7 +5,7 @@ import { filter } from 'rxjs/operators';
 /**
  * Сторінки, які мають другу (контекстну) панель бічного меню.
  * Прив'язується до маршруту через `data: { layoutSection: ... }`
- * у app-routing.module.ts.
+ * у app.routes.ts.
  */
 export type LayoutSection = 'knowledge-base' | 'planner' | 'settings';
 
@@ -13,7 +13,7 @@ const COLLAPSE_STORAGE_KEY = 'yavir.secondaryPanelCollapsed';
 
 /**
  * Перші сегменти шляху сторінок без оболонки — дублює `data: { layout:
- * 'none' }` з app-routing.module.ts. Потрібне лише як підстраховка на
+ * 'none' }` з app.routes.ts. Потрібне лише як підстраховка на
  * найперше синхронне читання (див. readHideShell): на ньому Router іноді
  * ще не встиг домапити дочірній маршрут (особливо для lazy-модуля), і
  * ActivatedRoute.snapshot.data порожній — без цієї підстраховки на
@@ -21,7 +21,7 @@ const COLLAPSE_STORAGE_KEY = 'yavir.secondaryPanelCollapsed';
  * прибрала б її.
  */
 // Порожній рядок — корінь '/', який завжди редіректить на 'login' (див.
-// app-routing.module.ts) — на цю ж мить синхронного читання він ще не встиг
+// app.routes.ts) — на цю ж мить синхронного читання він ще не встиг
 // розгорнутись, тож підстраховка мусить трактувати корінь так само.
 const NO_SHELL_PATHS = new Set(['login', 'join', 'relogin', '']);
 
@@ -43,7 +43,7 @@ export class LayoutService {
   readonly collapsed: Signal<boolean> = this.collapsedSignal.asReadonly();
 
   // Сторінки без бічного меню взагалі (наразі — /login і /join).
-  // Прив'язується через `data: { layout: 'none' }` у app-routing.module.ts.
+  // Прив'язується через `data: { layout: 'none' }` у app.routes.ts.
   private readonly hideShellSignal = signal<boolean>(this.readHideShell());
   readonly hideShell: Signal<boolean> = this.hideShellSignal.asReadonly();
 

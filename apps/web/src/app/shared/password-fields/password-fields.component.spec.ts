@@ -5,7 +5,6 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { PasswordFieldsComponent } from './password-fields.component';
-import { PasswordFieldsModule } from './password-fields.module';
 
 // Тексти живуть в uk.json — беремо їх звідти, а не дублюємо. Напис полів і
 // помилки — ті, що компонент отримує на формі адміністратора.
@@ -29,7 +28,7 @@ const errorTexts = { weak: uk.login.admin.error.passwordWeak, mismatch: uk.login
       (submitted)="submits = submits + 1"
     />
   `,
-  imports: [PasswordFieldsModule],
+  imports: [PasswordFieldsComponent],
 })
 class HostComponent {
   readonly labels = fieldLabels;

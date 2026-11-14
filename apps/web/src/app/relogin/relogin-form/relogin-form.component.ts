@@ -1,8 +1,10 @@
 import { Component, inject, input, output } from '@angular/core';
 import { Router } from '@angular/router';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { REDIRECT_URL } from '../../core/auth/auth.service';
-import { AfterSignIn } from '../../core/auth/sign-in-form/sign-in-form.component';
+import { AfterSignIn, SignInFormComponent } from '../../core/auth/sign-in-form/sign-in-form.component';
 import { ConnectionService } from '../../core/connection/connection.service';
 import { DEFAULT_LOGIN_IMAGE, LoginPageImagesService } from '../../core/login-page-images/login-page-images.service';
 
@@ -23,7 +25,7 @@ import { DEFAULT_LOGIN_IMAGE, LoginPageImagesService } from '../../core/login-pa
   selector: 'app-relogin-form',
   templateUrl: './relogin-form.component.html',
   styleUrls: ['./relogin-form.component.scss'],
-  standalone: false,
+  imports: [IonIcon, SignInFormComponent, TranslatePipe],
 })
 export class ReloginFormComponent {
   private readonly connection = inject(ConnectionService);

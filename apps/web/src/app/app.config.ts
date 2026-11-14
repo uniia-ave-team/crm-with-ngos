@@ -1,29 +1,24 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { NgModule, inject, provideAppInitializer } from '@angular/core';
-import { BrowserModule } from '@angular/platform-browser';
-import { RouteReuseStrategy } from '@angular/router';
-
-import { IonicModule, IonicRouteStrategy } from '@ionic/angular/lazy';
-import { TranslatePipe, provideTranslateService } from '@ngx-translate/core';
+import { ApplicationConfig, inject, provideAppInitializer } from '@angular/core';
+import { PreloadAllModules, RouteReuseStrategy, provideRouter, withComponentInputBinding, withPreloading } from '@angular/router';
+import { IonicRouteStrategy, provideIonicAngular } from '@ionic/angular';
+import { provideTranslateService } from '@ngx-translate/core';
 import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 
-import { AppComponent } from './app.component';
-import { AppRoutingModule } from './app-routing.module';
-import { PreloaderModule } from './shared/preloader/preloader.module';
+import { routes } from './app.routes';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { SessionService } from './core/auth/session.service';
-import { LayoutModule } from './core/layout/layout.module';
 import { ConnectionService } from './core/connection/connection.service';
 import { LanguageService } from './core/i18n/language.service';
 
-@NgModule({
-  declarations: [AppComponent],
-  // TranslatePipe — стандалонний пайп (потрібен тут для {{ ... | translate }}
-  // у app.component.html), а не NgModule; provideTranslateService нижче
-  // лише реєструє сам TranslateService.
-  imports: [BrowserModule, IonicModule.forRoot(), LayoutModule, AppRoutingModule, TranslatePipe, PreloaderModule],
+/** Провайдери застосунку: Ionic, маршрути, HTTP з інтерцептором токенів, переклади й сервіси, що стартують разом із ним. */
+export const appConfig: ApplicationConfig = {
   providers: [
+    provideIonicAngular(),
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
+    // Усі сторінки довантажуються у фоні після старту; query-параметри (`?token=`, `?error=`)
+    // привʼязуються до входів сторінок.
+    provideRouter(routes, withPreloading(PreloadAllModules), withComponentInputBinding()),
     provideHttpClient(withInterceptors([authInterceptor])),
     // Мова, з якою «стартує» сервіс, тут не має значення — LanguageService
     // одразу перевизначає її результатом детекції (localStorage/мова
@@ -48,6 +43,4 @@ import { LanguageService } from './core/i18n/language.service';
       inject(SessionService);
     }),
   ],
-  bootstrap: [AppComponent],
-})
-export class AppModule {}
+};

@@ -2,7 +2,6 @@ import { Component, CUSTOM_ELEMENTS_SCHEMA, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { ModalComponent } from './modal.component';
-import { ModalModule } from './modal.module';
 
 @Component({
   template: `
@@ -11,7 +10,7 @@ import { ModalModule } from './modal.module';
       <p class="content">зміст</p>
     </app-modal>
   `,
-  imports: [ModalModule],
+  imports: [ModalComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {

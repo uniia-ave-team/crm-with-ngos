@@ -3,12 +3,12 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { ColleaguesPageModule } from '../colleagues.module';
 import { InvitationShare, InvitationStatus } from './invitation-dialog.component';
+import { InvitationDialogComponent } from './invitation-dialog.component';
 
 @Component({
   template: `<app-invitation-dialog [email]="email()" [token]="token()" [expiresAt]="expiresAt()" [ngoName]="ngo()" [status]="status()" (copyLink)="copied.push($event)" (shareLink)="shared.push($event)" (dismiss)="dismissed = dismissed + 1" />`,
-  imports: [ColleaguesPageModule],
+  imports: [InvitationDialogComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {

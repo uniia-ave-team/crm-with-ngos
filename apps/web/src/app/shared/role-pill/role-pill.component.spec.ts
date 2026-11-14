@@ -2,12 +2,11 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { RolePillComponent } from './role-pill.component';
-import { RolePillModule } from './role-pill.module';
 import { roleColor } from './role-color';
 
 @Component({
   template: `<app-role-pill [name]="name()" [active]="active()" [icon]="icon()" />`,
-  imports: [RolePillModule],
+  imports: [RolePillComponent],
 })
 class HostComponent {
   readonly name = signal('Куратор');

@@ -1,4 +1,7 @@
 import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { PERMISSION_GROUPS, canGrantGroup } from '../../core/roles/role-permissions';
 import { ROLE_NAME_MAX_LENGTH } from '../../core/roles/role-rules';
@@ -32,7 +35,7 @@ export interface NewRole {
   selector: 'app-role-form',
   templateUrl: './role-form.component.html',
   styleUrls: ['../../settings/settings-section.scss', './role-form.component.scss'],
-  standalone: false,
+  imports: [FormsModule, IonIcon, TranslatePipe],
 })
 export class RoleFormComponent implements OnInit {
   /** Роль, яку редагують (початкові значення полів); без неї — нова роль. */

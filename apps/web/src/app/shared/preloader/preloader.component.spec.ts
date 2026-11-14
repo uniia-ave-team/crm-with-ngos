@@ -4,11 +4,11 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { LanguageService } from '../../core/i18n/language.service';
-import { PreloaderModule } from './preloader.module';
+import { PreloaderComponent } from './preloader.component';
 
 @Component({
   template: `<app-preloader [visible]="visible()" />`,
-  imports: [PreloaderModule],
+  imports: [PreloaderComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {

@@ -1,4 +1,8 @@
 import { Component, Input } from '@angular/core';
+import { RouterLink, RouterLinkActive } from '@angular/router';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { LayoutSection } from '../layout.service';
 
 interface TreeLink {
@@ -38,7 +42,7 @@ interface TreeGroup {
   selector: 'app-secondary-panel',
   templateUrl: './secondary-panel.component.html',
   styleUrls: ['./secondary-panel.component.scss'],
-  standalone: false,
+  imports: [IonIcon, RouterLink, RouterLinkActive, TranslatePipe],
 })
 export class SecondaryPanelComponent {
   @Input({ required: true }) section!: LayoutSection;

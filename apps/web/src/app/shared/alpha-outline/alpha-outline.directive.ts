@@ -17,10 +17,7 @@ import { AlphaOutlineFilters } from './alpha-outline-filters.service';
  * Контур виходить за межі елемента, тож місце під нього (відступ від сусідів)
  * лишається на розсуд розмітки.
  */
-@Directive({
-  selector: '[appAlphaOutline]',
-  standalone: false,
-})
+@Directive({ selector: '[appAlphaOutline]', })
 export class AlphaOutlineDirective {
   readonly appAlphaOutline = input<number | string>('');
   readonly outlineColor = input<string | null>(null);

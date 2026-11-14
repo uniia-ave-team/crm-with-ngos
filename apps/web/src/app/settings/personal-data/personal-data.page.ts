@@ -1,5 +1,7 @@
 import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
-import { TranslateService } from '@ngx-translate/core';
+import { FormsModule } from '@angular/forms';
+import { TranslateService, TranslatePipe } from '@ngx-translate/core';
+import { IonIcon } from '@ionic/angular';
 
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { IMAGE_TYPES } from '../../core/images/image-types';
@@ -9,6 +11,7 @@ import { UserProfile } from '../../core/users/user-profile';
 import { ProfileUpdate, UsersService } from '../../core/users/users.service';
 import { LANGUAGES, LanguageOption } from '../../core/i18n/languages.generated';
 import { isPhoneNumber } from '../../shared/phone/phone-number';
+import { AvatarComponent } from '../../shared/avatar/avatar.component';
 
 /**
  * Що показати в блоці над формою за результатом останнього збереження. `avatar.*` —
@@ -48,7 +51,7 @@ const PRONOUN_LABELS = { she: 'pronounShe', he: 'pronounHe', they: 'pronounThey'
   selector: 'app-settings-personal-data',
   templateUrl: './personal-data.page.html',
   styleUrls: ['../settings-section.scss', '../avatar-block.scss', './personal-data.page.scss'],
-  standalone: false,
+  imports: [FormsModule, AvatarComponent, IonIcon, TranslatePipe],
 })
 export class PersonalDataPage {
   private readonly accounts = inject(AccountsService);

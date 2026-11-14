@@ -1,6 +1,9 @@
 import { Component, input, output } from '@angular/core';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { AccountTile, accountTooltip } from '../../accounts/account-avatar/account-tile';
+import { AccountAvatarComponent } from '../../accounts/account-avatar/account-avatar.component';
 
 export type { AccountTile };
 
@@ -14,7 +17,7 @@ export type { AccountTile };
   selector: 'app-account-menu',
   templateUrl: './account-menu.component.html',
   styleUrls: ['./account-menu.component.scss'],
-  standalone: false,
+  imports: [AccountAvatarComponent, IonIcon, TranslatePipe],
 })
 export class AccountMenuComponent {
   readonly accounts = input<readonly AccountTile[]>([]);

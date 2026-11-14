@@ -4,7 +4,7 @@ import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
-import { IonicModule } from '@ionic/angular/lazy';
+import { provideIonicAngular } from '@ionic/angular';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../../assets/i18n/uk.json';
@@ -12,7 +12,6 @@ import { ModalComponent } from '../../../shared/modal/modal.component';
 import { AccountsService } from '../../accounts/accounts.service';
 import { REDIRECT_URL } from '../../auth/auth.service';
 import { ConnectionService } from '../../connection/connection.service';
-import { LayoutModule } from '../layout.module';
 import { AddAccountComponent } from './add-account.component';
 
 // Приватне/protected API компонента, яке в шаблоні викликають події.
@@ -40,8 +39,9 @@ describe('AddAccountComponent', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [IonicModule.forRoot(), LayoutModule],
+      imports: [AddAccountComponent],
       providers: [
+        provideIonicAngular(),
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),

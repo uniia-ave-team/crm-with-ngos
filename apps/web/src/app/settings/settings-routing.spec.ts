@@ -11,7 +11,7 @@ import uk from '../../assets/i18n/uk.json';
 import { NotificationsPage } from './notifications/notifications.page';
 import { PasswordPage } from './password/password.page';
 import { PersonalDataPage } from './personal-data/personal-data.page';
-import { SettingsPageModule } from './settings.module';
+import { SETTINGS_ROUTES } from './settings.routes';
 
 describe('settings routes', () => {
   let harness: RouterTestingHarness;
@@ -22,7 +22,7 @@ describe('settings routes', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        provideRouter([{ path: 'settings', loadChildren: () => Promise.resolve(SettingsPageModule) }]),
+        provideRouter([{ path: 'settings', loadChildren: () => Promise.resolve(SETTINGS_ROUTES) }]),
         provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
       ],
     });

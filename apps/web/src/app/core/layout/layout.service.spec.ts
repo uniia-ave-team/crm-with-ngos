@@ -4,7 +4,7 @@ import { Router, provideRouter } from '@angular/router';
 
 import { LayoutService } from './layout.service';
 
-@Component({ template: '', standalone: false })
+@Component({ template: '' })
 class EmptyPage {}
 
 const COLLAPSE_KEY = 'yavir.secondaryPanelCollapsed';
@@ -14,22 +14,22 @@ describe('LayoutService', () => {
   function createAt(path: string): LayoutService {
     window.history.replaceState({}, '', path);
     TestBed.configureTestingModule({
-      declarations: [EmptyPage],
-      providers: [
+    imports: [EmptyPage],
+    providers: [
         provideRouter([
-          { path: 'login', component: EmptyPage, data: { layout: 'none' } },
-          { path: 'planner', component: EmptyPage, data: { layoutSection: 'planner' } },
-          { path: 'colleagues', component: EmptyPage },
-          {
-            path: 'settings',
-            component: EmptyPage,
-            data: { layoutSection: 'settings' },
-            children: [{ path: 'password', component: EmptyPage }],
-          },
-          { path: 'odd', component: EmptyPage, data: { layoutSection: 'unknown-section' } },
+            { path: 'login', component: EmptyPage, data: { layout: 'none' } },
+            { path: 'planner', component: EmptyPage, data: { layoutSection: 'planner' } },
+            { path: 'colleagues', component: EmptyPage },
+            {
+                path: 'settings',
+                component: EmptyPage,
+                data: { layoutSection: 'settings' },
+                children: [{ path: 'password', component: EmptyPage }],
+            },
+            { path: 'odd', component: EmptyPage, data: { layoutSection: 'unknown-section' } },
         ]),
-      ],
-    });
+    ],
+});
     return TestBed.inject(LayoutService);
   }
 

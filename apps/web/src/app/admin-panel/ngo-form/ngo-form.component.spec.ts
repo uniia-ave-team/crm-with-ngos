@@ -7,7 +7,6 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 import uk from '../../../assets/i18n/uk.json';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { ConnectionService } from '../../core/connection/connection.service';
-import { AdminPanelPageModule } from '../admin-panel.module';
 import { AdminNgoFormComponent } from './ngo-form.component';
 
 // Тексти сторінки живуть в uk.json — беремо їх звідти, а не дублюємо.
@@ -38,7 +37,7 @@ describe('AdminNgoFormComponent', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [AdminPanelPageModule],
+      imports: [AdminNgoFormComponent],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);

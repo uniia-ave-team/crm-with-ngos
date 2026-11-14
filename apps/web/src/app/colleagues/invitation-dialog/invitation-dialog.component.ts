@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { Component, computed, inject, input, output } from '@angular/core';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateService, TranslatePipe } from '@ngx-translate/core';
+import { IonIcon } from '@ionic/angular';
 
 import { LanguageService } from '../../core/i18n/language.service';
 
@@ -29,7 +30,7 @@ export interface InvitationShare {
   selector: 'app-invitation-dialog',
   templateUrl: './invitation-dialog.component.html',
   styleUrls: ['./invitation-dialog.component.scss'],
-  standalone: false,
+  imports: [IonIcon, TranslatePipe],
 })
 export class InvitationDialogComponent {
   private readonly language = inject(LanguageService).language;

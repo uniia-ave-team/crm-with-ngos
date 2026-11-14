@@ -1,7 +1,10 @@
 import { Component, input, output } from '@angular/core';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { RequestFailure } from '../../core/http/request-failure';
 import { Role } from '../../core/roles/roles.service';
+import { RolePillComponent } from '../../shared/role-pill/role-pill.component';
 
 /** Що показує список ролей. */
 export type RolesStatus = 'loading' | 'ready' | 'failed';
@@ -22,7 +25,7 @@ export interface RolesView {
   selector: 'app-roles-panel',
   templateUrl: './roles-panel.component.html',
   styleUrls: ['./roles-panel.component.scss'],
-  standalone: false,
+  imports: [RolePillComponent, IonIcon, TranslatePipe],
 })
 export class RolesPanelComponent {
   readonly view = input.required<RolesView>();

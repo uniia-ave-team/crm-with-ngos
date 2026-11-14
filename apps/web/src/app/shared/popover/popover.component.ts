@@ -1,4 +1,5 @@
 import { Component, DestroyRef, Signal, computed, inject, input, output, signal } from '@angular/core';
+import { IonPopover } from '@ionic/angular';
 
 let nextAnchorId = 0;
 
@@ -30,7 +31,7 @@ export type PopoverAlignment = 'start' | 'center' | 'end';
   selector: 'app-popover',
   templateUrl: './popover.component.html',
   styleUrls: ['./popover.component.scss'],
-  standalone: false,
+  imports: [IonPopover],
 })
 export class PopoverComponent {
   /** Бік вікна на широких екранах. */

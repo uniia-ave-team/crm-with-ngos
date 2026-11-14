@@ -1,11 +1,15 @@
 import { Component, computed, effect, inject, input, OnDestroy, signal, untracked, WritableSignal } from '@angular/core';
 import { Router } from '@angular/router';
+import { NgTemplateOutlet } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { IonButton, IonContent, IonIcon, IonInput } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { NO_CONNECTION_ERROR } from '../core/connection/connection.guard';
 import { AccountRestoreService } from '../core/accounts/account-restore.service';
 import { AccountsService } from '../core/accounts/accounts.service';
 import { AuthService, LoginResult, REDIRECT_URL, RELOGIN_URL } from '../core/auth/auth.service';
-import { AfterSignIn } from '../core/auth/sign-in-form/sign-in-form.component';
+import { AfterSignIn, SignInFormComponent } from '../core/auth/sign-in-form/sign-in-form.component';
 import { ConnectionService } from '../core/connection/connection.service';
 import { AppLanguage, LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
@@ -14,6 +18,7 @@ import { DEFAULT_LOGIN_IMAGE, LoginPageImagesService } from '../core/login-page-
 import { CreateNgoResult, NgoService, UploadNgoLogoResult } from '../core/ngo/ngo.service';
 import { CreateUserResult, UsersService } from '../core/users/users.service';
 import { isStrongPassword } from '../shared/password-fields/password-rules';
+import { PasswordFieldsComponent } from '../shared/password-fields/password-fields.component';
 
 /**
  * Що показує сторінка: перевірку підключення (або запит статусу системи),
@@ -40,7 +45,17 @@ type LoginError = 'invalid' | 'unreachable' | 'unhealthy' | 'no-connection';
   selector: 'app-login',
   templateUrl: './login.page.html',
   styleUrls: ['./login.page.scss'],
-  standalone: false,
+  imports: [
+    IonButton,
+    IonContent,
+    IonIcon,
+    IonInput,
+    SignInFormComponent,
+    NgTemplateOutlet,
+    FormsModule,
+    PasswordFieldsComponent,
+    TranslatePipe,
+  ],
 })
 export class LoginPage implements OnDestroy {
   protected readonly connection = inject(ConnectionService);

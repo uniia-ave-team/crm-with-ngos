@@ -16,7 +16,6 @@ import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
 import { ModalComponent } from '../shared/modal/modal.component';
 import { ColleagueActionsComponent } from './colleague-actions/colleague-actions.component';
-import { ColleaguesPageModule } from './colleagues.module';
 import { ColleaguesPage } from './colleagues.page';
 
 /** Права, з якими видно всі кнопки й три крапки. */
@@ -38,7 +37,7 @@ describe('ColleaguesPage', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [ColleaguesPageModule],
+      imports: [ColleaguesPage],
       providers: [
         provideRouter([]),
         provideHttpClient(),
@@ -1236,7 +1235,8 @@ describe('ColleaguesPage', () => {
 
         it('gives the dialog its name from the language file', async () => {
           const ctx = await openAdd();
-          expect((ctx.element.querySelector('ion-modal') as HTMLElement).getAttribute('aria-label')).toBe(uk.colleagues.invitation.title);
+          // Сам `aria-label` ion-modal переносить на свій діалог (перевіряється в спеку вікна); тут — що вікну дано назву.
+          expect(modalOf(ctx.fixture).label()).toBe(uk.colleagues.invitation.title);
         });
 
         it('clears the form after it: the next opening of "Add" has an empty email and no chosen role', async () => {

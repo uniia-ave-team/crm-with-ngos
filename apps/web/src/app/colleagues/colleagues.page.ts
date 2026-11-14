@@ -1,6 +1,7 @@
 import { Component, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateService, TranslatePipe } from '@ngx-translate/core';
+import { IonButtons, IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonTitle, IonToolbar } from '@ionic/angular';
 
 import { AccountsService } from '../core/accounts/accounts.service';
 import { PERMISSIONS, hasAnyPermission } from '../core/auth/permissions';
@@ -13,21 +14,17 @@ import { CurrentUserService } from '../core/users/current-user.service';
 import { PRONOUN_CATEGORY } from '../core/users/pronouns';
 import { UserRole } from '../core/users/user-profile';
 import { UserSummary, UsersService, UsersSort } from '../core/users/users.service';
-import {
-  DataTableCellContext,
-  DataTableColumn,
-  DataTableRow,
-  DataTableRowMenuEvent,
-  DataTableSort,
-} from '../shared/data-table/data-table.component';
+import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent, DataTableSort, DataTableComponent } from '../shared/data-table/data-table.component';
 import { ModalComponent } from '../shared/modal/modal.component';
 import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
-import { ColleagueAction, ColleagueActionItem } from './colleague-actions/colleague-actions.component';
+import { ColleagueAction, ColleagueActionItem, ColleagueActionsComponent } from './colleague-actions/colleague-actions.component';
 import { ColleagueFormComponent, NewColleague } from './colleague-form/colleague-form.component';
-import { InvitationShare, InvitationStatus } from './invitation-dialog/invitation-dialog.component';
-import { NewRole } from './role-form/role-form.component';
-import { RolesView } from './roles-panel/roles-panel.component';
+import { InvitationShare, InvitationStatus, InvitationDialogComponent } from './invitation-dialog/invitation-dialog.component';
+import { NewRole, RoleFormComponent } from './role-form/role-form.component';
+import { RolesView, RolesPanelComponent } from './roles-panel/roles-panel.component';
+import { AvatarComponent } from '../shared/avatar/avatar.component';
+import { RolePillComponent } from '../shared/role-pill/role-pill.component';
 
 /** Стан форми редагування ролі: запит ролі (`GET /api/v1/roles/{id}`) і сама роль, коли вона є. */
 export interface RoleEditView {
@@ -161,7 +158,28 @@ interface ColleagueRow extends DataTableRow {
   selector: 'app-colleagues',
   templateUrl: './colleagues.page.html',
   styleUrls: ['./colleagues.page.scss'],
-  standalone: false,
+  imports: [
+    IonButtons,
+    IonContent,
+    IonHeader,
+    IonIcon,
+    IonInfiniteScroll,
+    IonInfiniteScrollContent,
+    IonTitle,
+    IonToolbar,
+    DataTableComponent,
+    PopoverComponent,
+    ColleagueActionsComponent,
+    SidePanelComponent,
+    RoleFormComponent,
+    ColleagueFormComponent,
+    RolesPanelComponent,
+    ModalComponent,
+    InvitationDialogComponent,
+    AvatarComponent,
+    RolePillComponent,
+    TranslatePipe,
+  ],
 })
 export class ColleaguesPage implements OnInit {
   private readonly translate = inject(TranslateService);

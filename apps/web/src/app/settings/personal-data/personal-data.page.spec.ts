@@ -8,7 +8,6 @@ import uk from '../../../assets/i18n/uk.json';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { ConnectionService } from '../../core/connection/connection.service';
 import { CurrentUserService } from '../../core/users/current-user.service';
-import { SettingsPageModule } from '../settings.module';
 import { LanguageService } from '../../core/i18n/language.service';
 import { LANGUAGES } from '../../core/i18n/languages.generated';
 import { PersonalDataPage } from './personal-data.page';
@@ -47,7 +46,7 @@ describe('PersonalDataPage', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [SettingsPageModule],
+      imports: [PersonalDataPage],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);

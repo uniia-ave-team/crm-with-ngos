@@ -1,4 +1,6 @@
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { UsersService } from '../../core/users/users.service';
 import { PasswordFieldsComponent } from '../../shared/password-fields/password-fields.component';
@@ -19,7 +21,7 @@ const ERROR_PREFIX = 'settings.password.error.';
   selector: 'app-settings-password',
   templateUrl: './password.page.html',
   styleUrls: ['../settings-section.scss', './password.page.scss'],
-  standalone: false,
+  imports: [FormsModule, PasswordFieldsComponent, TranslatePipe],
 })
 export class PasswordPage {
   private readonly users = inject(UsersService);

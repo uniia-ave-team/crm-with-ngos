@@ -5,7 +5,6 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { ProtectedSrcDirective } from '../../../shared/protected-src/protected-src.directive';
 import { AccountAvatarComponent } from './account-avatar.component';
-import { AccountAvatarModule } from './account-avatar.module';
 import { AccountTile } from './account-tile';
 
 describe('AccountAvatarComponent', () => {
@@ -15,7 +14,7 @@ describe('AccountAvatarComponent', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       // Модуль, а не оголошення компонента напряму: інакше директиви шаблону в тесті не діють.
-      imports: [AccountAvatarModule],
+      imports: [AccountAvatarComponent],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
   });

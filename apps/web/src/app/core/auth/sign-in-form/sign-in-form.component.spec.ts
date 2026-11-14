@@ -7,7 +7,6 @@ import uk from '../../../../assets/i18n/uk.json';
 import { AccountsService } from '../../accounts/accounts.service';
 import { ConnectionService } from '../../connection/connection.service';
 import { AfterSignIn, SignInFormComponent } from './sign-in-form.component';
-import { SignInFormModule } from './sign-in-form.module';
 
 interface FormInternals {
   address: { set(value: string): void };
@@ -39,7 +38,7 @@ describe('SignInFormComponent', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
-      imports: [SignInFormModule],
+      imports: [SignInFormComponent],
       providers: [provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }), provideHttpClient(), provideHttpClientTesting()],
     });
     const translate = TestBed.inject(TranslateService);

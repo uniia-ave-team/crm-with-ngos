@@ -1,5 +1,7 @@
 import { Component, computed, input, output, viewChildren } from '@angular/core';
-import { NgModel } from '@angular/forms';
+import { NgModel, FormsModule } from '@angular/forms';
+import { IonInput } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { PASSWORD_RULES } from './password-rules';
 
@@ -29,7 +31,7 @@ let nextId = 0;
   selector: 'app-password-fields',
   templateUrl: './password-fields.component.html',
   styleUrls: ['./password-fields.component.scss'],
-  standalone: false,
+  imports: [IonInput, FormsModule, TranslatePipe],
 })
 export class PasswordFieldsComponent {
   readonly password = input('');

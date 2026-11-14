@@ -1,4 +1,7 @@
 import { Component, TemplateRef, input, output, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 /** Рядок таблиці: `id` обовʼязковий, решта полів — довільні (за ними колонки беруть значення). */
 export interface DataTableRow {
@@ -68,7 +71,7 @@ export interface DataTableColumn {
   selector: 'app-data-table',
   templateUrl: './data-table.component.html',
   styleUrls: ['./data-table.component.scss'],
-  standalone: false,
+  imports: [IonIcon, NgTemplateOutlet, TranslatePipe],
 })
 export class DataTableComponent {
   readonly columns = input.required<readonly DataTableColumn[]>();

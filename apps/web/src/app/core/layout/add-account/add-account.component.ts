@@ -1,10 +1,12 @@
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { ModalComponent } from '../../../shared/modal/modal.component';
 import { AccountsService } from '../../accounts/accounts.service';
 import { REDIRECT_URL } from '../../auth/auth.service';
-import { AfterSignIn } from '../../auth/sign-in-form/sign-in-form.component';
+import { AfterSignIn, SignInFormComponent } from '../../auth/sign-in-form/sign-in-form.component';
 import { ConnectionService } from '../../connection/connection.service';
 
 /** Для чого відкрито вікно: що вписано у форму спочатку й який акаунт вхід може перезаписати. */
@@ -37,7 +39,7 @@ interface AddAccountTarget {
   selector: 'app-add-account',
   templateUrl: './add-account.component.html',
   styleUrls: ['./add-account.component.scss'],
-  standalone: false,
+  imports: [ModalComponent, IonIcon, SignInFormComponent, TranslatePipe],
 })
 export class AddAccountComponent {
   private readonly connection = inject(ConnectionService);

@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import { IonicModule } from '@ionic/angular/lazy';
+import { provideIonicAngular } from '@ionic/angular';
 import { provideTranslateService } from '@ngx-translate/core';
 
 import { AccountRestoreService } from '../../accounts/account-restore.service';
@@ -11,7 +11,6 @@ import { AccountsService } from '../../accounts/accounts.service';
 import { AuthService, REDIRECT_URL } from '../../auth/auth.service';
 import { ConnectionService } from '../../connection/connection.service';
 import { CurrentUserService } from '../../users/current-user.service';
-import { LayoutModule } from '../layout.module';
 import { PrimaryNavComponent } from './primary-nav.component';
 import { PopoverComponent } from '../../../shared/popover/popover.component';
 
@@ -26,8 +25,9 @@ describe('PrimaryNavComponent avatar initials', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [IonicModule.forRoot(), LayoutModule],
+      imports: [PrimaryNavComponent],
       providers: [
+        provideIonicAngular(),
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -297,8 +297,9 @@ describe('PrimaryNavComponent admin item', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [IonicModule.forRoot(), LayoutModule],
+      imports: [PrimaryNavComponent],
       providers: [
+        provideIonicAngular(),
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -378,8 +379,9 @@ describe('PrimaryNavComponent colleagues item', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [IonicModule.forRoot(), LayoutModule],
+      imports: [PrimaryNavComponent],
       providers: [
+        provideIonicAngular(),
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -453,8 +455,9 @@ describe('PrimaryNavComponent: a click on the tile of an account', () => {
     dialog.open.mockClear();
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [IonicModule.forRoot(), LayoutModule],
+      imports: [PrimaryNavComponent],
       providers: [
+        provideIonicAngular(),
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),

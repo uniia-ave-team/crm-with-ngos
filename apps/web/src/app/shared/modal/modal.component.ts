@@ -1,4 +1,5 @@
 import { Component, Signal, computed, input, output, signal } from '@angular/core';
+import { IonModal } from '@ionic/angular';
 
 /** Скільки (мс) чекаємо завершення анімації закриття, перш ніж вважати вікно закритим. */
 const CLOSE_TIMEOUT_MS = 1000;
@@ -23,7 +24,7 @@ const CLOSE_TIMEOUT_MS = 1000;
   selector: 'app-modal',
   templateUrl: './modal.component.html',
   styleUrls: ['./modal.component.scss'],
-  standalone: false,
+  imports: [IonModal],
 })
 export class ModalComponent {
   /** Ширина вікна (CSS-значення); за замовчуванням — за змістом. */
