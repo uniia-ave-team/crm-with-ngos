@@ -37,30 +37,6 @@
   gap: 12px;
 }
 
-.login__error {
-  padding: 12px 16px;
-  box-sizing: border-box;
-  border-radius: 10px;
-  border: 1px solid #f1c0bb;
-  background: #fdeceb;
-  color: #a1281f;
-  font-family: var(--font-menu);
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-@media (prefers-color-scheme: dark) {
-  .login__error {
-    border-color: #5a2b27;
-    background: #2a1413;
-    color: #ff9b92;
-  }
-}
-
-.login__error-line {
-  margin: 0;
-}
-
 .login__status {
   margin: 0;
   font-family: var(--font-login-body);
@@ -103,65 +79,6 @@
   font-size: 14px;
   line-height: 1.5;
   color: var(--nav-fg-inactive);
-}
-
-.login__input {
-  // Шрифт і розмір тексту в полях — як у решти застосунку (e-Ukraine, 15px),
-  // а не стандартні Roboto 16px з Ionic.
-  font-family: var(--font-menu);
-  font-size: 15px;
-  --border-radius: 8px;
-  --border-color: var(--nav-border);
-  --padding-start: 12px;
-  --padding-end: 12px;
-  --padding-top: 10px;
-  --padding-bottom: 10px;
-  // Підсвітка рамки (фокус, а також «валідно» після торкання) — зелений
-  // кнопки, а не стандартні синій/зелений Ionic.
-  --highlight-color-focused: #32670b;
-  --highlight-color-valid: #32670b;
-}
-
-@media (prefers-color-scheme: dark) {
-  .login__input {
-    --highlight-color-focused: #478a7f;
-    --highlight-color-valid: #478a7f;
-  }
-}
-
-.login__submit {
-  --border-radius: 10px;
-  --background: #32670b;
-  --background-hover: #32670b;
-  --background-activated: #32670b;
-  --color: #ffffff;
-  --box-shadow: none;
-  margin: 0;
-  text-transform: none;
-  font-family: var(--font-menu);
-}
-
-@media (prefers-color-scheme: dark) {
-  .login__submit {
-    --background: #478a7f;
-    --background-hover: #478a7f;
-    --background-activated: #478a7f;
-  }
-}
-
-// Форма створення організації.
-.login__field-error {
-  margin: -8px 0 0;
-  font-family: var(--font-menu);
-  font-size: 12px;
-  line-height: 1.4;
-  color: #a1281f;
-}
-
-@media (prefers-color-scheme: dark) {
-  .login__field-error {
-    color: #ff9b92;
-  }
 }
 
 .login__logo {
@@ -353,52 +270,6 @@
   color: var(--nav-fg-active);
 }
 
-.login-form__label {
-  margin-bottom: 8px;
-  font-family: var(--font-login-title);
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--nav-fg-active);
-}
-
-.login-form .login__input {
-  margin-bottom: 16px;
-}
-
-.login-form__actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.login-form__submit {
-  min-width: 112px;
-}
-
-.login-form__forgot {
-  padding: 0;
-  border: 0;
-  background: none;
-  font-family: var(--font-login-body);
-  font-weight: 300;
-  font-size: 14px;
-  color: var(--nav-fg-inactive);
-  cursor: pointer;
-
-  &:hover,
-  &:focus-visible {
-    color: #32670b;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .login-form__forgot:hover,
-  .login-form__forgot:focus-visible {
-    color: #478a7f;
-  }
-}
-
 .login-form__divider {
   width: 100%;
   margin: 20px 0;
@@ -440,12 +311,6 @@
   .login-form__panel {
     padding: 32px 24px;
   }
-}
-
-// Помилка під полем у формі входу: тулиться до поля, а відступ до наступного
-// підпису забирає margin самого поля.
-.login-form__field-error {
-  margin: -8px 0 12px;
 }
 
 // Кругла кнопка «змінити сервер» у правому верхньому куті форми.

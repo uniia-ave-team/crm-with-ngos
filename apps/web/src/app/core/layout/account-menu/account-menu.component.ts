@@ -1,6 +1,6 @@
 import { Component, input, output } from '@angular/core';
 
-import { AccountTile, accountTooltip } from '../../../shared/account-avatar/account-tile';
+import { AccountTile, accountTooltip } from '../../accounts/account-avatar/account-tile';
 
 export type { AccountTile };
 

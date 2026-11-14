@@ -1,7 +1,6 @@
 import { Injectable, effect, inject, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService, LOGIN_URL, RELOGIN_URL } from './auth.service';
 
@@ -30,7 +29,6 @@ export class SessionService {
   private readonly auth = inject(AuthService);
   private readonly accounts = inject(AccountsService);
   private readonly router = inject(Router);
-  private readonly restore = inject(AccountRestoreService);
 
   private timer: ReturnType<typeof setTimeout> | null = null;
   private hadTokens = false;
@@ -48,7 +46,7 @@ export class SessionService {
     // «зникає» — це не вихід, тож тоді нічого не робимо.
     effect(() => {
       const hasTokens = this.auth.hasTokens();
-      const searching = this.restore.searching();
+      const searching = this.accounts.switching();
       untracked(() => {
         if (searching) {
           return;
@@ -66,7 +64,7 @@ export class SessionService {
 
     // Пошук акаунта завершено (старт застосунку) — час подбати про неактивні.
     effect(() => {
-      if (!this.restore.searching()) {
+      if (!this.accounts.switching()) {
         untracked(() => void this.refreshInactiveAccounts());
       }
     });
@@ -85,7 +83,7 @@ export class SessionService {
    * (активний тоді перемикається) і не паралельно з попереднім проходом.
    */
   private refreshInactiveAccounts(): Promise<void> {
-    if (this.restore.searching()) {
+    if (this.accounts.switching()) {
       return Promise.resolve();
     }
     if (!this.inactiveRefresh) {

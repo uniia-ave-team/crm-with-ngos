@@ -2,8 +2,10 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
+import { CreateNgoCommand, NgoDto, UpdateNgoCommand } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
+import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
 
 const API_NGO_PATH = '/api/v1/ngo';
@@ -38,7 +40,7 @@ export class NgoService {
     console.log(`[NgoService] Створюю організацію: ${url}`);
 
     try {
-      await firstValueFrom(this.http.post(url, { name }).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      await firstValueFrom(this.http.post(url, { name } satisfies CreateNgoCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
       console.log('[NgoService] Організацію створено');
       // Назва й логотип ГО — частина знімка активного акаунта (плитка у вікні
       // акаунта). Щойно створена організація логотипа ще не має.
@@ -100,7 +102,7 @@ export class NgoService {
     console.log(`[NgoService] Оновлюю організацію: ${url}`);
 
     try {
-      await firstValueFrom(this.http.put(url, { name }).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      await firstValueFrom(this.http.put(url, { name } satisfies UpdateNgoCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
       console.log('[NgoService] Організацію оновлено');
       if (accountId) {
         this.accounts.update(accountId, { ngoName: name });
@@ -122,13 +124,13 @@ export class NgoService {
     const url = `${this.connection.serverUrl()}${API_NGO_PATH}`;
     try {
       const ngo = await firstValueFrom(
-        this.http.get<{ name?: string; logoUrl?: string | null }>(url).pipe(timeout(REQUEST_TIMEOUT_MS)),
+        this.http.get<Untrusted<NgoDto>>(url).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      const name = ngo?.name?.trim();
+      const name = typeof ngo?.name === 'string' ? ngo.name.trim() : '';
       if (!name) {
         return null;
       }
-      return { name, logoUrl: ngo.logoUrl?.trim() || null };
+      return { name, logoUrl: (typeof ngo?.logoUrl === 'string' && ngo.logoUrl.trim()) || null };
     } catch {
       return null;
     }

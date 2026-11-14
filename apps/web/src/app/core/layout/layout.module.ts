@@ -1,11 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { IonicModule } from '@ionic/angular/lazy';
 import { TranslatePipe } from '@ngx-translate/core';
 
-import { AccountAvatarModule } from '../../shared/account-avatar/account-avatar.module';
+import { AccountAvatarModule } from '../accounts/account-avatar/account-avatar.module';
+import { SignInFormModule } from '../auth/sign-in-form/sign-in-form.module';
 import { AvatarModule } from '../../shared/avatar/avatar.module';
 import { ModalModule } from '../../shared/modal/modal.module';
 import { PopoverModule } from '../../shared/popover/popover.module';
@@ -20,11 +20,11 @@ import { SecondaryPanelComponent } from './secondary-panel/secondary-panel.compo
   // тому додається напряму в imports поряд з CommonModule/IonicModule.
   imports: [
     CommonModule,
-    FormsModule,
     RouterModule,
     IonicModule,
     TranslatePipe,
     AccountAvatarModule,
+    SignInFormModule,
     AvatarModule,
     ModalModule,
     PopoverModule,

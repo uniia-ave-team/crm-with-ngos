@@ -107,7 +107,7 @@ describe('JoinPage', () => {
   it('shows a loading state while the server is being checked', () => {
     const { element } = create();
     expect(element.textContent).toContain(uk.join.loading);
-    expect(element.querySelector('.join__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
     expect(element.querySelector('ion-input')).toBeNull();
   });
 
@@ -132,7 +132,7 @@ describe('JoinPage', () => {
     answerHealth(fixture, body);
     await settled(fixture, element);
 
-    const error = element.querySelector('.join__error');
+    const error = element.querySelector('.auth-error');
     expect(error?.getAttribute('role')).toBe('alert');
     expect(error?.textContent).toContain(uk.join.noServer);
     const link = error?.querySelector('a');
@@ -151,7 +151,7 @@ describe('JoinPage', () => {
     answerHealth(fixture);
     await answerValidate(fixture, element, {}, status);
 
-    const error = element.querySelector('.join__error');
+    const error = element.querySelector('.auth-error');
     expect(error?.textContent).toContain(uk.join.invalid);
     expect(error?.textContent).not.toContain(uk.join.noServer);
     expect(error?.querySelector('a')?.getAttribute('href')).toBe('/login');
@@ -164,7 +164,7 @@ describe('JoinPage', () => {
     await settled(fixture, element);
 
     http.expectNone((r) => r.url.includes('/invitations/validate'));
-    expect(element.querySelector('.join__error')?.textContent).toContain(uk.join.invalid);
+    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.join.invalid);
   });
 
   it('shows the form with the e-mail of the invitation as the first, disabled field', async () => {
@@ -179,7 +179,7 @@ describe('JoinPage', () => {
     expect(inputs[1].placeholder).toBe(`${uk.join.lastName} *`);
     expect(inputs[3].placeholder).toBe(uk.join.patronymic);
     expect(element.querySelector('app-password-fields')).not.toBeNull();
-    expect(element.querySelector('.join__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
     expect(element.textContent).toContain(uk.join.title);
   });
 
@@ -189,7 +189,7 @@ describe('JoinPage', () => {
     fixture.detectChanges();
 
     http.expectNone(`${server}/api/v1/invitations/accept`);
-    const banner = element.querySelector('.join__error')?.textContent;
+    const banner = element.querySelector('.auth-error')?.textContent;
     expect(banner).toContain(uk.join.error.lastNameRequired);
     expect(element.querySelector('.join__card')?.textContent).toContain(uk.join.error.firstNameRequired);
     expect(element.textContent).toContain(uk.join.error.passwordRequired);
@@ -280,7 +280,7 @@ describe('JoinPage', () => {
     await first;
     fixture.detectChanges();
 
-    const error = element.querySelector('.join__error');
+    const error = element.querySelector('.auth-error');
     expect(error?.textContent).toContain(text);
     expect(error?.nextElementSibling?.classList.contains('join__card')).toBe(true);
     expect(element.querySelector('ion-input')).not.toBeNull();
@@ -292,7 +292,7 @@ describe('JoinPage', () => {
     acceptRequest().flush({ accessToken: 'access', refreshToken: 'refresh' });
     await second;
     fixture.detectChanges();
-    expect(element.querySelector('.join__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
     expect(navigate).toHaveBeenCalledWith(REDIRECT_URL);
   });
 
@@ -312,7 +312,7 @@ describe('JoinPage', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(element.querySelector('.join__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
     expect((element.querySelector('ion-input') as unknown as { value: string }).value).toBe('new@b.org');
   });
 });

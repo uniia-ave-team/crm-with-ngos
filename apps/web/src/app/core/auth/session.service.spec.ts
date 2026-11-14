@@ -5,7 +5,6 @@ import { Router } from '@angular/router';
 
 import { ConnectionService } from '../connection/connection.service';
 import { AccountsService } from '../accounts/accounts.service';
-import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
 
@@ -234,9 +233,8 @@ describe('SessionService', () => {
 
   it('does not move to /login while the search for a valid account is running, even though the active account is switched', () => {
     signIn(600);
-    const restore = TestBed.inject(AccountRestoreService);
     // Під час пошуку акаунти по черзі стають активними й тимчасово «зникають».
-    (restore as unknown as { searchingSignal: { set(v: boolean): void } }).searchingSignal.set(true);
+    TestBed.inject(AccountsService).setSwitching(true);
     TestBed.tick();
     auth.clearTokens();
     TestBed.tick();

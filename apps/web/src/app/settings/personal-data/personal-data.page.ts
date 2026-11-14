@@ -6,7 +6,7 @@ import { IMAGE_TYPES } from '../../core/images/image-types';
 import { CurrentUserService } from '../../core/users/current-user.service';
 import { PRONOUN_CATEGORY } from '../../core/users/pronouns';
 import { UserProfile } from '../../core/users/user-profile';
-import { UsersService } from '../../core/users/users.service';
+import { ProfileUpdate, UsersService } from '../../core/users/users.service';
 import { LANGUAGES, LanguageOption } from '../../core/i18n/languages.generated';
 import { isPhoneNumber } from '../../shared/phone/phone-number';
 
@@ -223,8 +223,8 @@ export class PersonalDataPage {
       this.attempted.set(false);
       // Те, що збережено, одразу видно в меню й знімку акаунта, без нового запиту.
       this.currentUser.applyLocal({
-        firstName: body.firstName ?? '',
-        lastName: body.lastName ?? '',
+        firstName: body.firstName,
+        lastName: body.lastName,
         patronymic: body.patronymic,
         phoneNumber: body.phoneNumber,
         country: body.country,
@@ -287,11 +287,12 @@ export class PersonalDataPage {
   }
 
   /** Тіло запиту: порожні рядки — `null`; фото йде окремим запитом. */
-  private buildBody() {
+  private buildBody(): ProfileUpdate {
     const nullable = (value: string) => value.trim() || null;
     return {
-      firstName: nullable(this.firstName()),
-      lastName: nullable(this.lastName()),
+      // Імʼя й прізвище обовʼязкові (форму без них не надіслати), і сервер приймає їх лише рядками.
+      firstName: this.firstName().trim(),
+      lastName: this.lastName().trim(),
       patronymic: nullable(this.patronymic()),
       phoneNumber: nullable(this.phone()),
       country: nullable(this.country()),

@@ -17,9 +17,9 @@
     "test": "ng test",
     "pretest:ci": "npm run generate",
     "test:ci": "ng test --configuration ci",
-    "prelint": "npm run generate:languages",
+    "prelint": "npm run generate",
     "lint": "ng lint",
-    "prelint:fix": "npm run generate:languages",
+    "prelint:fix": "npm run generate",
     "lint:fix": "ng lint --fix"
   },
   "private": true,

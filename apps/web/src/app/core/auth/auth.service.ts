@@ -1,9 +1,9 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Injectable, Injector, Signal, computed, inject } from '@angular/core';
+import { Injectable, Signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { AccountRestoreService } from '../accounts/account-restore.service';
+import { AuthTokensDto, AuthenticateUserCommand, LogoutRequest, RefreshTokensCommand } from '../../api/generated/models';
 import { AccountsService, StoredAccount } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
@@ -44,13 +44,8 @@ const REFRESH_TOKEN_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 /** Токени неактивного акаунта оновлюються, коли минула половина терміну refresh-токена. */
 const REFRESH_DUE_AFTER_MS = REFRESH_TOKEN_LIFETIME_MS / 2;
 
-/** Пара токенів, яку віддають вхід і завершення реєстрації за запрошенням. */
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-}
-
-type LoginResponse = AuthTokens;
+/** Пара токенів, яку віддають вхід, оновлення токенів і завершення реєстрації за запрошенням. */
+export type AuthTokens = AuthTokensDto;
 
 export type LoginResult = 'ok' | RequestFailure;
 export type RefreshResult = 'ok' | RequestFailure;
@@ -74,8 +69,6 @@ export class AuthService {
   private readonly connection = inject(ConnectionService);
   private readonly accounts = inject(AccountsService);
   private readonly router = inject(Router);
-  // Сервіс пошуку акаунта залежить від цього, тож береться лише в момент виходу.
-  private readonly injector = inject(Injector);
 
   readonly accessToken: Signal<string | null> = computed(() => this.accounts.active()?.accessToken ?? null);
   readonly refreshToken: Signal<string | null> = computed(() => this.accounts.active()?.refreshToken ?? null);
@@ -151,42 +144,44 @@ export class AuthService {
   }
 
   /**
-   * Вихід з активного акаунта: видаляє лише його (запис, місце в індексі, вказівник активного;
-   * мова, інші акаунти й решта памʼяті лишаються) і відкликає його refresh-токен на сервері
-   * (`POST <сервер>/api/v1/auth/logout`). Після цього йде та сама перевірка, що й при вході на
-   * сторінку (`AccountRestoreService`): знайшовся інший чинний акаунт — він стає активним і
-   * відкривається `REDIRECT_URL`; нема — `/relogin`, якщо збережені акаунти ще є, інакше `/login`.
+   * Перша половина виходу: забуває активний акаунт (запис, місце в індексі, вказівник активного;
+   * мова, інші акаунти й решта памʼяті лишаються) і повертає його запис із токенами, щоб їх
+   * можна було відкликати (`revoke`). Прострочений access-токен спершу тихо оновлюється: сервер
+   * вимагає авторизований запит. `null` — активного акаунта не було.
    *
-   * Спершу беремо токени (прострочений access-токен тихо оновлюємо — сервер вимагає
-   * авторизований запит), далі видаляємо акаунт, і лише потім шлемо запит із заголовком,
-   * зібраним уже з цих токенів: результат запиту ні на що не впливає, локально користувач
-   * вийшов у будь-якому разі.
+   * Що буде після виходу (пошук іншого акаунта, перехід) вирішує `AccountRestoreService.signOut`.
    */
-  async logout(): Promise<LogoutResult> {
+  async forgetActive(): Promise<StoredAccount | null> {
     // Виходимо саме з цього акаунта, навіть якщо невдале оновлення токенів зніме з нього активність.
     const id = this.accounts.activeId();
     if (this.hasTokens() && this.accessTokenExpired()) {
       await this.refresh();
     }
-    const account = this.accounts.accounts().find((candidate) => candidate.id === id);
-    const url = `${account?.server ?? this.connection.serverUrl()}${API_LOGOUT_PATH}`;
-
+    const account = this.accounts.accounts().find((candidate) => candidate.id === id) ?? null;
     if (id) {
       this.accounts.remove(id);
     }
-    void this.moveOnAfterLogout();
+    return account;
+  }
 
-    // Токени, які сервер уже відхилив (оновлення не вдалося), відкликати нічого.
+  /**
+   * Друга половина виходу: відкликає refresh-токен забутого акаунта на його сервері
+   * (`POST <сервер>/api/v1/auth/logout`) із заголовком, зібраним з його ж токенів. Результат ні
+   * на що не впливає: локально користувач уже вийшов. `skipped` — відкликати нічого: акаунта чи
+   * токенів нема або сервер їх уже відхилив (оновлення не вдалося).
+   */
+  async revoke(account: StoredAccount | null): Promise<LogoutResult> {
     if (!account?.accessToken || !account.refreshToken || account.outdated) {
       return 'skipped';
     }
+    const url = `${account.server}${API_LOGOUT_PATH}`;
     console.log(`[AuthService] Виходжу: ${url}`);
     try {
       await firstValueFrom(
         this.http
           .post(
             url,
-            { refreshToken: account.refreshToken },
+            { refreshToken: account.refreshToken } satisfies LogoutRequest,
             { headers: new HttpHeaders({ Authorization: `Bearer ${account.accessToken}` }) },
           )
           .pipe(timeout(REQUEST_TIMEOUT_MS)),
@@ -197,20 +192,6 @@ export class AuthService {
       const failure = toRequestFailure(error);
       console.warn(`[AuthService] Не вдалося відкликати refresh-токен на сервері (${failure})`, error);
       return failure;
-    }
-  }
-
-  /**
-   * Після виходу: шукає інший чинний акаунт (як `authGuard`; на час пошуку `SessionService`
-   * мовчить). Знайшовся — на `REDIRECT_URL` зі стражами заново; ні — на `/relogin`, якщо
-   * акаунти ще є, інакше на `/login`.
-   */
-  private async moveOnAfterLogout(): Promise<void> {
-    const result = await this.injector.get(AccountRestoreService).restore();
-    if (result === 'restored') {
-      void this.router.navigateByUrl(REDIRECT_URL, { onSameUrlNavigation: 'reload' });
-    } else {
-      void this.router.navigateByUrl(this.accounts.accounts().length > 0 ? RELOGIN_URL : LOGIN_URL);
     }
   }
 
@@ -232,7 +213,7 @@ export class AuthService {
 
     try {
       const tokens = await firstValueFrom(
-        this.http.post<LoginResponse>(url, { email, password }).pipe(timeout(REQUEST_TIMEOUT_MS)),
+        this.http.post<AuthTokens>(url, { email, password } satisfies AuthenticateUserCommand).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
       this.adoptTokens(server, tokens, email, replaceAccountId);
       console.log('[AuthService] Вхід виконано, токени отримано');
@@ -353,7 +334,7 @@ export class AuthService {
     try {
       const tokens = await firstValueFrom(
         this.http
-          .post<LoginResponse>(url, { accessToken: account.accessToken, refreshToken: account.refreshToken })
+          .post<AuthTokens>(url, { accessToken: account.accessToken, refreshToken: account.refreshToken } satisfies RefreshTokensCommand)
           .pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
       this.accounts.update(account.id, {

@@ -7,7 +7,7 @@ import { Router, RouterModule } from '@angular/router';
 import { IonicModule } from '@ionic/angular/lazy';
 
 import { AppComponent } from './app.component';
-import { AccountRestoreService } from './core/accounts/account-restore.service';
+import { AccountsService } from './core/accounts/accounts.service';
 import { LayoutModule } from './core/layout/layout.module';
 import { PreloaderModule } from './shared/preloader/preloader.module';
 
@@ -42,16 +42,16 @@ describe('AppComponent', () => {
   it('has the full-page preloader in the template, driven by the search for a valid account', () => {
     // Сам вигляд прелоадера перевіряється в його спеку й у браузері; тут — що
     // він є в шаблоні й що його прапорець іде від пошуку акаунта.
-    const restore = TestBed.inject(AccountRestoreService) as unknown as { searchingSignal: { set(v: boolean): void } };
+    const accounts = TestBed.inject(AccountsService);
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const search = (fixture.componentInstance as unknown as { accountSearch(): boolean }).accountSearch;
 
     expect((fixture.nativeElement as HTMLElement).querySelector('app-preloader')).not.toBeNull();
     expect(search()).toBe(false);
-    restore.searchingSignal.set(true);
+    accounts.setSwitching(true);
     expect(search()).toBe(true);
-    restore.searchingSignal.set(false);
+    accounts.setSwitching(false);
     expect(search()).toBe(false);
   });
 });

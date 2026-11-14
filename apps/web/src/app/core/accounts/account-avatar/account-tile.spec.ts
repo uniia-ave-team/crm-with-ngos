@@ -1,4 +1,4 @@
-import { StoredAccount } from '../../core/accounts/accounts.service';
+import { StoredAccount } from '../accounts.service';
 import { AccountTile, accountCaption, accountTooltip, toAccountTiles } from './account-tile';
 
 describe('account tile helpers', () => {

@@ -1,12 +1,14 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../assets/i18n/uk.json';
 import { AccountsService } from '../core/accounts/accounts.service';
 import { AuthService } from '../core/auth/auth.service';
+import { SignInFormComponent } from '../core/auth/sign-in-form/sign-in-form.component';
 import { ConnectionService } from '../core/connection/connection.service';
 import { LanguageService } from '../core/i18n/language.service';
 import { LoginPage } from './login.page';
@@ -16,6 +18,18 @@ interface LoginPageInternals {
   onNgoNameChange(value: string): void;
   onAddressChange(value: string): void;
   submit(): void;
+}
+
+// Форма входу (`app-sign-in-form`) усередині сторінки: її поля й «Ввійти».
+interface SignInFormInternals {
+  email: { (): string };
+  password: { (): string };
+  onFieldChange(field: unknown, value: string): void;
+  submit(): Promise<void>;
+}
+
+function signInForm(fixture: ComponentFixture<LoginPage>): SignInFormInternals {
+  return fixture.debugElement.query(By.directive(SignInFormComponent)).componentInstance as unknown as SignInFormInternals;
 }
 
 // Тексти з параметром `{{url}}`: частина до нього й частина після нього.
@@ -111,7 +125,7 @@ describe('LoginPage', () => {
     fixture.detectChanges();
 
     expect(element.textContent).toContain(uk.login.step1.title);
-    expect(element.querySelector('.login__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
   });
 
   it('shows the login stub when the API is up', () => {
@@ -133,7 +147,7 @@ describe('LoginPage', () => {
     retry.error(new ProgressEvent('error'));
     fixture.detectChanges();
 
-    const error = element.querySelector('.login__error');
+    const error = element.querySelector('.auth-error');
     const card = element.querySelector('.login__card');
     expect(error?.textContent).toContain(afterUrl(uk.login.step1.error.unreachable));
     expect(error?.textContent).toContain(`${location.protocol}//192.168.0.9:5065`);
@@ -153,7 +167,7 @@ describe('LoginPage', () => {
       .flush({ status: 'Unhealthy' }, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
 
-    expect(element.querySelector('.login__error')?.textContent).toContain(afterUrl(uk.login.step1.error.unhealthy));
+    expect(element.querySelector('.auth-error')?.textContent).toContain(afterUrl(uk.login.step1.error.unhealthy));
   });
 
   it('rejects an address that does not look like a server without any request', () => {
@@ -164,7 +178,7 @@ describe('LoginPage', () => {
     submitAddress(page, 'http://');
     fixture.detectChanges();
 
-    expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.step1.error.invalid);
+    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.login.step1.error.invalid);
     http.expectNone(() => true);
   });
 
@@ -177,7 +191,7 @@ describe('LoginPage', () => {
     http.expectOne(`${location.protocol}//192.168.0.9:5065/health`).flush({ status: 'Healthy' });
     answerStatus(connection, fixture);
 
-    expect(element.querySelector('.login__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
   });
 
   it('requests the system status once the login form is shown, and not before', () => {
@@ -207,7 +221,7 @@ describe('LoginPage', () => {
     request.error(new ProgressEvent('error'));
     fixture.detectChanges();
 
-    const error = element.querySelector('.login__error');
+    const error = element.querySelector('.auth-error');
     expect(error?.textContent).toContain(beforeUrl(uk.login.step1.error.noConnection));
     expect(element.querySelector('.login__card')?.textContent).toContain(uk.login.step1.title);
   });
@@ -216,7 +230,7 @@ describe('LoginPage', () => {
     const { fixture, element, request } = create();
     request.error(new ProgressEvent('error'));
     fixture.detectChanges();
-    expect(element.querySelector('.login__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
   });
 
   describe('login form visual', () => {
@@ -236,8 +250,10 @@ describe('LoginPage', () => {
       expect(element.querySelector('.login-form__title')?.textContent).toContain(uk.login.form.title);
       expect(element.textContent).toContain(uk.login.form.email);
       expect(element.querySelectorAll('.login-form ion-input')).toHaveLength(2);
-      expect(element.querySelector('.login-form__submit')?.textContent).toContain(uk.login.form.submit);
-      expect(element.querySelector('.login-form__forgot')?.textContent).toContain(uk.login.form.forgot);
+      expect(element.querySelector('.login-form .sign-in-form__submit')?.textContent).toContain(uk.login.form.submit);
+      expect(element.querySelector('.login-form .sign-in-form__forgot')?.textContent).toContain(uk.login.form.forgot);
+      // На цій сторінці сервер уже визначено: поля адреси у формі входу нема.
+      expect(element.querySelector('.sign-in-form__address')).toBeNull();
     });
 
     describe('the image of the form (GET /api/v1/loginpageimages/random)', () => {
@@ -470,17 +486,15 @@ describe('LoginPage', () => {
       expect(input.value).toBe('');
     });
 
-    it('forgets what was typed into the forms', async () => {
+    it('forgets what was typed into the sign-in form: the form goes away with the step', async () => {
       const ctx = createWithStatus({ hasAdmin: true, hasNgo: true, isSetupComplete: true }, false);
-      const form = ctx.fixture.componentInstance as unknown as {
-        loginEmail: () => string;
-        onFieldChange(field: unknown, value: string): void;
-      };
-      form.onFieldChange(form.loginEmail, 'a@b.org');
-      expect(form.loginEmail()).toBe('a@b.org');
+      const form = signInForm(ctx.fixture);
+      form.onFieldChange(form.email, 'a@b.org');
+      expect(form.email()).toBe('a@b.org');
 
       await clickAndAnswerProbe(ctx, 'healthy');
-      expect(form.loginEmail()).toBe('');
+      // Крок адреси: форми входу з введеним більше нема, наступна почнеться порожньою.
+      expect(ctx.fixture.debugElement.query(By.directive(SignInFormComponent))).toBeNull();
     });
 
     it('stays on step 1 while the server is fine, and moves on once a new address is submitted', async () => {
@@ -513,28 +527,21 @@ describe('LoginPage', () => {
       page.onAddressChange('http://');
       page.submit();
       ctx.fixture.detectChanges();
-      expect(ctx.element.querySelector('.login__error')?.textContent).toContain(uk.login.step1.error.invalid);
+      expect(ctx.element.querySelector('.auth-error')?.textContent).toContain(uk.login.step1.error.invalid);
       expect(ctx.element.querySelector('.login-form')).toBeNull();
     });
   });
 
   describe('login form submit', () => {
-    interface LoginFormInternals {
-      onFieldChange(field: unknown, value: string): void;
-      submitLogin(): Promise<void>;
-      loginEmail: unknown;
-      loginPassword: unknown;
-    }
-
     function createLoginForm() {
       const ctx = create();
       ctx.request.flush({ status: 'Healthy' });
       answerStatus(ctx.connection, ctx.fixture);
-      const form = ctx.fixture.componentInstance as unknown as LoginFormInternals;
+      const form = signInForm(ctx.fixture);
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
       const fill = (email: string, password: string) => {
-        form.onFieldChange(form.loginEmail, email);
-        form.onFieldChange(form.loginPassword, password);
+        form.onFieldChange(form.email, email);
+        form.onFieldChange(form.password, password);
       };
       return { ...ctx, form, navigate, fill };
     }
@@ -545,9 +552,9 @@ describe('LoginPage', () => {
 
     it('requires both fields and sends no request without them', () => {
       const { fixture, element, form } = createLoginForm();
-      void form.submitLogin();
+      void form.submit();
       fixture.detectChanges();
-      const errors = Array.from(element.querySelectorAll('.login-form__field-error')).map((e) => e.textContent?.trim());
+      const errors = Array.from(element.querySelectorAll('.sign-in-form__field-error')).map((e) => e.textContent?.trim());
       expect(errors).toEqual([uk.login.form.error.emailRequired, uk.login.form.error.passwordRequired]);
       // Крім запиту зображення форми, жодних запитів.
       http.expectNone((r) => !r.url.endsWith('/loginpageimages/random'));
@@ -556,7 +563,7 @@ describe('LoginPage', () => {
     it('logs in, keeps the tokens and goes to the planner when the NGO exists', async () => {
       const { connection, form, navigate, fill } = createLoginForm();
       fill(' a@b.org ', 'Abcde1!x');
-      const done = form.submitLogin();
+      const done = form.submit();
 
       const login = http.expectOne(loginUrl(connection));
       expect(login.request.body).toEqual({ email: 'a@b.org', password: 'Abcde1!x' });
@@ -576,7 +583,7 @@ describe('LoginPage', () => {
     it('shows the NGO form when the NGO has not been created yet', async () => {
       const { fixture, connection, element, form, navigate, fill } = createLoginForm();
       fill('a@b.org', 'Abcde1!x');
-      const done = form.submitLogin();
+      const done = form.submit();
       http.expectOne(loginUrl(connection)).flush(tokens);
       await vi.waitFor(() =>
         http.expectOne(statusUrl(connection)).flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false }),
@@ -592,18 +599,19 @@ describe('LoginPage', () => {
       [401, uk.login.form.error.unauthorized],
       [400, uk.login.form.error.invalid],
       [500, uk.login.form.error.error],
-    ])('shows a block above the form for HTTP %i and requests no status', async (status, text) => {
+    ])('shows a block above the fields for HTTP %i and requests no status', async (status, text) => {
       const { fixture, connection, element, form, navigate, fill } = createLoginForm();
       fill('a@b.org', 'wrong');
-      const done = form.submitLogin();
+      const done = form.submit();
       http.expectOne(loginUrl(connection)).flush({}, { status, statusText: 'x' });
       await done;
       fixture.detectChanges();
 
-      const banner = element.querySelector('.login__error')!;
+      // Блок помилки — у самій формі входу, над полями.
+      const banner = element.querySelector('.login-form .auth-error')!;
       expect(banner.textContent).toContain(text);
       expect(
-        banner.compareDocumentPosition(element.querySelector('.login-form')!) & Node.DOCUMENT_POSITION_FOLLOWING,
+        banner.compareDocumentPosition(element.querySelector('.sign-in-form__email')!) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
       expect(navigate).not.toHaveBeenCalled();
       http.expectNone(statusUrl(connection));
@@ -613,14 +621,14 @@ describe('LoginPage', () => {
     it('shows an error when the system status cannot be loaded after a successful login', async () => {
       const { fixture, connection, element, form, navigate, fill } = createLoginForm();
       fill('a@b.org', 'Abcde1!x');
-      const done = form.submitLogin();
+      const done = form.submit();
       http.expectOne(loginUrl(connection)).flush(tokens);
       await vi.waitFor(() => http.expectOne(statusUrl(connection)).error(new ProgressEvent('error')));
       await done;
       fixture.detectChanges();
 
       expect(navigate).not.toHaveBeenCalled();
-      expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.form.error.statusFailed);
+      expect(element.querySelector('.auth-error')?.textContent).toContain(uk.login.form.error.statusFailed);
     });
   });
 
@@ -928,7 +936,7 @@ describe('LoginPage', () => {
       const submit = () => {
         form.submitAdmin();
         ctx.fixture.detectChanges();
-        return Array.from(ctx.element.querySelectorAll('.login__error-line, .login__field-error, .password-fields__error')).map((e) => e.textContent?.trim());
+        return Array.from(ctx.element.querySelectorAll('.auth-error__line, .auth-field-error, .password-fields__error')).map((e) => e.textContent?.trim());
       };
       return { ...ctx, fill, submit };
     }
@@ -966,7 +974,7 @@ describe('LoginPage', () => {
 
     it('shows no errors before the first submit', () => {
       const { element } = createAdmin();
-      expect(element.querySelector('.login__field-error')).toBeNull();
+      expect(element.querySelector('.auth-field-error')).toBeNull();
     });
 
     it('requires every field', () => {
@@ -985,12 +993,12 @@ describe('LoginPage', () => {
       const { element, submit } = createAdmin();
       submit();
       const card = element.querySelector('.login__card')!;
-      const banner = element.querySelector('.login__error')!;
+      const banner = element.querySelector('.auth-error')!;
       expect(banner.textContent).toContain(uk.login.admin.error.lastNameRequired);
       expect(banner.textContent).not.toContain(uk.login.admin.error.firstNameRequired);
       expect(banner.textContent).not.toContain(uk.login.admin.error.emailRequired);
       expect(banner.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(card.querySelectorAll('.login__field-error, .password-fields__error')).toHaveLength(4);
+      expect(card.querySelectorAll('.auth-field-error, .password-fields__error')).toHaveLength(4);
       expect(card.textContent).toContain(uk.login.admin.error.firstNameRequired);
       expect(card.textContent).not.toContain(uk.login.admin.error.lastNameRequired);
     });
@@ -1082,7 +1090,7 @@ describe('LoginPage', () => {
       http.expectOne(`${connection.serverUrl()}/api/v1/users`).flush({}, { status: 400, statusText: 'Bad Request' });
       await vi.waitFor(() => {
         fixture.detectChanges();
-        expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.admin.saveError.createInvalid);
+        expect(element.querySelector('.auth-error')?.textContent).toContain(uk.login.admin.saveError.createInvalid);
       });
       http.expectNone(`${connection.serverUrl()}/api/v1/auth/login`);
       expect(element.textContent).toContain(uk.login.admin.title);
@@ -1097,7 +1105,7 @@ describe('LoginPage', () => {
       login.flush({}, { status: 401, statusText: 'Unauthorized' });
       await vi.waitFor(() => {
         fixture.detectChanges();
-        expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.admin.saveError.loginUnauthorized);
+        expect(element.querySelector('.auth-error')?.textContent).toContain(uk.login.admin.saveError.loginUnauthorized);
       });
 
       submit();
@@ -1326,7 +1334,7 @@ describe('LoginPage', () => {
         fixture.detectChanges();
 
         expect(navigate).not.toHaveBeenCalled();
-        expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.ngo.logoUploadError.forbidden);
+        expect(element.querySelector('.auth-error')?.textContent).toContain(uk.login.ngo.logoUploadError.forbidden);
         expect(element.textContent).toContain(uk.login.ngo.title);
       });
 
@@ -1344,7 +1352,7 @@ describe('LoginPage', () => {
         (await vi.waitFor(() => http.expectOne(logoUrl))).flush({}, { status, statusText: 'x' });
         await done;
         fixture.detectChanges();
-        expect(element.querySelector('.login__error')?.textContent).toContain(uk.login.ngo.logoUploadError[key]);
+        expect(element.querySelector('.auth-error')?.textContent).toContain(uk.login.ngo.logoUploadError[key]);
       });
 
       it('does not create the organization a second time: the next "Continue" only repeats the logo', async () => {
@@ -1367,7 +1375,7 @@ describe('LoginPage', () => {
 
         expect(navigate).toHaveBeenCalledWith('/planner');
         fixture.detectChanges();
-        expect(element.querySelector('.login__error')).toBeNull();
+        expect(element.querySelector('.auth-error')).toBeNull();
       });
 
       it('locks the name once the organization is created', async () => {
@@ -1436,15 +1444,15 @@ describe('LoginPage', () => {
 
       void form.submitNgo();
       fixture.detectChanges();
-      const nameError = element.querySelector('.login__card > .login__field-error');
+      const nameError = element.querySelector('.login__card > .auth-field-error');
       expect(nameError?.textContent).toContain(uk.login.ngo.nameRequired);
-      expect(element.querySelector('.login__error')).toBeNull();
+      expect(element.querySelector('.auth-error')).toBeNull();
 
       pickLogo(element, new File(['x'], 'doc.pdf', { type: 'application/pdf' }));
       fixture.detectChanges();
-      const logoError = element.querySelector('.login__logo .login__field-error');
+      const logoError = element.querySelector('.login__logo .auth-field-error');
       expect(logoError?.textContent).toContain(uk.login.ngo.logoTypeError);
-      expect(element.querySelector('.login__error')).toBeNull();
+      expect(element.querySelector('.auth-error')).toBeNull();
 
       form.onNgoNameChange('Організація');
       pickLogo(element, new File(['x'], 'logo.png', { type: 'image/png' }));
@@ -1452,7 +1460,7 @@ describe('LoginPage', () => {
       http.expectOne(`${connection.serverUrl()}/api/v1/ngo`).flush({}, { status: 403, statusText: 'Forbidden' });
       await done;
       fixture.detectChanges();
-      const banner = element.querySelector('.login__error')!;
+      const banner = element.querySelector('.auth-error')!;
       const card = element.querySelector('.login__card')!;
       expect(banner.textContent).toContain(uk.login.ngo.saveError.forbidden);
       expect(banner.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1538,6 +1546,6 @@ describe('LoginPage', () => {
     fixture.componentRef.setInput('error', 'no-connection');
     request.flush({ status: 'Healthy' });
     fixture.detectChanges();
-    expect(element.querySelector('.login__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
   });
 });

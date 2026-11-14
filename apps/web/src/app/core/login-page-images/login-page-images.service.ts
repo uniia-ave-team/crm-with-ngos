@@ -2,7 +2,9 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
+import { LoginPageImageDto, PagedResultOfLoginPageImageDto } from '../../api/generated/models';
 import { ConnectionService } from '../connection/connection.service';
+import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
 
 /** Зображення збоку форм входу, поки з сервера нічого не отримано (або його нема). */
@@ -28,11 +30,6 @@ export interface LoginPageImagesPage {
   readonly hasNextPage: boolean;
 }
 
-interface LoginPageImagesResponse {
-  readonly items?: unknown;
-  readonly hasNextPage?: boolean;
-}
-
 /**
  * Зображення сторінки входу на сервері (`/api/v1/loginpageimages`, права
  * `ViewLoginPageImages` та інші окремо для кожної дії).
@@ -55,14 +52,14 @@ export class LoginPageImagesService {
     try {
       const params = new HttpParams().set('PageNumber', pageNumber).set('PageSize', pageSize);
       const body = await firstValueFrom(
-        this.http.get<LoginPageImagesResponse>(url, { params }).pipe(timeout(REQUEST_TIMEOUT_MS)),
+        this.http.get<Untrusted<PagedResultOfLoginPageImageDto>>(url, { params }).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
       if (!Array.isArray(body?.items)) {
         console.warn('[LoginPageImagesService] Відповідь без списку зображень', body);
         return 'error';
       }
       const images: LoginPageImage[] = [];
-      for (const item of body.items as { id?: unknown; url?: unknown }[]) {
+      for (const item of body.items as Untrusted<LoginPageImageDto>[]) {
         if (typeof item?.id === 'string' && typeof item.url === 'string' && item.url.trim()) {
           images.push({ id: item.id, url: this.absolute(item.url.trim()) });
         }
@@ -89,7 +86,7 @@ export class LoginPageImagesService {
 
     try {
       const body = await firstValueFrom(
-        this.http.get<{ id?: unknown; url?: unknown }>(url).pipe(timeout(REQUEST_TIMEOUT_MS)),
+        this.http.get<Untrusted<LoginPageImageDto>>(url).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
       const link = typeof body?.url === 'string' ? body.url.trim() : '';
       if (typeof body?.id !== 'string' || !link) {

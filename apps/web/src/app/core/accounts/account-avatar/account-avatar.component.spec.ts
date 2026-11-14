@@ -3,7 +3,7 @@ import { By } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { ProtectedSrcDirective } from '../protected-src/protected-src.directive';
+import { ProtectedSrcDirective } from '../../../shared/protected-src/protected-src.directive';
 import { AccountAvatarComponent } from './account-avatar.component';
 import { AccountAvatarModule } from './account-avatar.module';
 import { AccountTile } from './account-tile';

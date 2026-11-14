@@ -2,11 +2,11 @@ import { Component, Signal, computed, effect, inject, signal, untracked } from '
 import { Router } from '@angular/router';
 
 import { PopoverComponent } from '../../../shared/popover/popover.component';
-import { AccountTile, toAccountTiles } from '../../../shared/account-avatar/account-tile';
+import { AccountTile, toAccountTiles } from '../../accounts/account-avatar/account-tile';
 import { AddAccountComponent } from '../add-account/add-account.component';
 import { AccountRestoreService } from '../../accounts/account-restore.service';
 import { AccountsService } from '../../accounts/accounts.service';
-import { AuthService, REDIRECT_URL } from '../../auth/auth.service';
+import { REDIRECT_URL } from '../../auth/auth.service';
 import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
 import { mobileLogoBase } from '../../i18n/mobile-logo';
@@ -38,7 +38,6 @@ export class PrimaryNavComponent {
   private readonly languageService = inject(LanguageService);
   private readonly currentUser = inject(CurrentUserService);
   private readonly router = inject(Router);
-  private readonly auth = inject(AuthService);
   private readonly accountsStore = inject(AccountsService);
   private readonly restore = inject(AccountRestoreService);
 
@@ -64,7 +63,7 @@ export class PrimaryNavComponent {
 
   /**
    * Акаунт, який показують рейл і меню: слідує за активним, але не під час пошуку акаунта й
-   * перемикання по плитці (`AccountRestoreService.searching`). Там активним на мить стає
+   * перемикання по плитці (`AccountsService.switching`). Там активним на мить стає
    * акаунт, на який перемикаються, і якби меню йшло за ним, аватар і пункти мигтіли б чужими,
    * а коли перемикання не вдалось — ще й лишились би порожніми. Змінюється лише після завершення.
    */
@@ -78,7 +77,7 @@ export class PrimaryNavComponent {
   constructor() {
     effect(() => {
       const id = this.accountsStore.activeId();
-      const searching = this.restore.searching();
+      const searching = this.accountsStore.switching();
       untracked(() => {
         if (!searching) {
           this.shownAccountId.set(id);
@@ -168,7 +167,7 @@ export class PrimaryNavComponent {
    */
   protected async signOut(popover: PopoverComponent): Promise<void> {
     await popover.close();
-    await this.auth.logout();
+    await this.restore.signOut();
   }
 
   // Мобільний вордмарк-логотип (з текстом) є в окремих мовних варіантах

@@ -1,3 +1,5 @@
+import { UserProfileDto } from '../../api/generated/models';
+
 /** Роль користувача в його профілі (`roles` відповіді `/users/me`). */
 export interface UserRole {
   id: string;
@@ -16,21 +18,15 @@ export function sanitizeRoles(value: unknown): readonly UserRole[] {
 }
 
 /**
- * Профіль поточного користувача (`GET /api/v1/users/me`).
- * Поля, які ще не потрібні, не описано.
+ * Профіль поточного користувача (`GET /api/v1/users/me`): поля контракту (`UserProfileDto`), які
+ * застосунок читає. Імена й типи беруться з контракту, тож якщо сервер перейменує чи прибере
+ * поле, збірка впаде. Обовʼязкові лише `id`, пошта, імена, ролі й додаткові поля; решта може
+ * бути відсутня (сервер іншої версії) і тому необовʼязкова.
  */
-export interface UserProfile {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  patronymic?: string | null;
-  phoneNumber?: string | null;
-  country?: string | null;
-  emergencyContact?: string | null;
-  preferredLanguage?: string | null;
-  pronouns?: string | null;
-  avatarUrl?: string | null;
-  roles: UserRole[];
-  customFields: unknown[];
-}
+export type UserProfile = Pick<UserProfileDto, 'id' | 'email' | 'firstName' | 'lastName' | 'roles' | 'customFields'> &
+  Partial<
+    Pick<
+      UserProfileDto,
+      'patronymic' | 'phoneNumber' | 'country' | 'emergencyContact' | 'preferredLanguage' | 'pronouns' | 'avatarUrl'
+    >
+  >;

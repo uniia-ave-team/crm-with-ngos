@@ -1,6 +1,7 @@
-import { Injectable, Signal, inject, signal } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { Router } from '@angular/router';
 
-import { AuthService } from '../auth/auth.service';
+import { AuthService, LOGIN_URL, LogoutResult, REDIRECT_URL, RELOGIN_URL } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
 import { CurrentUserService } from '../users/current-user.service';
 import { AccountsService } from './accounts.service';
@@ -50,21 +51,20 @@ export class AccountRestoreService {
   private readonly auth = inject(AuthService);
   private readonly currentUser = inject(CurrentUserService);
 
-  private readonly searchingSignal = signal(false);
-  /**
-   * Іде пошук: акаунти по черзі стають активними, тож «активного нема» в цей
-   * час не означає виходу (на цьому тримається `SessionService`).
-   */
-  readonly searching: Signal<boolean> = this.searchingSignal.asReadonly();
+  private readonly router = inject(Router);
 
   private inFlight: Promise<RestoreResult> | null = null;
 
-  /** Шукає чинний акаунт; виклики, що збіглися в часі, діляться одним пошуком. */
+  /**
+   * Шукає чинний акаунт; виклики, що збіглися в часі, діляться одним пошуком. На час пошуку
+   * вмикається `AccountsService.switching`: акаунти по черзі стають активними, тож «активного
+   * нема» в цей час не означає виходу (на цьому тримається `SessionService`).
+   */
   restore(): Promise<RestoreResult> {
     if (!this.inFlight) {
-      this.searchingSignal.set(true);
+      this.accounts.setSwitching(true);
       this.inFlight = this.search().finally(() => {
-        this.searchingSignal.set(false);
+        this.accounts.setSwitching(false);
         this.inFlight = null;
       });
     }
@@ -81,7 +81,7 @@ export class AccountRestoreService {
    * - не пройшла → активним повертається попередній акаунт, а цей позначається: сервер
    *   відхилив токени — застарілим (`markOutdated`), не відповів — недоступним
    *   (`markUnavailable`); підключення й профіль знову належать попередньому.
-   * На час перевірки так само, як і під час пошуку, вмикається `searching`: тимчасове
+   * На час перевірки так само, як і під час пошуку, вмикається `AccountsService.switching`: тимчасове
    * перемикання активного акаунта не вважається виходом. Невідомий `id` — `unavailable`
    * без жодних змін.
    */
@@ -93,7 +93,7 @@ export class AccountRestoreService {
     await this.inFlight?.catch(() => undefined);
 
     const previous = this.accounts.activeId();
-    this.searchingSignal.set(true);
+    this.accounts.setSwitching(true);
     try {
       this.accounts.setActive(id);
       const check = await this.check();
@@ -113,7 +113,29 @@ export class AccountRestoreService {
       }
       return check;
     } finally {
-      this.searchingSignal.set(false);
+      this.accounts.setSwitching(false);
+    }
+  }
+
+  /**
+   * Вихід з активного акаунта: він забувається (`AuthService.forgetActive`), його refresh-токен
+   * відкликається на сервері (`AuthService.revoke`), а далі йде та сама перевірка, що й при вході
+   * на сторінку: знайшовся інший чинний акаунт — він стає активним і відкривається
+   * `REDIRECT_URL` (зі стражами заново); нема — `/relogin`, якщо збережені акаунти ще є, інакше
+   * `/login`. Пошук починається одразу після забування, не чекаючи відповіді сервера на
+   * відкликання: локально користувач вийшов у будь-якому разі. Повертає результат відкликання.
+   */
+  async signOut(): Promise<LogoutResult> {
+    const account = await this.auth.forgetActive();
+    void this.moveOnAfterSignOut();
+    return this.auth.revoke(account);
+  }
+
+  private async moveOnAfterSignOut(): Promise<void> {
+    if ((await this.restore()) === 'restored') {
+      void this.router.navigateByUrl(REDIRECT_URL, { onSameUrlNavigation: 'reload' });
+    } else {
+      void this.router.navigateByUrl(this.accounts.accounts().length > 0 ? RELOGIN_URL : LOGIN_URL);
     }
   }
 

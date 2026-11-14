@@ -2,7 +2,9 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
+import { CreateRoleCommand, PagedResultOfRoleDto, RoleDetailsDto, RoleDto, UpdateRoleRequest } from '../../api/generated/models';
 import { ConnectionService } from '../connection/connection.service';
+import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
 
 const API_ROLES_PATH = '/api/v1/roles';
@@ -48,11 +50,6 @@ export interface RoleDetails extends Role {
   readonly claims: readonly string[];
 }
 
-interface RolesResponse {
-  readonly items?: unknown;
-  readonly hasNextPage?: boolean;
-}
-
 /** Ролі на сервері (`/api/v1/roles`; для читання потрібна лише авторизація). */
 @Injectable({ providedIn: 'root' })
 export class RolesService {
@@ -73,12 +70,12 @@ export class RolesService {
       console.log(`[RolesService] Запитую ролі (сторінка ${pageNumber}): ${url}`);
       try {
         const params = new HttpParams().set('PageNumber', pageNumber).set('PageSize', PAGE_SIZE);
-        const body = await firstValueFrom(this.http.get<RolesResponse>(url, { params }).pipe(timeout(REQUEST_TIMEOUT_MS)));
+        const body = await firstValueFrom(this.http.get<Untrusted<PagedResultOfRoleDto>>(url, { params }).pipe(timeout(REQUEST_TIMEOUT_MS)));
         if (!Array.isArray(body?.items)) {
           console.warn('[RolesService] Відповідь без списку ролей', body);
           return 'error';
         }
-        for (const item of body.items as Record<string, unknown>[]) {
+        for (const item of body.items as Untrusted<RoleDto>[]) {
           const role = toRole(item);
           if (role) {
             roles.push(role);
@@ -108,7 +105,8 @@ export class RolesService {
     console.log(`[RolesService] Створюю роль: ${url}`);
     let id: string;
     try {
-      const body = await firstValueFrom(this.http.post<unknown>(url, draft).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      const command = { name: draft.name, feminitiveName: draft.feminitiveName, pluralName: draft.pluralName } satisfies CreateRoleCommand;
+      const body = await firstValueFrom(this.http.post<unknown>(url, command).pipe(timeout(REQUEST_TIMEOUT_MS)));
       const created = typeof body === 'string' ? body : (body as Record<string, unknown> | null)?.['id'] ?? (body as Record<string, unknown> | null)?.['Id'];
       if (typeof created !== 'string' || !created) {
         console.warn('[RolesService] Відповідь без id створеної ролі', body);
@@ -141,7 +139,7 @@ export class RolesService {
     const url = `${this.connection.serverUrl()}${API_ROLES_PATH}/${encodeURIComponent(id)}`;
     console.log(`[RolesService] Оновлюю роль: ${url}`);
     try {
-      const body = { newName: draft.name, feminitiveName: draft.feminitiveName, pluralName: draft.pluralName };
+      const body = { newName: draft.name, feminitiveName: draft.feminitiveName, pluralName: draft.pluralName } satisfies UpdateRoleRequest;
       await firstValueFrom(this.http.put(url, body).pipe(timeout(REQUEST_TIMEOUT_MS)));
     } catch (error) {
       const failure = toRequestFailure(error);
@@ -198,13 +196,13 @@ export class RolesService {
     const url = `${this.connection.serverUrl()}${API_ROLES_PATH}/${encodeURIComponent(id)}`;
     console.log(`[RolesService] Запитую роль: ${url}`);
     try {
-      const body = await firstValueFrom(this.http.get<Record<string, unknown>>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      const body = await firstValueFrom(this.http.get<Untrusted<RoleDetailsDto>>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
       const role = toRole(body);
       if (!role) {
         console.warn('[RolesService] Відповідь без id чи назви ролі', body);
         return 'error';
       }
-      const claims = Array.isArray(body['claims']) ? body['claims'].filter((claim): claim is string => typeof claim === 'string') : [];
+      const claims = Array.isArray(body?.claims) ? body.claims.filter((claim): claim is string => typeof claim === 'string') : [];
       return { ...role, claims };
     } catch (error) {
       const failure = toRequestFailure(error);
@@ -214,16 +212,16 @@ export class RolesService {
   }
 }
 
-function toRole(item: Record<string, unknown> | null | undefined): Role | null {
-  const name = typeof item?.['name'] === 'string' ? item['name'].trim() : '';
-  if (typeof item?.['id'] !== 'string' || !name) {
+function toRole(item: Untrusted<RoleDto>): Role | null {
+  const name = typeof item?.name === 'string' ? item.name.trim() : '';
+  if (typeof item?.id !== 'string' || !name) {
     return null;
   }
   const optional = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
   return {
-    id: item['id'],
+    id: item.id,
     name,
-    feminitiveName: optional(item['feminitiveName']),
-    pluralName: optional(item['pluralName']),
+    feminitiveName: optional(item.feminitiveName),
+    pluralName: optional(item.pluralName),
   };
 }

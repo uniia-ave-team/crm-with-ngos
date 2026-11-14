@@ -2,6 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Signal, computed, inject, signal } from '@angular/core';
 import { Subscription, finalize, firstValueFrom, timeout } from 'rxjs';
 
+import { SystemSetupStatusDto } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
 
 const API_PORT = 5065;
@@ -29,11 +30,7 @@ export type SystemStatusState = 'idle' | 'loading' | 'loaded' | 'failed';
  * `GET /api/v1/system/status` (авторизація не потрібна). За ним фронтенд
  * вирішує, чи показувати майстер початкового налаштування.
  */
-export interface SystemStatus {
-  hasAdmin: boolean;
-  hasNgo: boolean;
-  isSetupComplete: boolean;
-}
+export type SystemStatus = SystemSetupStatusDto;
 
 /**
  * Розбирає адресу сервера, введену користувачем (домен, IP або повне

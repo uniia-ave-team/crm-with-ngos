@@ -172,6 +172,15 @@ export class AccountsService {
     () => this.accountsSignal().find((account) => account.id === this.activeIdSignal()) ?? null,
   );
 
+  private readonly switchingSignal = signal(false);
+  /**
+   * Іде пошук чинного акаунта чи перемикання на інший (`AccountRestoreService`): активними на мить
+   * стають акаунти, які лише перевіряються, тож «активного нема» чи «активний інший» у цей час
+   * не означає ні виходу, ні справжньої зміни акаунта. Прапорець живе тут, у сховищі, бо на нього
+   * зважають сервіси, нижчі за пошук: профіль, сесія, меню.
+   */
+  readonly switching: Signal<boolean> = this.switchingSignal.asReadonly();
+
   constructor() {
     this.reload();
     // Інша вкладка змінила акаунти (додала, оновила токени, вийшла) — підхоплюємо.
@@ -354,6 +363,11 @@ export class AccountsService {
     if (this.activeIdSignal() === changedId) {
       this.setActive(null);
     }
+  }
+
+  /** Вмикає й вимикає `switching`; це робить лише той, хто тимчасово перемикає активний акаунт. */
+  setSwitching(switching: boolean): void {
+    this.switchingSignal.set(switching);
   }
 
   /** Робить акаунт активним (`null` — зняти вибір). Неіснуючий `id` ігнорується. */

@@ -1,4 +1,4 @@
-import { AccountThumbnail, StoredAccount } from '../../core/accounts/accounts.service';
+import { AccountThumbnail, StoredAccount } from '../accounts.service';
 
 /** Акаунт у списку: знімок із запису акаунта (імʼя, аватар, назва й логотип ГО). */
 export interface AccountTile {

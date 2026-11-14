@@ -8,7 +8,7 @@ import { ConnectionService } from '../core/connection/connection.service';
 import { LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
 import { DEFAULT_LOGIN_IMAGE } from '../core/login-page-images/login-page-images.service';
-import { AccountCaption, AccountTile, accountCaption, toAccountTiles } from '../shared/account-avatar/account-tile';
+import { AccountCaption, AccountTile, accountCaption, toAccountTiles } from '../core/accounts/account-avatar/account-tile';
 
 /** Що показано справа: список акаунтів чи форма входу. */
 type ReloginView = 'list' | 'form';

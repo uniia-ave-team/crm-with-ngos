@@ -2,7 +2,6 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
@@ -186,7 +185,7 @@ describe('CurrentUserService', () => {
 
   describe('a temporary switch of the active account (the search for an account, the click on a tile)', () => {
     const searching = (value: boolean) =>
-      (TestBed.inject(AccountRestoreService) as unknown as { searchingSignal: { set(v: boolean): void } }).searchingSignal.set(value);
+      TestBed.inject(AccountsService).setSwitching(value);
     let first: string;
 
     async function loadedFirst(): Promise<void> {

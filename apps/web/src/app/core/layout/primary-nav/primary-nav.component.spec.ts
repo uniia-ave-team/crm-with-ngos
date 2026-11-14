@@ -120,7 +120,7 @@ describe('PrimaryNavComponent avatar initials', () => {
 
     describe('while another account is being switched to (the search for an account and the click on a tile)', () => {
       const searching = (value: boolean) =>
-        (TestBed.inject(AccountRestoreService) as unknown as { searchingSignal: { set(v: boolean): void } }).searchingSignal.set(value);
+        TestBed.inject(AccountsService).setSwitching(value);
       const ngoName = (fixture: ReturnType<typeof TestBed.createComponent<PrimaryNavComponent>>) =>
         (fixture.componentInstance as unknown as { ngoName(): string }).ngoName();
       const activeTiles = (fixture: ReturnType<typeof TestBed.createComponent<PrimaryNavComponent>>) =>
@@ -266,8 +266,8 @@ describe('PrimaryNavComponent avatar initials', () => {
     });
   });
 
-  it('signs the user out from the account popover: closes it first, then calls the logout', async () => {
-    const logout = vi.spyOn(TestBed.inject(AuthService), 'logout').mockResolvedValue('ok');
+  it('signs the user out from the account popover: closes it first, then signs out', async () => {
+    const logout = vi.spyOn(TestBed.inject(AccountRestoreService), 'signOut').mockResolvedValue('ok');
     const fixture = TestBed.createComponent(PrimaryNavComponent);
     fixture.detectChanges();
     let finishClosing!: () => void;

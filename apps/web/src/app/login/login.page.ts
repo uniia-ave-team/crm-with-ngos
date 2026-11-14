@@ -5,6 +5,7 @@ import { NO_CONNECTION_ERROR } from '../core/connection/connection.guard';
 import { AccountRestoreService } from '../core/accounts/account-restore.service';
 import { AccountsService } from '../core/accounts/accounts.service';
 import { AuthService, LoginResult, REDIRECT_URL, RELOGIN_URL } from '../core/auth/auth.service';
+import { AfterSignIn } from '../core/auth/sign-in-form/sign-in-form.component';
 import { ConnectionService } from '../core/connection/connection.service';
 import { AppLanguage, LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
@@ -223,25 +224,11 @@ export class LoginPage implements OnDestroy {
     ];
   });
 
-  /** Форма входу. */
-  protected readonly loginEmail = signal('');
-  protected readonly loginPassword = signal('');
-  protected readonly loginSaving = signal(false);
-  private readonly loginSubmitted = signal(false);
-  /** Ключ помилки запиту (`login.form.error.<ключ>`) або `null`. */
-  private readonly loginSaveError = signal<string | null>(null);
-
-  protected readonly loginEmailError = computed(() =>
-    this.loginSubmitted() && !this.loginEmail().trim() ? 'emailRequired' : null,
-  );
-  protected readonly loginPasswordError = computed(() =>
-    this.loginSubmitted() && !this.loginPassword() ? 'passwordRequired' : null,
-  );
-  /** Відповідь сервера — блоком над формою (ключ перекладу). */
-  protected readonly loginBannerError = computed(() => {
-    const key = this.loginSaveError();
-    return key ? `login.form.error.${key}` : null;
-  });
+  /**
+   * Помилка форми входу, що сталася вже після входу (ключ перекладу): живе тут, а не у формі,
+   * бо поки запитується стан системи, сторінка показує «завантаження» і форма зникає.
+   */
+  protected readonly loginError = signal<string | null>(null);
 
   /** Форма адміністратора. */
   protected readonly adminEmail = signal('');
@@ -434,10 +421,7 @@ export class LoginPage implements OnDestroy {
 
   /** Забуває все, що введено й показано у формах входу, адміна та ГО. */
   private resetForms(): void {
-    this.loginEmail.set('');
-    this.loginPassword.set('');
-    this.loginSubmitted.set(false);
-    this.loginSaveError.set(null);
+    this.loginError.set(null);
     this.adminEmail.set('');
     this.adminLastName.set('');
     this.adminFirstName.set('');
@@ -572,37 +556,19 @@ export class LoginPage implements OnDestroy {
   }
 
   /**
-   * Вхід (`POST /api/v1/auth/login`): токени записуються (`AuthService`), далі
-   * запитується статус системи. Немає ГО — лишаємось на сторінці, і вона
-   * показує форму створення ГО (токени вже є). ГО є — одразу на «Планер».
+   * Після входу у формі входу (`app-sign-in-form`; токени вже записано): запитується статус
+   * системи. Немає ГО — лишаємось на сторінці, і вона показує форму створення ГО. ГО є — одразу
+   * на «Планер». Статус отримати не вдалося — форма показує про це помилку (`loginError`).
    */
-  protected async submitLogin(): Promise<void> {
-    if (this.loginSaving()) {
-      return;
-    }
-    this.loginSubmitted.set(true);
-    if (this.loginEmailError() || this.loginPasswordError()) {
-      return;
-    }
-
-    this.loginSaving.set(true);
-    this.loginSaveError.set(null);
-    const login = await this.auth.login(this.loginEmail().trim(), this.loginPassword());
-    if (login !== 'ok') {
-      this.loginSaving.set(false);
-      this.loginSaveError.set(loginFormErrorKey(login));
-      return;
-    }
-
+  protected readonly afterLogin: AfterSignIn = async () => {
     const status = await this.connection.loadSystemStatus();
-    this.loginSaving.set(false);
     if (!status) {
-      this.loginSaveError.set('statusFailed');
+      this.loginError.set('login.form.error.statusFailed');
     } else if (status.hasNgo) {
       void this.router.navigateByUrl(REDIRECT_URL);
     }
     // Немає ГО: view() за статусом і токенами сам покаже форму створення ГО.
-  }
+  };
 
   /**
    * Перевіряє форму адміністратора; якщо все гаразд — створює користувача
@@ -686,18 +652,5 @@ function loginErrorKey(result: Exclude<LoginResult, 'ok'>): string {
       return 'loginUnreachable';
     default:
       return 'loginError';
-  }
-}
-
-function loginFormErrorKey(result: Exclude<LoginResult, 'ok'>): string {
-  switch (result) {
-    case 'invalid':
-      return 'invalid';
-    case 'unauthorized':
-      return 'unauthorized';
-    case 'unreachable':
-      return 'unreachable';
-    default:
-      return 'error';
   }
 }

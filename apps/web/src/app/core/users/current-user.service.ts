@@ -2,7 +2,6 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Injector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountThumbnail, AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
@@ -83,7 +82,7 @@ export class CurrentUserService {
       const session = this.auth.sessionId();
       // Під час пошуку акаунта (`AccountRestoreService`) і перемикання по плитці активний
       // акаунт змінюється тимчасово й ці зміни не наші: профіль для них вантажить сам пошук.
-      const searching = this.injector.get(AccountRestoreService).searching();
+      const searching = this.accounts.switching();
       untracked(() => {
         // Тимчасове перемикання профіль не скидає: аватар і меню лишаються попередніми, доки
         // перемикання не вдалося (тоді профіль новий, а коли ні — попередній лишається як був).
