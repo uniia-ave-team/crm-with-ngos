@@ -1,3 +1,4 @@
+using Crm.Api.DemoMode;
 using Crm.Api.Logging;
 using Crm.Api.Middleware;
 using Crm.Application.Extensions;
@@ -54,6 +55,7 @@ public static class HostingExtensions
 
         builder.Services.AddInfrastructureServices(builder.Configuration, builder.Environment);
         builder.Services.AddApplicationServices();
+        builder.Services.AddDemoMode(builder.Configuration);
 
         return builder;
     }
@@ -101,6 +103,8 @@ public static class HostingExtensions
 
         app.UseAuthentication();
         app.UseAuthorization();
+
+        app.UseDemoMode();
 
         app.MapControllers().RequireRateLimiting(RateLimitingExtensions.GlobalPolicyName);
         app.MapCustomHealthChecks();
