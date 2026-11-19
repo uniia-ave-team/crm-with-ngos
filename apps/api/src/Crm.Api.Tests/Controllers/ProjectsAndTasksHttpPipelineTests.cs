@@ -66,6 +66,7 @@ public class ProjectsAndTasksHttpPipelineTests
                     new InvalidOperationException("concurrency leak detail")),
                 CreateProjectCommand => createdProjectId,
                 GetProjectTasksQuery => new PagedResult<TaskSummaryDto>([], 0, 1, 10),
+                CreateTaskCommand => taskId,
                 UpdateTaskCommand => Unit.Value,
                 UploadTaskAttachmentCommand => new TaskAttachmentDto(
                     attachmentId,
@@ -164,6 +165,14 @@ public class ProjectsAndTasksHttpPipelineTests
             "application/json");
         var partialPutResp = await client.PutAsync($"/api/v1/projects/{projectId}/tasks/{taskId}", missingStatusPayload, ct);
         partialPutResp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // POST /tasks omitting optional tagIds / assigneeIds succeeds (201 Created)
+        using var createTaskWithoutTagsPayload = new StringContent(
+            $$"""{"topicId":"{{Guid.NewGuid()}}","title":"Task Without Tags","description":null,"startDate":"2026-11-20T00:00:00","status":1,"priority":2,"endDate":"2026-11-20T02:00:00+02:00","assigneeIds":["{{Guid.NewGuid()}}"]}""",
+            Encoding.UTF8,
+            "application/json");
+        var createTaskWithoutTagsResp = await client.PostAsync($"/api/v1/projects/{projectId}/tasks", createTaskWithoutTagsPayload, ct);
+        createTaskWithoutTagsResp.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         // Global GET /api/v1/tasks binds ProjectId=null even when spoofed, and normalizes query dates to UTC (B-08, B-09)
         var spoofedProjectId = Guid.NewGuid();

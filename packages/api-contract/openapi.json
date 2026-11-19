@@ -2717,6 +2717,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2800,6 +2810,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -7762,6 +7782,8 @@
         "required": [
           "topicId",
           "title",
+          "assigneeIds",
+          "tagIds",
           "description",
           "startDate"
         ],
@@ -7773,6 +7795,26 @@
           },
           "title": {
             "type": "string"
+          },
+          "assigneeIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "tagIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "description": {
             "type": [
@@ -7796,26 +7838,6 @@
               "string"
             ],
             "format": "date-time"
-          },
-          "assigneeIds": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          "tagIds": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
           },
           "externalLinks": {
             "type": [
@@ -8887,7 +8909,9 @@
         "required": [
           "projectId",
           "userId",
-          "name",
+          "firstName",
+          "lastName",
+          "patronymic",
           "avatarUrl",
           "roleTitle",
           "claim"
@@ -8902,8 +8926,17 @@
             "type": "string",
             "format": "uuid"
           },
-          "name": {
+          "firstName": {
             "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "patronymic": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "avatarUrl": {
             "type": [
@@ -9166,7 +9199,9 @@
       "TaskAssigneeDto": {
         "required": [
           "id",
-          "name",
+          "firstName",
+          "lastName",
+          "patronymic",
           "avatarUrl"
         ],
         "type": "object",
@@ -9175,8 +9210,17 @@
             "type": "string",
             "format": "uuid"
           },
-          "name": {
+          "firstName": {
             "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "patronymic": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "avatarUrl": {
             "type": [
@@ -9245,7 +9289,9 @@
           "id",
           "taskId",
           "userId",
-          "authorName",
+          "authorFirstName",
+          "authorLastName",
+          "authorPatronymic",
           "authorAvatarUrl",
           "content",
           "createdAt",
@@ -9268,7 +9314,19 @@
             ],
             "format": "uuid"
           },
-          "authorName": {
+          "authorFirstName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "authorLastName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "authorPatronymic": {
             "type": [
               "null",
               "string"
@@ -9934,6 +9992,8 @@
         "required": [
           "topicId",
           "title",
+          "assigneeIds",
+          "tagIds",
           "description",
           "startDate",
           "status",
@@ -9947,6 +10007,26 @@
           },
           "title": {
             "type": "string"
+          },
+          "assigneeIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "tagIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "description": {
             "type": [
@@ -9970,26 +10050,6 @@
               "string"
             ],
             "format": "date-time"
-          },
-          "assigneeIds": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          "tagIds": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
           },
           "externalLinks": {
             "type": [

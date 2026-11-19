@@ -6,6 +6,7 @@ using Crm.Application.Features.Tasks.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Entities;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using Mediator;
@@ -40,7 +41,7 @@ public partial class UploadTaskAttachmentCommandHandler(
 
         LogUploadingTaskAttachment(logger, request.OriginalFileName, request.TaskId);
 
-        string safeOriginalFileName = Path.GetFileName(request.OriginalFileName);
+        string safeOriginalFileName = request.OriginalFileName.ExtractFileName();
 
         string storedFileName = await fileStorageService.SaveFileAsync(
             request.ContentStream,

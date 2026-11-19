@@ -24,8 +24,8 @@ namespace Crm.Application.Dtos.Task.Commands;
 public record CreateTaskCommand(
     Guid TopicId,
     string Title,
-    IReadOnlyList<Guid> AssigneeIds,
-    IReadOnlyList<Guid> TagIds,
+    IReadOnlyList<Guid>? AssigneeIds,
+    IReadOnlyList<Guid>? TagIds,
     string? Description,
     DateTime StartDate,
     ProjectTaskStatus Status = ProjectTaskStatus.ToDo,

@@ -200,6 +200,16 @@ public class TaskCommandValidatorTests
         var exactLimitCommand = validCommand with { FileSize = TaskValidationConstants.MaxAttachmentFileSize };
         _uploadAttachmentValidator.Validate(exactLimitCommand).IsValid.ShouldBeTrue();
 
+        var windowsPathCommand = validCommand with { OriginalFileName = @"C:\fakepath\report.pdf" };
+        _uploadAttachmentValidator.Validate(windowsPathCommand).IsValid.ShouldBeTrue();
+
+        var unixPathDangerousCommand = validCommand with
+        {
+            OriginalFileName = "/tmp/payload.exe",
+            ContentType = "application/octet-stream",
+        };
+        _uploadAttachmentValidator.Validate(unixPathDangerousCommand).IsValid.ShouldBeFalse();
+
         var oversizedCommand = validCommand with
         {
             FileSize = TaskValidationConstants.MaxAttachmentFileSize + 1,

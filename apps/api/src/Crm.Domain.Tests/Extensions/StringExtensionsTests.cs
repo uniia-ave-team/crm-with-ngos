@@ -132,4 +132,17 @@ public class StringExtensionsTests
 
         result.ShouldBe(expected);
     }
+
+    [Theory]
+    [InlineData(@"C:\fakepath\report.pdf", "report.pdf")]
+    [InlineData("/tmp/uploads/report.pdf", "report.pdf")]
+    [InlineData(@"C:\mixed/path\doc.txt", "doc.txt")]
+    [InlineData("plain.csv", "plain.csv")]
+    [InlineData(@"C:\fakepath\", "")]
+    public void ExtractFileNameShouldStripBothWindowsAndUnixDirectorySeparators(string input, string expected)
+    {
+        var result = input.ExtractFileName();
+
+        result.ShouldBe(expected);
+    }
 }

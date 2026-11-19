@@ -26,6 +26,19 @@ public static class StringExtensions
     }
 
     /// <summary>
+    /// Extracts the base file name and extension from a path using either Unix (<c>/</c>) or Windows (<c>\</c>) separators,
+    /// ensuring consistent behavior regardless of the host operating system.
+    /// </summary>
+    /// <param name="fileName">The raw client-supplied file name or path.</param>
+    /// <returns>The base file name without directory components.</returns>
+    public static string ExtractFileName(this string fileName)
+    {
+        ArgumentNullException.ThrowIfNull(fileName);
+        int lastSeparatorIndex = fileName.LastIndexOfAny(['/', '\\']);
+        return lastSeparatorIndex >= 0 ? fileName[(lastSeparatorIndex + 1)..] : fileName;
+    }
+
+    /// <summary>
     /// Formats a search term into a wildcard pattern.
     /// </summary>
     /// <param name="term">The input search phrase.</param>

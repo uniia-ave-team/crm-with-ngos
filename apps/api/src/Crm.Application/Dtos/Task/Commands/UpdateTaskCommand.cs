@@ -24,8 +24,8 @@ namespace Crm.Application.Dtos.Task.Commands;
 public record UpdateTaskCommand(
     [property: JsonRequired] Guid TopicId,
     string Title,
-    IReadOnlyList<Guid> AssigneeIds,
-    IReadOnlyList<Guid> TagIds,
+    IReadOnlyList<Guid>? AssigneeIds,
+    IReadOnlyList<Guid>? TagIds,
     string? Description,
     [property: JsonRequired] DateTime StartDate,
     [property: JsonRequired] ProjectTaskStatus Status,

@@ -185,41 +185,49 @@ public class ProjectAndTaskPostgresIntegrationTests(
                     CreatedAt = t1,
                 },
             ],
-            Comments =
-            [
-                new TaskComment
-                {
-                    UserId = userA.Id,
-                    Content = "Initial comment",
-                    CreatedAt = t1,
-                    UpdatedAt = t1,
-                },
-                new TaskComment
-                {
-                    UserId = userA.Id,
-                    Content = "Follow-up comment",
-                    CreatedAt = t2,
-                    UpdatedAt = t2,
-                },
-                new TaskComment
-                {
-                    UserId = userB.Id,
-                    Content = "Self comment (not unread for userB)",
-                    CreatedAt = t2.AddMinutes(1),
-                    UpdatedAt = t2.AddMinutes(1),
-                },
-            ],
         };
 
         setupContext.Add(task);
         await setupContext.SaveChangesAsync(ct);
 
-        // Mark unread for userA comments (userB's own comment creates no marker for userB)
+        // Create comments and mark unread for userA comments in a fresh DbContext (matching CreateTaskCommentCommandHandler)
         await using var notifyContext = fixture.CreateDbContext();
         var notifyCommentRepo = new TaskCommentRepository(notifyContext);
-        foreach (var authorComment in task.Comments.Where(c => c.UserId == userA.Id))
+        TaskComment[] comments =
+        [
+            new TaskComment
+            {
+                TaskId = task.Id,
+                UserId = userA.Id,
+                Content = "Initial comment",
+                CreatedAt = t1,
+                UpdatedAt = t1,
+            },
+            new TaskComment
+            {
+                TaskId = task.Id,
+                UserId = userA.Id,
+                Content = "Follow-up comment",
+                CreatedAt = t2,
+                UpdatedAt = t2,
+            },
+            new TaskComment
+            {
+                TaskId = task.Id,
+                UserId = userB.Id,
+                Content = "Self comment (not unread for userB)",
+                CreatedAt = t2.AddMinutes(1),
+                UpdatedAt = t2.AddMinutes(1),
+            },
+        ];
+
+        foreach (var comment in comments)
         {
-            await notifyCommentRepo.MarkUnreadForOtherUsersAsync(authorComment, userA.Id, ct);
+            await notifyCommentRepo.CreateAsync(comment, ct);
+            if (comment.UserId == userA.Id)
+            {
+                await notifyCommentRepo.MarkUnreadForOtherUsersAsync(comment, userA.Id, ct);
+            }
         }
 
         await notifyContext.SaveChangesAsync(ct);

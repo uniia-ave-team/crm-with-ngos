@@ -3,6 +3,7 @@ using System.Net.Mime;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Task.Commands;
 using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Extensions;
 using FluentValidation;
 
 namespace Crm.Application.Features.Tasks.Validators;
@@ -57,7 +58,7 @@ public class UploadTaskAttachmentCommandValidator : AbstractValidator<UploadTask
             return false;
         }
 
-        string extension = Path.GetExtension(Path.GetFileName(originalFileName));
+        string extension = Path.GetExtension(originalFileName.ExtractFileName());
         return !string.IsNullOrEmpty(extension)
                && TaskValidationConstants.AllowedAttachmentExtensions.ContainsKey(extension);
     }
@@ -76,7 +77,7 @@ public class UploadTaskAttachmentCommandValidator : AbstractValidator<UploadTask
             return true;
         }
 
-        string extension = Path.GetExtension(Path.GetFileName(command.OriginalFileName));
+        string extension = Path.GetExtension(command.OriginalFileName.ExtractFileName());
         return TaskValidationConstants.AllowedAttachmentExtensions.TryGetValue(extension, out FrozenSet<string>? allowedTypes)
                && allowedTypes.Contains(mediaType);
     }
