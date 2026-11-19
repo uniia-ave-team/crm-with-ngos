@@ -708,6 +708,7 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
                 ["FileStorage:UploadDirectory"] = uploadDir,
                 ["FileStorage:BaseUrl"] = "http://localhost",
                 ["CorsSettings:AllowedOrigins:0"] = "http://localhost",
+                ["RateLimiting:PermitLimit"] = "10000",
             };
 
             if (extraConfig is not null)
