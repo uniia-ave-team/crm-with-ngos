@@ -60,7 +60,7 @@ public class ArchitectureTests
             .Or()
             .ImplementInterface(typeof(IRequestHandler<>))
             .ShouldNot()
-            .HaveDependencyOn(typeof(DbContext).Namespace!)
+            .HaveDependencyOn(typeof(DbContext).Namespace)
             .GetResult();
 
         Assert.True(result.IsSuccessful, FormatFailingTypes(result));
@@ -76,8 +76,8 @@ public class ArchitectureTests
             .ResideInNamespace("Crm.Api.Middleware")
             .ShouldNot()
             .HaveDependencyOnAny(
-                typeof(NpgsqlException).Namespace!,
-                typeof(DbContext).Namespace!)
+                typeof(NpgsqlException).Namespace,
+                typeof(DbContext).Namespace)
             .GetResult();
 
         Assert.True(result.IsSuccessful, FormatFailingTypes(result));
@@ -90,7 +90,7 @@ public class ArchitectureTests
             .That()
             .HaveNameStartingWith("GenericRepository")
             .ShouldNot()
-            .HaveDependencyOn(typeof(NpgsqlException).Namespace!)
+            .HaveDependencyOn(typeof(NpgsqlException).Namespace)
             .GetResult();
 
         Assert.True(result.IsSuccessful, FormatFailingTypes(result));

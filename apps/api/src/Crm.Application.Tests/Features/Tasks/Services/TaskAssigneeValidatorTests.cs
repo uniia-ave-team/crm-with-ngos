@@ -27,8 +27,8 @@ public class TaskAssigneeValidatorTests
 
         await validator.ValidateAsync([], Guid.NewGuid(), access, ct);
 
-        await _userRepository.DidNotReceiveWithAnyArgs().GetActiveStatusesAsync(default!, ct);
-        await _projectRepository.DidNotReceiveWithAnyArgs().GetMemberUserIdsAsync(default, default!, ct);
+        await _userRepository.DidNotReceiveWithAnyArgs().GetActiveStatusesAsync(default, ct);
+        await _projectRepository.DidNotReceiveWithAnyArgs().GetMemberUserIdsAsync(default, default, ct);
     }
 
     [Fact]
