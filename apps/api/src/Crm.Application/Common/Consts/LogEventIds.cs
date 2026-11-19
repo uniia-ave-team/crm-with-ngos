@@ -3,6 +3,10 @@ namespace Crm.Application.Common.Consts;
 // TODO: Translate logs in different languages.
 // TODO: Write unit tests for logging to ensure that all log consts are unique and they are used only once in the application. This will help to avoid duplicate log event.
 // TODO: Before end refactor all code values entirely
+
+/// <summary>
+/// Defines structured logging event identifiers grouped by functional area across the application.
+/// </summary>
 public static class LogEventIds
 {
     // 1000s: Roles, Claims, and Cache
@@ -216,4 +220,78 @@ public static class LogEventIds
     public const int CheckingTableTemplates = 9035;
     public const int TableTemplatesAlreadySeeded = 9036;
     public const int TableTemplatesSeededSuccessfully = 9037;
+
+    // 10000s: Projects, Members, Topics, Tags, Tasks, Comments, and Attachments
+    public const int CreatingProject = 10001;
+    public const int ProjectCreatedSuccessfully = 10002;
+    public const int UpdatingProject = 10003;
+    public const int ProjectUpdatedSuccessfully = 10004;
+    public const int DeletingProject = 10005;
+    public const int ProjectDeletedSuccessfully = 10006;
+    public const int FetchingProjects = 10007;
+    public const int ProjectsFetched = 10008;
+    public const int FetchingProjectById = 10009;
+    public const int ProjectByIdFetched = 10010;
+    public const int AssigningProjectMember = 10011;
+    public const int ProjectMemberAssigned = 10012;
+    public const int UpdatingProjectMember = 10013;
+    public const int ProjectMemberUpdated = 10014;
+    public const int RemovingProjectMember = 10015;
+    public const int ProjectMemberRemoved = 10016;
+    public const int FetchingProjectMembers = 10017;
+    public const int ProjectMembersFetched = 10018;
+    public const int CreatingTopic = 10019;
+    public const int TopicCreatedSuccessfully = 10020;
+    public const int UpdatingTopic = 10021;
+    public const int TopicUpdatedSuccessfully = 10022;
+    public const int DeletingTopic = 10023;
+    public const int TopicDeletedSuccessfully = 10024;
+    public const int FetchingTopics = 10025;
+    public const int TopicsFetched = 10026;
+    public const int CreatingTag = 10027;
+    public const int TagCreatedSuccessfully = 10028;
+    public const int UpdatingTag = 10029;
+    public const int TagUpdatedSuccessfully = 10030;
+    public const int DeletingTag = 10031;
+    public const int TagDeletedSuccessfully = 10032;
+    public const int FetchingTags = 10033;
+    public const int TagsFetched = 10034;
+    public const int CreatingTask = 10035;
+    public const int TaskCreatedSuccessfully = 10036;
+    public const int UpdatingTask = 10037;
+    public const int TaskUpdatedSuccessfully = 10038;
+    public const int DeletingTask = 10039;
+    public const int TaskDeletedSuccessfully = 10040;
+    public const int FetchingProjectTasks = 10041;
+    public const int ProjectTasksFetched = 10042;
+    public const int FetchingTaskById = 10043;
+    public const int TaskByIdFetched = 10044;
+    public const int CreatingTaskComment = 10045;
+    public const int TaskCommentCreatedSuccessfully = 10046;
+    public const int UpdatingTaskComment = 10047;
+    public const int TaskCommentUpdatedSuccessfully = 10048;
+    public const int DeletingTaskComment = 10049;
+    public const int TaskCommentDeletedSuccessfully = 10050;
+    public const int FetchingTaskComments = 10051;
+    public const int TaskCommentsFetched = 10052;
+    public const int MarkingTaskCommentsRead = 10053;
+    public const int TaskCommentsMarkedRead = 10054;
+    public const int UploadingTaskAttachment = 10055;
+    public const int TaskAttachmentUploadedSuccessfully = 10056;
+    public const int DeletingTaskAttachment = 10057;
+    public const int TaskAttachmentDeletedSuccessfully = 10058;
+    public const int FetchingTaskAttachments = 10059;
+    public const int TaskAttachmentsFetched = 10060;
+    public const int FetchingTaskAttachmentFile = 10061;
+    public const int TaskAttachmentFileFetched = 10062;
+    public const int AddingTagToTask = 10063;
+    public const int TagAddedToTask = 10064;
+    public const int RemovingTagFromTask = 10065;
+    public const int TagRemovedFromTask = 10066;
+    public const int AssigningUserToTask = 10067;
+    public const int UserAssignedToTask = 10068;
+    public const int UnassigningUserFromTask = 10069;
+    public const int UserUnassignedFromTask = 10070;
+    public const int UpdatingTaskStatus = 10071;
+    public const int TaskStatusUpdated = 10072;
 }

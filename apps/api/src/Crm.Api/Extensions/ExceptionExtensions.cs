@@ -13,7 +13,7 @@ public static class ExceptionExtensions
     /// Maps a given exception instance to its corresponding HTTP status code integer.
     /// </summary>
     /// <param name="exception">The exception instance to evaluate.</param>
-    /// <returns>An HTTP status code (e.g., 400, 401, 403, 500).</returns>
+    /// <returns>An HTTP status code (e.g., 400, 401, 403, 404, 409, 500).</returns>
     public static int MapToStatusCode(this Exception exception) => exception switch
     {
         // TODO: Remove InvalidOperationException, ArgumentNullException, FileNotFoundException, ArgumentException
@@ -25,7 +25,7 @@ public static class ExceptionExtensions
         InvalidCredentialException => StatusCodes.Status401Unauthorized,
         UnauthorizedAccessException => StatusCodes.Status403Forbidden,
         NotFoundException or FileNotFoundException => StatusCodes.Status404NotFound,
-        EntityAlreadyExistsException => StatusCodes.Status409Conflict,
+        EntityAlreadyExistsException or ConflictException => StatusCodes.Status409Conflict,
         _ => StatusCodes.Status500InternalServerError,
     };
 }

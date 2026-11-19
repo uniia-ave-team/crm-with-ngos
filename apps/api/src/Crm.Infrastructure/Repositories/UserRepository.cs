@@ -9,6 +9,7 @@ namespace Crm.Infrastructure.Repositories;
 /// <summary>
 /// Provides repository implementation for managing <see cref="User"/> entities.
 /// </summary>
+/// <param name="appDbContext">The application database context.</param>
 public class UserRepository(
     ApplicationDbContext appDbContext)
     : GenericRepository<User>(appDbContext),
@@ -88,5 +89,17 @@ public class UserRepository(
         return await DbSet
             .Where(u => u.Id == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsActive, isActive), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<Dictionary<Guid, bool>> GetActiveStatusesAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+    {
+        List<Guid> distinctIds = [.. ids.Distinct()];
+        return distinctIds.Count == 0
+            ? []
+            : await DbSet
+                .AsNoTracking()
+                .Where(u => distinctIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.IsActive, cancellationToken);
     }
 }

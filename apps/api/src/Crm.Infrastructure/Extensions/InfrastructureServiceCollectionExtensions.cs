@@ -10,6 +10,7 @@ using Crm.Infrastructure.Consts;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Options;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Interceptors;
 using Crm.Infrastructure.Persistence.Seeders;
 using Crm.Infrastructure.Persistence.Seeders.SystemPresets;
 using Crm.Infrastructure.Repositories;
@@ -80,10 +81,20 @@ public static class InfrastructureServiceCollectionExtensions
         return app;
     }
 
+    /// <summary>
+    /// Registers the Entity Framework Core database context, unit of work, and database seeder strategies.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">The application configuration.</param>
+    /// <returns>The original <see cref="IServiceCollection"/> instance for chaining.</returns>
     public static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<ApplicationDbContext>(options =>
-                   options.UseNpgsql(configuration.GetConnectionString(ConfigurationKeys.PostgreSqlConnection)));
+        services.AddSingleton<IDbExceptionTranslator, PostgresDbExceptionTranslator>();
+        services.AddSingleton<DbExceptionTranslationInterceptor>();
+
+        services.AddDbContext<ApplicationDbContext>((sp, options) =>
+            options.UseNpgsql(configuration.GetConnectionString(ConfigurationKeys.PostgreSqlConnection))
+                   .AddInterceptors(sp.GetRequiredService<DbExceptionTranslationInterceptor>()));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddStrategies<IDatabaseSeeder>(typeof(InfrastructureServiceCollectionExtensions).Assembly);
@@ -92,6 +103,11 @@ public static class InfrastructureServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Registers all domain and identity repository implementations in the dependency injection container.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The original <see cref="IServiceCollection"/> instance for chaining.</returns>
     public static IServiceCollection AddRepositories(this IServiceCollection services)
     {
         services.AddScoped<IUserRepository, UserRepository>();
@@ -105,10 +121,22 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<ICustomRecordRepository, CustomRecordRepository>();
         services.AddScoped<ICustomTableRepository, CustomTableRepository>();
         services.AddScoped<ICustomFieldRepository, CustomFieldRepository>();
+        services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddScoped<ITopicRepository, TopicRepository>();
+        services.AddScoped<ITagRepository, TagRepository>();
+        services.AddScoped<IProjectTaskRepository, ProjectTaskRepository>();
+        services.AddScoped<ITaskCommentRepository, TaskCommentRepository>();
+        services.AddScoped<ITaskAttachmentRepository, TaskAttachmentRepository>();
 
         return services;
     }
 
+    /// <summary>
+    /// Configures ASP.NET Core Identity, password rules, token lifespans, and identity services.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">The application configuration.</param>
+    /// <returns>The original <see cref="IServiceCollection"/> instance for chaining.</returns>
     public static IServiceCollection AddCustomIdentity(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<CustomIdentityOptions>()
@@ -254,6 +282,7 @@ public static class InfrastructureServiceCollectionExtensions
                           HttpMethods.Get,
                           HttpMethods.Post,
                           HttpMethods.Put,
+                          HttpMethods.Patch,
                           HttpMethods.Delete,
                           HttpMethods.Options)
                       .WithHeaders(

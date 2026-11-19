@@ -4,6 +4,9 @@ using Crm.Domain.Interfaces.Repositories.Generic;
 
 namespace Crm.Domain.Interfaces.Repositories;
 
+/// <summary>
+/// Defines repository operations for managing <see cref="User"/> entities.
+/// </summary>
 public interface IUserRepository : IGenericRepository<User>
 {
     /// <summary>
@@ -50,4 +53,12 @@ public interface IUserRepository : IGenericRepository<User>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task containing the number of rows updated in the database.</returns>
     Task<int> SetUserActivationStatusAsync(Guid userId, bool isActive, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously retrieves activation flags (<see cref="User.IsActive"/>) for the specified user identifiers without loading full entities.
+    /// </summary>
+    /// <param name="ids">The collection of user identifiers to look up.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A dictionary mapping each existing user identifier to its activation status.</returns>
+    Task<Dictionary<Guid, bool>> GetActiveStatusesAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
 }

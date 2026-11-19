@@ -78,10 +78,10 @@ public sealed partial class GlobalExceptionHandler(
     }
 
     /// <summary>
-    /// Determines the safest detail message to expose to the client.
+    /// Determines the safest detail message to expose to the client without leaking internal details.
     /// </summary>
-    private static string GetDetailMessage(Exception exception, bool isClientError, bool isDev) =>
-        isDev || isClientError
+    private static string GetDetailMessage(Exception exception, bool isClientError, bool isDev)
+        => isDev || isClientError
             ? exception.Message
             : ProblemDetailsDefaults.UnexpectedErrorDetail;
 

@@ -121,4 +121,15 @@ public class StringExtensionsTests
         // Assert
         result.ShouldBeNull();
     }
+
+    [Theory]
+    [InlineData("  Urgent  ", "URGENT")]
+    [InlineData("\tТерміново\u00A0", "ТЕРМІНОВО")]
+    [InlineData("розробка", "РОЗРОБКА")]
+    public void NormalizeTitleShouldTrimUnicodeWhitespaceAndUppercaseInvariant(string title, string expected)
+    {
+        var result = title.NormalizeTitle();
+
+        result.ShouldBe(expected);
+    }
 }

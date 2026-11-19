@@ -1,0 +1,171 @@
+using Crm.Application.Dtos.Task;
+using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Features.Tasks.Mappings;
+using Crm.Application.Features.Tasks.Queries;
+using Crm.Application.Interfaces;
+using Crm.Domain.Common;
+using Crm.Domain.Consts;
+using Crm.Domain.Enums;
+using Crm.Domain.Interfaces.Repositories;
+using Mapster;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
+using Shouldly;
+
+namespace Crm.Application.Tests.Features.Tasks.Queries;
+
+/// <summary>
+/// Unit tests for <see cref="GetProjectTasksQueryHandler"/> verifying paginated <see cref="TaskSummaryDto"/> projections,
+/// unread comment count hydration, URL enrichment, and global cross-project querying.
+/// </summary>
+public class GetProjectTasksQueryHandlerTests
+{
+    private readonly IProjectTaskRepository _taskRepository = Substitute.For<IProjectTaskRepository>();
+    private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
+    private readonly IFileUrlProvider _fileUrlProvider = Substitute.For<IFileUrlProvider>();
+    private readonly GetProjectTasksQueryHandler _handler;
+
+    static GetProjectTasksQueryHandlerTests()
+    {
+        new TaskMappingRegister().Register(TypeAdapterConfig.GlobalSettings);
+    }
+
+    public GetProjectTasksQueryHandlerTests()
+    {
+        _handler = new GetProjectTasksQueryHandler(
+            _taskRepository,
+            _currentUserService,
+            _fileUrlProvider,
+            Substitute.For<ILogger<GetProjectTasksQueryHandler>>());
+    }
+
+    [Fact]
+    public async Task HandlePagedQueryShouldHydrateUnreadCountsEnrichUrlsAndPreservePaginationMetadata()
+    {
+        var currentUserId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var devTopicId = Guid.NewGuid();
+        var smmTopicId = Guid.NewGuid();
+        var smmTaskId = Guid.NewGuid();
+        var devTaskId = Guid.NewGuid();
+
+        _currentUserService.GetUserId().Returns(currentUserId);
+        _fileUrlProvider.GetFileUrl("other-avatar.png", $"api/v1/users/{otherUserId}/avatar")
+            .Returns($"https://cdn.example/api/v1/users/{otherUserId}/avatar");
+        _fileUrlProvider.GetFileUrl("me-avatar.png", "api/v1/users/me/avatar")
+            .Returns("https://cdn.example/api/v1/users/me/avatar");
+
+        _taskRepository.GetPagedAsync<TaskSummaryDto>(
+                Arg.Is<ProjectTaskFilter>(filter => filter.ProjectId == projectId && !filter.IsMine),
+                currentUserId,
+                null,
+                SortOrderConstants.Ascending,
+                2,
+                5,
+                Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<TaskSummaryDto>(
+            [
+                new TaskSummaryDto(
+                    devTaskId,
+                    projectId,
+                    devTopicId,
+                    "Розробка",
+                    "Setup DB",
+                    null,
+                    ProjectTaskStatus.ToDo,
+                    TaskPriority.High,
+                    DateTime.UtcNow,
+                    null,
+                    UnreadCommentsCount: 0,
+                    AttachmentsCount: 2,
+                    [new TaskAssigneeDto(currentUserId, "Ivan", "Franko", null, "me-avatar.png")],
+                    [],
+                    DateTime.UtcNow,
+                    DateTime.UtcNow),
+                new TaskSummaryDto(
+                    smmTaskId,
+                    projectId,
+                    smmTopicId,
+                    "SMM",
+                    "Instagram Post",
+                    null,
+                    ProjectTaskStatus.Done,
+                    TaskPriority.Medium,
+                    DateTime.UtcNow,
+                    null,
+                    UnreadCommentsCount: 0,
+                    AttachmentsCount: 0,
+                    [new TaskAssigneeDto(otherUserId, "Olena", "Kovalenko", null, "other-avatar.png")],
+                    [],
+                    DateTime.UtcNow,
+                    DateTime.UtcNow),
+            ],
+            totalCount: 12,
+            pageNumber: 2,
+            pageSize: 5));
+
+        _taskRepository.GetUnreadCommentCountsAsync(
+                Arg.Any<IEnumerable<Guid>>(),
+                currentUserId,
+                Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, int> { [smmTaskId] = 2 });
+
+        var result = await _handler.Handle(
+            new GetProjectTasksQuery(PageNumber: 2, PageSize: 5) { ProjectId = projectId },
+            CancellationToken.None);
+
+        result.TotalCount.ShouldBe(12);
+        result.PageNumber.ShouldBe(2);
+        result.PageSize.ShouldBe(5);
+        result.Items.Count.ShouldBe(2);
+
+        var items = result.Items.ToList();
+        items[0].Title.ShouldBe("Setup DB");
+        items[0].AttachmentsCount.ShouldBe(2);
+        items[0].UnreadCommentsCount.ShouldBe(0);
+        items[0].AssignedUsers.Single().AvatarUrl.ShouldBe("https://cdn.example/api/v1/users/me/avatar");
+
+        items[1].Title.ShouldBe("Instagram Post");
+        items[1].AttachmentsCount.ShouldBe(0);
+        items[1].UnreadCommentsCount.ShouldBe(2);
+        items[1].AssignedUsers.Single().AvatarUrl.ShouldBe($"https://cdn.example/api/v1/users/{otherUserId}/avatar");
+    }
+
+    [Fact]
+    public async Task HandleGlobalMineQueryShouldPassNullProjectIdAndIsMineTrueToRepository()
+    {
+        var currentUserId = Guid.NewGuid();
+        _currentUserService.GetUserId().Returns(currentUserId);
+
+        _taskRepository.GetPagedAsync<TaskSummaryDto>(
+                Arg.Is<ProjectTaskFilter>(filter => filter.ProjectId == null && filter.IsMine),
+                currentUserId,
+                null,
+                SortOrderConstants.Ascending,
+                1,
+                10,
+                Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<TaskSummaryDto>([], 0, 1, 10));
+
+        _taskRepository.GetUnreadCommentCountsAsync(
+                Arg.Any<IEnumerable<Guid>>(),
+                currentUserId,
+                Arg.Any<CancellationToken>())
+            .Returns([]);
+
+        var result = await _handler.Handle(
+            new GetProjectTasksQuery(Filter: "mine") { ProjectId = null },
+            CancellationToken.None);
+
+        result.TotalCount.ShouldBe(0);
+        await _taskRepository.Received(1).GetPagedAsync<TaskSummaryDto>(
+            Arg.Is<ProjectTaskFilter>(filter => filter.ProjectId == null && filter.IsMine),
+            currentUserId,
+            null,
+            SortOrderConstants.Ascending,
+            1,
+            10,
+            Arg.Any<CancellationToken>());
+    }
+}

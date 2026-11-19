@@ -14,6 +14,18 @@ public static class StringExtensions
     }
 
     /// <summary>
+    /// Normalizes a title by trimming all leading/trailing Unicode whitespace and converting to uppercase invariant
+    /// for collation-independent uniqueness comparisons.
+    /// </summary>
+    /// <param name="title">The raw title to normalize.</param>
+    /// <returns>The trimmed, uppercase-invariant normalized title.</returns>
+    public static string NormalizeTitle(this string title)
+    {
+        ArgumentNullException.ThrowIfNull(title);
+        return title.Trim().ToUpperInvariant();
+    }
+
+    /// <summary>
     /// Formats a search term into a wildcard pattern.
     /// </summary>
     /// <param name="term">The input search phrase.</param>

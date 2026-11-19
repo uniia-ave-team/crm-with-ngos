@@ -21,6 +21,11 @@ public static class FileStorageConstants
     public const string LoginPageImagesFolder = "login-page-images";
 
     /// <summary>
+    /// The folder name used for storing task file attachments.
+    /// </summary>
+    public const string TaskAttachmentsFolder = "task-attachments";
+
+    /// <summary>
     /// The list of allowed file extensions for uploaded images and media.
     /// </summary>
     public static readonly string[] AllowedExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg"];
