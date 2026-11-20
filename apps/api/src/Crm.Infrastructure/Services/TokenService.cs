@@ -26,12 +26,15 @@ public sealed partial class TokenService : ITokenService
     private readonly ILogger<TokenService> _logger;
     private readonly SymmetricSecurityKey _signingKey;
     private readonly SigningCredentials _signingCredentials;
+    private readonly IAccessTokenClaimsProvider[] _claimsProviders;
 
     public TokenService(
         IOptions<JwtOptions> jwtOptions,
         ILogger<TokenService> logger,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IEnumerable<IAccessTokenClaimsProvider>? claimsProviders = null)
     {
+        _claimsProviders = claimsProviders is null ? [] : [.. claimsProviders];
         _jwtOptions = jwtOptions.Value;
         _logger = logger;
         _timeProvider = timeProvider;
@@ -54,6 +57,11 @@ public sealed partial class TokenService : ITokenService
         }
 
         claims.AddRange(roleIds.Select(roleId => new Claim(CustomClaimTypes.RoleId, roleId.ToString())));
+
+        foreach (var provider in _claimsProviders)
+        {
+            claims.AddRange(provider.GetClaims(user));
+        }
 
         var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddMinutes(_jwtOptions.AccessTokenExpiryMinutes);
         var tokenString = GenerateTokenString(claims, expiresAt);

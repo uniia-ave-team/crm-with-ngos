@@ -1,6 +1,7 @@
 using System.Net.Mime;
 using Asp.Versioning;
 using Crm.Api.Consts;
+using Crm.Api.DemoMode;
 using Crm.Api.Dtos;
 using Crm.Api.Extensions;
 using Crm.Api.Security;
@@ -108,6 +109,7 @@ public class UsersController(
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The unique identifier of the newly created user.</returns>
     [HttpPost]
+    [DemoBlocked]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<Guid>> CreateUser(
@@ -152,6 +154,7 @@ public class UsersController(
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [DemoBlocked]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ResetPassword(
@@ -442,6 +445,7 @@ public class UsersController(
     /// <returns>The generated password restore token and its expiration timestamp.</returns>
     [HttpPost("{id:guid}/password-reset-token")]
     [HasAccessRight(AccessRight.CanResetPassword)]
+    [DemoBlocked]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

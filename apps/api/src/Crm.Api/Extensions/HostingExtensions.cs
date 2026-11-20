@@ -102,9 +102,11 @@ public static class HostingExtensions
         app.UseRateLimiter();
 
         app.UseAuthentication();
-        app.UseAuthorization();
 
+        // Demo mode picks the visitor's sandbox database; authorization already reads from it.
         app.UseDemoMode();
+
+        app.UseAuthorization();
 
         app.MapControllers().RequireRateLimiting(RateLimitingExtensions.GlobalPolicyName);
         app.MapCustomHealthChecks();

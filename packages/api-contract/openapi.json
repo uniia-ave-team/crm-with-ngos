@@ -4528,6 +4528,57 @@
           }
         }
       },
+      "DemoAccountDto": {
+        "required": [
+          "name",
+          "email",
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "DemoModeInfoDto": {
+        "required": [
+          "accounts",
+          "sessionIdleMinutes",
+          "sessionMaxMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DemoAccountDto"
+            }
+          },
+          "sessionIdleMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "sessionMaxMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "FieldDataType": {
         "type": "integer"
       },
@@ -5171,6 +5222,16 @@
           },
           "isSetupComplete": {
             "type": "boolean"
+          },
+          "demo": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DemoModeInfoDto"
+              }
+            ]
           }
         }
       },

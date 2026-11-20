@@ -1,4 +1,5 @@
 using Crm.Api.Consts;
+using Crm.Api.DemoMode;
 using Crm.Api.Extensions;
 using Crm.Application.Common.Consts;
 using FluentValidation;
@@ -42,6 +43,11 @@ public sealed partial class GlobalExceptionHandler(
         };
 
         problemDetails.Instance = httpContext.Request.Path;
+
+        if (exception is DemoModeException demoModeException)
+        {
+            problemDetails.Extensions[ProblemDetailsDefaults.ErrorCodeExtensionKey] = demoModeException.ErrorCode;
+        }
 
         if (env.IsDevelopment() && exception is not ValidationException)
         {

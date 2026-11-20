@@ -1,4 +1,5 @@
 using System.Security.Authentication;
+using Crm.Api.DemoMode;
 using Crm.Domain.Exceptions;
 using FluentValidation;
 
@@ -16,6 +17,8 @@ public static class ExceptionExtensions
     /// <returns>An HTTP status code (e.g., 400, 401, 403, 500).</returns>
     public static int MapToStatusCode(this Exception exception) => exception switch
     {
+        DemoModeException demoModeException => demoModeException.StatusCode,
+
         // TODO: Remove InvalidOperationException, ArgumentNullException, FileNotFoundException, ArgumentException
         ValidationException or
         ArgumentException or

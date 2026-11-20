@@ -8,6 +8,11 @@ public static class ProblemDetailsDefaults
     public const string ValidationFailedDetail = "One or more validation errors occurred.";
     public const string UnexpectedErrorDetail = "An unexpected error occurred while processing your request. Please try again later.";
     public const string StackTraceExtensionKey = "stackTrace";
+
+    /// <summary>
+    /// The name of the problem details extension that carries a machine-readable error code.
+    /// </summary>
+    public const string ErrorCodeExtensionKey = "errorCode";
     private const string Rfc9110BaseUrl = "https://tools.ietf.org/html/rfc9110#section-";
 
     public static string GetTypeUrl(int statusCode)

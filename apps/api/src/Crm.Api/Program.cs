@@ -1,4 +1,5 @@
 using System.Reflection;
+using Crm.Api.DemoMode;
 using Crm.Api.Extensions;
 using Crm.Infrastructure.Extensions;
 using Crm.Infrastructure.Persistence.Extensions;
@@ -24,6 +25,7 @@ if (!isOpenApiGeneration)
 
     await app.Services.UseInfrastructureDatabaseAsync(cts.Token);
     await app.Services.SeedDatabaseAsync(cts.Token);
+    await app.Services.InitializeDemoModeAsync(cts.Token);
 }
 
 await app.RunAsync();

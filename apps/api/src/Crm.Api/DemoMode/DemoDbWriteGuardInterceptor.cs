@@ -1,35 +1,30 @@
 using System.Data.Common;
 using System.Text.RegularExpressions;
+using Crm.Api.DemoMode.Sandbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Crm.Api.DemoMode;
 
 /// <summary>
-/// Fail-safe EF Core interceptor that blocks any unguarded database write during an HTTP request
-/// when Demo Mode is active unless the write runs inside a rolled-back dry-run transaction
-/// or an explicitly allowed (<see cref="DemoExecutionMode.ExplicitlyAllowed"/>) scope.
-/// Startup migrations and seeders (where <see cref="IHttpContextAccessor.HttpContext"/> is <see langword="null"/>)
-/// are unaffected.
+/// Fail-safe for demo mode: an HTTP request that has no sandbox works with the shared demo database
+/// (the source of every sandbox) and must never change it. Startup migrations, seeders and background
+/// services run outside HTTP requests and are not affected.
 /// </summary>
-/// <param name="demoModeState">The service providing current Demo Mode state.</param>
-/// <param name="executionContext">The active Demo Mode execution context.</param>
-/// <param name="httpContextAccessor">The HTTP context accessor used to distinguish HTTP requests from startup tasks.</param>
-/// <param name="logger">The logger used to record blocked unguarded write attempts.</param>
+/// <param name="demoModeState">The demo mode state.</param>
+/// <param name="sandboxAccessor">The accessor of the current sandbox.</param>
+/// <param name="logger">The logger.</param>
 public sealed partial class DemoDbWriteGuardInterceptor(
     IDemoModeState demoModeState,
-    IDemoExecutionContext executionContext,
-    IHttpContextAccessor httpContextAccessor,
+    IDemoSandboxAccessor sandboxAccessor,
     ILogger<DemoDbWriteGuardInterceptor> logger) : ISaveChangesInterceptor, IDbCommandInterceptor
 {
-    private const string BlockedSaveMessage = "Demo Mode blocked an unguarded database SaveChanges operation outside a dry-run transaction.";
-    private const string BlockedSqlMessage = "Demo Mode blocked an unguarded mutating SQL command outside a dry-run transaction.";
-
     /// <inheritdoc />
     public InterceptionResult<int> SavingChanges(
         DbContextEventData eventData,
         InterceptionResult<int> result)
     {
+        ArgumentNullException.ThrowIfNull(eventData);
         GuardSaveChanges(eventData.Context);
         return result;
     }
@@ -40,6 +35,7 @@ public sealed partial class DemoDbWriteGuardInterceptor(
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(eventData);
         GuardSaveChanges(eventData.Context);
         return ValueTask.FromResult(result);
     }
@@ -107,41 +103,13 @@ public sealed partial class DemoDbWriteGuardInterceptor(
         return ValueTask.FromResult(result);
     }
 
+    /// <summary>
+    /// Checks whether a SQL command changes data or schema.
+    /// </summary>
+    /// <param name="commandText">The SQL text.</param>
+    /// <returns><c>true</c> when the command is mutating.</returns>
     internal static bool IsMutatingSql(string? commandText)
         => !string.IsNullOrWhiteSpace(commandText) && MutatingSqlRegex().IsMatch(commandText);
-
-    private void GuardSaveChanges(DbContext? context)
-    {
-        if (!ShouldEnforceGuard() || context is null || !context.ChangeTracker.HasChanges())
-        {
-            return;
-        }
-
-        if (!executionContext.IsDryRunActive || context.Database.CurrentTransaction is null)
-        {
-            LogUnguardedDbWriteBlocked(logger, "SaveChanges", executionContext.Mode);
-            throw new InvalidOperationException(BlockedSaveMessage);
-        }
-    }
-
-    private void GuardCommand(DbCommand command)
-    {
-        if (!ShouldEnforceGuard() || !IsMutatingSql(command.CommandText))
-        {
-            return;
-        }
-
-        if (!executionContext.IsDryRunActive || command.Transaction is null)
-        {
-            LogUnguardedDbWriteBlocked(logger, "DbCommand", executionContext.Mode);
-            throw new InvalidOperationException(BlockedSqlMessage);
-        }
-    }
-
-    private bool ShouldEnforceGuard() =>
-        demoModeState.IsActive &&
-        httpContextAccessor.HttpContext is not null &&
-        !executionContext.IsExplicitlyAllowed;
 
     [GeneratedRegex(
         @"(?im)(?:^|[;\s])(?:INSERT|UPDATE|DELETE|TRUNCATE|MERGE|CREATE|ALTER|DROP|GRANT|REVOKE)\b",
@@ -151,6 +119,37 @@ public sealed partial class DemoDbWriteGuardInterceptor(
     [LoggerMessage(
         EventId = DemoLogEventIds.UnguardedDbWriteBlocked,
         Level = LogLevel.Warning,
-        Message = "Demo mode fail-safe blocked an unguarded database write ({Operation}) in execution mode {Mode}.")]
-    private static partial void LogUnguardedDbWriteBlocked(ILogger logger, string operation, DemoExecutionMode mode);
+        Message = "Demo mode blocked a database write ({Operation}) from a request without a sandbox.")]
+    private static partial void LogUnguardedDbWriteBlocked(ILogger logger, string operation);
+
+    private bool ShouldBlockWrites() =>
+        demoModeState.IsActive &&
+        sandboxAccessor.IsHttpRequest &&
+        sandboxAccessor.Current is null;
+
+    private void GuardSaveChanges(DbContext? context)
+    {
+        if (context is null || !ShouldBlockWrites() || !context.ChangeTracker.HasChanges())
+        {
+            return;
+        }
+
+        LogUnguardedDbWriteBlocked(logger, "SaveChanges");
+
+        throw new DemoModeException();
+    }
+
+    private void GuardCommand(DbCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        if (!ShouldBlockWrites() || !IsMutatingSql(command.CommandText))
+        {
+            return;
+        }
+
+        LogUnguardedDbWriteBlocked(logger, "DbCommand");
+
+        throw new DemoModeException();
+    }
 }

@@ -71,6 +71,11 @@ db:
 up:
     {{compose}} up -d --build --wait
 
+# Start everything in demo mode: each visitor who signs in gets a private copy of the demo data.
+# Run `just reset` first to rebuild the demo data from scratch.
+demo:
+    {{compose}} -f compose.demo.yaml up -d --build --wait
+
 # Stop all containers. Data and uploaded files are kept.
 down:
     {{compose}} down

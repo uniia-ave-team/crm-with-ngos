@@ -1,8 +1,8 @@
+using System.ComponentModel.DataAnnotations;
+using Crm.Api.DemoMode.DemoData;
+using Crm.Api.DemoMode.Sandbox;
 using Crm.Application.Interfaces;
-using Crm.Domain.Interfaces.Repositories;
-using Crm.Infrastructure.Options;
 using Crm.Infrastructure.Persistence;
-using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -10,136 +10,91 @@ using Microsoft.Extensions.Options;
 namespace Crm.Api.DemoMode;
 
 /// <summary>
-/// Provides extension methods for configuring, validating, and conditionally registering isolated Demo Mode
-/// decorators, interceptors, and <see cref="DemoModeMiddleware"/> at startup.
-/// When <c>DemoMode:Enabled</c> is <see langword="false"/> or missing, nothing is registered in DI or the HTTP pipeline.
+/// Wires demo mode into the application. With <c>DemoMode:Enabled = false</c> (the default)
+/// only the "demo is off" info provider is registered and nothing else changes.
 /// </summary>
 public static class DemoModeExtensions
 {
     /// <summary>
-    /// Binds, normalizes, and validates <see cref="DemoModeOptions"/> when <c>DemoMode:Enabled</c> is <see langword="true"/>,
-    /// and decorates core pipeline/infrastructure services with Demo Mode wrappers.
-    /// When disabled, leaves the container completely untouched for zero runtime overhead.
+    /// Registers the demo mode services. Must be called after the infrastructure services,
+    /// because it reconfigures the database context and decorates infrastructure services.
     /// </summary>
-    /// <param name="services">The <see cref="IServiceCollection"/> to configure.</param>
-    /// <param name="configuration">The application <see cref="IConfiguration"/>.</param>
-    /// <returns>The original <see cref="IServiceCollection"/> instance for method chaining.</returns>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">The application configuration.</param>
+    /// <returns>The same service collection.</returns>
     public static IServiceCollection AddDemoMode(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
         var section = configuration.GetSection(DemoModeOptions.Position);
+
+        services.AddOptions<DemoModeOptions>()
+            .Bind(section)
+            .PostConfigure(options => options.NormalizePaths())
+            .ValidateDataAnnotations()
+            .Validate(
+                options => options.DemoBlockedPaths.All(DemoModeOptions.IsValidPathPrefix),
+                $"DemoMode:DemoBlockedPaths entries must start with '/', contain at least {DemoModeOptions.MinimumPathSegmentCount} path segments, and must not contain '?' or '#'.")
+            .Validate(
+                options => IsValid(options.Sandbox) && options.Accounts.All(IsValid),
+                "DemoMode:Sandbox or DemoMode:Accounts contains invalid values.")
+            .Validate(
+                options => options.Sandbox.IdleTimeoutMinutes <= options.Sandbox.MaxLifetimeMinutes,
+                "DemoMode:Sandbox:IdleTimeoutMinutes must not exceed DemoMode:Sandbox:MaxLifetimeMinutes.")
+            .ValidateOnStart();
+
+        services.TryAddSingleton<IDemoModeInfoProvider, DemoModeInfoProvider>();
+
         if (!section.GetValue<bool>(nameof(DemoModeOptions.Enabled)))
         {
             return services;
         }
 
-        bool hasCustomExcludedPaths = section.GetSection(nameof(DemoModeOptions.ExcludedPaths)).Exists();
-        bool hasCustomBlockedPaths = section.GetSection(nameof(DemoModeOptions.DemoBlockedPaths)).Exists();
-
-        services.AddOptions<DemoModeOptions>()
-            .Configure(options =>
-            {
-                if (hasCustomExcludedPaths)
-                {
-                    options.ExcludedPaths = [];
-                }
-
-                if (hasCustomBlockedPaths)
-                {
-                    options.DemoBlockedPaths = [];
-                }
-            })
-            .Bind(section)
-            .PostConfigure(options => options.NormalizePaths())
-            .ValidateDataAnnotations()
-            .Validate(
-                options =>
-                    options.ExcludedPaths.All(DemoModeOptions.IsValidPathPrefix) &&
-                    options.DemoBlockedPaths.All(DemoModeOptions.IsValidPathPrefix),
-                $"DemoMode path prefixes must start with '/', contain at least {DemoModeOptions.MinimumPathSegmentCount} path segments, and must not contain query strings or fragments ('?' or '#').")
-            .ValidateOnStart();
-
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IDemoModeState, DemoModeState>();
-        services.TryAddSingleton<IDemoExecutionContext, DemoExecutionContext>();
-        services.TryAddSingleton<DemoRefreshTokenStore>();
-        services.TryAddSingleton<DemoDryRunIdRegistry>();
+        services.TryAddSingleton<IDemoSandboxAccessor, DemoSandboxAccessor>();
+        services.TryAddSingleton<IDemoSandboxDatabase, PostgresDemoSandboxDatabase>();
+        services.TryAddSingleton<DemoSandboxManager>();
         services.TryAddSingleton<DemoDbWriteGuardInterceptor>();
-        services.TryAddSingleton<IDemoCommandPolicy, DemoCommandPolicy>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IDemoCommandInterceptor, DemoSafeIdentityCommandInterceptor>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IDemoCommandInterceptor, DemoDryRunFollowUpInterceptor>());
+        services.TryAddScoped<DemoDataSeeder>();
+        services.AddHostedService<DemoSandboxCleanupService>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAccessTokenClaimsProvider, DemoSandboxClaimsProvider>());
 
-        if (services.Any(d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>)))
+        // Options are built per scope, so every request connects to its own sandbox database.
+        services.ConfigureDbContext<ApplicationDbContext>((sp, options) =>
         {
-            services.ConfigureDbContext<ApplicationDbContext>((sp, options) =>
-                options.AddInterceptors(sp.GetRequiredService<DemoDbWriteGuardInterceptor>()));
-        }
+            var sandbox = sp.GetRequiredService<IDemoSandboxAccessor>().Current;
 
-        services.Decorate<IMediator>((sp, inner) =>
-            inner is DemoMediator
-                ? inner
-                : new DemoMediator(
-                    inner,
-                    sp.GetRequiredService<IDemoModeState>(),
-                    sp.GetRequiredService<IDemoExecutionContext>(),
-                    sp.GetRequiredService<IDemoCommandPolicy>(),
-                    sp.GetServices<IDemoCommandInterceptor>()));
+            if (sandbox is not null)
+            {
+                options.UseNpgsql(sandbox.ConnectionString);
+            }
 
-        if (services.Any(d => d.ServiceType == typeof(IMediator)))
-        {
-            services.Decorate<ISender>((sp, _) => sp.GetRequiredService<IMediator>());
-            services.Decorate<IPublisher>((sp, _) => sp.GetRequiredService<IMediator>());
-        }
+            options.AddInterceptors(sp.GetRequiredService<DemoDbWriteGuardInterceptor>());
+        });
 
-        services.Decorate<IUnitOfWork>((sp, inner) =>
-            inner is DemoUnitOfWork
-                ? inner
-                : new DemoUnitOfWork(
-                    inner,
-                    sp.GetRequiredService<IDemoExecutionContext>(),
-                    sp.GetRequiredService<ILogger<DemoUnitOfWork>>(),
-                    sp.GetRequiredService<IDemoModeState>(),
-                    sp.GetService<IHttpContextAccessor>()));
-        services.Decorate<IUserRefreshTokenRepository>((sp, inner) =>
-            inner is DemoUserRefreshTokenRepository
-                ? inner
-                : new DemoUserRefreshTokenRepository(
-                    inner,
-                    sp.GetRequiredService<DemoRefreshTokenStore>(),
-                    sp.GetRequiredService<IDemoModeState>(),
-                    sp.GetRequiredService<IDemoExecutionContext>()));
-        services.Decorate<IFileTransactionTracker>((sp, inner) =>
-            inner is DemoFileTransactionTracker
-                ? inner
-                : new DemoFileTransactionTracker(
-                    inner,
-                    sp.GetRequiredService<IDemoExecutionContext>()));
-        services.Decorate<IFileStorageService>((sp, inner) =>
-            inner is DemoFileStorageService
-                ? inner
-                : new DemoFileStorageService(
-                    inner,
-                    sp.GetRequiredService<IOptions<FileStorageOptions>>(),
-                    sp.GetRequiredService<IImageValidator>(),
-                    sp.GetRequiredService<IDemoModeState>()));
         services.Decorate<IRolePermissionsCache>((sp, inner) =>
-            inner is DemoRolePermissionsCache
-                ? inner
-                : new DemoRolePermissionsCache(
-                    inner,
-                    sp.GetRequiredService<IDemoModeState>()));
+            new DemoSandboxRolePermissionsCache(
+                inner,
+                sp.GetRequiredService<IDemoSandboxAccessor>(),
+                sp.GetRequiredService<IHttpContextAccessor>()));
+
+        services.Decorate<IFileStorageService>((sp, inner) =>
+            new DemoSandboxFileStorageService(
+                inner,
+                sp.GetRequiredService<IDemoSandboxAccessor>(),
+                sp.GetRequiredService<IOptions<DemoModeOptions>>(),
+                sp.GetRequiredService<ILogger<DemoSandboxFileStorageService>>()));
 
         return services;
     }
 
     /// <summary>
-    /// Registers <see cref="DemoModeMiddleware"/> in the HTTP request pipeline only when Demo Mode was enabled at startup.
-    /// When disabled, adds zero middleware overhead to the pipeline.
+    /// Adds the demo mode middleware. Must be placed after authentication and before authorization.
     /// </summary>
-    /// <param name="app">The <see cref="WebApplication"/> pipeline builder.</param>
-    /// <returns>The original <see cref="WebApplication"/> instance for method chaining.</returns>
+    /// <param name="app">The application.</param>
+    /// <returns>The same application.</returns>
     public static WebApplication UseDemoMode(this WebApplication app)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -152,20 +107,51 @@ public static class DemoModeExtensions
         return app;
     }
 
+    /// <summary>
+    /// Fills the database with demo data (when it is empty) and builds the template every sandbox is copied from.
+    /// Must be called at startup after migrations and the regular seeders. Does nothing when demo mode is off.
+    /// </summary>
+    /// <param name="serviceProvider">The application services.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>A task that completes when demo mode is ready to serve visitors.</returns>
+    public static async Task InitializeDemoModeAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        if (serviceProvider.GetService<IDemoModeState>()?.IsActive != true)
+        {
+            return;
+        }
+
+        await using (var scope = serviceProvider.CreateAsyncScope())
+        {
+            var options = scope.ServiceProvider.GetRequiredService<IOptions<DemoModeOptions>>().Value;
+            var seeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
+
+            await seeder.SeedAsync(options.GetEffectiveAccounts(), cancellationToken);
+
+            // The seeder may have added roles; the shared permission cache must know them.
+            await scope.ServiceProvider.GetRequiredService<IRolePermissionsCache>().SeedAllRolesCacheAsync(cancellationToken);
+        }
+
+        await serviceProvider.GetRequiredService<DemoSandboxManager>().InitializeAsync(cancellationToken);
+    }
+
+    private static bool IsValid(object instance) =>
+        Validator.TryValidateObject(instance, new ValidationContext(instance), validationResults: null, validateAllProperties: true);
+
     private static void Decorate<TService>(
         this IServiceCollection services,
         Func<IServiceProvider, TService, TService> decoratorFactory)
         where TService : class
     {
-        var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(TService));
-        if (descriptor is null)
-        {
-            return;
-        }
+        var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(TService))
+            ?? throw new InvalidOperationException($"Demo Mode cannot decorate {typeof(TService).FullName}: the service is not registered.");
 
         services.Remove(descriptor);
 
         Func<IServiceProvider, TService> innerResolver;
+
         if (descriptor.ImplementationInstance is TService instance)
         {
             innerResolver = _ => instance;
@@ -175,14 +161,14 @@ public static class DemoModeExtensions
             var factory = descriptor.ImplementationFactory;
             innerResolver = sp => (TService)factory(sp);
         }
-        else if (descriptor.ImplementationType is { } implType)
+        else if (descriptor.ImplementationType is { } implementationType)
         {
-            services.TryAdd(new ServiceDescriptor(implType, implType, descriptor.Lifetime));
-            innerResolver = sp => (TService)sp.GetRequiredService(implType);
+            services.TryAdd(new ServiceDescriptor(implementationType, implementationType, descriptor.Lifetime));
+            innerResolver = sp => (TService)sp.GetRequiredService(implementationType);
         }
         else
         {
-            throw new InvalidOperationException($"Cannot decorate service {typeof(TService).FullName}.");
+            throw new InvalidOperationException($"Demo Mode cannot decorate {typeof(TService).FullName}.");
         }
 
         services.Add(new ServiceDescriptor(
