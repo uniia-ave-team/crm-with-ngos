@@ -1,3 +1,12 @@
 @if (demo(); as info) {
-  <p class="demo-banner" role="status">{{ 'demo.banner' | translate: { minutes: info.sessionIdleMinutes } }}</p>
+  <p class="demo-banner" [class.demo-banner--ending]="ending()">
+    {{ 'demo.banner' | translate }}
+    @if (timeLeft(); as time) {
+      <!-- role="timer": екранний диктор не зачитує кожну секунду, але значення доступне. -->
+      {{ 'demo.bannerCountdown' | translate }}
+      <span class="demo-banner__time" role="timer">{{ time }}</span>
+    } @else {
+      {{ 'demo.bannerNoTimer' | translate: { minutes: info.sessionMinutes } }}
+    }
+  </p>
 }

@@ -1639,8 +1639,7 @@ describe('LoginPage', () => {
         { name: 'Олена (адміністраторка)', email: 'olena@demo.example', password: 'Demo-1a' },
         { name: 'Тарас (волонтер)', email: 'taras@demo.example', password: 'Demo-2b' },
       ],
-      sessionIdleMinutes: 30,
-      sessionMaxMinutes: 120,
+      sessionMinutes: 60,
     };
     const complete = { hasAdmin: true, hasNgo: true, isSetupComplete: true };
     const statusUrl = () => `${pageServer()}/api/v1/system/status`;
@@ -1664,7 +1663,7 @@ describe('LoginPage', () => {
       expect(block).not.toBeNull();
       expect(block.querySelector('.login-demo__title')?.textContent?.trim()).toBe(uk.demo.login.title);
       expect(block.querySelector('.login-demo__text')?.textContent?.trim()).toBe(
-        uk.demo.login.description.replace('{{minutes}}', '30'),
+        uk.demo.login.description.replace('{{minutes}}', '60'),
       );
       expect(demoButtons(element).map((button) => button.textContent?.trim())).toEqual(
         demo.accounts.map((account) => uk.demo.login.signInAs.replace('{{name}}', account.name)),

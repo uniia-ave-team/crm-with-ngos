@@ -670,7 +670,7 @@ describe('AuthService', () => {
   });
 
   describe('a busy demo at login', () => {
-    const demo = { accounts: [], sessionIdleMinutes: 30, sessionMaxMinutes: 120 };
+    const demo = { accounts: [], sessionMinutes: 60 };
 
     /** Підключення до сервера в демо-режимі (чи звичайного): нова перевірка й статус системи. */
     function connect(demoInfo: typeof demo | null): void {

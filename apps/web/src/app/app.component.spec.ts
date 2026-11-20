@@ -76,7 +76,7 @@ describe('AppComponent', () => {
       hasAdmin: true,
       hasNgo: true,
       isSetupComplete: true,
-      demo: { accounts: [], sessionIdleMinutes: 30, sessionMaxMinutes: 120 },
+      demo: { accounts: [], sessionMinutes: 60 },
     });
     fixture.detectChanges();
 

@@ -14,6 +14,7 @@ import { authInterceptor } from './core/auth/auth.interceptor';
 import { SessionService } from './core/auth/session.service';
 import { LayoutModule } from './core/layout/layout.module';
 import { ConnectionService } from './core/connection/connection.service';
+import { DemoSessionService } from './core/demo/demo-session.service';
 import { LanguageService } from './core/i18n/language.service';
 
 @NgModule({
@@ -46,6 +47,9 @@ import { LanguageService } from './core/i18n/language.service';
       inject(LanguageService);
       inject(ConnectionService);
       inject(SessionService);
+      // Відлік демо-сеансу має завершити його вчасно на будь-якій сторінці, а не лише там,
+      // де є банер демо-режиму.
+      inject(DemoSessionService);
     }),
   ],
   bootstrap: [AppComponent],

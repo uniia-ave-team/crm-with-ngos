@@ -243,7 +243,11 @@ Production-образ локально: `just up` з кореня репозит
 - **Демо-режим** (сервер віддає `demo` у `/api/v1/system/status`): на формі входу —
   окремий блок із поясненням і кнопками «Ввійти як …» (`login/login-demo`), що
   входять звичайним шляхом; на сторінках з оболонкою — тонкий банер над нею
-  (`core/layout/demo-banner`), який не закривається. Помилки демо-режиму за
+  (`core/layout/demo-banner`), який не закривається і показує зворотний відлік до
+  скидання демо-даних. Сеанс триває фіксований час (`demo.sessionMinutes`), а момент
+  видалення даних сервер кладе в access-токен (claim `demo_exp`): `core/demo/DemoSessionService`
+  читає його з токена активного акаунта, оновлює відлік щосекунди й, коли час вийшов,
+  сам завершує сеанс (як `DEMO_SESSION_EXPIRED`). Помилки демо-режиму за
   `errorCode` обробляє `authInterceptor`: `DEMO_MODE_RESTRICTED` і
   `DEMO_QUOTA_EXCEEDED` — спливне повідомлення (`core/demo/DemoNoticeService`);
   `DEMO_SESSION_EXPIRED` — без оновлення токенів акаунт забувається

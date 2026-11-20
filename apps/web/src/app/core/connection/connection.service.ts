@@ -32,13 +32,13 @@ export interface DemoAccount {
 }
 
 /**
- * Демо-режим сервера: кожен відвідувач після входу отримує власну копію демо-даних, яка
- * видаляється після `sessionIdleMinutes` хвилин без дій або через `sessionMaxMinutes` загалом.
+ * Демо-режим сервера: кожен відвідувач після входу отримує власну копію демо-даних, яка живе
+ * рівно `sessionMinutes` хвилин від створення, хоч би що він робив. Точний момент видалення —
+ * у claim `demo_exp` access-токена (див. `DemoSessionService`).
  */
 export interface DemoInfo {
   accounts: DemoAccount[];
-  sessionIdleMinutes: number;
-  sessionMaxMinutes: number;
+  sessionMinutes: number;
 }
 
 /**

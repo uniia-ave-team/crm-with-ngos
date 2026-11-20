@@ -17,8 +17,7 @@ describe('ConnectionService', () => {
   const status = { hasAdmin: true, hasNgo: true, isSetupComplete: true };
   const demo = {
     accounts: [{ name: 'Олена', email: 'olena@demo.example', password: 'Demo-1a' }],
-    sessionIdleMinutes: 30,
-    sessionMaxMinutes: 120,
+    sessionMinutes: 60,
   };
 
   /** Відповіді «тут нашого API нема». */
@@ -620,7 +619,7 @@ describe('ConnectionService', () => {
       http.expectOne(health(apiPort)).flush({ status: 'Healthy' });
       http.expectOne(statusUrl(apiPort)).flush({ ...status, demo });
 
-      expect(service.demo()?.sessionIdleMinutes).toBe(30);
+      expect(service.demo()?.sessionMinutes).toBe(60);
     });
 
     it('keeps the demo while the connection is re-checked and the status is requested again', () => {

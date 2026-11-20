@@ -8,7 +8,9 @@
     }
   },
   "demo": {
-    "banner": "This is a demo. Only you see your changes; they are reset after {{minutes}} minutes of inactivity.",
+    "banner": "This is a demo. Only you see your changes.",
+    "bannerCountdown": "Data resets in:",
+    "bannerNoTimer": "The data is reset {{minutes}} minutes after sign-in.",
     "sessionEnded": "Your demo session has ended. Sign in again to start with fresh demo data.",
     "toast": {
       "restricted": "This action is not available in the demo",
@@ -16,7 +18,7 @@
     },
     "login": {
       "title": "Demo",
-      "description": "This is a demo version of the system. Sign in with a ready-made account: you get your own copy of the demo data, and only you see your changes. They are reset after {{minutes}} minutes of inactivity.",
+      "description": "This is a demo version of the system. Sign in with a ready-made account: you get your own copy of the demo data, and only you see your changes. The session lasts {{minutes}} minutes from sign-in, then the data is reset.",
       "signInAs": "Sign in as {{name}}"
     }
   }
