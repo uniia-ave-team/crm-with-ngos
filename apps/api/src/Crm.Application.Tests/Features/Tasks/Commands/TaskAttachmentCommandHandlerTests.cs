@@ -116,7 +116,7 @@ public class TaskAttachmentCommandHandlerTests
             new UploadTaskAttachmentCommand(projectId, taskId, stream, "report.pdf", "application/pdf", 4),
             CancellationToken.None).AsTask());
 
-        await _fileStorageService.DidNotReceiveWithAnyArgs().SaveFileAsync(default!, default!, default!, Arg.Any<CancellationToken>());
+        await _fileStorageService.DidNotReceiveWithAnyArgs().SaveFileAsync(default, default, default, Arg.Any<CancellationToken>());
     }
 
     [Fact]
