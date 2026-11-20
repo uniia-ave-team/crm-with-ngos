@@ -17,6 +17,7 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status409Conflict);
         exception.IsClientError().ShouldBeTrue();
+        exception.IsExpectedDomainError().ShouldBeTrue();
     }
 
     [Theory]
@@ -30,6 +31,7 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status409Conflict);
         exception.IsClientError().ShouldBeTrue();
+        exception.IsExpectedDomainError().ShouldBeTrue();
     }
 
     [Fact]
@@ -39,6 +41,7 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status409Conflict);
         exception.IsClientError().ShouldBeTrue();
+        exception.IsExpectedDomainError().ShouldBeTrue();
     }
 
     [Fact]
@@ -48,6 +51,32 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status413PayloadTooLarge);
         exception.IsClientError().ShouldBeTrue();
+        exception.IsExpectedDomainError().ShouldBeTrue();
+    }
+
+    [Fact]
+    public void MapToStatusCodeShouldReturn500ForObjectDisposedExceptionAndNotClassifyAsClientError()
+    {
+        var exception = new ObjectDisposedException("MemoryStream");
+
+        exception.MapToStatusCode().ShouldBe(StatusCodes.Status500InternalServerError);
+        exception.IsClientError().ShouldBeFalse();
+        exception.IsExpectedDomainError().ShouldBeFalse();
+    }
+
+    [Fact]
+    public void GenericBclClientExceptionsShouldNotBeTreatedAsExpectedDomainErrorsSoStackTracesArePreserved()
+    {
+        var invalidOp = new InvalidOperationException("Unexpected state");
+        var argEx = new ArgumentException("Invalid argument");
+
+        invalidOp.MapToStatusCode().ShouldBe(StatusCodes.Status400BadRequest);
+        invalidOp.IsClientError().ShouldBeTrue();
+        invalidOp.IsExpectedDomainError().ShouldBeFalse();
+
+        argEx.MapToStatusCode().ShouldBe(StatusCodes.Status400BadRequest);
+        argEx.IsClientError().ShouldBeTrue();
+        argEx.IsExpectedDomainError().ShouldBeFalse();
     }
 
     [Fact]
@@ -57,5 +86,6 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status500InternalServerError);
         exception.IsClientError().ShouldBeFalse();
+        exception.IsExpectedDomainError().ShouldBeFalse();
     }
 }

@@ -4,18 +4,18 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace Crm.Infrastructure.Persistence.Interceptors;
 
 /// <summary>
-/// Intercepts EF Core SQL commands tagged with <see cref="ForUpdateTag"/> and appends a
-/// row-level <c>FOR UPDATE</c> lock clause without requiring raw SQL in repositories.
+/// Intercepts EF Core SQL commands tagged with <see cref="ForNoKeyUpdateTag"/> and appends a
+/// row-level <c>FOR NO KEY UPDATE</c> lock clause without requiring raw SQL in repositories.
 /// </summary>
 public sealed class RowLockCommandInterceptor : DbCommandInterceptor
 {
     /// <summary>
-    /// The EF Core query tag marker that instructs this interceptor to append <c>FOR UPDATE</c>.
+    /// The EF Core query tag marker that instructs this interceptor to append <c>FOR NO KEY UPDATE</c>.
     /// </summary>
-    internal const string ForUpdateTag = "__ROW_LOCK_FOR_UPDATE__";
+    internal const string ForNoKeyUpdateTag = "__ROW_LOCK_FOR_NO_KEY_UPDATE__";
 
-    private const string TagComment = $"-- {ForUpdateTag}";
-    private const string ForUpdateClause = "FOR UPDATE";
+    private const string TagComment = $"-- {ForNoKeyUpdateTag}";
+    private const string ForNoKeyUpdateClause = "FOR NO KEY UPDATE";
 
     /// <inheritdoc />
     public override InterceptionResult<DbDataReader> ReaderExecuting(
@@ -50,13 +50,13 @@ public sealed class RowLockCommandInterceptor : DbCommandInterceptor
         bool hasTrailingSemicolon = trimmed.EndsWith(';');
         string sqlWithoutSemicolon = hasTrailingSemicolon ? trimmed[..^1].TrimEnd() : trimmed;
 
-        if (sqlWithoutSemicolon.EndsWith(ForUpdateClause, StringComparison.OrdinalIgnoreCase))
+        if (sqlWithoutSemicolon.EndsWith(ForNoKeyUpdateClause, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
         command.CommandText = hasTrailingSemicolon
-            ? $"{sqlWithoutSemicolon}\n{ForUpdateClause};"
-            : $"{sqlWithoutSemicolon}\n{ForUpdateClause}";
+            ? $"{sqlWithoutSemicolon}\n{ForNoKeyUpdateClause};"
+            : $"{sqlWithoutSemicolon}\n{ForNoKeyUpdateClause}";
     }
 }

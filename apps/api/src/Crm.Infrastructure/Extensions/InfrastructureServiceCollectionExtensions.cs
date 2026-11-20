@@ -325,6 +325,7 @@ public static class InfrastructureServiceCollectionExtensions
     private static IServiceCollection AddInfrastructureBackgroundServices(this IServiceCollection services)
     {
         services.AddHostedService<ExpiredTokensCleanupService>();
+        services.AddHostedService<OrphanedTempFilesCleanupService>();
 
         return services;
     }

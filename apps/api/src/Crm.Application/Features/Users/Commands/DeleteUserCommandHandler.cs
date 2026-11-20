@@ -26,7 +26,7 @@ public partial class DeleteUserCommandHandler(
         LogDeletingUser(logger, request.UserId);
 
         await EnsureUserIsNotLastAdminAsync(request.UserId, cancellationToken);
-        await EnsureUserIsNotSoleProjectManagerAsync(request.UserId, cancellationToken);
+        await HandleSoleManagedProjectsAsync(request.UserId, request.CurrentUserId, cancellationToken);
 
         await TryDeleteUserAvatarAsync(request.UserId, cancellationToken);
 
@@ -50,16 +50,26 @@ public partial class DeleteUserCommandHandler(
     }
 
     /// <summary>
-    /// Ensures that the user being deleted is not the sole remaining active manager of any project.
+    /// Transfers management of any solely-managed projects to the acting administrator when deleting another user,
+    /// or blocks self-deletion when no acting administrator can take over.
     /// </summary>
-    private async Task EnsureUserIsNotSoleProjectManagerAsync(Guid userId, CancellationToken cancellationToken)
+    private async Task HandleSoleManagedProjectsAsync(Guid userId, Guid? currentUserId, CancellationToken cancellationToken)
     {
         var soleManagedProjectIds = await projectRepository.GetSoleManagedProjectIdsForUpdateAsync(userId, cancellationToken);
-        if (soleManagedProjectIds.Count > 0)
+        if (soleManagedProjectIds.Count == 0)
         {
-            LogCannotDeleteSoleProjectManager(logger, userId, soleManagedProjectIds.Count);
-            throw new CannotRemoveLastProjectManagerException(userId, soleManagedProjectIds);
+            return;
         }
+
+        if (currentUserId is { } actingAdminUserId && actingAdminUserId != Guid.Empty && actingAdminUserId != userId)
+        {
+            await projectRepository.EnsureManagerForProjectsAsync(soleManagedProjectIds, actingAdminUserId, cancellationToken);
+            LogTransferredSoleManagedProjects(logger, soleManagedProjectIds.Count, userId, actingAdminUserId);
+            return;
+        }
+
+        LogCannotDeleteSoleProjectManager(logger, userId, soleManagedProjectIds.Count);
+        throw new CannotRemoveLastProjectManagerException(userId, soleManagedProjectIds);
     }
 
     /// <summary>
@@ -98,4 +108,7 @@ public partial class DeleteUserCommandHandler(
 
     [LoggerMessage(EventId = LogEventIds.CannotDeleteSoleProjectManager, Level = LogLevel.Warning, Message = "Attempted to delete user ID: {UserId}, but they are the sole active manager of {ProjectCount} project(s).")]
     private static partial void LogCannotDeleteSoleProjectManager(ILogger logger, Guid userId, int projectCount);
+
+    [LoggerMessage(EventId = LogEventIds.TransferredSoleManagedProjectsOnDeletion, Level = LogLevel.Information, Message = "Transferred management of {ProjectCount} solely-managed project(s) from deleted user ID: {UserId} to acting administrator ID: {ActingAdminUserId}.")]
+    private static partial void LogTransferredSoleManagedProjects(ILogger logger, int projectCount, Guid userId, Guid actingAdminUserId);
 }

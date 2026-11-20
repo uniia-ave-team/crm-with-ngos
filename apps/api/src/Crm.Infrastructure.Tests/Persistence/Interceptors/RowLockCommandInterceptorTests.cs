@@ -30,20 +30,20 @@ public class RowLockCommandInterceptorTests
         var eventData = CreateCommandEventData();
 
         var taggedCommand = Substitute.For<DbCommand>();
-        taggedCommand.CommandText = "-- __ROW_LOCK_FOR_UPDATE__\nSELECT p.\"Id\" FROM \"Project\" AS p WHERE p.\"Id\" = @p0 LIMIT 1";
+        taggedCommand.CommandText = "-- __ROW_LOCK_FOR_NO_KEY_UPDATE__\nSELECT p.\"Id\" FROM \"Project\" AS p WHERE p.\"Id\" = @p0 LIMIT 1";
         interceptor.ReaderExecuting(taggedCommand, eventData, default);
-        taggedCommand.CommandText.ShouldEndWith("FOR UPDATE");
+        taggedCommand.CommandText.ShouldEndWith("FOR NO KEY UPDATE");
 
-        // Re-running must not double-append FOR UPDATE
+        // Re-running must not double-append FOR NO KEY UPDATE
         await interceptor.ReaderExecutingAsync(taggedCommand, eventData, default, ct);
-        taggedCommand.CommandText.IndexOf("FOR UPDATE", StringComparison.Ordinal)
-            .ShouldBe(taggedCommand.CommandText.LastIndexOf("FOR UPDATE", StringComparison.Ordinal));
+        taggedCommand.CommandText.IndexOf("FOR NO KEY UPDATE", StringComparison.Ordinal)
+            .ShouldBe(taggedCommand.CommandText.LastIndexOf("FOR NO KEY UPDATE", StringComparison.Ordinal));
 
-        // Trailing semicolon is preserved after FOR UPDATE
+        // Trailing semicolon is preserved after FOR NO KEY UPDATE
         var semicolonCommand = Substitute.For<DbCommand>();
-        semicolonCommand.CommandText = "-- __ROW_LOCK_FOR_UPDATE__\nSELECT p.\"Id\" FROM \"Project\" AS p ORDER BY p.\"Id\";";
+        semicolonCommand.CommandText = "-- __ROW_LOCK_FOR_NO_KEY_UPDATE__\nSELECT p.\"Id\" FROM \"Project\" AS p ORDER BY p.\"Id\";";
         await interceptor.ReaderExecutingAsync(semicolonCommand, eventData, default, ct);
-        semicolonCommand.CommandText.ShouldEndWith("FOR UPDATE;");
+        semicolonCommand.CommandText.ShouldEndWith("FOR NO KEY UPDATE;");
 
         // Untagged queries remain untouched
         var untaggedCommand = Substitute.For<DbCommand>();
@@ -71,7 +71,7 @@ public class RowLockCommandInterceptorTests
             .Select(p => p.Id)
             .ToQueryString();
 
-        sql.ShouldContain("-- __ROW_LOCK_FOR_UPDATE__");
+        sql.ShouldContain("-- __ROW_LOCK_FOR_NO_KEY_UPDATE__");
         sql.ShouldContain("EXISTS");
         sql.ShouldContain("ORDER BY");
         sql.ShouldNotContain("LEFT JOIN", Case.Insensitive);

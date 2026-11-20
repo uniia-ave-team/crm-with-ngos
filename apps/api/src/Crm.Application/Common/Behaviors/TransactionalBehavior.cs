@@ -38,9 +38,13 @@ public partial class TransactionalBehavior<TRequest, TResponse>(
         }
         catch (Exception ex)
         {
-            if (ex.IsClientError())
+            if (ex.IsExpectedDomainError())
             {
                 LogTransactionRolledBackOnClientError(logger, typeof(TRequest).Name, ex.GetType().Name, ex.Message);
+            }
+            else if (ex.IsClientError())
+            {
+                LogTransactionRolledBackOnUnexpectedClientError(logger, ex, typeof(TRequest).Name, ex.GetType().Name);
             }
             else
             {
@@ -63,6 +67,9 @@ public partial class TransactionalBehavior<TRequest, TResponse>(
 
     [LoggerMessage(EventId = LogEventIds.TransactionRolledBackOnClientError, Level = LogLevel.Warning, Message = "Transaction rolled back for command {CommandName} due to client error ({ExceptionType}): {Message}")]
     private static partial void LogTransactionRolledBackOnClientError(ILogger logger, string commandName, string exceptionType, string message);
+
+    [LoggerMessage(EventId = LogEventIds.TransactionRolledBackOnUnexpectedClientError, Level = LogLevel.Warning, Message = "Transaction rolled back for command {CommandName} due to unexpected client error ({ExceptionType}).")]
+    private static partial void LogTransactionRolledBackOnUnexpectedClientError(ILogger logger, Exception exception, string commandName, string exceptionType);
 
     [LoggerMessage(EventId = LogEventIds.TransactionRolledBack, Level = LogLevel.Error, Message = "An error occurred while executing command {CommandName}. Transaction rolled back.")]
     private static partial void LogTransactionRolledBack(ILogger logger, Exception exception, string commandName);

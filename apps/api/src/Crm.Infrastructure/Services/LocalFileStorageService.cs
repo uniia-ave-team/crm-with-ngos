@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
 using Crm.Application.Interfaces;
+using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
 using Crm.Infrastructure.Options;
 using Microsoft.Extensions.Options;
@@ -8,7 +8,7 @@ namespace Crm.Infrastructure.Services;
 
 /// <summary>
 /// Implements <see cref="IFileStorageService"/> to manage physical files locally on the disk,
-/// enforcing installation-wide storage quotas and atomic writes without leaving partial files on disk.
+/// enforcing installation-wide storage quotas via <see cref="LocalStorageQuotaTracker"/> and atomic writes.
 /// </summary>
 /// <param name="options">The configuration options containing the UploadDirectory and storage quota.</param>
 /// <param name="imageValidator">The validator verifying uploaded image content.</param>
@@ -17,10 +17,6 @@ public class LocalFileStorageService(
     IImageValidator imageValidator) : IFileStorageService
 {
     private const int DefaultBufferSize = 4096;
-    private const string TempFileExtension = ".tmp";
-
-    private static readonly ConcurrentDictionary<string, StorageQuotaGuard> QuotaGuards =
-        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
     /// <inheritdoc />
     public Task<string> SaveFileAsync(Stream contentStream, string originalFileName, string folderName, CancellationToken cancellationToken = default)
@@ -32,7 +28,7 @@ public class LocalFileStorageService(
     }
 
     /// <inheritdoc />
-    public Task<string> SaveImageAsync(Stream contentStream, string originalFileName, string folderName, CancellationToken cancellationToken = default)
+    public async Task<string> SaveImageAsync(Stream contentStream, string originalFileName, string folderName, CancellationToken cancellationToken = default)
     {
         ValidateStream(contentStream);
         ValidateFileName(originalFileName);
@@ -41,7 +37,7 @@ public class LocalFileStorageService(
 
         return !validationResult.IsValid
             ? throw new ArgumentException("The file content does not match a supported image format.", nameof(originalFileName))
-            : SaveValidatedAsync(validationResult.ResultStream ?? contentStream, originalFileName, folderName, cancellationToken);
+            : await SaveValidatedAsync(validationResult.ResultStream ?? contentStream, originalFileName, folderName, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -72,51 +68,75 @@ public class LocalFileStorageService(
             return Task.CompletedTask;
         }
 
+        string rootDirectory = NormalizeUploadDirectory(options.Value.UploadDirectory);
         string filePath = GetSecureFilePath(folderName, fileName);
 
         if (File.Exists(filePath))
         {
+            long deletedBytes = TryGetFileLength(filePath);
             File.Delete(filePath);
+            LocalStorageQuotaTracker.OnFileDeleted(rootDirectory, deletedBytes);
         }
 
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Resolves and normalizes a configured upload directory path to an absolute directory ending with a separator.
+    /// </summary>
+    /// <param name="uploadDirectory">The configured upload directory path (absolute or relative to base directory).</param>
+    /// <returns>The normalized absolute directory path.</returns>
+    internal static string NormalizeUploadDirectory(string uploadDirectory)
+    {
+        string resolved = Path.IsPathRooted(uploadDirectory)
+            ? uploadDirectory
+            : Path.Combine(AppContext.BaseDirectory, uploadDirectory);
+
+        string normalized = Path.GetFullPath(resolved);
+
+        return normalized.EndsWith(Path.DirectorySeparatorChar)
+            ? normalized
+            : normalized + Path.DirectorySeparatorChar;
+    }
+
     private async Task<string> SaveValidatedAsync(Stream stream, string name, string folder, CancellationToken cancellationToken)
     {
-        string rootDirectory = GetNormalizedUploadDirectory();
-        string uniqueName = GenerateUniqueFileName(name);
+        string rootDirectory = NormalizeUploadDirectory(options.Value.UploadDirectory);
+        string uniqueName = $"{Guid.NewGuid()}{Path.GetExtension(name)}";
         string directoryPath = GetTargetDirectory(folder, rootDirectory);
         long maxTotalBytes = options.Value.MaxTotalBytes;
         long incomingBytes = stream.Length - stream.Position;
 
-        StorageQuotaGuard guard = QuotaGuards.GetOrAdd(rootDirectory, _ => new StorageQuotaGuard());
         bool reserved = false;
+        bool committed = false;
 
         try
         {
-            guard.Reserve(rootDirectory, incomingBytes, maxTotalBytes);
+            LocalStorageQuotaTracker.Reserve(rootDirectory, incomingBytes, maxTotalBytes);
             reserved = true;
 
-            EnsureDirectoryExists(directoryPath);
+            Directory.CreateDirectory(directoryPath);
 
             string filePath = Path.Combine(directoryPath, uniqueName);
-            await SaveAtomicallyToDiskAsync(stream, filePath, incomingBytes, maxTotalBytes, cancellationToken);
+            long writtenBytes = await SaveAtomicallyToDiskAsync(stream, filePath, incomingBytes, maxTotalBytes, cancellationToken);
+
+            LocalStorageQuotaTracker.Commit(rootDirectory, incomingBytes, writtenBytes);
+            committed = true;
 
             return uniqueName;
         }
         finally
         {
-            if (reserved)
+            if (reserved && !committed)
             {
-                guard.Release(incomingBytes);
+                LocalStorageQuotaTracker.Release(rootDirectory, incomingBytes);
             }
         }
     }
 
     private string GetSecureFilePath(string folderName, string fileName)
     {
-        string baseDirectory = GetTargetDirectory(folderName, GetNormalizedUploadDirectory());
+        string baseDirectory = GetTargetDirectory(folderName, NormalizeUploadDirectory(options.Value.UploadDirectory));
         string fullBaseDirectory = Path.GetFullPath(baseDirectory);
 
         if (!fullBaseDirectory.EndsWith(Path.DirectorySeparatorChar))
@@ -129,25 +149,6 @@ public class LocalFileStorageService(
         return !fullFilePath.StartsWith(fullBaseDirectory, StringComparison.OrdinalIgnoreCase)
             ? throw new UnauthorizedAccessException("Path traversal attempt detected in file name.")
             : fullFilePath;
-    }
-
-    private string GetNormalizedUploadDirectory()
-    {
-        string uploadDir = options.Value.UploadDirectory;
-
-        if (!Path.IsPathRooted(uploadDir))
-        {
-            uploadDir = Path.Combine(AppContext.BaseDirectory, uploadDir);
-        }
-
-        string normalizedUploadDir = Path.GetFullPath(uploadDir);
-
-        if (!normalizedUploadDir.EndsWith(Path.DirectorySeparatorChar))
-        {
-            normalizedUploadDir += Path.DirectorySeparatorChar;
-        }
-
-        return normalizedUploadDir;
     }
 
     private static string GetTargetDirectory(string folderName, string normalizedUploadDir)
@@ -184,28 +185,14 @@ public class LocalFileStorageService(
         }
     }
 
-    private static string GenerateUniqueFileName(string originalFileName)
-    {
-        string extension = Path.GetExtension(originalFileName);
-        return $"{Guid.NewGuid()}{extension}";
-    }
-
-    private static void EnsureDirectoryExists(string directoryPath)
-    {
-        if (!Directory.Exists(directoryPath))
-        {
-            Directory.CreateDirectory(directoryPath);
-        }
-    }
-
-    private static async Task SaveAtomicallyToDiskAsync(
+    private static async Task<long> SaveAtomicallyToDiskAsync(
         Stream sourceStream,
         string filePath,
         long expectedMaxBytes,
         long maxTotalBytes,
         CancellationToken cancellationToken)
     {
-        string tempFilePath = $"{filePath}.{Guid.NewGuid():N}{TempFileExtension}";
+        string tempFilePath = $"{filePath}.{Guid.NewGuid():N}{FileStorageConstants.TempFileExtension}";
         byte[] buffer = new byte[DefaultBufferSize];
         long totalWritten = 0;
 
@@ -236,11 +223,24 @@ public class LocalFileStorageService(
             }
 
             File.Move(tempFilePath, filePath);
+            return totalWritten;
         }
         catch
         {
             TryDeleteFile(tempFilePath);
             throw;
+        }
+    }
+
+    private static long TryGetFileLength(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (IOException)
+        {
+            return 0;
         }
     }
 
@@ -263,66 +263,8 @@ public class LocalFileStorageService(
         }
     }
 
-    private static long CalculateDirectorySize(string rootDirectory)
-    {
-        if (!Directory.Exists(rootDirectory))
-        {
-            return 0;
-        }
-
-        long totalBytes = 0;
-        foreach (string filePath in Directory.EnumerateFiles(rootDirectory, "*", SearchOption.AllDirectories))
-        {
-            if (filePath.EndsWith(TempFileExtension, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            try
-            {
-                totalBytes += new FileInfo(filePath).Length;
-            }
-            catch (FileNotFoundException)
-            {
-                // Ignore files deleted concurrently during directory traversal.
-            }
-            catch (IOException)
-            {
-                // Ignore transient I/O errors on concurrently modified files.
-            }
-        }
-
-        return totalBytes;
-    }
-
     private static bool ShouldIgnoreFile(string fileName) =>
         string.IsNullOrWhiteSpace(fileName) ||
         fileName.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         fileName.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
-
-    private sealed class StorageQuotaGuard
-    {
-        private readonly Lock _syncRoot = new();
-        private long _inFlightBytes;
-
-        public void Reserve(string rootDirectory, long incomingBytes, long maxTotalBytes)
-        {
-            lock (_syncRoot)
-            {
-                long currentBytes = CalculateDirectorySize(rootDirectory);
-                long reservedBytes = Interlocked.Read(ref _inFlightBytes);
-
-                if (incomingBytes > maxTotalBytes || currentBytes + reservedBytes > maxTotalBytes - incomingBytes)
-                {
-                    throw new StorageQuotaExceededException(
-                        $"File storage quota of {maxTotalBytes} bytes exceeded. Delete unused files or contact your administrator.");
-                }
-
-                Interlocked.Add(ref _inFlightBytes, incomingBytes);
-            }
-        }
-
-        public void Release(long bytes)
-            => Interlocked.Add(ref _inFlightBytes, -bytes);
-    }
 }

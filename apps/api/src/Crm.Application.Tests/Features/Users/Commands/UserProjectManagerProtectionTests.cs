@@ -11,8 +11,9 @@ using Shouldly;
 namespace Crm.Application.Tests.Features.Users.Commands;
 
 /// <summary>
-/// Unit tests verifying that deactivating or deleting the sole active manager of any project is blocked,
-/// while users who are not sole active managers can be deactivated or deleted normally.
+/// Unit tests verifying project management continuity during user deactivation and deletion:
+/// administrators can deactivate or delete a sole project manager by taking over management of
+/// those projects, while self-deletion (<c>DELETE /users/me</c>) remains blocked until transferred.
 /// </summary>
 public class UserProjectManagerProtectionTests
 {
@@ -23,10 +24,10 @@ public class UserProjectManagerProtectionTests
     private readonly IFileTransactionTracker _fileTracker = Substitute.For<IFileTransactionTracker>();
 
     [Fact]
-    public async Task DeactivateUserWhenSoleActiveManagerOfProjectShouldThrowAndNotDeactivate()
+    public async Task DeactivateUserWhenSoleActiveManagerOfProjectShouldTransferManagementToActingAdminAndDeactivate()
     {
         var userId = Guid.NewGuid();
-        var currentUserId = Guid.NewGuid();
+        var actingAdminId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
 
         _userRepository.GetAsync(userId, Arg.Any<CancellationToken>())
@@ -42,17 +43,20 @@ public class UserProjectManagerProtectionTests
             _projectRepository,
             Substitute.For<ILogger<DeactivateUserCommandHandler>>());
 
-        await Should.ThrowAsync<CannotRemoveLastProjectManagerException>(() =>
-            handler.Handle(new DeactivateUserCommand(userId, currentUserId), CancellationToken.None).AsTask());
+        await handler.Handle(new DeactivateUserCommand(userId, actingAdminId), CancellationToken.None);
 
-        await _userRepository.DidNotReceive().SetUserActivationStatusAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await _projectRepository.Received(1).EnsureManagerForProjectsAsync(
+            Arg.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { projectId })),
+            actingAdminId,
+            Arg.Any<CancellationToken>());
+        await _userRepository.Received(1).SetUserActivationStatusAsync(userId, false, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task DeactivateUserWhenNotSoleProjectManagerShouldSucceed()
+    public async Task DeactivateUserWhenNotSoleProjectManagerShouldDeactivateWithoutTransfer()
     {
         var userId = Guid.NewGuid();
-        var currentUserId = Guid.NewGuid();
+        var actingAdminId = Guid.NewGuid();
 
         _userRepository.GetAsync(userId, Arg.Any<CancellationToken>())
             .Returns(new User { Id = userId, IsActive = true });
@@ -67,13 +71,48 @@ public class UserProjectManagerProtectionTests
             _projectRepository,
             Substitute.For<ILogger<DeactivateUserCommandHandler>>());
 
-        await handler.Handle(new DeactivateUserCommand(userId, currentUserId), CancellationToken.None);
+        await handler.Handle(new DeactivateUserCommand(userId, actingAdminId), CancellationToken.None);
 
+        await _projectRepository.DidNotReceive().EnsureManagerForProjectsAsync(
+            Arg.Any<IEnumerable<Guid>>(),
+            Arg.Any<Guid>(),
+            Arg.Any<CancellationToken>());
         await _userRepository.Received(1).SetUserActivationStatusAsync(userId, false, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task DeleteUserWhenSoleActiveManagerOfProjectShouldThrowAndNotDelete()
+    public async Task DeleteUserByAdminWhenSoleActiveManagerOfProjectShouldTransferManagementToActingAdminAndDelete()
+    {
+        var userId = Guid.NewGuid();
+        var actingAdminId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+
+        _roleRepository.IsUserLastAdminAsync(userId, Arg.Any<CancellationToken>())
+            .Returns(false);
+        _projectRepository.GetSoleManagedProjectIdsForUpdateAsync(userId, Arg.Any<CancellationToken>())
+            .Returns([projectId]);
+        _userRepository.GetAvatarAsync(userId, Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException<string>(new EntityFieldNotFoundException<User>(nameof(User.Avatar))));
+
+        var handler = new DeleteUserCommandHandler(
+            _identityService,
+            _roleRepository,
+            _userRepository,
+            _projectRepository,
+            _fileTracker,
+            Substitute.For<ILogger<DeleteUserCommandHandler>>());
+
+        await handler.Handle(new DeleteUserCommand(userId, actingAdminId), CancellationToken.None);
+
+        await _projectRepository.Received(1).EnsureManagerForProjectsAsync(
+            Arg.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { projectId })),
+            actingAdminId,
+            Arg.Any<CancellationToken>());
+        await _identityService.Received(1).DeleteUserAsync(userId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteUserSelfWhenSoleActiveManagerOfProjectShouldThrowAndNotDelete()
     {
         var userId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
@@ -92,13 +131,17 @@ public class UserProjectManagerProtectionTests
             Substitute.For<ILogger<DeleteUserCommandHandler>>());
 
         await Should.ThrowAsync<CannotRemoveLastProjectManagerException>(() =>
-            handler.Handle(new DeleteUserCommand(userId), CancellationToken.None).AsTask());
+            handler.Handle(new DeleteUserCommand(userId, userId), CancellationToken.None).AsTask());
 
+        await _projectRepository.DidNotReceive().EnsureManagerForProjectsAsync(
+            Arg.Any<IEnumerable<Guid>>(),
+            Arg.Any<Guid>(),
+            Arg.Any<CancellationToken>());
         await _identityService.DidNotReceive().DeleteUserAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task DeleteUserWhenNotSoleProjectManagerShouldSucceed()
+    public async Task DeleteUserWhenNotSoleProjectManagerShouldDeleteWithoutTransfer()
     {
         var userId = Guid.NewGuid();
 
@@ -119,6 +162,10 @@ public class UserProjectManagerProtectionTests
 
         await handler.Handle(new DeleteUserCommand(userId), CancellationToken.None);
 
+        await _projectRepository.DidNotReceive().EnsureManagerForProjectsAsync(
+            Arg.Any<IEnumerable<Guid>>(),
+            Arg.Any<Guid>(),
+            Arg.Any<CancellationToken>());
         await _identityService.Received(1).DeleteUserAsync(userId, Arg.Any<CancellationToken>());
     }
 }

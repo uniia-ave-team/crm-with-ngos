@@ -461,7 +461,6 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         var (inactiveClient, inactiveId) = await InviteAndRegisterUserAsync(factory, adminClient, "inactive@ngo.org", "Inactive", "Three", adminRoleId, ct);
         using var inactiveClientScope = inactiveClient;
 
-        // Create a restricted role WITHOUT Project/Task global AccessRights (B-16)
         var restrictedRoleResp = await adminClient.PostAsJsonAsync(
             "/api/v1/roles",
             new CreateRoleCommand("UsersOnly", null, null),
@@ -472,15 +471,12 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         var (restrictedClient, _) = await InviteAndRegisterUserAsync(factory, adminClient, "limited@ngo.org", "Limited", "Four", restrictedRoleId, ct);
         using var restrictedClientScope = restrictedClient;
 
-        // B-16: User without ViewProject / ViewTask gets 403 Forbidden globally
         (await restrictedClient.GetAsync("/api/v1/projects", ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await restrictedClient.GetAsync("/api/v1/tasks?filter=mine", ct)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // B-18: Deactivate inactiveId and verify assigning them as a project member returns 400
         var deactivateResp = await adminClient.PostAsync($"/api/v1/users/{inactiveId}/deactivate", null, ct);
         deactivateResp.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // B-09: Create Public project with non-Z and offset DateTime strings in JSON body
         using var createPublicJson = new StringContent(
             JsonSerializer.Serialize(new
             {
@@ -501,15 +497,12 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         loadedPublicProj.StartDate.ShouldBe(new DateTime(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc));
         loadedPublicProj.EndDate.ShouldBe(new DateTime(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc));
 
-        // B-18: Assigning deactivated user to project returns 400 Bad Request
         var assignInactiveResp = await adminClient.PostAsJsonAsync(
             $"/api/v1/projects/{publicProjectId}/members",
             new AssignProjectMemberCommand(inactiveId, "Deactivated", ProjectClaim.View),
             ct);
         assignInactiveResp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
-        // B-02: Non-member peer on Public project CAN view & edit (create topic/task),
-        //       CANNOT manage (delete project, change visibility, assign members -> 403 Forbidden)
         var peerTopicResp = await peerClient.PostAsJsonAsync($"/api/v1/projects/{publicProjectId}/topics", new CreateTopicCommand("Open Topic", 0), ct);
         peerTopicResp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var publicTopicId = await peerTopicResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
@@ -529,7 +522,6 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
             ct);
         peerAddMemberResp.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // B-13: Last manager (admin) cannot remove or demote themselves
         (await adminClient.DeleteAsync($"/api/v1/projects/{publicProjectId}/members/{adminId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await adminClient.PutAsJsonAsync(
@@ -538,7 +530,6 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
-        // Create a task in Public project assigned to peer (who is NOT an explicit ProjectMember)
         var publicTagResp = await peerClient.PostAsJsonAsync($"/api/v1/projects/{publicProjectId}/tags", new CreateTagCommand("PublicTag"), ct);
         publicTagResp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var publicTagId = await publicTagResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
@@ -551,7 +542,6 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         publicTaskResp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var publicTaskId = await publicTaskResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
-        // B-10: Parallel AssignUser & AddTag requests do NOT fail with 500
         var parallelAssignTasks = Enumerable.Range(0, 5)
             .Select(_ => peerClient.PostAsync($"/api/v1/projects/{publicProjectId}/tasks/{publicTaskId}/assignees/{adminId}", null, ct));
         var parallelAssignResponses = await Task.WhenAll(parallelAssignTasks);
@@ -564,14 +554,12 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         parallelTagResponses.All(r => r.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Conflict).ShouldBeTrue();
         parallelTagResponses.Count(r => r.StatusCode == HttpStatusCode.NoContent).ShouldBeGreaterThanOrEqualTo(1);
 
-        // B-10: Parallel CreateTag with differing casing -> exactly one 201 Created, others 409 Conflict (NEVER 500!)
         string[] raceVariants = ["RaceTag", "racetag", "RACETAG", "RaceTag "];
         var parallelCreateTagResponses = await Task.WhenAll(
             raceVariants.Select(title => adminClient.PostAsJsonAsync($"/api/v1/projects/{publicProjectId}/tags", new CreateTagCommand(title), ct)));
         parallelCreateTagResponses.Count(r => r.StatusCode == HttpStatusCode.Created).ShouldBe(1);
         parallelCreateTagResponses.Count(r => r.StatusCode == HttpStatusCode.Conflict).ShouldBe(raceVariants.Length - 1);
 
-        // Create a second Private project where peer IS a member, and a third Private project where peer is NOT a member
         var peerPrivateProjId = await CreateProjectAsync(adminClient, "Peer Private", ProjectVisibility.Private, ct);
         (await adminClient.PostAsJsonAsync(
                 $"/api/v1/projects/{peerPrivateProjId}/members",
@@ -594,7 +582,6 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        // B-08 + B-09: Global GET /api/v1/tasks?filter=mine with non-Z & offset query dates returns tasks from BOTH visible projects
         var globalMine = await peerClient.GetFromJsonAsync<PagedResult<TaskSummaryDto>>(
             "/api/v1/tasks?filter=mine&startDateFrom=2026-11-20T00:00:00&startDateTo=2026-11-20T02:00:00%2B02:00",
             JsonOptions,
@@ -604,12 +591,10 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         globalMine.Items.Select(t => t.Id).ShouldContain(publicTaskId);
         globalMine.Items.Select(t => t.Id).ShouldContain(peerPrivateTaskId);
 
-        // Global GET /api/v1/tasks (without mine) NEVER leaks Secret Private project tasks to peer
         var globalVisible = await peerClient.GetFromJsonAsync<PagedResult<TaskSummaryDto>>("/api/v1/tasks", JsonOptions, ct);
         globalVisible.ShouldNotBeNull();
         globalVisible.Items.ShouldNotContain(t => t.ProjectId == secretProjId);
 
-        // B-13: Switching Public Board -> Private cleans up non-member peer's TaskUser & TaskReadState
         (await adminClient.PostAsJsonAsync(
                 $"/api/v1/projects/{publicProjectId}/tasks/{publicTaskId}/comments",
                 new CreateTaskCommentCommand("Unread notification before privacy change"),
@@ -630,7 +615,6 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         publicTaskAfterPrivate.AssignedUsers.Select(u => u.Id).ShouldNotContain(peerId);
         publicTaskAfterPrivate.AssignedUsers.Select(u => u.Id).ShouldContain(adminId);
 
-        // B-13: Removing peer from Peer Private cleans up peer's TaskUser assignment
         (await adminClient.DeleteAsync($"/api/v1/projects/{peerPrivateProjId}/members/{peerId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
@@ -641,19 +625,14 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         peerPrivateTaskAfterRemoval.ShouldNotBeNull();
         peerPrivateTaskAfterRemoval.AssignedUsers.ShouldBeEmpty();
 
-        // Global My Tasks for peer is now empty
         var peerGlobalAfterCleanup = await peerClient.GetFromJsonAsync<PagedResult<TaskSummaryDto>>("/api/v1/tasks?filter=mine", JsonOptions, ct);
         peerGlobalAfterCleanup.ShouldNotBeNull();
         peerGlobalAfterCleanup.TotalCount.ShouldBe(0);
 
-        // Sole manager cannot be deactivated or deleted while sole manager of a project
         var soleManagerProjId = await CreateProjectAsync(peerClient, "Peer Sole Private", ProjectVisibility.Private, ct);
-        (await adminClient.PostAsync($"/api/v1/users/{peerId}/deactivate", null, ct))
-            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await adminClient.DeleteAsync($"/api/v1/users/{peerId}", ct))
+        (await peerClient.DeleteAsync("/api/v1/users/me", ct))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
-        // Transfer ownership: peer promotes admin to Manage, then admin removes original creator (peer)
         (await peerClient.PostAsJsonAsync(
                 $"/api/v1/projects/{soleManagerProjId}/members",
                 new AssignProjectMemberCommand(adminId, "New Owner", ProjectClaim.Manage),
@@ -663,13 +642,11 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         (await adminClient.DeleteAsync($"/api/v1/projects/{soleManagerProjId}/members/{peerId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // Removed original creator loses ALL access to the private project (404, cannot view/manage/re-add/delete)
         (await peerClient.GetAsync($"/api/v1/projects/{soleManagerProjId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await peerClient.DeleteAsync($"/api/v1/projects/{soleManagerProjId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
-        // Concurrent removal of last 2 managers: exactly one succeeds (204) and one fails (400)
         var raceProjId = await CreateProjectAsync(adminClient, "Manager Race", ProjectVisibility.Private, ct);
         (await adminClient.PostAsJsonAsync(
                 $"/api/v1/projects/{raceProjId}/members",
@@ -682,6 +659,31 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
             peerClient.DeleteAsync($"/api/v1/projects/{raceProjId}/members/{adminId}", ct));
         raceResponses.Count(r => r.StatusCode == HttpStatusCode.NoContent).ShouldBe(1);
         raceResponses.Count(r => r.StatusCode == HttpStatusCode.BadRequest).ShouldBe(1);
+
+        var handoffOnDeactivateProjId = await CreateProjectAsync(peerClient, "Peer Deactivate Handoff", ProjectVisibility.Private, ct);
+        (await adminClient.GetAsync($"/api/v1/projects/{handoffOnDeactivateProjId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        (await adminClient.PostAsync($"/api/v1/users/{peerId}/deactivate", null, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var handedOffOnDeactivate = await adminClient.GetFromJsonAsync<ProjectDto>($"/api/v1/projects/{handoffOnDeactivateProjId}", JsonOptions, ct);
+        handedOffOnDeactivate.ShouldNotBeNull();
+        handedOffOnDeactivate.Members.ShouldContain(m => m.UserId == adminId && m.Claim == ProjectClaim.Manage);
+
+        (await adminClient.PostAsync($"/api/v1/users/{peerId}/activate", null, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var handoffOnDeleteProjId = await CreateProjectAsync(peerClient, "Peer Delete Handoff", ProjectVisibility.Private, ct);
+        (await adminClient.GetAsync($"/api/v1/projects/{handoffOnDeleteProjId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        (await adminClient.DeleteAsync($"/api/v1/users/{peerId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var handedOffOnDelete = await adminClient.GetFromJsonAsync<ProjectDto>($"/api/v1/projects/{handoffOnDeleteProjId}", JsonOptions, ct);
+        handedOffOnDelete.ShouldNotBeNull();
+        handedOffOnDelete.Members.ShouldContain(m => m.UserId == adminId && m.Claim == ProjectClaim.Manage);
     }
 
     private static async Task<(HttpClient Client, Guid UserId, Guid AdminRoleId)> SeedAdminAndNgoAsync(

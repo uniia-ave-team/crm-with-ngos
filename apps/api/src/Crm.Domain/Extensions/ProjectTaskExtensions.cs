@@ -33,12 +33,22 @@ public static class ProjectTaskExtensions
 
         if (requestedEndDate is { } explicitEndDate)
         {
-            task.EnsureValidEndDate(explicitEndDate);
             bool preserveAutoFlag = task.EndDateWasAuto
                 && task.Status == ProjectTaskStatus.Completed
                 && newStatus == ProjectTaskStatus.Completed
-                && task.EndDate == explicitEndDate;
-            task.EndDate = explicitEndDate;
+                && task.EndDate is { } currentEndDate
+                && Math.Abs((currentEndDate - explicitEndDate).Ticks) < TimeSpan.TicksPerMillisecond;
+
+            if (preserveAutoFlag)
+            {
+                task.EnsureValidEndDate(task.EndDate!.Value);
+            }
+            else
+            {
+                task.EnsureValidEndDate(explicitEndDate);
+                task.EndDate = explicitEndDate;
+            }
+
             task.EndDateWasAuto = preserveAutoFlag;
         }
         else if (updateEndDateWhenNull)

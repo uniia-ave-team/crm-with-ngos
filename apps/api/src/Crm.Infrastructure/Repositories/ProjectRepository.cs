@@ -104,6 +104,49 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
     }
 
     /// <inheritdoc />
+    public async Task EnsureManagerForProjectsAsync(
+        IEnumerable<Guid> projectIds,
+        Guid newManagerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        List<Guid> distinctProjectIds = [.. projectIds.Distinct()];
+        if (distinctProjectIds.Count == 0)
+        {
+            return;
+        }
+
+        var memberSet = Context.Set<ProjectMember>();
+        var existingMembers = await memberSet
+            .Where(m => distinctProjectIds.Contains(m.ProjectId) && m.UserId == newManagerUserId)
+            .ToListAsync(cancellationToken);
+
+        var existingByProjectId = existingMembers.ToDictionary(m => m.ProjectId);
+
+        foreach (Guid projectId in distinctProjectIds)
+        {
+            if (existingByProjectId.TryGetValue(projectId, out var existingMember))
+            {
+                if (existingMember.Claim < ProjectClaim.Manage)
+                {
+                    existingMember.Claim = ProjectClaim.Manage;
+                }
+            }
+            else
+            {
+                await memberSet.AddAsync(
+                    new ProjectMember
+                    {
+                        ProjectId = projectId,
+                        UserId = newManagerUserId,
+                        Claim = ProjectClaim.Manage,
+                        RoleTitle = string.Empty,
+                    },
+                    cancellationToken);
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<HashSet<Guid>> GetMemberUserIdsAsync(
         Guid projectId,
         IEnumerable<Guid> userIds,

@@ -119,8 +119,9 @@ public static class LogEventIds
     public const int PasswordResetSuccessfully = 2088;
     public const int RetrievingIdentityOptions = 2089;
     public const int IdentityOptionsRetrieved = 2090;
-    public const int CannotDeactivateSoleProjectManager = 2091;
+    public const int TransferredSoleManagedProjectsOnDeactivation = 2091;
     public const int CannotDeleteSoleProjectManager = 2092;
+    public const int TransferredSoleManagedProjectsOnDeletion = 2093;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;
@@ -145,6 +146,7 @@ public static class LogEventIds
     public const int FailedToDeleteFile = 4008;
     public const int FailedToCleanupOrphanedFile = 4009;
     public const int TransactionRolledBackOnClientError = 4010;
+    public const int TransactionRolledBackOnUnexpectedClientError = 4011;
 
     // 5000s: Security, Authorization, and Tokens
     public const int MissingRoleIdClaim = 5001;
@@ -160,6 +162,7 @@ public static class LogEventIds
     // 6000s: Global Errors and Middlewares
     public const int ClientError = 6001;
     public const int ServerError = 6002;
+    public const int UnexpectedClientError = 6003;
 
     // 7000s: UI Customizations and Settings
     public const int CreatingLoginPageImage = 7001;
@@ -184,6 +187,11 @@ public static class LogEventIds
     public const int CleanupStarted = 8004;
     public const int CleanupSuccessfullyFinished = 8005;
     public const int CleanupFailed = 8006;
+    public const int TempFileCleanupServiceStarting = 8007;
+    public const int TempFileCleanupServiceStopping = 8008;
+    public const int TempFileCleanupServiceFatalError = 8009;
+    public const int TempFileCleanupCompleted = 8010;
+    public const int TempFileCleanupFailed = 8011;
 
     // 9000s: Custom Tables, Templates, and Records
     public const int CreatingTableTemplate = 9001;

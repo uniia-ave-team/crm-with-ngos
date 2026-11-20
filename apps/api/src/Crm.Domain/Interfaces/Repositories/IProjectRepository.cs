@@ -85,6 +85,19 @@ public interface IProjectRepository : IGenericRepository<Project>
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Asynchronously ensures that <paramref name="newManagerUserId"/> holds at least <see cref="ProjectClaim.Manage"/>
+    /// on each project in <paramref name="projectIds"/>, promoting existing memberships or inserting new ones as needed.
+    /// </summary>
+    /// <param name="projectIds">The identifiers of projects to ensure management continuity on.</param>
+    /// <param name="newManagerUserId">The unique identifier of the active user taking over project management.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task EnsureManagerForProjectsAsync(
+        IEnumerable<Guid> projectIds,
+        Guid newManagerUserId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Asynchronously retrieves the subset of <paramref name="userIds"/> that are explicit members of the project.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>

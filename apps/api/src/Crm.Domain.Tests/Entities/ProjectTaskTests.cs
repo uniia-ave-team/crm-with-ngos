@@ -138,6 +138,33 @@ public class ProjectTaskTests
     }
 
     [Fact]
+    public void ChangeStatusOnPutWithJsMillisecondTruncatedAutoEndDateShouldPreserveAutoFlagAndClearOnReopen()
+    {
+        var microsecondAutoEndDate = new DateTime(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc)
+            .AddMilliseconds(123)
+            .AddMicroseconds(456);
+        var jsTruncatedEndDate = new DateTime(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc)
+            .AddMilliseconds(123);
+
+        var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
+
+        // Auto-complete via PATCH with PostgreSQL microsecond precision
+        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, microsecondAutoEndDate, updateEndDateWhenNull: false);
+        task.EndDate.ShouldBe(microsecondAutoEndDate);
+        task.EndDateWasAuto.ShouldBeTrue();
+
+        // Full edit via PUT echoing back JS Date-truncated millisecond timestamp preserves EndDateWasAuto
+        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: jsTruncatedEndDate, microsecondAutoEndDate.AddMinutes(5), updateEndDateWhenNull: true);
+        task.EndDate.ShouldBe(microsecondAutoEndDate);
+        task.EndDateWasAuto.ShouldBeTrue();
+
+        // Reopen via PATCH still clears the auto-populated EndDate
+        task.ChangeStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, microsecondAutoEndDate.AddMinutes(10), updateEndDateWhenNull: false);
+        task.EndDate.ShouldBeNull();
+        task.EndDateWasAuto.ShouldBeFalse();
+    }
+
+    [Fact]
     public void ChangeStatusOnPutWithModifiedEndDateShouldTreatItAsManual()
     {
         var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
