@@ -4261,7 +4261,7 @@
         "tags": [
           "ProjectTasks"
         ],
-        "summary": "Retrieves all comments on a task, ordered chronologically.",
+        "summary": "Retrieves a paginated list of comments on a task, ordered chronologically.",
         "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
         "operationId": "ProjectTasksGetComments",
         "parameters": [
@@ -4283,6 +4283,32 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "description": "Pagination query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Pagination query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
             }
           }
         ],
@@ -4312,10 +4338,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TaskCommentDto"
-                  }
+                  "$ref": "#/components/schemas/PagedResultOfTaskCommentDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -4846,6 +4879,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
             "content": {
               "application/json": {
                 "schema": {
@@ -8630,6 +8673,61 @@
           }
         }
       },
+      "PagedResultOfTaskCommentDto": {
+        "required": [
+          "items",
+          "totalCount",
+          "pageNumber",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskCommentDto"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          }
+        }
+      },
       "PagedResultOfTaskSummaryDto": {
         "required": [
           "items",
@@ -9363,6 +9461,7 @@
           "priority",
           "startDate",
           "endDate",
+          "endDateWasAuto",
           "unreadCommentsCount",
           "assignedUsers",
           "tags",
@@ -9414,6 +9513,9 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "endDateWasAuto": {
+            "type": "boolean"
           },
           "unreadCommentsCount": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -9493,6 +9595,7 @@
           "priority",
           "startDate",
           "endDate",
+          "endDateWasAuto",
           "unreadCommentsCount",
           "attachmentsCount",
           "assignedUsers",
@@ -9542,6 +9645,9 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "endDateWasAuto": {
+            "type": "boolean"
           },
           "unreadCommentsCount": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",

@@ -1,3 +1,4 @@
+using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
@@ -49,4 +50,16 @@ public class TaskAttachmentRepository(ApplicationDbContext appDbContext)
     /// <inheritdoc />
     public Task<TaskAttachment> GetByTaskAndIdAsync(Guid taskId, Guid attachmentId, CancellationToken cancellationToken = default)
         => GetAsync(a => a.TaskId == taskId && a.Id == attachmentId, attachmentId, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<TaskAttachmentStats> GetTaskAttachmentStatsAsync(Guid taskId, CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .AsNoTracking()
+            .Where(a => a.TaskId == taskId)
+            .GroupBy(_ => 1)
+            .Select(g => new TaskAttachmentStats(g.Count(), g.Sum(a => a.FileSize)))
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? TaskAttachmentStats.Empty;
+    }
 }

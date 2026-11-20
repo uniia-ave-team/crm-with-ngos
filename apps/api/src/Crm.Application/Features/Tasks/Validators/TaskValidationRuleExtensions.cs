@@ -23,7 +23,9 @@ internal static class TaskValidationRuleExtensions
         => ruleBuilder
             .NotEmpty().WithMessage(ValidationMessages.TaskTitleRequired)
             .MaximumLength(TaskValidationConstants.MaxTitleLength)
-            .WithMessage(ValidationMessages.TaskTitleMaxLength);
+            .WithMessage(ValidationMessages.TaskTitleMaxLength)
+            .Must(ContainsNoNullChar)
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
 
     /// <summary>
     /// Applies standard validation rules for an optional task description.
@@ -38,6 +40,8 @@ internal static class TaskValidationRuleExtensions
         => ruleBuilder
             .MaximumLength(TaskValidationConstants.MaxDescriptionLength)
             .WithMessage(ValidationMessages.TaskDescriptionMaxLength)
+            .Must(ContainsNoNullChar)
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
             .When(x => !string.IsNullOrEmpty(selector(x)));
 
     /// <summary>
@@ -50,7 +54,9 @@ internal static class TaskValidationRuleExtensions
         => ruleBuilder
             .NotEmpty().WithMessage(ValidationMessages.CommentContentRequired)
             .MaximumLength(TaskValidationConstants.MaxCommentContentLength)
-            .WithMessage(ValidationMessages.CommentContentMaxLength);
+            .WithMessage(ValidationMessages.CommentContentMaxLength)
+            .Must(ContainsNoNullChar)
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
 
     /// <summary>
     /// Applies validation rules for an optional collection of external links attached to a task.
@@ -82,9 +88,15 @@ internal static class TaskValidationRuleExtensions
             .Must(metadata => metadata is null || metadata.ToJsonString().Length <= TaskValidationConstants.MaxMetadataSerializedChars)
             .WithMessage(ValidationMessages.MetadataMaxSerializedChars);
 
+    private static bool ContainsNoNullChar(string? value)
+        => value is null || !value.Contains('\0', StringComparison.Ordinal);
+
     private static bool IsValidExternalLink(TaskExternalLinkDto? link)
     {
-        if (link is null || string.IsNullOrWhiteSpace(link.Url))
+        if (link is null
+            || string.IsNullOrWhiteSpace(link.Url)
+            || !ContainsNoNullChar(link.Url)
+            || !ContainsNoNullChar(link.Title))
         {
             return false;
         }
@@ -114,13 +126,13 @@ internal static class TaskValidationRuleExtensions
                 foreach (KeyValuePair<string, JsonNode?> entry in obj)
                 {
                     if (string.IsNullOrWhiteSpace(entry.Key)
-                        || entry.Key.Length > TaskValidationConstants.MaxMetadataKeyLength)
+                        || entry.Key.Length > TaskValidationConstants.MaxMetadataKeyLength
+                        || !ContainsNoNullChar(entry.Key))
                     {
                         return false;
                     }
 
-                    if (entry.Value is JsonObject or JsonArray
-                        && !IsValidMetadataStructure(entry.Value, currentDepth + 1))
+                    if (!IsValidMetadataValue(entry.Value, currentDepth))
                     {
                         return false;
                     }
@@ -131,8 +143,7 @@ internal static class TaskValidationRuleExtensions
             case JsonArray array:
                 foreach (JsonNode? item in array)
                 {
-                    if (item is JsonObject or JsonArray
-                        && !IsValidMetadataStructure(item, currentDepth + 1))
+                    if (!IsValidMetadataValue(item, currentDepth))
                     {
                         return false;
                     }
@@ -140,8 +151,19 @@ internal static class TaskValidationRuleExtensions
 
                 return true;
 
+            case JsonValue value:
+                return !value.TryGetValue(out string? str) || ContainsNoNullChar(str);
+
             default:
                 return true;
         }
     }
+
+    private static bool IsValidMetadataValue(JsonNode? value, int currentDepth)
+        => value switch
+        {
+            JsonObject or JsonArray => IsValidMetadataStructure(value, currentDepth + 1),
+            JsonValue scalar => !scalar.TryGetValue(out string? str) || ContainsNoNullChar(str),
+            _ => true,
+        };
 }

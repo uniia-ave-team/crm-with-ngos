@@ -16,7 +16,6 @@ public static class ProjectVisibilityExpressions
     /// <returns>An expression evaluating whether a project is visible to the specified user.</returns>
     public static Expression<Func<Project, bool>> IsVisibleTo(Guid userId)
         => p => p.Visibility != ProjectVisibility.Private
-                || p.CreatedBy == userId
                 || p.Members.Any(m => m.UserId == userId);
 
     /// <summary>

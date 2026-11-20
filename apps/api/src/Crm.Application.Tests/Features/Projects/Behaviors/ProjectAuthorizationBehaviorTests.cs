@@ -41,7 +41,7 @@ public class ProjectAuthorizationBehaviorTests
         var userId = Guid.NewGuid();
         _currentUserService.GetUserId().Returns(userId);
         _projectRepository.GetAccessAsync(projectId, userId, Arg.Any<CancellationToken>())
-            .Returns(new ProjectAccess(ProjectVisibility.Private, Guid.NewGuid(), Claim: null, userId));
+            .Returns(new ProjectAccess(ProjectVisibility.Private, Claim: null, userId));
 
         var behavior = new ProjectAuthorizationBehavior<GetProjectByIdQuery, ProjectDto>(
             _accessService,
@@ -61,7 +61,7 @@ public class ProjectAuthorizationBehaviorTests
         var userId = Guid.NewGuid();
         _currentUserService.GetUserId().Returns(userId);
         _projectRepository.GetAccessAsync(projectId, userId, Arg.Any<CancellationToken>())
-            .Returns(new ProjectAccess(ProjectVisibility.Public, Guid.NewGuid(), Claim: null, userId));
+            .Returns(new ProjectAccess(ProjectVisibility.Public, Claim: null, userId));
 
         var behavior = new ProjectAuthorizationBehavior<DeleteProjectCommand, Unit>(
             _accessService,
@@ -80,7 +80,7 @@ public class ProjectAuthorizationBehaviorTests
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var expectedAccess = new ProjectAccess(ProjectVisibility.Public, userId, ProjectClaim.Manage, userId);
+        var expectedAccess = new ProjectAccess(ProjectVisibility.Public, ProjectClaim.Manage, userId);
 
         _currentUserService.GetUserId().Returns(userId);
         _projectRepository.GetAccessAsync(projectId, userId, Arg.Any<CancellationToken>())

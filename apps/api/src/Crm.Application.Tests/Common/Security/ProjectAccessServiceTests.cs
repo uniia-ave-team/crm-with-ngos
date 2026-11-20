@@ -27,7 +27,7 @@ public class ProjectAccessServiceTests
         var currentUserService = Substitute.For<ICurrentUserService>();
         currentUserService.GetUserId().Returns(userId);
 
-        var expected = new ProjectAccess(ProjectVisibility.Private, userId, ProjectClaim.Manage, userId);
+        var expected = new ProjectAccess(ProjectVisibility.Private, ProjectClaim.Manage, userId);
         projectRepository.GetAccessAsync(projectId, userId, ct).Returns(expected);
         projectRepository.GetAccessAsync(missingProjectId, userId, ct).Returns((ProjectAccess?)null);
 

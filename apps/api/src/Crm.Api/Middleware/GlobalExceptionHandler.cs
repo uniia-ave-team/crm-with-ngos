@@ -1,6 +1,6 @@
 using Crm.Api.Consts;
-using Crm.Api.Extensions;
 using Crm.Application.Common.Consts;
+using Crm.Application.Extensions;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +22,7 @@ public sealed partial class GlobalExceptionHandler(
         CancellationToken cancellationToken)
     {
         int statusCode = exception.MapToStatusCode();
-        bool isClientError = statusCode < StatusCodes.Status500InternalServerError;
+        bool isClientError = exception.IsClientError();
 
         httpContext.Response.StatusCode = statusCode;
 
@@ -92,7 +92,7 @@ public sealed partial class GlobalExceptionHandler(
     {
         if (isClientError)
         {
-            LogClientError(logger, exception, exception.GetType().Name, exception.Message);
+            LogClientError(logger, exception.GetType().Name, exception.Message);
         }
         else
         {
@@ -101,7 +101,7 @@ public sealed partial class GlobalExceptionHandler(
     }
 
     [LoggerMessage(EventId = LogEventIds.ClientError, Level = LogLevel.Warning, Message = "Client error occurred: {ExceptionType} - {Message}")]
-    private static partial void LogClientError(ILogger logger, Exception exception, string exceptionType, string message);
+    private static partial void LogClientError(ILogger logger, string exceptionType, string message);
 
     [LoggerMessage(EventId = LogEventIds.ServerError, Level = LogLevel.Error, Message = "Unhandled server exception: {ExceptionType} - {Message}")]
     private static partial void LogServerError(ILogger logger, Exception exception, string exceptionType, string message);

@@ -307,6 +307,7 @@ public class ProjectAndTaskPostgresIntegrationTests(
 
         var ct = TestContext.Current.CancellationToken;
         var (authUser, user) = CreateTestUser("Deleted", "Creator");
+        var (authSurvivingManager, survivingManager) = CreateTestUser("Surviving", "Manager");
         var topic = new Topic { Id = Guid.NewGuid(), Title = "Розробка", Order = 0 };
         var project = new Project
         {
@@ -318,12 +319,13 @@ public class ProjectAndTaskPostgresIntegrationTests(
             Topics = [topic],
             Members =
             [
-                new ProjectMember { UserId = user.Id, RoleTitle = "Owner", Claim = ProjectClaim.Manage },
+                new ProjectMember { UserId = user.Id, RoleTitle = "Former Owner", Claim = ProjectClaim.Manage },
+                new ProjectMember { UserId = survivingManager.Id, RoleTitle = "Active Manager", Claim = ProjectClaim.Manage },
             ],
         };
 
         await using var setupContext = fixture.CreateDbContext();
-        setupContext.AddRange(authUser, project);
+        setupContext.AddRange(authUser, authSurvivingManager, project);
         await setupContext.SaveChangesAsync(ct);
 
         var task = new ProjectTask
@@ -387,7 +389,10 @@ public class ProjectAndTaskPostgresIntegrationTests(
         survivingTask.Comments.Single().UserId.ShouldBeNull();
         survivingTask.Comments.Single().ReadStates.ShouldBeEmpty();
         survivingTask.Attachments.Single().UploadedBy.ShouldBeNull();
-        (await assertContext.Set<ProjectMember>().CountAsync(m => m.ProjectId == project.Id, ct)).ShouldBe(0);
+        var remainingMembers = await assertContext.Set<ProjectMember>()
+            .Where(m => m.ProjectId == project.Id)
+            .ToListAsync(ct);
+        remainingMembers.ShouldHaveSingleItem().UserId.ShouldBe(survivingManager.Id);
 
         // Deleting the whole project must succeed in PostgreSQL even with Restrict FK between Topic and Task
         await using var deleteProjectContext = fixture.CreateDbContext();
@@ -430,6 +435,7 @@ public class ProjectAndTaskPostgresIntegrationTests(
             Tags = [existingTag, extraTag],
             Members =
             [
+                new ProjectMember { UserId = creator.Id, Claim = ProjectClaim.Manage },
                 new ProjectMember { UserId = member.Id, Claim = ProjectClaim.Edit },
                 new ProjectMember { UserId = inactive.Id, Claim = ProjectClaim.View },
             ],
@@ -503,6 +509,40 @@ public class ProjectAndTaskPostgresIntegrationTests(
         updatedTask.AssignedUsers.Select(u => u.Id).ShouldBe([creator.Id]);
         updatedTask.Comments.Single().ReadStates.Select(rs => rs.UserId).ShouldBe([creator.Id]);
         updatedTask.Tags.Select(t => t.Id).ShouldBe([extraTag.Id]);
+
+        // Even if outsider previously commented on the task, new comments MUST NOT recreate unread markers for them
+        await using var commentAccessContext = fixture.CreateDbContext();
+        var accessCommentRepo = new TaskCommentRepository(commentAccessContext);
+        var priorOutsiderComment = new TaskComment
+        {
+            TaskId = task.Id,
+            UserId = outsider.Id,
+            Content = "Historical comment before removal",
+            CreatedAt = utcNow.AddMinutes(1),
+            UpdatedAt = utcNow.AddMinutes(1),
+        };
+        await accessCommentRepo.CreateAsync(priorOutsiderComment, ct);
+        await commentAccessContext.SaveChangesAsync(ct);
+
+        var freshMemberComment = new TaskComment
+        {
+            TaskId = task.Id,
+            UserId = member.Id,
+            Content = "New private comment",
+            CreatedAt = utcNow.AddMinutes(2),
+            UpdatedAt = utcNow.AddMinutes(2),
+        };
+        await accessCommentRepo.CreateAsync(freshMemberComment, ct);
+        await accessCommentRepo.MarkUnreadForOtherUsersAsync(freshMemberComment, member.Id, ct);
+        await commentAccessContext.SaveChangesAsync(ct);
+
+        await using var verifyUnreadContext = fixture.CreateDbContext();
+        var freshUnreadUserIds = await verifyUnreadContext.Set<TaskReadState>()
+            .Where(rs => rs.CommentId == freshMemberComment.Id)
+            .Select(rs => rs.UserId)
+            .ToListAsync(ct);
+        freshUnreadUserIds.ShouldBe([creator.Id]);
+        freshUnreadUserIds.ShouldNotContain(outsider.Id);
 
         await Should.ThrowAsync<EntitiesNotFoundException>(
             () => tagRepo.EnsureAllExistInProjectAsync(project.Id, [existingTag.Id, Guid.NewGuid()], ct));

@@ -17,6 +17,7 @@ namespace Crm.Application.Dtos.Task;
 /// <param name="Priority">The priority level of the task.</param>
 /// <param name="StartDate">The UTC start date/time of the task.</param>
 /// <param name="EndDate">The optional UTC end/completion date/time of the task.</param>
+/// <param name="EndDateWasAuto">Indicates whether <paramref name="EndDate"/> was automatically populated on completion rather than explicitly set.</param>
 /// <param name="UnreadCommentsCount">The number of comments on this task that are unread by the current user.</param>
 /// <param name="AttachmentsCount">The total number of files attached to the task.</param>
 /// <param name="AssignedUsers">The list of users assigned to the task.</param>
@@ -34,6 +35,7 @@ public record TaskSummaryDto(
     TaskPriority Priority,
     DateTime StartDate,
     DateTime? EndDate,
+    bool EndDateWasAuto,
     int UnreadCommentsCount,
     int AttachmentsCount,
     IReadOnlyList<TaskAssigneeDto> AssignedUsers,

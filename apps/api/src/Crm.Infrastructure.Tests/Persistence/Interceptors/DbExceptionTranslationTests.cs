@@ -1,5 +1,7 @@
 using System.Data.Common;
+using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
+using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Extensions;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Interceptors;
@@ -7,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -65,6 +68,37 @@ public class DbExceptionTranslationTests
         conflict.Kind.ShouldBe(ConflictKind.Concurrency);
         conflict.Message.ShouldBe(PostgresDbExceptionTranslator.ConcurrencyConflictMessage);
         conflict.InnerException.ShouldBeSameAs(concurrencyEx);
+    }
+
+    [Fact]
+    public void TranslateShouldNotHijackIdentityConcurrencyExceptionOnAuthUserOrAuthRole()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseNpgsql("Host=localhost;Database=crm_translator_test;Username=postgres;Password=postgres")
+            .Options;
+
+        using var context = new ApplicationDbContext(options);
+
+        var authUser = new AuthUser { Id = Guid.NewGuid(), Email = "user@ngo.org" };
+        var authUserUpdateEntry = Substitute.For<IUpdateEntry>();
+        authUserUpdateEntry.ToEntityEntry().Returns(context.Entry(authUser));
+        var identityConcurrencyEx = new DbUpdateConcurrencyException("Identity concurrency conflict.", [authUserUpdateEntry]);
+
+        _translator.Translate(identityConcurrencyEx).ShouldBeNull();
+
+        var authRole = new AuthRole { Id = Guid.NewGuid(), Name = "Member" };
+        var authRoleUpdateEntry = Substitute.For<IUpdateEntry>();
+        authRoleUpdateEntry.ToEntityEntry().Returns(context.Entry(authRole));
+        var roleConcurrencyEx = new DbUpdateConcurrencyException("Role concurrency conflict.", [authRoleUpdateEntry]);
+
+        _translator.Translate(roleConcurrencyEx).ShouldBeNull();
+
+        var task = new ProjectTask { Id = Guid.NewGuid(), Title = "Concurrent task" };
+        var taskUpdateEntry = Substitute.For<IUpdateEntry>();
+        taskUpdateEntry.ToEntityEntry().Returns(context.Entry(task));
+        var taskConcurrencyEx = new DbUpdateConcurrencyException("Task concurrency conflict.", [taskUpdateEntry]);
+
+        _translator.Translate(taskConcurrencyEx).ShouldBeOfType<ConcurrencyConflictException>();
     }
 
     [Fact]

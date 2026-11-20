@@ -100,6 +100,7 @@ public class UserRepository(
             : await DbSet
                 .AsNoTracking()
                 .Where(u => distinctIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.IsActive })
                 .ToDictionaryAsync(u => u.Id, u => u.IsActive, cancellationToken);
     }
 }

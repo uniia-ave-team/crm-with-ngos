@@ -51,7 +51,7 @@ public sealed class TaskAssigneeValidator(
                 throw new CannotAssignUserToTaskException(userId, AssignmentErrorMessages.UserAccountDeactivated);
             }
 
-            if (isPrivate && userId != projectAccess.CreatedBy && !memberIds.Contains(userId))
+            if (isPrivate && memberIds is not null && !memberIds.Contains(userId))
             {
                 throw new CannotAssignUserToTaskException(userId, AssignmentErrorMessages.NoPrivateProjectAccess(projectId));
             }

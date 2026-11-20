@@ -14,23 +14,78 @@ public sealed class ProjectMappingRegister : IRegister
     /// <inheritdoc />
     public void Register(TypeAdapterConfig config)
     {
-        config.NewConfig<Project, ProjectSummaryDto>();
+        config.NewConfig<Project, ProjectSummaryDto>()
+            .MapWith(src => new ProjectSummaryDto(
+                src.Id,
+                src.Title,
+                src.Description,
+                src.Visibility,
+                src.StartDate,
+                src.EndDate,
+                src.CreatedBy));
 
         config.NewConfig<ProjectMember, ProjectMemberDto>()
-            .MapToConstructor(true)
-            .Map(dest => dest.FirstName, src => src.User.FirstName)
-            .Map(dest => dest.LastName, src => src.User.LastName)
-            .Map(dest => dest.Patronymic, src => src.User.Patronymic)
-            .Map(dest => dest.AvatarUrl, src => src.User.Avatar);
+            .MapWith(src => new ProjectMemberDto(
+                src.ProjectId,
+                src.UserId,
+                src.User.FirstName,
+                src.User.LastName,
+                src.User.Patronymic,
+                src.User.Avatar,
+                src.RoleTitle,
+                src.Claim));
 
-        config.NewConfig<Topic, TopicDto>();
-        config.NewConfig<Tag, TagDto>();
+        config.NewConfig<Topic, TopicDto>()
+            .MapWith(src => new TopicDto(
+                src.Id,
+                src.ProjectId,
+                src.Title,
+                src.Order));
+
+        config.NewConfig<Tag, TagDto>()
+            .MapWith(src => new TagDto(
+                src.Id,
+                src.ProjectId,
+                src.Title));
 
         config.NewConfig<Project, ProjectDto>()
-            .MapToConstructor(true)
-            .Map(dest => dest.Members, src => src.Members.OrderBy(m => m.User.LastName).ThenBy(m => m.User.FirstName))
-            .Map(dest => dest.Topics, src => src.Topics.OrderBy(t => t.Order).ThenBy(t => t.Title))
-            .Map(dest => dest.Tags, src => src.Tags.OrderBy(t => t.Title));
+            .MapWith(src => new ProjectDto(
+                src.Id,
+                src.Title,
+                src.Description,
+                src.Visibility,
+                src.StartDate,
+                src.EndDate,
+                src.CreatedBy,
+                src.Members
+                    .OrderBy(m => m.User.LastName)
+                    .ThenBy(m => m.User.FirstName)
+                    .Select(m => new ProjectMemberDto(
+                        m.ProjectId,
+                        m.UserId,
+                        m.User.FirstName,
+                        m.User.LastName,
+                        m.User.Patronymic,
+                        m.User.Avatar,
+                        m.RoleTitle,
+                        m.Claim))
+                    .ToList(),
+                src.Topics
+                    .OrderBy(t => t.Order)
+                    .ThenBy(t => t.Title)
+                    .Select(t => new TopicDto(
+                        t.Id,
+                        t.ProjectId,
+                        t.Title,
+                        t.Order))
+                    .ToList(),
+                src.Tags
+                    .OrderBy(t => t.Title)
+                    .Select(t => new TagDto(
+                        t.Id,
+                        t.ProjectId,
+                        t.Title))
+                    .ToList()));
 
         config.NewConfig<CreateProjectCommand, Project>()
             .Ignore(dest => dest.Id)

@@ -10,7 +10,8 @@ public interface IGenericRepository<T> :
     IProjectingRepository,
     IPagedProjectingRepository<T>,
     ICommandRepository<T>,
-    IExistenceChecker
+    IExistenceChecker,
+    IRowLockRepository
     where T : IEntity
 {
 }

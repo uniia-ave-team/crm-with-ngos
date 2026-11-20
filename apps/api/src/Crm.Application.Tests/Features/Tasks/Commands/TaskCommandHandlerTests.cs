@@ -58,7 +58,7 @@ public class TaskCommandHandlerTests
         var topicId = Guid.NewGuid();
         var startDate = new DateTime(2026, 11, 16, 10, 0, 0, DateTimeKind.Utc);
         _projectAccessService.GetRequiredAsync(projectId, Arg.Any<CancellationToken>())
-            .Returns(new ProjectAccess(ProjectVisibility.Public, userId, ProjectClaim.Manage, userId));
+            .Returns(new ProjectAccess(ProjectVisibility.Public, ProjectClaim.Manage, userId));
 
         ProjectTask? created = null;
         _taskRepository.CreateAsync(Arg.Do<ProjectTask>(t => created = t), Arg.Any<CancellationToken>())
@@ -321,7 +321,7 @@ public class TaskCommandHandlerTests
             });
 
         _projectAccessService.GetRequiredAsync(projectId, Arg.Any<CancellationToken>())
-            .Returns(new ProjectAccess(ProjectVisibility.Private, otherUserId, ProjectClaim.Edit, userId));
+            .Returns(new ProjectAccess(ProjectVisibility.Private, ProjectClaim.Edit, userId));
 
         var handler = new DeleteTaskCommentCommandHandler(
             commentRepository,
@@ -449,9 +449,9 @@ public class TaskCommandHandlerTests
         var tagId = Guid.NewGuid();
 
         _projectAccessService.GetRequiredAsync(projectId, Arg.Any<CancellationToken>())
-            .Returns(new ProjectAccess(ProjectVisibility.Private, creatorId, ProjectClaim.Manage, creatorId));
+            .Returns(new ProjectAccess(ProjectVisibility.Private, ProjectClaim.Manage, creatorId));
         _projectRepository.GetMemberUserIdsAsync(projectId, Arg.Any<IEnumerable<Guid>>(), Arg.Any<CancellationToken>())
-            .Returns([validMemberId]);
+            .Returns([creatorId, validMemberId]);
         _userRepository.GetActiveStatusesAsync(Arg.Any<IEnumerable<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<Guid, bool>
             {
@@ -518,7 +518,7 @@ public class TaskCommandHandlerTests
         var tagId = Guid.NewGuid();
 
         _projectAccessService.GetRequiredAsync(projectId, Arg.Any<CancellationToken>())
-            .Returns(new ProjectAccess(ProjectVisibility.Public, userId, ProjectClaim.Manage, userId));
+            .Returns(new ProjectAccess(ProjectVisibility.Public, ProjectClaim.Manage, userId));
         _userRepository.GetActiveStatusesAsync(Arg.Any<IEnumerable<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<Guid, bool>
             {

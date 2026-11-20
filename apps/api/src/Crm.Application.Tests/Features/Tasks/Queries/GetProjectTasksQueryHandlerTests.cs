@@ -77,6 +77,7 @@ public class GetProjectTasksQueryHandlerTests
                     TaskPriority.High,
                     DateTime.UtcNow,
                     null,
+                    EndDateWasAuto: false,
                     UnreadCommentsCount: 0,
                     AttachmentsCount: 2,
                     [new TaskAssigneeDto(currentUserId, "Ivan", "Franko", null, "me-avatar.png")],
@@ -94,6 +95,7 @@ public class GetProjectTasksQueryHandlerTests
                     TaskPriority.Medium,
                     DateTime.UtcNow,
                     null,
+                    EndDateWasAuto: false,
                     UnreadCommentsCount: 0,
                     AttachmentsCount: 0,
                     [new TaskAssigneeDto(otherUserId, "Olena", "Kovalenko", null, "other-avatar.png")],
@@ -167,5 +169,52 @@ public class GetProjectTasksQueryHandlerTests
             1,
             10,
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetTaskCommentsQueryHandlerShouldReturnPaginatedCommentsWithEnrichedAvatars()
+    {
+        var currentUserId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var commentRepository = Substitute.For<ITaskCommentRepository>();
+
+        _currentUserService.GetUserId().Returns(currentUserId);
+        _fileUrlProvider.GetFileUrl("me-avatar.png", "api/v1/users/me/avatar")
+            .Returns("https://cdn.example/api/v1/users/me/avatar");
+
+        commentRepository.GetPagedByTaskIdAsync<TaskCommentDto>(taskId, 2, 5, Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<TaskCommentDto>(
+            [
+                new TaskCommentDto(
+                    Guid.NewGuid(),
+                    taskId,
+                    currentUserId,
+                    "Ivan",
+                    "Franko",
+                    null,
+                    "me-avatar.png",
+                    "Page 2 comment",
+                    DateTime.UtcNow,
+                    DateTime.UtcNow),
+            ],
+            totalCount: 6,
+            pageNumber: 2,
+            pageSize: 5));
+
+        var handler = new GetTaskCommentsQueryHandler(
+            commentRepository,
+            _currentUserService,
+            _fileUrlProvider,
+            Substitute.For<ILogger<GetTaskCommentsQueryHandler>>());
+
+        var result = await handler.Handle(
+            new GetTaskCommentsQuery(PageNumber: 2, PageSize: 5) { ProjectId = projectId, TaskId = taskId },
+            CancellationToken.None);
+
+        result.TotalCount.ShouldBe(6);
+        result.PageNumber.ShouldBe(2);
+        result.PageSize.ShouldBe(5);
+        result.Items.ShouldHaveSingleItem().AuthorAvatarUrl.ShouldBe("https://cdn.example/api/v1/users/me/avatar");
     }
 }

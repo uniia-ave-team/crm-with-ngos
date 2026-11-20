@@ -30,6 +30,7 @@ public static class ValidationMessages
     public const string StartDateRequired = "Start date is required.";
     public const string EndDateBeforeStartDate = DomainErrorMessages.EndDateBeforeStartDate;
     public const string CommentContentRequired = "Comment content is required.";
+    public const string NullCharacterNotAllowed = "Value cannot contain null characters.";
 
     public const string AttachmentFileNameRequired = "File name is required.";
     public const string UnsupportedAttachmentExtension = "Unsupported or disallowed file extension.";

@@ -270,8 +270,66 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         completedTask.ShouldNotBeNull();
         completedTask.Status.ShouldBe(ProjectTaskStatus.Completed);
         completedTask.EndDate.ShouldNotBeNull();
+        completedTask.EndDateWasAuto.ShouldBeTrue();
 
-        // Reopen auto-completed task clears EndDate
+        // Editing an auto-completed task via PUT echoing the unchanged EndDate preserves EndDateWasAuto
+        var editAutoCompletedResp = await client2.PutAsJsonAsync(
+            $"/api/v1/projects/{projectId}/tasks/{taskForUser2Id}",
+            new UpdateTaskCommand(
+                topicSmmId,
+                "Prepare SMM plan (edited)",
+                [user2Id],
+                [tagId],
+                "## Markdown plan",
+                taskStartDate,
+                ProjectTaskStatus.Completed,
+                TaskPriority.High,
+                EndDate: completedTask.EndDate),
+            ct);
+        editAutoCompletedResp.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // PUT moving StartDate after existing EndDate with null EndDate returns 400
+        var invalidPutRangeResp = await client2.PutAsJsonAsync(
+            $"/api/v1/projects/{projectId}/tasks/{taskForUser2Id}",
+            new UpdateTaskCommand(
+                topicSmmId,
+                "Bad range",
+                [user2Id],
+                [tagId],
+                null,
+                completedTask.EndDate.Value.AddDays(5),
+                ProjectTaskStatus.Completed,
+                TaskPriority.High,
+                EndDate: null),
+            ct);
+        invalidPutRangeResp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // Null character in task title returns 400 (not 500)
+        var nullCharTaskResp = await client2.PutAsJsonAsync(
+            $"/api/v1/projects/{projectId}/tasks/{taskForUser2Id}",
+            new UpdateTaskCommand(
+                topicSmmId,
+                "Bad\0Title",
+                [user2Id],
+                [tagId],
+                null,
+                taskStartDate,
+                ProjectTaskStatus.Completed,
+                TaskPriority.High,
+                EndDate: completedTask.EndDate),
+            ct);
+        nullCharTaskResp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // Paginated comments endpoint returns PagedResult<TaskCommentDto>
+        var pagedComments = await client2.GetFromJsonAsync<PagedResult<TaskCommentDto>>(
+            $"/api/v1/projects/{projectId}/tasks/{taskForUser2Id}/comments?pageNumber=1&pageSize=1",
+            JsonOptions,
+            ct);
+        pagedComments.ShouldNotBeNull();
+        pagedComments.TotalCount.ShouldBe(2);
+        pagedComments.Items.Count.ShouldBe(1);
+
+        // Reopen auto-completed task clears EndDate even after earlier PUT edit
         var reopenResp = await client2.PatchAsJsonAsync(
             $"/api/v1/projects/{projectId}/tasks/{taskForUser2Id}/status",
             new UpdateTaskStatusCommand(ProjectTaskStatus.Blocked),
@@ -587,6 +645,43 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
         var peerGlobalAfterCleanup = await peerClient.GetFromJsonAsync<PagedResult<TaskSummaryDto>>("/api/v1/tasks?filter=mine", JsonOptions, ct);
         peerGlobalAfterCleanup.ShouldNotBeNull();
         peerGlobalAfterCleanup.TotalCount.ShouldBe(0);
+
+        // Sole manager cannot be deactivated or deleted while sole manager of a project
+        var soleManagerProjId = await CreateProjectAsync(peerClient, "Peer Sole Private", ProjectVisibility.Private, ct);
+        (await adminClient.PostAsync($"/api/v1/users/{peerId}/deactivate", null, ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await adminClient.DeleteAsync($"/api/v1/users/{peerId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // Transfer ownership: peer promotes admin to Manage, then admin removes original creator (peer)
+        (await peerClient.PostAsJsonAsync(
+                $"/api/v1/projects/{soleManagerProjId}/members",
+                new AssignProjectMemberCommand(adminId, "New Owner", ProjectClaim.Manage),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        (await adminClient.DeleteAsync($"/api/v1/projects/{soleManagerProjId}/members/{peerId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Removed original creator loses ALL access to the private project (404, cannot view/manage/re-add/delete)
+        (await peerClient.GetAsync($"/api/v1/projects/{soleManagerProjId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await peerClient.DeleteAsync($"/api/v1/projects/{soleManagerProjId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // Concurrent removal of last 2 managers: exactly one succeeds (204) and one fails (400)
+        var raceProjId = await CreateProjectAsync(adminClient, "Manager Race", ProjectVisibility.Private, ct);
+        (await adminClient.PostAsJsonAsync(
+                $"/api/v1/projects/{raceProjId}/members",
+                new AssignProjectMemberCommand(peerId, "Co-Manager", ProjectClaim.Manage),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var raceResponses = await Task.WhenAll(
+            adminClient.DeleteAsync($"/api/v1/projects/{raceProjId}/members/{peerId}", ct),
+            peerClient.DeleteAsync($"/api/v1/projects/{raceProjId}/members/{adminId}", ct));
+        raceResponses.Count(r => r.StatusCode == HttpStatusCode.NoContent).ShouldBe(1);
+        raceResponses.Count(r => r.StatusCode == HttpStatusCode.BadRequest).ShouldBe(1);
     }
 
     private static async Task<(HttpClient Client, Guid UserId, Guid AdminRoleId)> SeedAdminAndNgoAsync(

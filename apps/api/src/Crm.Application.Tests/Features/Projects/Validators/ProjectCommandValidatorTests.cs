@@ -115,4 +115,14 @@ public class ProjectCommandValidatorTests
         _updateValidator.Validate(invalidRange).Errors
             .ShouldContain(e => e.PropertyName == nameof(UpdateProjectCommand.EndDate));
     }
+
+    [Fact]
+    public void ProjectValidatorsShouldRejectNullCharacters()
+    {
+        var createWithNullTitle = new CreateProjectCommand("Bad\0Project", null, ProjectVisibility.Public, DefaultStartDate);
+        _createValidator.Validate(createWithNullTitle).IsValid.ShouldBeFalse();
+
+        var createWithNullDesc = new CreateProjectCommand("Project", "Bad\0Desc", ProjectVisibility.Public, DefaultStartDate);
+        _createValidator.Validate(createWithNullDesc).IsValid.ShouldBeFalse();
+    }
 }

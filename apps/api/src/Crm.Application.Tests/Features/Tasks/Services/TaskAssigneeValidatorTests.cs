@@ -23,7 +23,7 @@ public class TaskAssigneeValidatorTests
     {
         var ct = TestContext.Current.CancellationToken;
         var validator = new TaskAssigneeValidator(_userRepository, _projectRepository);
-        var access = new ProjectAccess(ProjectVisibility.Private, Guid.NewGuid(), ProjectClaim.Manage, Guid.NewGuid());
+        var access = new ProjectAccess(ProjectVisibility.Private, ProjectClaim.Manage, Guid.NewGuid());
 
         await validator.ValidateAsync([], Guid.NewGuid(), access, ct);
 
@@ -36,27 +36,27 @@ public class TaskAssigneeValidatorTests
     {
         var ct = TestContext.Current.CancellationToken;
         var projectId = Guid.NewGuid();
-        var creatorId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
         var memberId = Guid.NewGuid();
         var missingId = Guid.NewGuid();
         var inactiveId = Guid.NewGuid();
         var outsiderId = Guid.NewGuid();
 
-        var access = new ProjectAccess(ProjectVisibility.Private, creatorId, ProjectClaim.Manage, creatorId);
+        var access = new ProjectAccess(ProjectVisibility.Private, ProjectClaim.Manage, managerId);
         var validator = new TaskAssigneeValidator(_userRepository, _projectRepository);
 
         _userRepository.GetActiveStatusesAsync(Arg.Any<IEnumerable<Guid>>(), ct)
             .Returns(new Dictionary<Guid, bool>
             {
-                [creatorId] = true,
+                [managerId] = true,
                 [memberId] = true,
                 [inactiveId] = false,
                 [outsiderId] = true,
             });
         _projectRepository.GetMemberUserIdsAsync(projectId, Arg.Any<IEnumerable<Guid>>(), ct)
-            .Returns([memberId]);
+            .Returns([managerId, memberId]);
 
-        await validator.ValidateAsync([creatorId, memberId, memberId], projectId, access, ct);
+        await validator.ValidateAsync([managerId, memberId, memberId], projectId, access, ct);
 
         await Should.ThrowAsync<EntityNotFoundException<User>>(() =>
             validator.ValidateAsync([missingId], projectId, access, ct));

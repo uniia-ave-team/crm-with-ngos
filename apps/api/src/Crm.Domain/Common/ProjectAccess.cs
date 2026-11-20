@@ -6,38 +6,32 @@ using Crm.Domain.Exceptions;
 namespace Crm.Domain.Common;
 
 /// <summary>
-/// Encapsulates project access metadata for a specific user and evaluates view, edit, and management permissions.
+/// Encapsulates project access metadata for a specific user and evaluates view, edit, and management permissions
+/// based strictly on project visibility and explicit <see cref="ProjectMember"/> claims.
 /// </summary>
 /// <param name="Visibility">The project's visibility mode.</param>
-/// <param name="CreatedBy">The unique identifier of the project creator, if still available.</param>
 /// <param name="Claim">The project-specific permission claim assigned to the user, or <c>null</c> if not a member.</param>
 /// <param name="UserId">The unique identifier of the user being evaluated.</param>
 public sealed record ProjectAccess(
     ProjectVisibility Visibility,
-    Guid? CreatedBy,
     ProjectClaim? Claim,
     Guid UserId)
 {
     /// <summary>
-    /// Gets a value indicating whether the evaluated user is the project creator/owner.
-    /// </summary>
-    public bool IsOwner => CreatedBy == UserId;
-
-    /// <summary>
     /// Gets a value indicating whether the user can view the project and its contents.
     /// </summary>
-    public bool CanView => Visibility != ProjectVisibility.Private || IsOwner || Claim is not null;
+    public bool CanView => Visibility != ProjectVisibility.Private || Claim is not null;
 
     /// <summary>
     /// Gets a value indicating whether the user can edit tasks, topics, tags, and general project details.
     /// </summary>
-    public bool CanEdit => IsOwner || Visibility == ProjectVisibility.Public || Claim >= ProjectClaim.Edit;
+    public bool CanEdit => Visibility == ProjectVisibility.Public || Claim >= ProjectClaim.Edit;
 
     /// <summary>
     /// Gets a value indicating whether the user can manage project settings, visibility, members, and deletion.
     /// Public visibility does not grant management permissions.
     /// </summary>
-    public bool CanManage => IsOwner || Claim >= ProjectClaim.Manage;
+    public bool CanManage => Claim >= ProjectClaim.Manage;
 
     /// <summary>
     /// Ensures the user has view access to the project, throwing <see cref="EntityNotFoundException{Project}"/>

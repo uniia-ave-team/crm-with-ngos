@@ -1,5 +1,6 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User.Commands;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,7 @@ namespace Crm.Application.Features.Users.Commands;
 public partial class DeactivateUserCommandHandler(
     IUserRepository userRepository,
     IAuthRoleRepository roleRepository,
+    IProjectRepository projectRepository,
     ILogger<DeactivateUserCommandHandler> logger) : IRequestHandler<DeactivateUserCommand>
 {
     public async ValueTask<Unit> Handle(DeactivateUserCommand request, CancellationToken cancellationToken)
@@ -33,6 +35,7 @@ public partial class DeactivateUserCommandHandler(
         }
 
         await EnsureUserIsNotLastAdminAsync(request.UserId, cancellationToken);
+        await EnsureUserIsNotSoleProjectManagerAsync(request.UserId, cancellationToken);
 
         await userRepository.SetUserActivationStatusAsync(user.Id, isActive: false, cancellationToken);
 
@@ -53,6 +56,19 @@ public partial class DeactivateUserCommandHandler(
         }
     }
 
+    /// <summary>
+    /// Ensures that the user being deactivated is not the sole remaining active manager of any project.
+    /// </summary>
+    private async Task EnsureUserIsNotSoleProjectManagerAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var soleManagedProjectIds = await projectRepository.GetSoleManagedProjectIdsForUpdateAsync(userId, cancellationToken);
+        if (soleManagedProjectIds.Count > 0)
+        {
+            LogCannotDeactivateSoleProjectManager(logger, userId, soleManagedProjectIds.Count);
+            throw new CannotRemoveLastProjectManagerException(userId, soleManagedProjectIds);
+        }
+    }
+
     [LoggerMessage(EventId = LogEventIds.DeactivatingUser, Level = LogLevel.Information, Message = "Deactivating user ID: {UserId}")]
     private static partial void LogDeactivatingUser(ILogger logger, Guid userId);
 
@@ -67,4 +83,7 @@ public partial class DeactivateUserCommandHandler(
 
     [LoggerMessage(EventId = LogEventIds.CannotDeactivateLastAdmin, Level = LogLevel.Warning, Message = "Failed to deactivate user ID: {UserId}. Reason: User is the last active system administrator.")]
     private static partial void LogCannotDeactivateLastAdmin(ILogger logger, Guid userId);
+
+    [LoggerMessage(EventId = LogEventIds.CannotDeactivateSoleProjectManager, Level = LogLevel.Warning, Message = "Failed to deactivate user ID: {UserId}. Reason: User is the sole active manager of {ProjectCount} project(s).")]
+    private static partial void LogCannotDeactivateSoleProjectManager(ILogger logger, Guid userId, int projectCount);
 }

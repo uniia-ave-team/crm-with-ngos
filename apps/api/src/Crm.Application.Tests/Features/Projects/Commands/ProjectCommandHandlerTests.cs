@@ -90,7 +90,7 @@ public class ProjectCommandHandlerTests
         _projectRepository.GetForUpdateAsync(projectId, Arg.Any<CancellationToken>())
             .Returns(project);
         _projectAccessService.GetRequiredAsync(projectId, Arg.Any<CancellationToken>())
-            .Returns(new ProjectAccess(ProjectVisibility.Public, ownerId, ProjectClaim.Edit, editorId));
+            .Returns(new ProjectAccess(ProjectVisibility.Public, ProjectClaim.Edit, editorId));
 
         var handler = new UpdateProjectCommandHandler(
             _projectRepository,
@@ -133,7 +133,7 @@ public class ProjectCommandHandlerTests
 
         // Owner changing visibility from Public -> Private triggers inaccessible user data cleanup (B-13)
         _projectAccessService.GetRequiredAsync(projectId, Arg.Any<CancellationToken>())
-            .Returns(new ProjectAccess(ProjectVisibility.Public, ownerId, ProjectClaim.Manage, ownerId));
+            .Returns(new ProjectAccess(ProjectVisibility.Public, ProjectClaim.Manage, ownerId));
         _currentUserService.GetUserId().Returns(ownerId);
 
         await handler.Handle(changeVisibilityCommand, CancellationToken.None);
@@ -190,7 +190,7 @@ public class ProjectCommandHandlerTests
         var viewerId = Guid.NewGuid();
 
         _projectAccessService.GetRequiredAsync(projectId, Arg.Any<CancellationToken>())
-            .Returns(new ProjectAccess(ProjectVisibility.Private, managerId, ProjectClaim.Manage, managerId));
+            .Returns(new ProjectAccess(ProjectVisibility.Private, ProjectClaim.Manage, managerId));
 
         _projectRepository.GetMemberClaimAsync(projectId, managerId, Arg.Any<CancellationToken>())
             .Returns(ProjectClaim.Manage);
@@ -206,6 +206,8 @@ public class ProjectCommandHandlerTests
         await Should.ThrowAsync<CannotRemoveLastProjectManagerException>(() =>
             removeHandler.Handle(new RemoveProjectMemberCommand(projectId, managerId), CancellationToken.None).AsTask());
 
+        await _projectRepository.Received(1).LockForUpdateAsync(projectId, Arg.Any<CancellationToken>());
+
         _projectRepository.GetMemberForUpdateAsync(projectId, managerId, Arg.Any<CancellationToken>())
             .Returns(new ProjectMember { ProjectId = projectId, UserId = managerId, Claim = ProjectClaim.Manage });
 
@@ -217,6 +219,8 @@ public class ProjectCommandHandlerTests
             updateHandler.Handle(
                 new UpdateProjectMemberCommand("Editor", ProjectClaim.Edit) { ProjectId = projectId, UserId = managerId },
                 CancellationToken.None).AsTask());
+
+        await _projectRepository.Received(2).LockForUpdateAsync(projectId, Arg.Any<CancellationToken>());
 
         // Removing a non-manager viewer succeeds and cleans up task assignments/read states on private project
         _projectRepository.GetMemberClaimAsync(projectId, viewerId, Arg.Any<CancellationToken>())

@@ -34,8 +34,12 @@ public static class ProjectTaskExtensions
         if (requestedEndDate is { } explicitEndDate)
         {
             task.EnsureValidEndDate(explicitEndDate);
+            bool preserveAutoFlag = task.EndDateWasAuto
+                && task.Status == ProjectTaskStatus.Completed
+                && newStatus == ProjectTaskStatus.Completed
+                && task.EndDate == explicitEndDate;
             task.EndDate = explicitEndDate;
-            task.EndDateWasAuto = false;
+            task.EndDateWasAuto = preserveAutoFlag;
         }
         else if (updateEndDateWhenNull)
         {
@@ -48,6 +52,10 @@ public static class ProjectTaskExtensions
                     task.EnsureValidEndDate(utcNow);
                     task.EndDate = utcNow;
                     task.EndDateWasAuto = true;
+                }
+                else
+                {
+                    task.EnsureValidEndDate(task.EndDate!.Value);
                 }
             }
             else
@@ -65,11 +73,19 @@ public static class ProjectTaskExtensions
                     task.EndDate = utcNow < task.StartDate ? task.StartDate : utcNow;
                     task.EndDateWasAuto = true;
                 }
+                else
+                {
+                    task.EnsureValidEndDate(task.EndDate.Value);
+                }
             }
             else if (task.Status == ProjectTaskStatus.Completed && task.EndDateWasAuto)
             {
                 task.EndDate = null;
                 task.EndDateWasAuto = false;
+            }
+            else if (task.EndDate is { } preservedEndDate)
+            {
+                task.EnsureValidEndDate(preservedEndDate);
             }
         }
 

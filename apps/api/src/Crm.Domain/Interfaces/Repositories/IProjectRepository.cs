@@ -61,8 +61,8 @@ public interface IProjectRepository : IGenericRepository<Project>
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Asynchronously checks whether the project has at least one active manager (creator or member with
-    /// <see cref="ProjectClaim.Manage"/>) other than <paramref name="excludeUserId"/>.
+    /// Asynchronously checks whether the project has at least one active member with
+    /// <see cref="ProjectClaim.Manage"/> other than <paramref name="excludeUserId"/>.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>
     /// <param name="excludeUserId">The unique identifier of the user being removed or demoted.</param>
@@ -71,6 +71,17 @@ public interface IProjectRepository : IGenericRepository<Project>
     Task<bool> HasAnotherManagerAsync(
         Guid projectId,
         Guid excludeUserId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously locks all projects managed by <paramref name="userId"/> in deterministic order within the active
+    /// transaction and returns the identifiers of projects where <paramref name="userId"/> is the sole remaining active manager.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user being deactivated or deleted.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A list of project identifiers where <paramref name="userId"/> is the sole active manager.</returns>
+    Task<List<Guid>> GetSoleManagedProjectIdsForUpdateAsync(
+        Guid userId,
         CancellationToken cancellationToken = default);
 
     /// <summary>

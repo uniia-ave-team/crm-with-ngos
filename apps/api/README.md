@@ -235,6 +235,7 @@ All settings live in `appsettings.json` (committed, non-secret defaults). Secret
 |---|---|---|---|
 | `FileStorage:UploadDirectory` | ✅ **Required** | `"uploads"` (dev) / `/data/uploads` (Docker) | Directory path for uploaded files |
 | `FileStorage:BaseUrl` | ✅ **Required** | `"http://localhost:5065"` | Public base URL for constructing file access URLs |
+| `FileStorage:MaxTotalBytes` | Optional | `107374182400` (100 GB) | Maximum total file storage quota in bytes across the entire installation |
 
 ### Logging (`SerilogOptions`)
 

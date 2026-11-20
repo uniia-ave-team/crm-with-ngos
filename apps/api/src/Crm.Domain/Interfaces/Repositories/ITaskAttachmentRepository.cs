@@ -1,3 +1,4 @@
+using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
@@ -43,4 +44,12 @@ public interface ITaskAttachmentRepository : IGenericRepository<TaskAttachment>
     /// <returns>The <see cref="TaskAttachment"/> entity.</returns>
     /// <exception cref="EntityNotFoundException{TaskAttachment}">Thrown if the attachment is not found on the task.</exception>
     Task<TaskAttachment> GetByTaskAndIdAsync(Guid taskId, Guid attachmentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously retrieves the current attachment count and combined file size in bytes for a specific task.
+    /// </summary>
+    /// <param name="taskId">The unique identifier of the task.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A <see cref="TaskAttachmentStats"/> record containing the attachment count and total size in bytes.</returns>
+    Task<TaskAttachmentStats> GetTaskAttachmentStatsAsync(Guid taskId, CancellationToken cancellationToken = default);
 }

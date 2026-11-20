@@ -1,4 +1,5 @@
 using Crm.Domain.Exceptions;
+using Crm.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -36,9 +37,11 @@ public sealed class PostgresDbExceptionTranslator : IDbExceptionTranslator
                 return existingConflict;
             }
 
-            if (current is DbUpdateConcurrencyException)
+            if (current is DbUpdateConcurrencyException concurrencyException)
             {
-                return new ConcurrencyConflictException(ConcurrencyConflictMessage, exception);
+                return IsIdentityConcurrencyException(concurrencyException)
+                    ? null
+                    : new ConcurrencyConflictException(ConcurrencyConflictMessage, exception);
             }
 
             if (current is PostgresException postgresException)
@@ -65,6 +68,10 @@ public sealed class PostgresDbExceptionTranslator : IDbExceptionTranslator
 
         return null;
     }
+
+    private static bool IsIdentityConcurrencyException(DbUpdateConcurrencyException exception)
+        => exception.Entries.Count > 0
+           && exception.Entries.All(entry => entry.Entity is AuthUser or AuthRole);
 
     private static ConflictException? TranslatePostgresException(PostgresException postgresException, Exception originalException)
         => postgresException.SqlState switch

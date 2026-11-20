@@ -75,8 +75,14 @@ public static class HostingExtensions
     /// <returns>The configured <see cref="WebApplication"/>.</returns>
     public static WebApplication ConfigurePipeline(this WebApplication app)
     {
-        app.UseExceptionHandler();
         app.UseForwardedHeaders();
+
+        app.UseSerilogRequestLogging(options =>
+        {
+            options.GetLevel = (httpContext, _, ex) => SerilogLogLevelResolver.Resolve(httpContext, ex);
+        });
+
+        app.UseExceptionHandler();
 
         if (app.Environment.IsDevelopment())
         {
@@ -96,11 +102,6 @@ public static class HostingExtensions
         {
             app.UseHsts();
         }
-
-        app.UseSerilogRequestLogging(options =>
-        {
-            options.GetLevel = (httpContext, _, ex) => SerilogLogLevelResolver.Resolve(httpContext, ex);
-        });
 
         app.UseHttpsRedirection();
 

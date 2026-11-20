@@ -246,22 +246,25 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves all comments on a task, ordered chronologically.
+    /// Retrieves a paginated list of comments on a task, ordered chronologically.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>
     /// <param name="taskId">The unique identifier of the task.</param>
+    /// <param name="query">Pagination query parameters.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A chronological list of task comment DTOs.</returns>
+    /// <returns>A paginated chronological list of task comment DTOs.</returns>
     [HttpGet("{taskId:guid}/comments")]
     [HasAccessRight(AccessRight.ViewTask)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<List<TaskCommentDto>>> GetComments(
+    public async Task<ActionResult<PagedResult<TaskCommentDto>>> GetComments(
         Guid projectId,
         Guid taskId,
+        [FromQuery] GetTaskCommentsQuery query,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetTaskCommentsQuery(projectId, taskId), cancellationToken);
+        var result = await mediator.Send(query with { ProjectId = projectId, TaskId = taskId }, cancellationToken);
         return Ok(result);
     }
 
@@ -391,6 +394,7 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<ActionResult<TaskAttachmentDto>> UploadAttachment(
         Guid projectId,
         Guid taskId,

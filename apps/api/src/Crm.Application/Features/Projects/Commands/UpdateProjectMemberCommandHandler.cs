@@ -24,6 +24,8 @@ public partial class UpdateProjectMemberCommandHandler(
     {
         LogUpdatingProjectMember(logger, request.UserId, request.ProjectId);
 
+        await projectRepository.LockForUpdateAsync(request.ProjectId, cancellationToken);
+
         var member = await projectRepository.GetMemberForUpdateAsync(request.ProjectId, request.UserId, cancellationToken);
 
         if (member.Claim >= ProjectClaim.Manage

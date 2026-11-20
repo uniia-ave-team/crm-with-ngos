@@ -119,6 +119,8 @@ public static class LogEventIds
     public const int PasswordResetSuccessfully = 2088;
     public const int RetrievingIdentityOptions = 2089;
     public const int IdentityOptionsRetrieved = 2090;
+    public const int CannotDeactivateSoleProjectManager = 2091;
+    public const int CannotDeleteSoleProjectManager = 2092;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;
@@ -142,6 +144,7 @@ public static class LogEventIds
     public const int RollingBackCreatedFiles = 4007;
     public const int FailedToDeleteFile = 4008;
     public const int FailedToCleanupOrphanedFile = 4009;
+    public const int TransactionRolledBackOnClientError = 4010;
 
     // 5000s: Security, Authorization, and Tokens
     public const int MissingRoleIdClaim = 5001;

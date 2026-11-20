@@ -78,6 +78,16 @@ public static class TaskValidationConstants
     public const long MaxAttachmentFileSize = 10 * FileSizeUnits.Megabyte;
 
     /// <summary>
+    /// The maximum allowed number of file attachments on a single task.
+    /// </summary>
+    public const int MaxAttachmentsPerTask = 10;
+
+    /// <summary>
+    /// The maximum allowed combined file size in bytes for all attachments on a single task (50 MB).
+    /// </summary>
+    public const long MaxTotalAttachmentSizePerTask = 50 * FileSizeUnits.Megabyte;
+
+    /// <summary>
     /// Maps allow-listed task attachment file extensions (lowercase with leading dot) to their permitted MIME content types.
     /// Excludes executable, script, and active web content types such as HTML, SVG, JavaScript, and binaries.
     /// </summary>
@@ -86,9 +96,9 @@ public static class TaskValidationConstants
         {
         // Text & Data
         (".txt",  ["text/plain"]),
-        (".md",   ["text/markdown", "text/plain"]),
-        (".csv",  ["text/csv", "text/plain", "application/vnd.ms-excel"]),
-        (".json", ["application/json", "text/plain"]),
+        (".md",   ["text/markdown", "text/x-markdown", "text/plain"]),
+        (".csv",  ["text/csv", "application/csv", "text/x-csv", "application/x-csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel"]),
+        (".json", ["application/json", "text/json", "text/plain"]),
 
         // Documents
         (".pdf",  ["application/pdf"]),
@@ -106,15 +116,15 @@ public static class TaskValidationConstants
         (".odp",  ["application/vnd.oasis.opendocument.presentation"]),
 
         // Images
-        (".png",  ["image/png"]),
-        (".jpg",  ["image/jpeg"]),
-        (".jpeg", ["image/jpeg"]),
+        (".png",  ["image/png", "image/x-png"]),
+        (".jpg",  ["image/jpeg", "image/pjpeg"]),
+        (".jpeg", ["image/jpeg", "image/pjpeg"]),
         (".gif",  ["image/gif"]),
         (".webp", ["image/webp"]),
-        (".bmp",  ["image/bmp"]),
+        (".bmp",  ["image/bmp", "image/x-ms-bmp"]),
 
         // Archives
-        (".zip",  ["application/zip", "application/x-zip-compressed"]),
+        (".zip",  ["application/zip", "application/x-zip-compressed", "application/x-zip", "multipart/x-zip"]),
         }
         .ToFrozenDictionary(
             x => x.Extension,

@@ -28,6 +28,8 @@ public class UploadTaskAttachmentCommandValidator : AbstractValidator<UploadTask
         RuleFor(x => x.OriginalFileName)
             .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage(ValidationMessages.AttachmentFileNameRequired)
+            .Must(name => !name.Contains('\0', StringComparison.Ordinal))
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
             .MaximumLength(TaskValidationConstants.MaxAttachmentFileNameLength)
             .WithMessage(ValidationMessages.AttachmentFileNameMaxLength)
             .Must(HasAllowedExtension)

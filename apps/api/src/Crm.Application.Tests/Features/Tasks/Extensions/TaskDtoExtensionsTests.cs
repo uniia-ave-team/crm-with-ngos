@@ -75,6 +75,7 @@ public class TaskDtoExtensionsTests
             TaskPriority.Medium,
             DateTime.UtcNow,
             null,
+            EndDateWasAuto: false,
             UnreadCommentsCount: 0,
             AssignedUsers:
             [

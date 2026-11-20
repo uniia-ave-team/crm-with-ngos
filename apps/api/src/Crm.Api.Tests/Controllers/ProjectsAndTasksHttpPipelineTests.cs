@@ -64,8 +64,11 @@ public class ProjectsAndTasksHttpPipelineTests
                 CreateProjectCommand cmd when cmd.Title == "ConcurrencyConflict" => throw new ConcurrencyConflictException(
                     "The resource was modified or deleted concurrently.",
                     new InvalidOperationException("concurrency leak detail")),
+                CreateProjectCommand cmd when cmd.Title == "QuotaExceeded" => throw new StorageQuotaExceededException(
+                    "File storage quota of 100 bytes exceeded."),
                 CreateProjectCommand => createdProjectId,
                 GetProjectTasksQuery => new PagedResult<TaskSummaryDto>([], 0, 1, 10),
+                GetTaskCommentsQuery q => new PagedResult<TaskCommentDto>([], 0, q.PageNumber, q.PageSize),
                 CreateTaskCommand => taskId,
                 UpdateTaskCommand => Unit.Value,
                 UploadTaskAttachmentCommand => new TaskAttachmentDto(
@@ -136,6 +139,23 @@ public class ProjectsAndTasksHttpPipelineTests
         var concurrencyBody = await concurrencyConflictResp.Content.ReadAsStringAsync(ct);
         concurrencyBody.ShouldContain("modified or deleted concurrently");
         concurrencyBody.ShouldNotContain("concurrency leak detail");
+
+        // StorageQuotaExceededException maps to 413 Payload Too Large with clear message (NOT 500)
+        var quotaResp = await client.PostAsJsonAsync(
+            "/api/v1/projects",
+            new CreateProjectCommand("QuotaExceeded", null, ProjectVisibility.Public, DateTime.UtcNow),
+            ct);
+        quotaResp.StatusCode.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
+        var quotaBody = await quotaResp.Content.ReadAsStringAsync(ct);
+        quotaBody.ShouldContain("File storage quota of 100 bytes exceeded.");
+
+        // Paginated GET /comments binds pageNumber and pageSize
+        var commentsPageResp = await client.GetAsync(
+            $"/api/v1/projects/{projectId}/tasks/{taskId}/comments?pageNumber=2&pageSize=5",
+            ct);
+        commentsPageResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        mediator.SentRequests.OfType<GetTaskCommentsQuery>()
+            .ShouldContain(q => q.ProjectId == projectId && q.TaskId == taskId && q.PageNumber == 2 && q.PageSize == 5);
 
         // DateTime without Z and with timezone offset normalize to UTC in JSON body (B-09)
         using var rawUtcBody = new StringContent(

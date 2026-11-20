@@ -89,13 +89,11 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
     {
         await Context.Set<TaskUser>()
             .Where(tu => tu.Task.ProjectId == projectId
-                         && (tu.Task.Project.CreatedBy == null || tu.Task.Project.CreatedBy != tu.UserId)
                          && !Context.Set<ProjectMember>().Any(m => m.ProjectId == projectId && m.UserId == tu.UserId))
             .ExecuteDeleteAsync(cancellationToken);
 
         await Context.Set<TaskReadState>()
             .Where(rs => rs.Comment.Task.ProjectId == projectId
-                         && (rs.Comment.Task.Project.CreatedBy == null || rs.Comment.Task.Project.CreatedBy != rs.UserId)
                          && !Context.Set<ProjectMember>().Any(m => m.ProjectId == projectId && m.UserId == rs.UserId))
             .ExecuteDeleteAsync(cancellationToken);
     }

@@ -87,7 +87,7 @@ public interface IProjectTaskRepository : IGenericRepository<ProjectTask>
 
     /// <summary>
     /// Asynchronously removes task assignments (<see cref="TaskUser"/>) and read states (<see cref="TaskReadState"/>)
-    /// across all tasks in <paramref name="projectId"/> for users who are neither the project's creator nor a project member.
+    /// across all tasks in <paramref name="projectId"/> for users who are not explicit project members.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

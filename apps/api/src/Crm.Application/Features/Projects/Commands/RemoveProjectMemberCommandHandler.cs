@@ -30,10 +30,11 @@ public partial class RemoveProjectMemberCommandHandler(
     {
         LogRemovingProjectMember(logger, request.UserId, request.ProjectId);
 
+        await projectRepository.LockForUpdateAsync(request.ProjectId, cancellationToken);
+
         ProjectClaim memberClaim = await projectRepository.GetMemberClaimAsync(request.ProjectId, request.UserId, cancellationToken)
             ?? throw new EntityNotFoundException<ProjectMember>(request.UserId);
 
-        // TODO: Handle possible race condition
         if (memberClaim >= ProjectClaim.Manage
             && !await projectRepository.HasAnotherManagerAsync(request.ProjectId, request.UserId, cancellationToken))
         {

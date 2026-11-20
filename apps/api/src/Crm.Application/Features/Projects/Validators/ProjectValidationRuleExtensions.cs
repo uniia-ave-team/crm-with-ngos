@@ -19,7 +19,9 @@ internal static class ProjectValidationRuleExtensions
         => ruleBuilder
             .NotEmpty().WithMessage(ValidationMessages.ProjectTitleRequired)
             .MaximumLength(ProjectValidationConstants.MaxTitleLength)
-            .WithMessage(ValidationMessages.ProjectTitleMaxLength);
+            .WithMessage(ValidationMessages.ProjectTitleMaxLength)
+            .Must(ContainsNoNullChar)
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
 
     /// <summary>
     /// Applies standard validation rules for an optional project description.
@@ -34,6 +36,8 @@ internal static class ProjectValidationRuleExtensions
         => ruleBuilder
             .MaximumLength(ProjectValidationConstants.MaxDescriptionLength)
             .WithMessage(ValidationMessages.ProjectDescriptionMaxLength)
+            .Must(ContainsNoNullChar)
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
             .When(x => !string.IsNullOrEmpty(selector(x)));
 
     /// <summary>
@@ -49,6 +53,8 @@ internal static class ProjectValidationRuleExtensions
         => ruleBuilder
             .MaximumLength(ProjectValidationConstants.MaxRoleTitleLength)
             .WithMessage(ValidationMessages.ProjectRoleTitleMaxLength)
+            .Must(ContainsNoNullChar)
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
             .When(x => !string.IsNullOrEmpty(selector(x)));
 
     /// <summary>
@@ -61,7 +67,9 @@ internal static class ProjectValidationRuleExtensions
         => ruleBuilder
             .NotEmpty().WithMessage(ValidationMessages.TagTitleRequired)
             .MaximumLength(ProjectValidationConstants.MaxTagTitleLength)
-            .WithMessage(ValidationMessages.TagTitleMaxLength);
+            .WithMessage(ValidationMessages.TagTitleMaxLength)
+            .Must(ContainsNoNullChar)
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
 
     /// <summary>
     /// Applies standard validation rules for a board topic title.
@@ -73,5 +81,10 @@ internal static class ProjectValidationRuleExtensions
         => ruleBuilder
             .NotEmpty().WithMessage(ValidationMessages.TopicTitleRequired)
             .MaximumLength(ProjectValidationConstants.MaxTopicTitleLength)
-            .WithMessage(ValidationMessages.TopicTitleMaxLength);
+            .WithMessage(ValidationMessages.TopicTitleMaxLength)
+            .Must(ContainsNoNullChar)
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+
+    private static bool ContainsNoNullChar(string? value)
+        => value is null || !value.Contains('\0', StringComparison.Ordinal);
 }

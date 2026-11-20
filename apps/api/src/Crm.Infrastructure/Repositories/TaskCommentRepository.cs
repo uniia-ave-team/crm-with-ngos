@@ -1,7 +1,9 @@
+using Crm.Domain.Common;
+using Crm.Domain.Consts;
 using Crm.Domain.Entities;
+using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
-using Mapster;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -16,15 +18,19 @@ public class TaskCommentRepository(ApplicationDbContext appDbContext)
     ITaskCommentRepository
 {
     /// <inheritdoc />
-    public async Task<List<TResult>> GetByTaskIdAsync<TResult>(Guid taskId, CancellationToken cancellationToken = default)
+    public Task<PagedResult<TResult>> GetPagedByTaskIdAsync<TResult>(
+        Guid taskId,
+        int pageNumber = PaginationConstants.MinPageNumber,
+        int pageSize = PaginationConstants.DefaultPageSize,
+        CancellationToken cancellationToken = default)
     {
-        return await DbSet
+        IQueryable<TaskComment> query = DbSet
             .AsNoTracking()
             .Where(c => c.TaskId == taskId)
             .OrderBy(c => c.CreatedAt)
-            .ThenBy(c => c.Id)
-            .ProjectToType<TResult>()
-            .ToListAsync(cancellationToken);
+            .ThenBy(c => c.Id);
+
+        return ToPagedResultAsync<TResult>(query, pageNumber, pageSize, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -43,10 +49,13 @@ public class TaskCommentRepository(ApplicationDbContext appDbContext)
             .AsNoTracking()
             .Where(u => u.IsActive
                         && u.Id != authorUserId
+                        && Context.Set<ProjectTask>().Any(t =>
+                            t.Id == comment.TaskId
+                            && (t.Project.Visibility != ProjectVisibility.Private
+                                || t.Project.Members.Any(m => m.UserId == u.Id)))
                         && (Context.Set<TaskUser>().Any(tu => tu.TaskId == comment.TaskId && tu.UserId == u.Id)
                             || Context.Set<ProjectTask>().Any(t => t.Id == comment.TaskId
-                                && (t.Project.CreatedBy == u.Id
-                                    || t.Project.Members.Any(m => m.UserId == u.Id)))
+                                && t.Project.Members.Any(m => m.UserId == u.Id))
                             || DbSet.Any(c => c.TaskId == comment.TaskId && c.UserId == u.Id)))
             .Select(u => u.Id)
             .ToListAsync(cancellationToken);

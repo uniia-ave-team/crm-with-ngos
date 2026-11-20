@@ -80,9 +80,27 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
             .AsNoTracking()
             .Where(p => p.Id == projectId)
             .AnyAsync(
-                p => (p.CreatedBy != null && p.CreatedBy != excludeUserId && p.Creator != null && p.Creator.IsActive)
-                     || p.Members.Any(m => m.UserId != excludeUserId && m.Claim >= ProjectClaim.Manage && m.User.IsActive),
+                p => p.Members.Any(m => m.UserId != excludeUserId && m.Claim >= ProjectClaim.Manage && m.User.IsActive),
                 cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<List<Guid>> GetSoleManagedProjectIdsForUpdateAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        List<Guid> managedProjectIds = await LockIdsForUpdateAsync(
+            p => p.Members.Any(m => m.UserId == userId && m.Claim >= ProjectClaim.Manage),
+            cancellationToken);
+
+        return managedProjectIds.Count == 0
+            ? []
+            : await DbSet
+                .AsNoTracking()
+                .Where(p => managedProjectIds.Contains(p.Id)
+                            && !p.Members.Any(m => m.UserId != userId && m.Claim >= ProjectClaim.Manage && m.User.IsActive))
+                .Select(p => p.Id)
+                .ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -180,7 +198,7 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
     }
 
     /// <summary>
-    /// Builds a lightweight SQL-translatable projection of project visibility, creator, and user claim.
+    /// Builds a lightweight SQL-translatable projection of project visibility and user membership claim.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>
     /// <param name="userId">The unique identifier of the user.</param>
@@ -191,7 +209,6 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
             .Where(p => p.Id == projectId)
             .Select(p => new ProjectAccess(
                 p.Visibility,
-                p.CreatedBy,
                 p.Members
                     .Where(m => m.UserId == userId)
                     .Select(m => (ProjectClaim?)m.Claim)

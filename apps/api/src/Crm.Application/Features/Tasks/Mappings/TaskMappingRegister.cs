@@ -1,3 +1,4 @@
+using Crm.Application.Dtos.Project;
 using Crm.Application.Dtos.Task;
 using Crm.Application.Dtos.Task.Commands;
 using Crm.Application.Dtos.Task.Queries;
@@ -28,38 +29,132 @@ public sealed class TaskMappingRegister : IRegister
                 dest => dest.IsMine,
                 src => src.Filter != null && string.Equals(src.Filter.Trim(), TaskConstants.MineFilterValue, StringComparison.OrdinalIgnoreCase));
 
-        config.NewConfig<TaskExternalLink, TaskExternalLinkDto>();
+        config.NewConfig<TaskExternalLink, TaskExternalLinkDto>()
+            .MapWith(src => new TaskExternalLinkDto(
+                src.Title,
+                src.Url));
 
         config.NewConfig<User, TaskAssigneeDto>()
-            .MapToConstructor(true)
-            .Map(dest => dest.AvatarUrl, src => src.Avatar);
+            .MapWith(src => new TaskAssigneeDto(
+                src.Id,
+                src.FirstName,
+                src.LastName,
+                src.Patronymic,
+                src.Avatar));
 
         config.NewConfig<TaskComment, TaskCommentDto>()
-            .MapToConstructor(true)
-            .Map(dest => dest.AuthorFirstName, src => src.User != null ? src.User.FirstName : null)
-            .Map(dest => dest.AuthorLastName, src => src.User != null ? src.User.LastName : null)
-            .Map(dest => dest.AuthorPatronymic, src => src.User != null ? src.User.Patronymic : null)
-            .Map(dest => dest.AuthorAvatarUrl, src => src.User != null ? src.User.Avatar : null);
+            .MapWith(src => new TaskCommentDto(
+                src.Id,
+                src.TaskId,
+                src.UserId,
+                src.User != null ? src.User.FirstName : null,
+                src.User != null ? src.User.LastName : null,
+                src.User != null ? src.User.Patronymic : null,
+                src.User != null ? src.User.Avatar : null,
+                src.Content,
+                src.CreatedAt,
+                src.UpdatedAt));
 
         config.NewConfig<TaskAttachment, TaskAttachmentDto>()
-            .MapToConstructor(true)
-            .Map(dest => dest.Url, _ => (string?)null)
-            .Map(dest => dest.StorageKey, src => src.StoredFileName);
+            .MapWith(src => new TaskAttachmentDto(
+                src.Id,
+                src.TaskId,
+                src.UploadedBy,
+                src.OriginalFileName,
+                src.ContentType,
+                src.FileSize,
+                null,
+                src.CreatedAt,
+                src.StoredFileName));
 
         config.NewConfig<ProjectTask, TaskSummaryDto>()
-            .MapToConstructor(true)
-            .Map(dest => dest.TopicTitle, src => src.Topic.Title)
-            .Map(dest => dest.UnreadCommentsCount, _ => UnreadCountPlaceholder)
-            .Map(dest => dest.AttachmentsCount, src => src.Attachments.Count())
-            .Map(dest => dest.AssignedUsers, src => src.AssignedUsers.OrderBy(u => u.LastName).ThenBy(u => u.FirstName).ThenBy(u => u.Id))
-            .Map(dest => dest.Tags, src => src.Tags.OrderBy(t => t.Title));
+            .MapWith(src => new TaskSummaryDto(
+                src.Id,
+                src.ProjectId,
+                src.TopicId,
+                src.Topic.Title,
+                src.Title,
+                src.Description,
+                src.Status,
+                src.Priority,
+                src.StartDate,
+                src.EndDate,
+                src.EndDateWasAuto,
+                UnreadCountPlaceholder,
+                src.Attachments.Count(),
+                src.AssignedUsers
+                    .OrderBy(u => u.LastName)
+                    .ThenBy(u => u.FirstName)
+                    .ThenBy(u => u.Id)
+                    .Select(u => new TaskAssigneeDto(
+                        u.Id,
+                        u.FirstName,
+                        u.LastName,
+                        u.Patronymic,
+                        u.Avatar))
+                    .ToList(),
+                src.Tags
+                    .OrderBy(t => t.Title)
+                    .Select(t => new TagDto(
+                        t.Id,
+                        t.ProjectId,
+                        t.Title))
+                    .ToList(),
+                src.CreatedAt,
+                src.UpdatedAt));
 
         config.NewConfig<ProjectTask, TaskDto>()
-            .MapToConstructor(true)
-            .Map(dest => dest.TopicTitle, src => src.Topic.Title)
-            .Map(dest => dest.UnreadCommentsCount, _ => UnreadCountPlaceholder)
-            .Map(dest => dest.AssignedUsers, src => src.AssignedUsers.OrderBy(u => u.LastName).ThenBy(u => u.FirstName).ThenBy(u => u.Id))
-            .Map(dest => dest.Tags, src => src.Tags.OrderBy(t => t.Title))
-            .Map(dest => dest.Attachments, src => src.Attachments.OrderByDescending(a => a.CreatedAt));
+            .MapWith(src => new TaskDto(
+                src.Id,
+                src.ProjectId,
+                src.TopicId,
+                src.Topic.Title,
+                src.Title,
+                src.Description,
+                src.Status,
+                src.Priority,
+                src.StartDate,
+                src.EndDate,
+                src.EndDateWasAuto,
+                UnreadCountPlaceholder,
+                src.AssignedUsers
+                    .OrderBy(u => u.LastName)
+                    .ThenBy(u => u.FirstName)
+                    .ThenBy(u => u.Id)
+                    .Select(u => new TaskAssigneeDto(
+                        u.Id,
+                        u.FirstName,
+                        u.LastName,
+                        u.Patronymic,
+                        u.Avatar))
+                    .ToList(),
+                src.Tags
+                    .OrderBy(t => t.Title)
+                    .Select(t => new TagDto(
+                        t.Id,
+                        t.ProjectId,
+                        t.Title))
+                    .ToList(),
+                src.Attachments
+                    .OrderByDescending(a => a.CreatedAt)
+                    .Select(a => new TaskAttachmentDto(
+                        a.Id,
+                        a.TaskId,
+                        a.UploadedBy,
+                        a.OriginalFileName,
+                        a.ContentType,
+                        a.FileSize,
+                        null,
+                        a.CreatedAt,
+                        a.StoredFileName))
+                    .ToList(),
+                src.ExternalLinks
+                    .Select(l => new TaskExternalLinkDto(
+                        l.Title,
+                        l.Url))
+                    .ToList(),
+                src.Metadata,
+                src.CreatedAt,
+                src.UpdatedAt));
     }
 }

@@ -17,6 +17,7 @@ public partial class DeleteUserCommandHandler(
     IIdentityService identityService,
     IAuthRoleRepository roleRepository,
     IUserRepository userRepository,
+    IProjectRepository projectRepository,
     IFileTransactionTracker fileTransactionTracker,
     ILogger<DeleteUserCommandHandler> logger) : IRequestHandler<DeleteUserCommand>
 {
@@ -25,6 +26,7 @@ public partial class DeleteUserCommandHandler(
         LogDeletingUser(logger, request.UserId);
 
         await EnsureUserIsNotLastAdminAsync(request.UserId, cancellationToken);
+        await EnsureUserIsNotSoleProjectManagerAsync(request.UserId, cancellationToken);
 
         await TryDeleteUserAvatarAsync(request.UserId, cancellationToken);
 
@@ -44,6 +46,19 @@ public partial class DeleteUserCommandHandler(
         {
             LogCannotDeleteLastAdmin(logger, userId);
             throw new InvalidOperationException("Cannot delete the user because they are the last system administrator.");
+        }
+    }
+
+    /// <summary>
+    /// Ensures that the user being deleted is not the sole remaining active manager of any project.
+    /// </summary>
+    private async Task EnsureUserIsNotSoleProjectManagerAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var soleManagedProjectIds = await projectRepository.GetSoleManagedProjectIdsForUpdateAsync(userId, cancellationToken);
+        if (soleManagedProjectIds.Count > 0)
+        {
+            LogCannotDeleteSoleProjectManager(logger, userId, soleManagedProjectIds.Count);
+            throw new CannotRemoveLastProjectManagerException(userId, soleManagedProjectIds);
         }
     }
 
@@ -80,4 +95,7 @@ public partial class DeleteUserCommandHandler(
 
     [LoggerMessage(EventId = LogEventIds.UserDeletedSuccessfully, Level = LogLevel.Information, Message = "Successfully hard-deleted user ID: {UserId} and all associated personal data.")]
     private static partial void LogUserDeletedSuccessfully(ILogger logger, Guid userId);
+
+    [LoggerMessage(EventId = LogEventIds.CannotDeleteSoleProjectManager, Level = LogLevel.Warning, Message = "Attempted to delete user ID: {UserId}, but they are the sole active manager of {ProjectCount} project(s).")]
+    private static partial void LogCannotDeleteSoleProjectManager(ILogger logger, Guid userId, int projectCount);
 }

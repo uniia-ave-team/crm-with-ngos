@@ -5,7 +5,9 @@ using Crm.Application.Dtos.Task.Commands;
 using Crm.Application.Features.Tasks.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
+using Crm.Domain.Consts.Entities.ValidationConstants;
 using Crm.Domain.Entities;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
@@ -17,7 +19,8 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// <summary>
 /// Handles the <see cref="UploadTaskAttachmentCommand"/> to store an uploaded file in the Docker volume storage and create a <see cref="TaskAttachment"/> record.
 /// </summary>
-/// <param name="attachmentRepository">The repository for persisting task attachment entities.</param>
+/// <param name="taskRepository">The repository for locking the parent task during attachment quota checks.</param>
+/// <param name="attachmentRepository">The repository for persisting task attachment entities and evaluating task quotas.</param>
 /// <param name="fileStorageService">The file storage service for saving uploaded file streams to disk.</param>
 /// <param name="fileTracker">The transaction file tracker used to roll back created files if the transaction fails.</param>
 /// <param name="fileUrlProvider">The file URL provider for resolving the attachment download URL.</param>
@@ -25,6 +28,7 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
 public partial class UploadTaskAttachmentCommandHandler(
+    IProjectTaskRepository taskRepository,
     ITaskAttachmentRepository attachmentRepository,
     IFileStorageService fileStorageService,
     IFileTransactionTracker fileTracker,
@@ -40,6 +44,20 @@ public partial class UploadTaskAttachmentCommandHandler(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
         LogUploadingTaskAttachment(logger, request.OriginalFileName, request.TaskId);
+
+        await taskRepository.LockForUpdateAsync(request.TaskId, cancellationToken);
+
+        var stats = await attachmentRepository.GetTaskAttachmentStatsAsync(request.TaskId, cancellationToken);
+        if (stats.Count >= TaskValidationConstants.MaxAttachmentsPerTask)
+        {
+            throw new TaskAttachmentLimitExceededException(TaskValidationConstants.MaxAttachmentsPerTask);
+        }
+
+        if (stats.TotalBytes + request.FileSize > TaskValidationConstants.MaxTotalAttachmentSizePerTask)
+        {
+            throw new StorageQuotaExceededException(
+                $"Total attachment size for a task cannot exceed {TaskValidationConstants.MaxTotalAttachmentSizePerTask} bytes.");
+        }
 
         string safeOriginalFileName = request.OriginalFileName.ExtractFileName();
 

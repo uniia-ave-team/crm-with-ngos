@@ -138,6 +138,22 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     public virtual Task EnsureAllExistAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
         => EnsureAllExistAsync(ids, scopePredicate: null, cancellationToken);
 
+    /// <inheritdoc />
+    public virtual async Task LockForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        if (!Context.Database.IsRelational())
+        {
+            return;
+        }
+
+        _ = await DbSet
+            .AsNoTracking()
+            .Where(e => e.Id == id)
+            .WithRowLock()
+            .Select(e => e.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Asynchronously retrieves all entities of type <typeparamref name="T"/>.
     /// </summary>
@@ -307,6 +323,32 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
         return await DbSet
             .FirstOrDefaultAsync(predicate, cancellationToken)
             ?? throw new EntityNotFoundException<T>(entityId);
+    }
+
+    /// <summary>
+    /// Asynchronously locks all rows matching <paramref name="predicate"/> in deterministic identifier order
+    /// (<c>ORDER BY Id FOR UPDATE</c>) to prevent deadlocks and returns their unique identifiers.
+    /// </summary>
+    /// <param name="predicate">A SQL-translatable filter expression selecting the rows to lock.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The ordered list of locked entity identifiers.</returns>
+    protected async Task<List<Guid>> LockIdsForUpdateAsync(
+        Expression<Func<T, bool>> predicate,
+        CancellationToken cancellationToken = default)
+    {
+        IQueryable<T> query = DbSet
+            .AsNoTracking()
+            .Where(predicate)
+            .OrderBy(e => e.Id);
+
+        if (Context.Database.IsRelational())
+        {
+            query = query.WithRowLock();
+        }
+
+        return await query
+            .Select(e => e.Id)
+            .ToListAsync(cancellationToken);
     }
 
     /// <summary>

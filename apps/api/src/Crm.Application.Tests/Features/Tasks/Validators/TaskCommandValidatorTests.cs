@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Crm.Application.Dtos.Task;
 using Crm.Application.Dtos.Task.Commands;
+using Crm.Application.Dtos.Task.Queries;
 using Crm.Application.Features.Tasks.Validators;
 using Crm.Domain.Consts.Entities.ValidationConstants;
 using Crm.Domain.Enums;
@@ -217,5 +218,91 @@ public class TaskCommandValidatorTests
         var sizeResult = _uploadAttachmentValidator.Validate(oversizedCommand);
         sizeResult.IsValid.ShouldBeFalse();
         sizeResult.Errors.ShouldContain(e => e.PropertyName == nameof(UploadTaskAttachmentCommand.FileSize));
+    }
+
+    [Theory]
+    [InlineData("notes.md", "text/x-markdown")]
+    [InlineData("notes.md", "text/markdown")]
+    [InlineData("export.csv", "application/csv")]
+    [InlineData("export.csv", "text/csv")]
+    public void UploadTaskAttachmentValidatorShouldAcceptCommonMarkdownAndCsvMimeTypes(string fileName, string contentType)
+    {
+        using var stream = new MemoryStream([1, 2, 3]);
+        var command = new UploadTaskAttachmentCommand(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            stream,
+            fileName,
+            contentType,
+            stream.Length);
+
+        _uploadAttachmentValidator.Validate(command).IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void TaskAndCommentValidatorsShouldRejectNullCharactersInTextAndJsonFields()
+    {
+        var baseCmd = new CreateTaskCommand(
+            Guid.NewGuid(),
+            "Valid Title",
+            [],
+            [],
+            "Valid description",
+            DefaultStartDate,
+            ProjectTaskStatus.ToDo,
+            TaskPriority.Medium)
+        {
+            ProjectId = Guid.NewGuid(),
+        };
+
+        _createValidator.Validate(baseCmd with { Title = "Bad\0Title" }).IsValid.ShouldBeFalse();
+        _createValidator.Validate(baseCmd with { Description = "Bad\0Desc" }).IsValid.ShouldBeFalse();
+        _createValidator.Validate(baseCmd with
+        {
+            ExternalLinks = [new TaskExternalLinkDto("Bad\0Link", "https://example.org")],
+        }).IsValid.ShouldBeFalse();
+        _createValidator.Validate(baseCmd with
+        {
+            Metadata = new JsonObject { ["key"] = "bad\0value" },
+        }).IsValid.ShouldBeFalse();
+        _createValidator.Validate(baseCmd with
+        {
+            Metadata = new JsonObject { ["bad\0key"] = "ok" },
+        }).IsValid.ShouldBeFalse();
+
+        var commentValidator = new CreateTaskCommentCommandValidator();
+        commentValidator.Validate(new CreateTaskCommentCommand("Bad\0comment")
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+        }).IsValid.ShouldBeFalse();
+
+        using var stream = new MemoryStream([1, 2, 3]);
+        _uploadAttachmentValidator.Validate(new UploadTaskAttachmentCommand(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            stream,
+            "bad\0.pdf",
+            "application/pdf",
+            3)).IsValid.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void GetTaskCommentsQueryValidatorShouldValidatePaginationBounds()
+    {
+        var validator = new GetTaskCommentsQueryValidator();
+
+        var valid = new GetTaskCommentsQuery(PageNumber: 1, PageSize: 20)
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+        };
+        validator.Validate(valid).IsValid.ShouldBeTrue();
+
+        var invalidPage = valid with { PageNumber = 0 };
+        validator.Validate(invalidPage).IsValid.ShouldBeFalse();
+
+        var invalidSize = valid with { PageSize = 0 };
+        validator.Validate(invalidSize).IsValid.ShouldBeFalse();
     }
 }

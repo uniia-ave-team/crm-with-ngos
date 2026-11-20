@@ -1,5 +1,10 @@
 using System.Reflection;
 using Crm.Api.Controllers.V1;
+using Crm.Application.Common.Interfaces;
+using Crm.Application.Dtos.Project.Commands;
+using Crm.Application.Dtos.Project.Queries;
+using Crm.Application.Dtos.Task.Commands;
+using Crm.Application.Dtos.Task.Queries;
 using Crm.Application.Extensions;
 using Crm.Domain.Entities;
 using Crm.Infrastructure.Persistence;
@@ -95,6 +100,63 @@ public class ArchitectureTests
 
         Assert.True(result.IsSuccessful, FormatFailingTypes(result));
     }
+
+    [Fact]
+    public void ProjectAndTaskRequestsShouldImplementProjectScopedAuthorization()
+    {
+        HashSet<Type> allowedUnscopedRequests =
+        [
+            typeof(CreateProjectCommand),
+            typeof(GetProjectsQuery),
+        ];
+
+        List<Type> violatingTypes = [.. ApplicationAssembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false }
+                        && t.Namespace is not null
+                        && (t.Namespace.StartsWith("Crm.Application.Dtos.Project", StringComparison.Ordinal)
+                            || t.Namespace.StartsWith("Crm.Application.Dtos.Task", StringComparison.Ordinal))
+                        && IsMediatorRequest(t)
+                        && !allowedUnscopedRequests.Contains(t)
+                        && !typeof(IProjectScoped).IsAssignableFrom(t))];
+
+        Assert.True(
+            violatingTypes.Count == 0,
+            $"Project/task requests missing IProjectScoped: {string.Join(", ", violatingTypes.Select(t => t.FullName))}");
+    }
+
+    [Fact]
+    public void TaskSubResourceRequestsShouldImplementTaskScopedAuthorization()
+    {
+        HashSet<Type> directTaskRequests =
+        [
+            typeof(GetTaskByIdQuery),
+            typeof(UpdateTaskCommand),
+            typeof(UpdateTaskStatusCommand),
+            typeof(DeleteTaskCommand),
+        ];
+
+        List<Type> violatingTypes = [.. ApplicationAssembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false }
+                        && t.Namespace is not null
+                        && t.Namespace.StartsWith("Crm.Application.Dtos.Task", StringComparison.Ordinal)
+                        && IsMediatorRequest(t)
+                        && t.GetProperty("TaskId") is not null
+                        && !directTaskRequests.Contains(t)
+                        && !typeof(ITaskScoped).IsAssignableFrom(t))];
+
+        Assert.True(
+            violatingTypes.Count == 0,
+            $"Task sub-resource requests missing ITaskScoped: {string.Join(", ", violatingTypes.Select(t => t.FullName))}");
+    }
+
+    private static bool IsMediatorRequest(Type type)
+        => type.GetInterfaces().Any(i =>
+            i == typeof(IRequest)
+            || i == typeof(ICommand)
+            || (i.IsGenericType && (
+                i.GetGenericTypeDefinition() == typeof(IRequest<>)
+                || i.GetGenericTypeDefinition() == typeof(ICommand<>)
+                || i.GetGenericTypeDefinition() == typeof(IQuery<>))));
 
     private static string FormatFailingTypes(NetArchTest.Rules.TestResult result)
         => result.FailingTypeNames is { Count: > 0 }

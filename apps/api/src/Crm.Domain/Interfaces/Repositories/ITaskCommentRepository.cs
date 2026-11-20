@@ -1,3 +1,5 @@
+using Crm.Domain.Common;
+using Crm.Domain.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
@@ -10,13 +12,19 @@ namespace Crm.Domain.Interfaces.Repositories;
 public interface ITaskCommentRepository : IGenericRepository<TaskComment>
 {
     /// <summary>
-    /// Asynchronously retrieves and projects all comments for a specific task, ordered chronologically by creation date.
+    /// Asynchronously retrieves and projects a paginated list of comments for a specific task, ordered chronologically by creation date.
     /// </summary>
     /// <typeparam name="TResult">The target DTO or projection type.</typeparam>
     /// <param name="taskId">The unique identifier of the task.</param>
+    /// <param name="pageNumber">The 1-based page number to retrieve.</param>
+    /// <param name="pageSize">The maximum number of items per page.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A chronological list of projected task comments.</returns>
-    Task<List<TResult>> GetByTaskIdAsync<TResult>(Guid taskId, CancellationToken cancellationToken = default);
+    /// <returns>A paginated chronological result of projected task comments.</returns>
+    Task<PagedResult<TResult>> GetPagedByTaskIdAsync<TResult>(
+        Guid taskId,
+        int pageNumber = PaginationConstants.MinPageNumber,
+        int pageSize = PaginationConstants.DefaultPageSize,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Asynchronously retrieves a comment by task ID and comment ID with change tracking enabled.

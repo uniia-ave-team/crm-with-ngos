@@ -51,6 +51,9 @@ public class ProjectAndTaskQueryTests
         projectDetailSql.ShouldContain("ProjectMember", Case.Insensitive);
         projectDetailSql.ShouldContain("Topic", Case.Insensitive);
         projectDetailSql.ShouldContain("Tag", Case.Insensitive);
+        CountOccurrences(projectDetailSql, "\"ProjectMember\"").ShouldBe(1);
+        CountOccurrences(projectDetailSql, "\"Topic\"").ShouldBe(1);
+        CountOccurrences(projectDetailSql, "\"Tag\"").ShouldBe(1);
 
         var otherUserId = Guid.NewGuid();
         var projectRepo = new TestProjectRepository(context);
@@ -130,6 +133,9 @@ public class ProjectAndTaskQueryTests
         taskDetailSql.ShouldContain("ExternalLinks");
         taskDetailSql.ShouldContain("Metadata");
         taskDetailSql.ShouldContain("TaskAttachment", Case.Insensitive);
+        CountOccurrences(taskDetailSql, "\"TaskAttachment\"").ShouldBe(1);
+        CountOccurrences(taskDetailSql, "\"TaskUser\"").ShouldBe(1);
+        CountOccurrences(taskDetailSql, "\"TaskTag\"").ShouldBe(1);
 
         // Task summary DTO projection uses SQL COUNT(*) for AttachmentsCount instead of fetching attachment rows
         string taskSummarySql = context.Set<ProjectTask>()
@@ -140,6 +146,8 @@ public class ProjectAndTaskQueryTests
         taskSummarySql.ShouldContain("count(", Case.Insensitive);
         taskSummarySql.ShouldNotContain("StoredFileName");
         taskSummarySql.ShouldNotContain("OriginalFileName");
+        CountOccurrences(taskSummarySql, "\"TaskUser\"").ShouldBe(1);
+        CountOccurrences(taskSummarySql, "\"TaskTag\"").ShouldBe(1);
 
         // Unread comment count query backed by TaskReadState
         string unreadSql = context.Set<TaskReadState>()
@@ -358,9 +366,19 @@ public class ProjectAndTaskQueryTests
             CreatedBy = otherUserId,
         };
 
+        var hiddenPrivateForExCreator = new Project
+        {
+            Id = Guid.NewGuid(),
+            Title = "Removed Creator Private",
+            Visibility = ProjectVisibility.Private,
+            CreatedBy = userId,
+            Members = [],
+        };
+
         var visibilityPredicate = TestProjectRepository.Filter(userId, null).Compile();
         visibilityPredicate(visiblePrivateMember).ShouldBeTrue();
         visibilityPredicate(hiddenPrivate).ShouldBeFalse();
+        visibilityPredicate(hiddenPrivateForExCreator).ShouldBeFalse();
         visibilityPredicate(publicVisible).ShouldBeTrue();
 
         string projectSearchSql = context.Set<Project>()
@@ -385,6 +403,19 @@ public class ProjectAndTaskQueryTests
             .ToQueryString();
         topicSearchSql.ShouldContain("ILIKE");
         topicSearchSql.ShouldContain("ProjectId");
+    }
+
+    private static int CountOccurrences(string text, string pattern)
+    {
+        int count = 0;
+        int index = 0;
+        while ((index = text.IndexOf(pattern, index, StringComparison.OrdinalIgnoreCase)) != -1)
+        {
+            count++;
+            index += pattern.Length;
+        }
+
+        return count;
     }
 
     private static ProjectTask CreateTask(

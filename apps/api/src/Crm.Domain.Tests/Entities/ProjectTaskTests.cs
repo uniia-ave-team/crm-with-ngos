@@ -113,4 +113,53 @@ public class ProjectTaskTests
         Should.Throw<InvalidTaskDateRangeException>(() =>
             putFutureTask.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: true));
     }
+
+    [Fact]
+    public void ChangeStatusOnPutWithUnchangedAutoEndDateShouldPreserveAutoFlagAndClearOnReopen()
+    {
+        var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
+
+        // Auto-complete via PATCH
+        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: false);
+        task.EndDate.ShouldBe(UtcNow);
+        task.EndDateWasAuto.ShouldBeTrue();
+
+        // Full edit via PUT echoing back the unchanged auto EndDate preserves EndDateWasAuto
+        var editTime = UtcNow.AddMinutes(10);
+        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: UtcNow, editTime, updateEndDateWhenNull: true);
+        task.EndDate.ShouldBe(UtcNow);
+        task.EndDateWasAuto.ShouldBeTrue();
+
+        // Reopen via PATCH still clears the auto-populated EndDate
+        var reopenTime = UtcNow.AddMinutes(20);
+        task.ChangeStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, reopenTime, updateEndDateWhenNull: false);
+        task.EndDate.ShouldBeNull();
+        task.EndDateWasAuto.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void ChangeStatusOnPutWithModifiedEndDateShouldTreatItAsManual()
+    {
+        var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
+        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: false);
+        task.EndDateWasAuto.ShouldBeTrue();
+
+        var customEndDate = UtcNow.AddDays(1);
+        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: customEndDate, UtcNow.AddHours(1), updateEndDateWhenNull: true);
+        task.EndDate.ShouldBe(customEndDate);
+        task.EndDateWasAuto.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void ChangeStatusOnPutWhenAlreadyCompletedAndStartDateMovesPastEndDateShouldThrow()
+    {
+        var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
+        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: false);
+
+        // Simulate PUT moving StartDate after existing EndDate while passing null EndDate
+        task.StartDate = UtcNow.AddDays(5);
+
+        Should.Throw<InvalidTaskDateRangeException>(() =>
+            task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow.AddHours(1), updateEndDateWhenNull: true));
+    }
 }

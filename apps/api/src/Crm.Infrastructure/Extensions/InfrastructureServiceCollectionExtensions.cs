@@ -90,11 +90,14 @@ public static class InfrastructureServiceCollectionExtensions
     public static IServiceCollection AddPersistence(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<IDbExceptionTranslator, PostgresDbExceptionTranslator>();
+        services.AddSingleton<RowLockCommandInterceptor>();
         services.AddSingleton<DbExceptionTranslationInterceptor>();
 
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
             options.UseNpgsql(configuration.GetConnectionString(ConfigurationKeys.PostgreSqlConnection))
-                   .AddInterceptors(sp.GetRequiredService<DbExceptionTranslationInterceptor>()));
+                   .AddInterceptors(
+                       sp.GetRequiredService<RowLockCommandInterceptor>(),
+                       sp.GetRequiredService<DbExceptionTranslationInterceptor>()));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddStrategies<IDatabaseSeeder>(typeof(InfrastructureServiceCollectionExtensions).Assembly);
