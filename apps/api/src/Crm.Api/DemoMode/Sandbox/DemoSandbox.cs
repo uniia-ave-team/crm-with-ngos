@@ -65,17 +65,24 @@ public sealed class DemoSandbox(string id, string databaseName, string connectio
     public void MarkRolePermissionsLoaded() => Volatile.Write(ref _rolePermissionsLoaded, 1);
 
     /// <summary>
-    /// Checks whether the sandbox outlived its idle timeout or its maximum lifetime.
+    /// Gets the moment the sandbox is deleted: a fixed time after its creation, whatever the activity.
+    /// </summary>
+    /// <param name="options">The sandbox limits.</param>
+    /// <returns>The expiry time.</returns>
+    public DateTimeOffset GetExpiresAt(DemoSandboxOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        return CreatedAt + options.Lifetime;
+    }
+
+    /// <summary>
+    /// Checks whether the sandbox reached the end of its lifetime.
     /// </summary>
     /// <param name="now">The current time.</param>
     /// <param name="options">The sandbox limits.</param>
     /// <returns><c>true</c> when the sandbox must be removed.</returns>
-    public bool IsExpired(DateTimeOffset now, DemoSandboxOptions options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-
-        return now - LastAccess >= options.IdleTimeout || now - CreatedAt >= options.MaxLifetime;
-    }
+    public bool IsExpired(DateTimeOffset now, DemoSandboxOptions options) => now >= GetExpiresAt(options);
 
     /// <summary>
     /// Reserves room for one uploaded file within the sandbox upload quota.

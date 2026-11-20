@@ -39,9 +39,6 @@ public static class DemoModeExtensions
             .Validate(
                 options => IsValid(options.Sandbox) && options.Accounts.All(IsValid),
                 "DemoMode:Sandbox or DemoMode:Accounts contains invalid values.")
-            .Validate(
-                options => options.Sandbox.IdleTimeoutMinutes <= options.Sandbox.MaxLifetimeMinutes,
-                "DemoMode:Sandbox:IdleTimeoutMinutes must not exceed DemoMode:Sandbox:MaxLifetimeMinutes.")
             .ValidateOnStart();
 
         services.TryAddSingleton<IDemoModeInfoProvider, DemoModeInfoProvider>();

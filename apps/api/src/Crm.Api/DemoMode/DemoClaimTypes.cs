@@ -9,4 +9,9 @@ public static class DemoClaimTypes
     /// The identifier of the sandbox the token was issued in.
     /// </summary>
     public const string SandboxId = "demo_sid";
+
+    /// <summary>
+    /// The Unix time in seconds at which the sandbox and everything the visitor changed in it are deleted.
+    /// </summary>
+    public const string SandboxExpiresAt = "demo_exp";
 }

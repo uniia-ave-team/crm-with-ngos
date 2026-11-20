@@ -35,7 +35,7 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
         var demo = status.RootElement.GetProperty("demo");
         demo.GetProperty("accounts").GetArrayLength().ShouldBe(DemoAccountOptions.Defaults.Count);
         demo.GetProperty("accounts")[0].GetProperty("email").GetString().ShouldBe(Admin.Email);
-        demo.GetProperty("sessionIdleMinutes").GetInt32().ShouldBeGreaterThan(0);
+        demo.GetProperty("sessionMinutes").GetInt32().ShouldBe(60);
     }
 
     [Fact]
@@ -49,6 +49,10 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
         using var visitorA = fixture.CreateClient();
         var tokensA = await SignInAsync(visitorA, Admin);
         string sandboxA = CurrentSandboxId(visitorA);
+        long expiresAtA = ReadSandboxExpiry(tokensA.AccessToken);
+        DateTimeOffset.FromUnixTimeSeconds(expiresAtA).ShouldBeInRange(
+            DateTimeOffset.UtcNow.AddMinutes(58),
+            DateTimeOffset.UtcNow.AddMinutes(61));
         var created = await visitorA.PostAsJsonAsync("/api/v1/roles", new { name = roleName }, ct);
         created.StatusCode.ShouldBe(HttpStatusCode.Created);
 
@@ -68,13 +72,15 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
         refreshed.StatusCode.ShouldBe(HttpStatusCode.OK);
         var newTokens = await refreshed.Content.ReadFromJsonAsync<AuthTokensDto>(ct);
         visitorA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", newTokens.AccessToken);
+        ReadSandboxExpiry(newTokens.AccessToken).ShouldBe(expiresAtA);
         (await ListRolesAsync(visitorA)).ShouldContain(roleName);
 
         // Signing in again from the same browser (the cookie) continues in the same sandbox.
         visitorA.DefaultRequestHeaders.Authorization = null;
         await SignInAsync(visitorA, DemoAccountOptions.Defaults[1]);
-        await SignInAsync(visitorA, Admin);
+        var tokensAgain = await SignInAsync(visitorA, Admin);
         CurrentSandboxId(visitorA).ShouldBe(sandboxA);
+        ReadSandboxExpiry(tokensAgain.AccessToken).ShouldBe(expiresAtA);
         (await ListRolesAsync(visitorA)).ShouldContain(roleName);
     }
 
@@ -145,6 +151,12 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
 
         return document.RootElement.GetProperty("errorCode").GetString();
     }
+
+    private static long ReadSandboxExpiry(string accessToken) =>
+        long.Parse(
+            new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler()
+                .ReadJwtToken(accessToken).Claims.Single(c => c.Type == DemoClaimTypes.SandboxExpiresAt).Value,
+            System.Globalization.CultureInfo.InvariantCulture);
 
     private static string CurrentSandboxId(HttpClient client) =>
         client.DefaultRequestHeaders.GetValues(DemoApiFixture.SandboxHeader).Single();

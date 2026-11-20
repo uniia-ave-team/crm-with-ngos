@@ -157,7 +157,7 @@ public sealed partial class DemoModeMiddleware(
                 SameSite = SameSiteMode.Lax,
                 Secure = context.Request.IsHttps,
                 Path = "/",
-                MaxAge = options.MaxLifetime,
+                MaxAge = options.Lifetime,
             });
 
     private async Task HandleSignInAsync(HttpContext context, DemoSandboxOptions options)

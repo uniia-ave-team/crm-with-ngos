@@ -18,7 +18,6 @@ public sealed class DemoModeInfoProvider(IOptions<DemoModeOptions> demoModeOptio
         options.Enabled
             ? new DemoModeInfoDto(
                 [.. options.GetEffectiveAccounts().Select(a => new DemoAccountDto(a.Name, a.Email, a.Password))],
-                options.Sandbox.IdleTimeoutMinutes,
-                options.Sandbox.MaxLifetimeMinutes)
+                options.Sandbox.LifetimeMinutes)
             : null;
 }

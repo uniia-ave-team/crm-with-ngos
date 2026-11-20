@@ -220,7 +220,7 @@ public sealed class DemoModeMiddlewareTests : IAsyncLifetime
     {
         await StartAsync();
         var sandbox = await Manager.CreateAsync(TestContext.Current.CancellationToken);
-        _time.Advance(TimeSpan.FromMinutes(_options.Sandbox.IdleTimeoutMinutes + 1));
+        _time.Advance(TimeSpan.FromMinutes(_options.Sandbox.LifetimeMinutes));
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "/open");
         request.Headers.Add(SandboxHeader, sandbox.Id);

@@ -171,14 +171,15 @@ public sealed class DemoSandboxDecoratorsTests
     [Fact]
     public void ClaimsProviderShouldNameTheSandboxOnlyInsideOne()
     {
-        var provider = new DemoSandboxClaimsProvider(_accessor);
+        var provider = new DemoSandboxClaimsProvider(_accessor, MsOptions.Create(_options));
 
         provider.GetClaims(null).ShouldBeEmpty();
 
         UseSandbox();
-        var claim = provider.GetClaims(null).ShouldHaveSingleItem();
-        claim.Type.ShouldBe(DemoClaimTypes.SandboxId);
-        claim.Value.ShouldBe(_sandbox.Id);
+        var claims = provider.GetClaims(null).ToDictionary(c => c.Type, c => c.Value);
+        claims[DemoClaimTypes.SandboxId].ShouldBe(_sandbox.Id);
+        claims[DemoClaimTypes.SandboxExpiresAt].ShouldBe(
+            _sandbox.CreatedAt.AddMinutes(_options.Sandbox.LifetimeMinutes).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     [Theory]

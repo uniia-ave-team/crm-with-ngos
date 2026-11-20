@@ -14,23 +14,18 @@ public sealed class DemoSandboxOptions
     public int MaxSandboxes { get; set; } = 30;
 
     /// <summary>
-    /// Gets or sets the number of minutes without requests after which a sandbox is deleted.
-    /// </summary>
-    [Range(1, 1440)]
-    public int IdleTimeoutMinutes { get; set; } = 30;
-
-    /// <summary>
-    /// Gets or sets the maximum age of a sandbox in minutes, regardless of activity.
+    /// Gets or sets how long a sandbox lives, in minutes, counted from the moment it is created.
+    /// The visitor sees this as a countdown; activity does not extend it.
     /// </summary>
     [Range(1, 10080)]
-    public int MaxLifetimeMinutes { get; set; } = 240;
+    public int LifetimeMinutes { get; set; } = 60;
 
     /// <summary>
     /// Gets or sets the idle time in seconds after which a sandbox may be evicted to make room
     /// for a new visitor when <see cref="MaxSandboxes"/> is reached.
     /// </summary>
-    [Range(0, 86400)]
-    public int EvictableAfterIdleSeconds { get; set; } = 120;
+    [Range(0, 604800)]
+    public int EvictableAfterIdleSeconds { get; set; } = 600;
 
     /// <summary>
     /// Gets or sets how many new sandboxes a single client address may create per
@@ -70,14 +65,9 @@ public sealed class DemoSandboxOptions
     public int MaxPoolSize { get; set; } = 4;
 
     /// <summary>
-    /// Gets the idle timeout as a <see cref="TimeSpan"/>.
+    /// Gets the sandbox lifetime as a <see cref="TimeSpan"/>.
     /// </summary>
-    public TimeSpan IdleTimeout => TimeSpan.FromMinutes(IdleTimeoutMinutes);
-
-    /// <summary>
-    /// Gets the maximum lifetime as a <see cref="TimeSpan"/>.
-    /// </summary>
-    public TimeSpan MaxLifetime => TimeSpan.FromMinutes(MaxLifetimeMinutes);
+    public TimeSpan Lifetime => TimeSpan.FromMinutes(LifetimeMinutes);
 
     /// <summary>
     /// Gets the minimum idle time before eviction as a <see cref="TimeSpan"/>.

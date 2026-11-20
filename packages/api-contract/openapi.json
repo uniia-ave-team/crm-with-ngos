@@ -4550,8 +4550,7 @@
       "DemoModeInfoDto": {
         "required": [
           "accounts",
-          "sessionIdleMinutes",
-          "sessionMaxMinutes"
+          "sessionMinutes"
         ],
         "type": "object",
         "properties": {
@@ -4561,15 +4560,7 @@
               "$ref": "#/components/schemas/DemoAccountDto"
             }
           },
-          "sessionIdleMinutes": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
-          },
-          "sessionMaxMinutes": {
+          "sessionMinutes": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",

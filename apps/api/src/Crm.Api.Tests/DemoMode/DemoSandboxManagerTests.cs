@@ -65,37 +65,32 @@ public sealed class DemoSandboxManagerTests : IDisposable
     }
 
     [Fact]
-    public async Task TryGetShouldKeepAnActiveSandboxAliveBeyondTheIdleTimeout()
+    public async Task TryGetShouldKeepAnIdleSandboxUntilItsLifetimeEnds()
     {
-        using var manager = CreateManager(o => o.IdleTimeoutMinutes = 30);
+        using var manager = CreateManager(o => o.LifetimeMinutes = 60);
         var sandbox = await manager.CreateAsync(CancellationToken.None);
 
-        _time.Advance(TimeSpan.FromMinutes(20));
-        manager.TryGet(sandbox.Id, out _).ShouldBeTrue();
-        _time.Advance(TimeSpan.FromMinutes(20));
+        _time.Advance(TimeSpan.FromMinutes(59));
 
         manager.TryGet(sandbox.Id, out _).ShouldBeTrue();
     }
 
     [Fact]
-    public async Task TryGetWhenSandboxWasIdleTooLongShouldReturnFalse()
+    public async Task TryGetWhenLifetimeEndedShouldReturnFalse()
     {
-        using var manager = CreateManager(o => o.IdleTimeoutMinutes = 30);
+        using var manager = CreateManager(o => o.LifetimeMinutes = 60);
         var sandbox = await manager.CreateAsync(CancellationToken.None);
+        sandbox.GetExpiresAt(new DemoSandboxOptions { LifetimeMinutes = 60 }).ShouldBe(sandbox.CreatedAt.AddMinutes(60));
 
-        _time.Advance(TimeSpan.FromMinutes(31));
+        _time.Advance(TimeSpan.FromMinutes(60));
 
         manager.TryGet(sandbox.Id, out _).ShouldBeFalse();
     }
 
     [Fact]
-    public async Task TryGetWhenSandboxReachedMaxLifetimeShouldReturnFalseEvenIfActive()
+    public async Task TryGetWhenLifetimeEndedShouldReturnFalseEvenIfTheVisitorWasActive()
     {
-        using var manager = CreateManager(o =>
-        {
-            o.IdleTimeoutMinutes = 30;
-            o.MaxLifetimeMinutes = 60;
-        });
+        using var manager = CreateManager(o => o.LifetimeMinutes = 60);
         var sandbox = await manager.CreateAsync(CancellationToken.None);
 
         for (int i = 0; i < 3; i++)
@@ -110,11 +105,11 @@ public sealed class DemoSandboxManagerTests : IDisposable
     [Fact]
     public async Task RemoveExpiredAsyncShouldDropOnlyExpiredSandboxes()
     {
-        using var manager = CreateManager(o => o.IdleTimeoutMinutes = 30);
+        using var manager = CreateManager(o => o.LifetimeMinutes = 60);
         var old = await manager.CreateAsync(CancellationToken.None);
-        _time.Advance(TimeSpan.FromMinutes(25));
+        _time.Advance(TimeSpan.FromMinutes(40));
         var fresh = await manager.CreateAsync(CancellationToken.None);
-        _time.Advance(TimeSpan.FromMinutes(10));
+        _time.Advance(TimeSpan.FromMinutes(25));
 
         int removed = await manager.RemoveExpiredAsync(CancellationToken.None);
 
