@@ -1,0 +1,17 @@
+<section class="login-demo" aria-labelledby="login-demo-title">
+  <h2 class="login-demo__title" id="login-demo-title">{{ 'demo.login.title' | translate }}</h2>
+  <p class="login-demo__text">{{ 'demo.login.description' | translate: { minutes: demo().sessionIdleMinutes } }}</p>
+  @for (account of demo().accounts; track account.email) {
+    <ion-button
+      tabindex="0"
+      class="login-demo__account"
+      type="button"
+      fill="outline"
+      expand="block"
+      [disabled]="disabled()"
+      (click)="signIn.emit(account)"
+    >
+      {{ 'demo.login.signInAs' | translate: { name: account.name } }}
+    </ion-button>
+  }
+</section>

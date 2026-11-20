@@ -26,6 +26,9 @@
         @if (loginBannerError(); as bannerError) {
           <div class="login__error" role="alert">{{ bannerError | translate }}</div>
         }
+        @if (demoSessionEnded()) {
+          <div class="login__notice" role="status">{{ 'demo.sessionEnded' | translate }}</div>
+        }
 
         <div class="login-form">
           <div class="login-form__media">
@@ -38,6 +41,11 @@
               <img class="login-form__logo theme-dark" [src]="'assets/' + logoBase() + '_dark.svg'" [alt]="'login.form.logoAlt' | translate" />
 
               <h1 class="login-form__title">{{ 'login.form.title' | translate }}</h1>
+
+              <!-- Демо-режим: окремий блок із поясненням і входом під готовим акаунтом однією кнопкою. -->
+              @if (connection.demo(); as demo) {
+                <app-login-demo [demo]="demo" [disabled]="loginSaving()" (signIn)="signInDemo($event)"></app-login-demo>
+              }
 
               <label class="login-form__label" for="login-email">{{ 'login.form.email' | translate }}</label>
               <ion-input

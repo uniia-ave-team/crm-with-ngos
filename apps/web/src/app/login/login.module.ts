@@ -6,6 +6,7 @@ import { IonicModule } from '@ionic/angular/lazy';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { PasswordFieldsModule } from '../shared/password-fields/password-fields.module';
+import { LoginDemoComponent } from './login-demo/login-demo.component';
 import { LoginPageRoutingModule } from './login-routing.module';
 
 import { LoginPage } from './login.page';
@@ -19,6 +20,6 @@ import { LoginPage } from './login.page';
     PasswordFieldsModule,
     LoginPageRoutingModule
   ],
-  declarations: [LoginPage]
+  declarations: [LoginPage, LoginDemoComponent]
 })
 export class LoginPageModule {}

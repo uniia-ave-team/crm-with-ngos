@@ -48,12 +48,24 @@ describe('LoginPage', () => {
     localStorage.clear();
   });
 
-  // Сторінка інжектить ConnectionService, а той одразу шле перший запит.
+  /** За origin сторінки API нема: веб-контейнер відповідає на /health кодом 404. */
+  function notOnPageOrigin(): void {
+    for (const probe of http.match(`${location.origin}/health`)) {
+      if (!probe.cancelled) {
+        probe.flush('Not found', { status: 404, statusText: 'Not Found' });
+      }
+    }
+  }
+
+  // Сторінка інжектить ConnectionService, а той одразу шукає API: спершу за origin сторінки,
+  // далі на порту 5065. У цих тестах сторінку віддає веб-контейнер (API за її origin нема),
+  // тож усе вирішує порт 5065: `request` — запит саме туди.
   function create() {
     const fixture = TestBed.createComponent(LoginPage);
     const connection = TestBed.inject(ConnectionService);
     fixture.detectChanges();
-    const request = http.expectOne(connection.apiHealthUrl());
+    notOnPageOrigin();
+    const request = http.expectOne(`${pageServer()}/health`);
     const element = fixture.nativeElement as HTMLElement;
     const page = fixture.componentInstance as unknown as LoginPageInternals;
     return { fixture, connection, element, page, request };
@@ -82,7 +94,8 @@ describe('LoginPage', () => {
   /** Користувач увійшов: активний акаунт із токенами (уже після створення сторінки, тож пошук акаунтів не запускається). */
   function signIn(connection: ConnectionService): void {
     TestBed.inject(AccountsService).add({
-      server: connection.serverUrl(),
+      // Сервер, де в цих тестах живе API (до відповіді на /health `serverUrl()` ще вказує на origin сторінки).
+      server: connection.connected() ? connection.serverUrl() : pageServer(),
       accessToken: 'old-access',
       refreshToken: 'old-refresh',
       identity: 'user-1',
@@ -128,7 +141,7 @@ describe('LoginPage', () => {
     request.error(new ProgressEvent('error'));
     fixture.detectChanges();
 
-    submitAddress(page, '192.168.0.9');
+    submitAddress(page, '192.168.0.9:5065');
     const retry = http.expectOne(`${location.protocol}//192.168.0.9:5065/health`);
     retry.error(new ProgressEvent('error'));
     fixture.detectChanges();
@@ -147,7 +160,7 @@ describe('LoginPage', () => {
     request.error(new ProgressEvent('error'));
     fixture.detectChanges();
 
-    submitAddress(page, '192.168.0.9');
+    submitAddress(page, '192.168.0.9:5065');
     http
       .expectOne(`${location.protocol}//192.168.0.9:5065/health`)
       .flush({ status: 'Unhealthy' }, { status: 503, statusText: 'Service Unavailable' });
@@ -173,7 +186,7 @@ describe('LoginPage', () => {
     request.error(new ProgressEvent('error'));
     fixture.detectChanges();
 
-    submitAddress(page, '192.168.0.9');
+    submitAddress(page, '192.168.0.9:5065');
     http.expectOne(`${location.protocol}//192.168.0.9:5065/health`).flush({ status: 'Healthy' });
     answerStatus(connection, fixture);
 
@@ -413,17 +426,18 @@ describe('LoginPage', () => {
       expect(button(ctx.element)).toBeNull();
     });
 
-    it('puts the current page domain into the address field when the server is healthy', async () => {
+    it('puts the host of the server found at the page domain into the address field when it is healthy', async () => {
       const ctx = createWithStatus({ hasAdmin: true, hasNgo: true, isSetupComplete: true }, false);
       await clickAndAnswerProbe(ctx, 'healthy');
       const input = ctx.element.querySelector('.login__card ion-input') as HTMLIonInputElement;
-      expect(input.value).toBe(location.hostname);
+      // Разом із портом, на якому знайшлося API: з ним адресу знайдуть знову.
+      expect(input.value).toBe(`${location.hostname}:5065`);
     });
 
     it('puts the typed server address into the field when the server is healthy', async () => {
       const ctx = create();
       ctx.request.error(new ProgressEvent('error'));
-      ctx.connection.setServerAddress('192.168.0.9');
+      ctx.connection.setServerAddress('192.168.0.9:5065');
       http.expectOne(`${location.protocol}//192.168.0.9:5065/health`).flush({ status: 'Healthy' });
       answerStatus(ctx.connection, ctx.fixture, { hasAdmin: true, hasNgo: true, isSetupComplete: true });
 
@@ -434,7 +448,7 @@ describe('LoginPage', () => {
         expect(ctx.element.querySelector('.login-form')).toBeNull();
       });
       const input = ctx.element.querySelector('.login__card ion-input') as HTMLIonInputElement;
-      expect(input.value).toBe('192.168.0.9');
+      expect(input.value).toBe('192.168.0.9:5065');
     });
 
     it('puts the connection address of the active account into the field when its server is healthy', async () => {
@@ -446,7 +460,11 @@ describe('LoginPage', () => {
         refreshToken: 'r',
         identity: 'user-1',
       });
-      answerStatus(ctx.connection, ctx.fixture, { hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      // Статус системи запитано, щойно знайшлося API (ще до входу в акаунт).
+      http
+        .expectOne(`${pageServer()}/api/v1/system/status`)
+        .flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      ctx.fixture.detectChanges();
 
       button(ctx.element)!.click();
       http.expectOne('http://192.168.0.9:5065/health').flush({ status: 'Healthy' });
@@ -486,13 +504,14 @@ describe('LoginPage', () => {
     it('stays on step 1 while the server is fine, and moves on once a new address is submitted', async () => {
       const ctx = createWithStatus({ hasAdmin: true, hasNgo: true, isSetupComplete: true }, false);
       await clickAndAnswerProbe(ctx, 'healthy');
-      // Скидання адреси запускає нову перевірку за доменом сторінки.
+      // Скидання адреси запускає новий пошук за доменом сторінки.
+      notOnPageOrigin();
       http.expectOne(healthUrl()).flush({ status: 'Healthy' });
       ctx.fixture.detectChanges();
       expect(ctx.element.querySelector('.login__card')?.textContent).toContain(uk.login.step1.title);
 
       const page = ctx.fixture.componentInstance as unknown as LoginPageInternals;
-      page.onAddressChange('192.168.0.9');
+      page.onAddressChange('192.168.0.9:5065');
       page.submit();
       http.expectOne(`${location.protocol}//192.168.0.9:5065/health`).flush({ status: 'Healthy' });
       ctx.fixture.detectChanges();
@@ -508,6 +527,7 @@ describe('LoginPage', () => {
     it('rejects an invalid address without leaving step 1', async () => {
       const ctx = createWithStatus({ hasAdmin: true, hasNgo: true, isSetupComplete: true }, false);
       await clickAndAnswerProbe(ctx, 'healthy');
+      notOnPageOrigin();
       http.expectOne(healthUrl()).flush({ status: 'Healthy' });
       const page = ctx.fixture.componentInstance as unknown as LoginPageInternals;
       page.onAddressChange('http://');
@@ -726,6 +746,12 @@ describe('LoginPage', () => {
     }
 
     const healthUrl = (server = pageServer()) => `${server}/health`;
+    /** Пошук за доменом сторінки після перебору акаунтів: за її origin API нема, лишається порт 5065. */
+    async function pageDomainCheck() {
+      const check = await vi.waitFor(() => http.expectOne(healthUrl()));
+      notOnPageOrigin();
+      return check;
+    }
     const meUrl = (server = pageServer()) => `${server}/api/v1/users/me`;
     const refreshUrl = (server = pageServer()) => `${server}/api/v1/auth/refresh-token`;
 
@@ -778,7 +804,7 @@ describe('LoginPage', () => {
       (await vi.waitFor(() => http.expectOne(refreshUrl()))).flush({}, { status: 401, statusText: 'Unauthorized' });
 
       // Доступних акаунтів нема: підключення вертається до звичайної цілі, а користувач — на повторний вхід.
-      (await vi.waitFor(() => http.expectOne(healthUrl()))).flush({ status: 'Healthy' });
+      (await pageDomainCheck()).flush({ status: 'Healthy' });
       await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
       fixture.detectChanges();
 
@@ -800,7 +826,7 @@ describe('LoginPage', () => {
       request.flush({ status: 'Healthy' });
       (await vi.waitFor(() => http.expectOne(refreshUrl()))).flush({}, { status: 401, statusText: 'Unauthorized' });
       (await vi.waitFor(() => http.expectOne(healthUrl('http://down.example.org:5065')))).error(new ProgressEvent('error'));
-      (await vi.waitFor(() => http.expectOne(healthUrl()))).flush({ status: 'Healthy' });
+      (await pageDomainCheck()).flush({ status: 'Healthy' });
       await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
 
       expect(store.accounts().map((a) => [a.outdated, a.unavailable])).toEqual([
@@ -861,7 +887,7 @@ describe('LoginPage', () => {
       request.error(new ProgressEvent('error'));
 
       // Доступного нема: підключення вертається до звичайної цілі (за доменом сторінки).
-      (await vi.waitFor(() => http.expectOne(healthUrl()))).error(new ProgressEvent('error'));
+      (await pageDomainCheck()).error(new ProgressEvent('error'));
       await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
 
       expect(store.accounts()).toHaveLength(1);
@@ -1539,5 +1565,183 @@ describe('LoginPage', () => {
     request.flush({ status: 'Healthy' });
     fixture.detectChanges();
     expect(element.querySelector('.login__error')).toBeNull();
+  });
+
+  describe('an address typed without a port', () => {
+    const typed = `${location.protocol}//crm.example.org`;
+
+    it('looks for the API at the address as typed first, and signs in there when it answers', () => {
+      const { fixture, connection, element, page, request } = create();
+      request.error(new ProgressEvent('error'));
+      fixture.detectChanges();
+
+      submitAddress(page, 'crm.example.org');
+      http.expectOne(`${typed}/health`).flush({ status: 'Healthy' });
+      expect(http.expectOne(`${typed}:5065/health`).cancelled).toBe(true);
+      http.expectOne(`${typed}/api/v1/system/status`).flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+      fixture.detectChanges();
+
+      expect(connection.serverUrl()).toBe(typed);
+      expect(element.textContent).toContain(uk.login.form.title);
+    });
+
+    it('falls back to port 5065 when the address as typed is not the API, and the account keeps that origin', async () => {
+      const { fixture, connection, page, request } = create();
+      request.error(new ProgressEvent('error'));
+      fixture.detectChanges();
+
+      submitAddress(page, 'crm.example.org');
+      // За адресою як є — оболонка веб-клієнта (200, не JSON).
+      http.expectOne(`${typed}/health`).error(new ProgressEvent('error'), { status: 200, statusText: 'OK' });
+      http.expectOne(`${typed}:5065/health`).flush({ status: 'Healthy' });
+      http.expectOne(`${typed}:5065/api/v1/system/status`).flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+      fixture.detectChanges();
+      expect(connection.serverUrl()).toBe(`${typed}:5065`);
+
+      const form = fixture.componentInstance as unknown as {
+        onFieldChange(field: unknown, value: string): void;
+        submitLogin(): Promise<void>;
+        loginEmail: unknown;
+        loginPassword: unknown;
+      };
+      form.onFieldChange(form.loginEmail, 'a@b.org');
+      form.onFieldChange(form.loginPassword, 'Abcde1!x');
+      const done = form.submitLogin();
+      http.expectOne(`${typed}:5065/api/v1/auth/login`).flush({ accessToken: 'access', refreshToken: 'refresh' });
+      await vi.waitFor(() =>
+        http.expectOne(`${typed}:5065/api/v1/system/status`).flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true }),
+      );
+      await done;
+
+      expect(TestBed.inject(AccountsService).active()?.server).toBe(`${typed}:5065`);
+    });
+
+    it('names the address as typed in the error when neither port answers', () => {
+      const { fixture, element, page, request } = create();
+      request.error(new ProgressEvent('error'));
+      fixture.detectChanges();
+
+      submitAddress(page, 'crm.example.org');
+      http.expectOne(`${typed}/health`).error(new ProgressEvent('error'));
+      http.expectOne(`${typed}:5065/health`).error(new ProgressEvent('error'));
+      fixture.detectChanges();
+
+      const error = element.querySelector('.login__error')?.textContent ?? '';
+      expect(error).toContain(afterUrl(uk.login.step1.error.unreachable));
+      expect(error).toContain(typed);
+      expect(error).not.toContain(':5065');
+    });
+  });
+
+  describe('demo mode', () => {
+    const demo = {
+      accounts: [
+        { name: 'Олена (адміністраторка)', email: 'olena@demo.example', password: 'Demo-1a' },
+        { name: 'Тарас (волонтер)', email: 'taras@demo.example', password: 'Demo-2b' },
+      ],
+      sessionIdleMinutes: 30,
+      sessionMaxMinutes: 120,
+    };
+    const complete = { hasAdmin: true, hasNgo: true, isSetupComplete: true };
+    const statusUrl = () => `${pageServer()}/api/v1/system/status`;
+    const loginUrl = () => `${pageServer()}/api/v1/auth/login`;
+
+    /** Форма входу на сервері з таким статусом системи (за замовчуванням — у демо-режимі). */
+    function createLogin(systemStatus: object = { ...complete, demo }) {
+      const ctx = create();
+      ctx.request.flush({ status: 'Healthy' });
+      http.expectOne(statusUrl()).flush(systemStatus);
+      ctx.fixture.detectChanges();
+      return ctx;
+    }
+
+    const demoButtons = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLElement>('.login-demo__account'));
+
+    it('shows a separate demo block with an explanation and a button for every demo account', () => {
+      const { element } = createLogin();
+      const block = element.querySelector('.login-demo')!;
+
+      expect(block).not.toBeNull();
+      expect(block.querySelector('.login-demo__title')?.textContent?.trim()).toBe(uk.demo.login.title);
+      expect(block.querySelector('.login-demo__text')?.textContent?.trim()).toBe(
+        uk.demo.login.description.replace('{{minutes}}', '30'),
+      );
+      expect(demoButtons(element).map((button) => button.textContent?.trim())).toEqual(
+        demo.accounts.map((account) => uk.demo.login.signInAs.replace('{{name}}', account.name)),
+      );
+      // Звичайна форма входу лишається поруч.
+      expect(element.querySelector('#login-email')).not.toBeNull();
+    });
+
+    it.each([
+      ['has no demo field', complete],
+      ['says demo is null', { ...complete, demo: null }],
+    ])('shows no demo block when the status %s', (_name, systemStatus) => {
+      const { element } = createLogin(systemStatus);
+      expect(element.querySelector('.login-form')).not.toBeNull();
+      expect(element.querySelector('.login-demo')).toBeNull();
+    });
+
+    it('signs in with the e-mail and the password of the chosen demo account through the usual login', async () => {
+      const { fixture, element } = createLogin();
+      demoButtons(element)[1].click();
+      fixture.detectChanges();
+
+      const login = http.expectOne(loginUrl());
+      expect(login.request.method).toBe('POST');
+      expect(login.request.body).toEqual({ email: 'taras@demo.example', password: 'Demo-2b' });
+      login.flush({ accessToken: 'access', refreshToken: 'refresh' });
+      await vi.waitFor(() => http.expectOne(statusUrl()).flush({ ...complete, demo }));
+
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
+      expect(TestBed.inject(AccountsService).active()).toMatchObject({
+        server: pageServer(),
+        email: 'taras@demo.example',
+        accessToken: 'access',
+      });
+    });
+
+    it.each<[string, number, object]>([
+      ['there is no room for one more visitor (503 DEMO_CAPACITY_REACHED)', 503, { status: 503, errorCode: 'DEMO_CAPACITY_REACHED' }],
+      ['there were too many logins from one address (429)', 429, { status: 429, title: 'Too Many Requests' }],
+    ])('says the demo is busy when %s', async (_name, status, body) => {
+      const { fixture, element } = createLogin();
+      demoButtons(element)[0].click();
+      http.expectOne(loginUrl()).flush(body, { status, statusText: 'x', headers: { 'Retry-After': '120' } });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelector('.login__error')?.textContent?.trim()).toBe(uk.login.form.error.demoBusy);
+      });
+
+      // Форма лишається на місці: спробу можна повторити.
+      expect(demoButtons(element)).toHaveLength(2);
+      expect(navigate).not.toHaveBeenCalled();
+      http.expectNone(statusUrl());
+    });
+
+    it('explains that the demo session has ended after the visitor was brought back to the login page', () => {
+      // Відвідувач увійшов раніше й працює на іншій сторінці: підключення — до сервера його акаунта.
+      const accounts = TestBed.inject(AccountsService);
+      const account = accounts.add({ server: pageServer(), accessToken: 'a', refreshToken: 'r', identity: 'demo-user' });
+      TestBed.inject(ConnectionService);
+      http.expectOne(`${pageServer()}/health`).flush({ status: 'Healthy' });
+      http.expectOne(statusUrl()).flush({ ...complete, demo });
+
+      TestBed.inject(AuthService).endDemoSession(account.id);
+      expect(navigate).toHaveBeenCalledWith('/login');
+
+      const fixture = TestBed.createComponent(LoginPage);
+      fixture.detectChanges();
+      const element = fixture.nativeElement as HTMLElement;
+
+      expect(element.querySelector('.login__notice')?.textContent?.trim()).toBe(uk.demo.sessionEnded);
+      expect(element.querySelector('.login__error')).toBeNull();
+      expect(element.querySelector('.login-demo')).not.toBeNull();
+    });
+
+    it('shows no notice about the demo session otherwise', () => {
+      const { element } = createLogin();
+      expect(element.querySelector('.login__notice')).toBeNull();
+    });
   });
 });

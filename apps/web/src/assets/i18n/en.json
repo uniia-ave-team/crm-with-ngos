@@ -1,3 +1,23 @@
 {
-  "name": "English"
+  "name": "English",
+  "login": {
+    "form": {
+      "error": {
+        "demoBusy": "The demo is busy right now. Try again in a few minutes."
+      }
+    }
+  },
+  "demo": {
+    "banner": "This is a demo. Only you see your changes; they are reset after {{minutes}} minutes of inactivity.",
+    "sessionEnded": "Your demo session has ended. Sign in again to start with fresh demo data.",
+    "toast": {
+      "restricted": "This action is not available in the demo",
+      "quotaExceeded": "Demo limit reached"
+    },
+    "login": {
+      "title": "Demo",
+      "description": "This is a demo version of the system. Sign in with a ready-made account: you get your own copy of the demo data, and only you see your changes. They are reset after {{minutes}} minutes of inactivity.",
+      "signInAs": "Sign in as {{name}}"
+    }
+  }
 }

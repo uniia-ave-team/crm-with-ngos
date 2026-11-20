@@ -1,0 +1,3 @@
+@if (demo(); as info) {
+  <p class="demo-banner" role="status">{{ 'demo.banner' | translate: { minutes: info.sessionIdleMinutes } }}</p>
+}

@@ -4,7 +4,9 @@ import { StoredAccount } from './accounts.service';
 
 describe('account login helpers', () => {
   describe('loginErrorKey', () => {
-    it.each<[RequestFailure, string]>([
+    it.each<[RequestFailure | 'busy', string]>([
+      // Демо перевантажене (місць нема або забагато входів з однієї адреси).
+      ['busy', 'demoBusy'],
       ['invalid', 'invalid'],
       ['unauthorized', 'unauthorized'],
       ['unreachable', 'unreachable'],

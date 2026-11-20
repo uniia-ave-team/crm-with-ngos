@@ -1,8 +1,16 @@
 import { HttpErrorResponse, HttpEvent, HttpHandlerFn, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
-import { inject } from '@angular/core';
+import { Injector, inject } from '@angular/core';
 import { Observable, catchError, defer, from, switchMap, throwError } from 'rxjs';
 
 import { ConnectionService } from '../connection/connection.service';
+import { DemoNoticeService } from '../demo/demo-notice.service';
+import {
+  DEMO_MODE_RESTRICTED,
+  DEMO_QUOTA_EXCEEDED,
+  DEMO_SESSION_EXPIRED,
+  readBlobErrorCode,
+  readErrorCode,
+} from '../http/request-failure';
 import { AuthService } from './auth.service';
 
 /**
@@ -30,6 +38,12 @@ const ANONYMOUS_REQUESTS: ReadonlyArray<{ method?: string; path: string }> = [
  * Якщо оновити токени не вдалося — сесія акаунта завершується (`AuthService.expireSession`):
  * акаунт лишається в памʼяті з позначкою, активного акаунта більше нема, перехід на сторінку
  * повторного входу.
+ *
+ * Тут же, в одному місці, обробляються помилки демо-режиму (`errorCode` у тілі відповіді):
+ * - 401 `DEMO_SESSION_EXPIRED` — копії демо-даних уже нема: токени не оновлюються, акаунт
+ *   забувається, перехід на сторінку входу з повідомленням (`AuthService.endDemoSession`);
+ * - 403 `DEMO_MODE_RESTRICTED` / `DEMO_QUOTA_EXCEEDED` — спливне повідомлення
+ *   (`DemoNoticeService`); сама помилка йде далі тому, хто робив запит.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   // Сервіси інжектимо лише для запитів до /api: перевірка /health йде з
@@ -40,26 +54,60 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   }
   const auth = inject(AuthService);
   const connection = inject(ConnectionService);
+  // Сервіс сповіщень береться лише коли він справді потрібен (помилка демо-режиму).
+  const injector = inject(Injector);
+  const notifyDemo = catchError<HttpEvent<unknown>, Observable<never>>((error: unknown) =>
+    withErrorCode<never>(error, (code) => {
+      if (code === DEMO_MODE_RESTRICTED) {
+        void injector.get(DemoNoticeService).show('restricted');
+      } else if (code === DEMO_QUOTA_EXCEEDED) {
+        void injector.get(DemoNoticeService).show('quotaExceeded');
+      }
+      return throwError(() => error);
+    }),
+  );
 
   if (!needsAuth(req, connection.serverUrl())) {
-    return next(req);
+    return next(req).pipe(notifyDemo);
   }
 
   return defer(() => from(currentToken(auth))).pipe(
-    switchMap((token) =>
-      send(req, next, token).pipe(
+    switchMap((token) => {
+      // Акаунт, чий токен пішов у запит: поки йде відповідь, активним може стати інший.
+      const accountId = auth.sessionId();
+      return send(req, next, token).pipe(
         catchError((error: unknown) => {
           if (!(error instanceof HttpErrorResponse) || error.status !== 401 || !token) {
             return throwError(() => error);
           }
-          return from(recoverFromUnauthorized(auth, token)).pipe(
-            switchMap((newToken) => (newToken ? send(req, next, newToken) : throwError(() => error))),
-          );
+          return withErrorCode(error, (code) => {
+            if (code === DEMO_SESSION_EXPIRED) {
+              // Демо-сеанс завершився: оновлення токенів нічого не дасть.
+              auth.endDemoSession(accountId);
+              return throwError(() => error);
+            }
+            return from(recoverFromUnauthorized(auth, token)).pipe(
+              switchMap((newToken) => (newToken ? send(req, next, newToken) : throwError(() => error))),
+            );
+          });
         }),
-      ),
-    ),
+      );
+    }),
+    notifyDemo,
   );
 };
+
+/**
+ * Передає в `handle` код помилки (`errorCode`) невдалої відповіді. Тіло-`Blob` (запит
+ * зображення) читається асинхронно, решта — одразу.
+ */
+function withErrorCode<T>(error: unknown, handle: (code: string | null) => Observable<T>): Observable<T> {
+  const body = error instanceof HttpErrorResponse ? (error.error as unknown) : null;
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    return from(readBlobErrorCode(body)).pipe(switchMap(handle));
+  }
+  return handle(readErrorCode(error));
+}
 
 function isApiPath(url: string): boolean {
   try {

@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 
 import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
+import { DemoNoticeService } from '../demo/demo-notice.service';
 import { authInterceptor } from './auth.interceptor';
 import { AuthService } from './auth.service';
 
@@ -20,6 +21,8 @@ describe('authInterceptor', () => {
   let auth: AuthService;
   let server: string;
   let navigate: ReturnType<typeof vi.spyOn>;
+  /** Сповіщення демо-режиму: тут важливо лише, яке з них попросили показати. */
+  let notices: { show: ReturnType<typeof vi.fn> };
 
   function storeTokens(access: string, refresh: string): void {
     TestBed.inject(AccountsService).add({ server, accessToken: access, refreshToken: refresh, identity: 'user-1' });
@@ -29,8 +32,13 @@ describe('authInterceptor', () => {
     localStorage.clear();
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    notices = { show: vi.fn().mockResolvedValue(undefined) };
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(withInterceptors([authInterceptor])), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+        { provide: DemoNoticeService, useValue: notices },
+      ],
     });
     http = TestBed.inject(HttpTestingController);
     client = TestBed.inject(HttpClient);
@@ -216,5 +224,103 @@ describe('authInterceptor', () => {
     expect(retry.request.headers.get('Authorization')).toBe(`Bearer ${fresh}`);
     http.expectNone(`${server}/api/v1/auth/refresh-token`);
     retry.flush({});
+  });
+
+  describe('demo mode errors (errorCode of the problem JSON)', () => {
+    const problem = (status: number, errorCode: string) => ({ title: 'x', status, errorCode });
+    const unauthorized = { status: 401, statusText: 'Unauthorized' };
+    const forbidden = { status: 403, statusText: 'Forbidden' };
+
+    it('ends the demo session on 401 DEMO_SESSION_EXPIRED without trying to refresh the tokens', async () => {
+      storeTokens(jwt(600), 'refresh');
+      const accounts = TestBed.inject(AccountsService);
+
+      let status = 0;
+      client.get(`${server}/api/v1/ngo`).subscribe({ error: (e) => (status = e.status) });
+      (await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`))).flush(problem(401, 'DEMO_SESSION_EXPIRED'), unauthorized);
+
+      await vi.waitFor(() => expect(status).toBe(401));
+      http.expectNone(`${server}/api/v1/auth/refresh-token`);
+      // Акаунт забуто (копії демо-даних уже нема), користувач — на сторінці входу з поясненням.
+      expect(accounts.accounts()).toEqual([]);
+      expect(auth.hasTokens()).toBe(false);
+      expect(auth.demoSessionEnded()).toBe(true);
+      expect(navigate).toHaveBeenCalledWith('/login');
+      expect(navigate).not.toHaveBeenCalledWith('/relogin');
+    });
+
+    it('reads the error code of a request for an image (Blob body) as well', async () => {
+      storeTokens(jwt(600), 'refresh');
+
+      let status = 0;
+      client.get(`${server}/api/v1/users/me/avatar`, { responseType: 'blob' }).subscribe({ error: (e) => (status = e.status) });
+      const body = new Blob([JSON.stringify(problem(401, 'DEMO_SESSION_EXPIRED'))], { type: 'application/problem+json' });
+      (await vi.waitFor(() => http.expectOne(`${server}/api/v1/users/me/avatar`))).flush(body, unauthorized);
+
+      await vi.waitFor(() => expect(status).toBe(401));
+      http.expectNone(`${server}/api/v1/auth/refresh-token`);
+      expect(auth.demoSessionEnded()).toBe(true);
+      expect(navigate).toHaveBeenCalledWith('/login');
+    });
+
+    it('ends the demo session when the refresh before a request answers DEMO_SESSION_EXPIRED', async () => {
+      storeTokens(jwt(-60), 'refresh');
+
+      client.get(`${server}/api/v1/ngo`).subscribe({ error: () => undefined });
+      (await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`))).flush(
+        problem(401, 'DEMO_SESSION_EXPIRED'),
+        unauthorized,
+      );
+
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/login'));
+      expect(TestBed.inject(AccountsService).accounts()).toEqual([]);
+      expect(auth.demoSessionEnded()).toBe(true);
+      expect(navigate).not.toHaveBeenCalledWith('/relogin');
+    });
+
+    it('still refreshes the tokens on an ordinary 401', async () => {
+      storeTokens(jwt(600), 'refresh');
+      client.get(`${server}/api/v1/ngo`).subscribe({ error: () => undefined });
+      (await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`))).flush(problem(401, 'SOMETHING_ELSE'), unauthorized);
+
+      await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`));
+      expect(auth.demoSessionEnded()).toBe(false);
+    });
+
+    it.each([
+      ['DEMO_MODE_RESTRICTED', 'restricted'],
+      ['DEMO_QUOTA_EXCEEDED', 'quotaExceeded'],
+    ])('shows a notice on 403 %s and passes the error on', async (errorCode, notice) => {
+      storeTokens(jwt(600), 'refresh');
+
+      let status = 0;
+      client.post(`${server}/api/v1/users/me/avatar`, {}).subscribe({ error: (e) => (status = e.status) });
+      (await vi.waitFor(() => http.expectOne(`${server}/api/v1/users/me/avatar`))).flush(problem(403, errorCode), forbidden);
+
+      await vi.waitFor(() => expect(status).toBe(403));
+      expect(notices.show).toHaveBeenCalledTimes(1);
+      expect(notices.show).toHaveBeenCalledWith(notice);
+      // Сесія на місці: це не вихід.
+      expect(auth.hasTokens()).toBe(true);
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('shows the notice for a request that needs no token too', async () => {
+      client.post(`${server}/api/v1/users`, {}).subscribe({ error: () => undefined });
+      (await vi.waitFor(() => http.expectOne(`${server}/api/v1/users`))).flush(problem(403, 'DEMO_MODE_RESTRICTED'), forbidden);
+
+      await vi.waitFor(() => expect(notices.show).toHaveBeenCalledWith('restricted'));
+    });
+
+    it('shows no notice on an ordinary 403', async () => {
+      storeTokens(jwt(600), 'refresh');
+
+      let status = 0;
+      client.get(`${server}/api/v1/ngo`).subscribe({ error: (e) => (status = e.status) });
+      (await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`))).flush(problem(403, 'FORBIDDEN'), forbidden);
+
+      await vi.waitFor(() => expect(status).toBe(403));
+      expect(notices.show).not.toHaveBeenCalled();
+    });
   });
 });
