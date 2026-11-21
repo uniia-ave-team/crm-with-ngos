@@ -21,6 +21,26 @@ public static class FileStorageConstants
     public const string LoginPageImagesFolder = "login-page-images";
 
     /// <summary>
+    /// The folder name used for storing task file attachments.
+    /// </summary>
+    public const string TaskAttachmentsFolder = "task-attachments";
+
+    /// <summary>
+    /// The file extension used for temporary staging files during atomic uploads.
+    /// </summary>
+    public const string TempFileExtension = ".tmp";
+
+    /// <summary>
+    /// The interval in hours at which the orphaned temporary files cleanup process runs.
+    /// </summary>
+    public const int TempFileCleanupIntervalHours = 1;
+
+    /// <summary>
+    /// The maximum age in hours before an abandoned temporary upload file is considered stale and eligible for deletion.
+    /// </summary>
+    public const int StaleTempFileMaxAgeHours = 1;
+
+    /// <summary>
     /// The list of allowed file extensions for uploaded images and media.
     /// </summary>
     public static readonly string[] AllowedExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg"];

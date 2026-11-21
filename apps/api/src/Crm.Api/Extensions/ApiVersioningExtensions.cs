@@ -79,6 +79,7 @@ public static class ApiVersioningExtensions
             options.AddOperationTransformer<AccessRightOperationTransformer>();
             options.AddOperationTransformer<OperationIdOperationTransformer>();
             options.AddOperationTransformer<JsonContentTypeOperationTransformer>();
+            options.AddOperationTransformer<JsonIgnoreParameterOperationTransformer>();
         });
 
         return services;

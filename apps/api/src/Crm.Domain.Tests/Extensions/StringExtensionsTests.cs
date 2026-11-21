@@ -121,4 +121,28 @@ public class StringExtensionsTests
         // Assert
         result.ShouldBeNull();
     }
+
+    [Theory]
+    [InlineData("  Urgent  ", "URGENT")]
+    [InlineData("\tТерміново\u00A0", "ТЕРМІНОВО")]
+    [InlineData("розробка", "РОЗРОБКА")]
+    public void NormalizeTitleShouldTrimUnicodeWhitespaceAndUppercaseInvariant(string title, string expected)
+    {
+        var result = title.NormalizeTitle();
+
+        result.ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData(@"C:\fakepath\report.pdf", "report.pdf")]
+    [InlineData("/tmp/uploads/report.pdf", "report.pdf")]
+    [InlineData(@"C:\mixed/path\doc.txt", "doc.txt")]
+    [InlineData("plain.csv", "plain.csv")]
+    [InlineData(@"C:\fakepath\", "")]
+    public void ExtractFileNameShouldStripBothWindowsAndUnixDirectorySeparators(string input, string expected)
+    {
+        var result = input.ExtractFileName();
+
+        result.ShouldBe(expected);
+    }
 }

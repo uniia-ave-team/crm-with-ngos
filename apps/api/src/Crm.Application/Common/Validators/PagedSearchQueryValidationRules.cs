@@ -1,3 +1,4 @@
+using Crm.Application.Common.Consts;
 using Crm.Application.Common.Interfaces;
 using Crm.Domain.Consts;
 using FluentValidation;
@@ -32,6 +33,8 @@ public class PagedSearchQueryValidationRules : AbstractValidator<IPagedSearchQue
             .WithMessage($"Search term must be at least {SearchValidationConstants.MinSearchTermLength} characters long.")
             .MaximumLength(SearchValidationConstants.MaxSearchTermLength)
             .WithMessage($"Search term must not exceed {SearchValidationConstants.MaxSearchTermLength} characters.")
+            .Must(term => term is null || !term.Contains('\0', StringComparison.Ordinal))
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
             .When(x => !string.IsNullOrWhiteSpace(x.SearchTerm));
     }
 }
