@@ -1,12 +1,18 @@
-import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Injectable, Injector, Signal, computed, inject } from '@angular/core';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { Injectable, Injector, Signal, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom, timeout } from 'rxjs';
 
 import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountsService, StoredAccount } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
-import { RequestFailure, toRequestFailure } from '../http/request-failure';
+import {
+  DEMO_CAPACITY_REACHED,
+  DEMO_SESSION_EXPIRED,
+  RequestFailure,
+  readErrorCode,
+  toRequestFailure,
+} from '../http/request-failure';
 import { readJwtExpiry, readJwtSubject } from './jwt';
 
 const API_LOGIN_PATH = '/api/v1/auth/login';
@@ -52,7 +58,11 @@ export interface AuthTokens {
 
 type LoginResponse = AuthTokens;
 
-export type LoginResult = 'ok' | RequestFailure;
+/**
+ * `busy` — демо зараз не приймає нових відвідувачів: забагато одночасних сеансів
+ * (503 `DEMO_CAPACITY_REACHED`) або забагато входів з однієї адреси (429 у демо-режимі).
+ */
+export type LoginResult = 'ok' | 'busy' | RequestFailure;
 export type RefreshResult = 'ok' | RequestFailure;
 /** `skipped` — токенів уже не було, на сервер запит не йшов. */
 export type LogoutResult = 'ok' | 'skipped' | RequestFailure;
@@ -91,6 +101,13 @@ export class AuthService {
   readonly sessionId: Signal<string | null> = this.accounts.activeId;
 
   private refreshInFlight: Promise<RefreshResult> | null = null;
+
+  private readonly demoSessionEndedSignal = signal(false);
+  /**
+   * Демо-сеанс активного акаунта завершився (`endDemoSession`), і користувача повернуто на
+   * сторінку входу: вона показує про це повідомлення. Скидається наступним входом.
+   */
+  readonly demoSessionEnded: Signal<boolean> = this.demoSessionEndedSignal.asReadonly();
 
   /** Access-токен прострочений або майже (за `exp` у самому JWT; без токена чи при нечитному — `false`). */
   accessTokenExpired(): boolean {
@@ -147,6 +164,27 @@ export class AuthService {
     }
     if (this.accounts.activeId() === null) {
       void this.router.navigateByUrl(this.accounts.accounts().length > 0 ? RELOGIN_URL : LOGIN_URL);
+    }
+  }
+
+  /**
+   * Демо-сеанс акаунта завершився (сервер відповів `DEMO_SESSION_EXPIRED`: копії демо-даних
+   * цього відвідувача вже нема). Оновлювати токени марно, а повторний вхід дасть нову копію,
+   * тож акаунт забувається одразу (без запиту на вихід: відкликати нічого). Якщо він був
+   * активним — на сторінку входу з повідомленням (`demoSessionEnded`); підключення при цьому
+   * перевіряється заново, лише якщо без акаунта застосунок дивиться вже на інший сервер.
+   */
+  endDemoSession(accountId: string | null): void {
+    if (!accountId || !this.accounts.accounts().some((account) => account.id === accountId)) {
+      return;
+    }
+    const wasActive = this.accounts.activeId() === accountId;
+    this.accounts.remove(accountId);
+    console.warn('[AuthService] Демо-сеанс завершився — акаунт забуто');
+    if (wasActive) {
+      this.demoSessionEndedSignal.set(true);
+      void this.connection.checkApiIfServerChanged();
+      void this.router.navigateByUrl(LOGIN_URL);
     }
   }
 
@@ -238,10 +276,18 @@ export class AuthService {
       console.log('[AuthService] Вхід виконано, токени отримано');
       return 'ok';
     } catch (error) {
-      const failure = toRequestFailure(error);
+      const failure = this.isDemoBusy(error) ? 'busy' : toRequestFailure(error);
       console.warn(`[AuthService] Не вдалося увійти (${failure})`, error);
       return failure;
     }
+  }
+
+  /** Вхід відхилено, бо демо перевантажене: місць нема або забагато входів з однієї адреси. */
+  private isDemoBusy(error: unknown): boolean {
+    if (!(error instanceof HttpErrorResponse)) {
+      return false;
+    }
+    return readErrorCode(error) === DEMO_CAPACITY_REACHED || (error.status === 429 && this.connection.isDemo());
   }
 
   /**
@@ -261,6 +307,7 @@ export class AuthService {
       // Пошту з /users/me не отримати — запамʼятовуємо ту, з якою ввійшли.
       email: email.trim(),
     }, replaceAccountId);
+    this.demoSessionEndedSignal.set(false);
   }
 
   /**
@@ -344,7 +391,7 @@ export class AuthService {
   /**
    * `POST /auth/refresh-token` з парою токенів акаунта; при успіху зберігає нову
    * пару. Відхилення (400/401) — застарілий акаунт, якщо за цей час інша вкладка
-   * не записала нову пару.
+   * не записала нову пару; `DEMO_SESSION_EXPIRED` — демо-сеанс завершився (`endDemoSession`).
    */
   private async exchange(account: StoredAccount): Promise<RefreshResult> {
     const url = `${account.server}${API_REFRESH_PATH}`;
@@ -371,6 +418,11 @@ export class AuthService {
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[AuthService] Не вдалося оновити токени (${failure})`, error);
+      if (readErrorCode(error) === DEMO_SESSION_EXPIRED) {
+        // Копії демо-даних уже нема: нова пара від іншої вкладки нічого не змінить.
+        this.endDemoSession(account.id);
+        return failure;
+      }
       if (failure === 'invalid' || failure === 'unauthorized') {
         // Можливо, наш refresh-токен «спалила» інша вкладка, що встигла першою.
         if (this.accounts.syncFromStorage(account.id) !== null) {

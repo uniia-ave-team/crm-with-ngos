@@ -56,7 +56,8 @@ describe('AddAccountComponent', () => {
     TestBed.inject(TranslateService).setTranslation('uk', uk);
     http = TestBed.inject(HttpTestingController);
     const connection = TestBed.inject(ConnectionService);
-    http.expectOne(connection.apiHealthUrl());
+    // Пошук API на старті (origin сторінки й порт 5065): обидва запити забираємо без відповіді.
+    http.match((request) => request.url.endsWith('/health'));
     current = connection.serverUrl();
     navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     // Анімацію закриття в jsdom ніхто не завершить: вікно «закривається» одразу.
@@ -333,18 +334,71 @@ describe('AddAccountComponent', () => {
     http.expectNone((r) => r.url.includes('/health') || r.url.includes('/auth/login'));
   });
 
+  describe('an address typed without a port', () => {
+    const typed = 'https://crm.example.org';
+    const jwt = `h.${btoa(JSON.stringify({ sub: 'user-9' })).replace(/=+$/, '')}.s`;
+
+    it('signs in at the address as typed when the API answers there, and the account keeps that origin', async () => {
+      const { component, page } = create();
+      component.open('a@b.org');
+      fill(page, { address: 'https://crm.example.org/', password: 'secret' });
+
+      const done = page.submit();
+      http.expectOne(`${typed}/health`).flush({ status: 'Healthy' });
+      expect(http.expectOne(`${typed}:5065/health`).cancelled).toBe(true);
+      (await waitForRequest(`${typed}/api/v1/auth/login`)).flush({ accessToken: jwt, refreshToken: 'r' });
+      // Далі підключення перевіряється вже за адресою нового акаунта — лише за нею.
+      (await waitForRequest(`${typed}/health`)).flush({ status: 'Healthy' });
+      await done;
+
+      expect(TestBed.inject(AccountsService).active()?.server).toBe(typed);
+      http.expectNone(`${typed}:5065/health`);
+    });
+
+    it('falls back to port 5065 when the address as typed answers with the app shell, and the account keeps that origin', async () => {
+      const { component, page } = create();
+      component.open('a@b.org');
+      fill(page, { address: typed, password: 'secret' });
+
+      const done = page.submit();
+      // Веб-контейнер віддає index.html (200, не JSON) на будь-який шлях.
+      http.expectOne(`${typed}/health`).error(new ProgressEvent('error'), { status: 200, statusText: 'OK' });
+      http.expectOne(`${typed}:5065/health`).flush({ status: 'Healthy' });
+      (await waitForRequest(`${typed}:5065/api/v1/auth/login`)).flush({ accessToken: jwt, refreshToken: 'r' });
+      (await waitForRequest(`${typed}:5065/health`)).flush({ status: 'Healthy' });
+      await done;
+
+      expect(TestBed.inject(AccountsService).active()?.server).toBe(`${typed}:5065`);
+    });
+
+    it('tries only the given port when the address has one', async () => {
+      const { component, page } = create();
+      component.open('a@b.org');
+      fill(page, { address: `${typed}:8443`, password: 'secret' });
+
+      const done = page.submit();
+      http.expectOne(`${typed}:8443/health`).error(new ProgressEvent('error'));
+      await done;
+
+      http.expectNone((r) => r.url.startsWith(`${typed}:5065`) || r.url.startsWith(`${typed}/`));
+      expect(page.banner()).toEqual({ key: 'login.step1.error.unreachable', params: { url: `${typed}:8443` } });
+    });
+  });
+
   it('says the server is not found, and does not try to sign in, when it does not answer', async () => {
     const { component, page } = create();
     component.open('a@b.org');
     fill(page, { address: 'other.example', password: 'secret' });
 
     const done = page.submit();
+    // Адреса без порту: API шукаємо за нею як є, далі на порту 5065.
+    http.expectOne(`${location.protocol}//other.example/health`).error(new ProgressEvent('error'));
     http.expectOne(`${location.protocol}//other.example:5065/health`).error(new ProgressEvent('error'));
     await done;
 
     expect(page.banner()).toEqual({
       key: 'login.step1.error.unreachable',
-      params: { url: `${location.protocol}//other.example:5065` },
+      params: { url: `${location.protocol}//other.example` },
     });
     expect(page.saving()).toBe(false);
     http.expectNone((r) => r.url.includes('/auth/login'));

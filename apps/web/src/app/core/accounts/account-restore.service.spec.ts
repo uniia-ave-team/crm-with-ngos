@@ -27,6 +27,8 @@ describe('AccountRestoreService', () => {
     accounts.add({ server: first, accessToken: 'a1', refreshToken: 'r1', identity: 'u1', email: 'a@b.org' });
     connection = TestBed.inject(ConnectionService);
     http.expectOne(`${first}/health`).flush({ status: 'Healthy' });
+    // Підключення є — сервіс одразу запитує статус системи; тут він ні на що не впливає.
+    http.expectOne(`${first}/api/v1/system/status`);
     restore = TestBed.inject(AccountRestoreService);
   });
 

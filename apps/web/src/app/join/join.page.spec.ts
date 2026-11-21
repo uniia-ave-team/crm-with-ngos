@@ -23,6 +23,8 @@ interface JoinPageInternals {
 describe('JoinPage', () => {
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.spyOn>;
+  // Сервер запрошення шукається за доменом сторінки: спершу її origin, далі порт 5065. У цих
+  // тестах сторінку віддає веб-контейнер (на /health — 404), а API — на порту 5065.
   const server = `${location.protocol}//${location.hostname}:5065`;
 
   beforeEach(() => {
@@ -59,6 +61,9 @@ describe('JoinPage', () => {
 
   /** Відповідь на перевірку сервера за посиланням (разом із першою перевіркою самого сервісу підключення). */
   function answerHealth(fixture: { detectChanges(): void }, body: unknown = { status: 'Healthy' }): void {
+    for (const request of http.match(`${location.origin}/health`)) {
+      request.flush('Not found', { status: 404, statusText: 'Not Found' });
+    }
     for (const request of http.match(`${server}/health`)) {
       if (body === null) {
         request.error(new ProgressEvent('error'));
@@ -119,9 +124,29 @@ describe('JoinPage', () => {
       identity: 'someone',
     });
     create();
+    http.expectOne(`${location.origin}/health`).flush('Not found', { status: 404, statusText: 'Not Found' });
     http.expectOne(`${server}/health`).flush({ status: 'Healthy' });
     const request = await vi.waitFor(() => http.expectOne((r) => r.url === `${server}/api/v1/invitations/validate`));
     expect(request.request.params.get('token')).toBe('tok');
+  });
+
+  it('uses the origin of the page itself when the API answers there (behind a reverse proxy)', async () => {
+    const { fixture, element, page } = create();
+    for (const request of http.match(`${location.origin}/health`)) {
+      request.flush({ status: 'Healthy' });
+    }
+    const validate = await vi.waitFor(() =>
+      http.expectOne((r) => r.url === `${location.origin}/api/v1/invitations/validate`),
+    );
+    validate.flush({ email: 'a@b.org', ngoId: 'n', roleId: 'r' });
+    await settled(fixture, element);
+
+    fill(page, { lastName: 'Шевченко', firstName: 'Тарас', password: 'Abcde1!x', passwordRepeat: 'Abcde1!x' });
+    const done = page.submit();
+    http.expectOne(`${location.origin}/api/v1/invitations/accept`).flush({ accessToken: 'access', refreshToken: 'refresh' });
+    await done;
+
+    expect(TestBed.inject(AccountsService).active()?.server).toBe(location.origin);
   });
 
   it.each([

@@ -19,7 +19,8 @@ describe('AuthService', () => {
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
     const connection = TestBed.inject(ConnectionService);
-    http.expectOne(connection.apiHealthUrl());
+    // Пошук API на старті (origin сторінки й порт 5065): обидва запити забираємо без відповіді.
+    http.match((request) => request.url.endsWith('/health'));
     service = TestBed.inject(AuthService);
     url = `${connection.serverUrl()}/api/v1/auth/login`;
   });
@@ -595,6 +596,118 @@ describe('AuthService', () => {
         expect(accountsStore().accounts().find((a) => a.id === failed)?.outdated).toBe(true);
         expect(navigate).not.toHaveBeenCalled();
       });
+    });
+
+    describe('demo session (DEMO_SESSION_EXPIRED)', () => {
+      const expired = { title: 'Demo session expired', status: 401, errorCode: 'DEMO_SESSION_EXPIRED' };
+      let navigate: ReturnType<typeof vi.spyOn>;
+      beforeEach(() => {
+        navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      });
+
+      it('forgets the active account, raises the flag for the login page and goes to /login', () => {
+        localStorage.setItem('yavir.language', 'uk');
+        store('a', 'r');
+        const id = accountsStore().activeId()!;
+
+        service.endDemoSession(id);
+
+        expect(accountsStore().accounts()).toEqual([]);
+        expect(localStorage.getItem(`yavir.account.${id}`)).toBeNull();
+        expect(service.hasTokens()).toBe(false);
+        expect(service.demoSessionEnded()).toBe(true);
+        expect(navigate).toHaveBeenCalledWith('/login');
+        // Решта памʼяті (мова тощо) лишається.
+        expect(localStorage.getItem('yavir.language')).toBe('uk');
+        // Сервер про вихід не питаємо: сеансу там уже нема.
+        http.expectNone(`${server()}/api/v1/auth/logout`);
+      });
+
+      it('forgets an inactive account quietly: the active one stays, nobody is sent anywhere', () => {
+        const inactive = accountsStore().add({ server: server(), accessToken: 'b', refreshToken: 'rb', identity: 'user-2' });
+        store('a', 'r');
+        const active = accountsStore().activeId();
+
+        service.endDemoSession(inactive.id);
+
+        expect(accountsStore().accounts().map((a) => a.id)).toEqual([active]);
+        expect(accountsStore().activeId()).toBe(active);
+        expect(service.demoSessionEnded()).toBe(false);
+        expect(navigate).not.toHaveBeenCalled();
+      });
+
+      it('does nothing for an account that is already gone', () => {
+        service.endDemoSession('unknown');
+        service.endDemoSession(null);
+        expect(service.demoSessionEnded()).toBe(false);
+        expect(navigate).not.toHaveBeenCalled();
+      });
+
+      it('ends the demo session when the refresh answers DEMO_SESSION_EXPIRED, even if another tab stored a new pair', async () => {
+        store('a', 'r');
+        const result = service.refresh();
+        const request = http.expectOne(refreshUrl());
+        writeFromOtherTab('a-from-other-tab', 'r-from-other-tab');
+        request.flush(expired, { status: 401, statusText: 'Unauthorized' });
+
+        expect(await result).toBe('unauthorized');
+        expect(accountsStore().accounts()).toEqual([]);
+        expect(service.demoSessionEnded()).toBe(true);
+        expect(navigate).toHaveBeenCalledWith('/login');
+      });
+
+      it('lowers the flag at the next login', async () => {
+        store('a', 'r');
+        service.endDemoSession(accountsStore().activeId());
+        expect(service.demoSessionEnded()).toBe(true);
+
+        const result = service.login('a@b.org', 'Abcde1');
+        http.expectOne(url).flush({ accessToken: 'access', refreshToken: 'refresh' });
+        expect(await result).toBe('ok');
+        expect(service.demoSessionEnded()).toBe(false);
+      });
+    });
+  });
+
+  describe('a busy demo at login', () => {
+    const demo = { accounts: [], sessionMinutes: 60 };
+
+    /** Підключення до сервера в демо-режимі (чи звичайного): нова перевірка й статус системи. */
+    function connect(demoInfo: typeof demo | null): void {
+      const connection = TestBed.inject(ConnectionService);
+      void connection.checkApi();
+      http.expectOne(connection.apiHealthUrl()).flush({ status: 'Healthy' });
+      http
+        .expectOne(`${connection.serverUrl()}/api/v1/system/status`)
+        .flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true, demo: demoInfo });
+    }
+
+    it('reports "busy" for 503 DEMO_CAPACITY_REACHED and adds no account', async () => {
+      const result = service.login('a@b.org', 'Abcde1');
+      http
+        .expectOne(url)
+        .flush({ status: 503, errorCode: 'DEMO_CAPACITY_REACHED' }, { status: 503, statusText: 'Service Unavailable', headers: { 'Retry-After': '60' } });
+
+      expect(await result).toBe('busy');
+      expect(TestBed.inject(AccountsService).accounts()).toEqual([]);
+    });
+
+    it('reports "busy" for 429 on a demo server', async () => {
+      connect(demo);
+      const result = service.login('a@b.org', 'Abcde1');
+      http.expectOne(url).flush({ status: 429 }, { status: 429, statusText: 'Too Many Requests' });
+      expect(await result).toBe('busy');
+    });
+
+    it('keeps 429 an ordinary error outside the demo, and 503 without the code as well', async () => {
+      connect(null);
+      const limited = service.login('a@b.org', 'Abcde1');
+      http.expectOne(url).flush({ status: 429 }, { status: 429, statusText: 'Too Many Requests' });
+      expect(await limited).toBe('error');
+
+      const down = service.login('a@b.org', 'Abcde1');
+      http.expectOne(url).flush('Service Unavailable', { status: 503, statusText: 'Service Unavailable' });
+      expect(await down).toBe('error');
     });
   });
 });

@@ -61,6 +61,27 @@
   margin: 0;
 }
 
+// Нейтральне повідомлення над формою (демо-сеанс завершився): не помилка, тож без червоного.
+.login__notice {
+  padding: 12px 16px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid #ecd9a4;
+  background: #fdf6e0;
+  color: #6b4e00;
+  font-family: var(--font-menu);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .login__notice {
+    border-color: #57471c;
+    background: #2a2412;
+    color: #f0d68a;
+  }
+}
+
 .login__status {
   margin: 0;
   font-family: var(--font-login-body);

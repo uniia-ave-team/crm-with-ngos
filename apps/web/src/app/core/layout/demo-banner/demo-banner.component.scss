@@ -1,0 +1,47 @@
+// Хост — звичайний блок у колонці ion-app над оболонкою: поза демо-режимом він порожній
+// і місця не займає.
+:host {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.demo-banner {
+  margin: 0;
+  padding: 4px 16px;
+  border-bottom: 1px solid #ecd9a4;
+  background: #fdf6e0;
+  color: #6b4e00;
+  font-family: var(--font-menu);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+// Лічильник: цифри однакової ширини, щоб текст не «стрибав» щосекунди.
+.demo-banner__time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// Лишилось 5 хвилин чи менше: банер стає червоним (кольори блоку помилки сторінки входу).
+.demo-banner--ending {
+  border-bottom-color: #f1c0bb;
+  background: #fdeceb;
+  color: #a1281f;
+  font-weight: 700;
+}
+
+@media (prefers-color-scheme: dark) {
+  .demo-banner {
+    border-bottom-color: #57471c;
+    background: #2a2412;
+    color: #f0d68a;
+  }
+
+  .demo-banner--ending {
+    border-bottom-color: #5a2b27;
+    background: #2a1413;
+    color: #ff9b92;
+  }
+}

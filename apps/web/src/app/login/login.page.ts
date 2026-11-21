@@ -5,7 +5,7 @@ import { NO_CONNECTION_ERROR } from '../core/connection/connection.guard';
 import { AccountRestoreService } from '../core/accounts/account-restore.service';
 import { AccountsService } from '../core/accounts/accounts.service';
 import { AuthService, LoginResult, REDIRECT_URL, RELOGIN_URL } from '../core/auth/auth.service';
-import { ConnectionService } from '../core/connection/connection.service';
+import { ConnectionService, DemoAccount } from '../core/connection/connection.service';
 import { AppLanguage, LanguageService } from '../core/i18n/language.service';
 import { mobileLogoBase } from '../core/i18n/mobile-logo';
 import { NGO_LOGO_MAX_BYTES, NGO_LOGO_TYPES, NGO_NAME_MAX_LENGTH } from '../core/ngo/logo-rules';
@@ -242,6 +242,11 @@ export class LoginPage implements OnDestroy {
     const key = this.loginSaveError();
     return key ? `login.form.error.${key}` : null;
   });
+  /**
+   * Сюди повернуло завершення демо-сеансу (`AuthService.endDemoSession`): над формою входу —
+   * пояснення, доки не буде нової спроби входу, що закінчилась помилкою (тоді показуємо її).
+   */
+  protected readonly demoSessionEnded = computed(() => this.auth.demoSessionEnded() && !this.loginSaveError());
 
   /** Форма адміністратора. */
   protected readonly adminEmail = signal('');
@@ -317,19 +322,8 @@ export class LoginPage implements OnDestroy {
       void this.restoreAccounts();
     }
 
-    // Щойно пошук завершено й підключення є — запитуємо стан первинного
-    // налаштування системи (від нього залежить, що показати: форму адміна,
-    // організації чи входу). untracked: виклик нічого не читає з сигналів
-    // сторінки, тож ефект має реагувати лише на `restoreDone` і `apiStatus`.
-    effect(() => {
-      const done = this.restoreDone();
-      const healthy = this.connection.apiStatus() === 'healthy';
-      untracked(() => {
-        if (done && healthy) {
-          this.connection.loadSystemStatus();
-        }
-      });
-    });
+    // Стан первинного налаштування системи (від нього залежить, що показати: форму
+    // адміна, організації чи входу) запитує сам `ConnectionService`, щойно підключення є.
 
     // Показано форму входу — підтягуємо її зображення з сервера (раз на сервер).
     effect(() => {
@@ -418,8 +412,10 @@ export class LoginPage implements OnDestroy {
       return;
     }
     this.resettingServer.set(true);
-    // Беремо до очищення: після нього акаунти й надана адреса вже забуті.
-    const currentAddress = this.accounts.active()?.server ?? this.connection.serverAddress() ?? this.connection.domain;
+    // Беремо до очищення: після нього акаунти й надана адреса вже забуті. Адреси не надавали —
+    // хост (із портом, якщо він нестандартний), за яким знайшлося API домену сторінки.
+    const currentAddress =
+      this.accounts.active()?.server ?? this.connection.serverAddress() ?? new URL(this.connection.serverUrl()).host;
     const healthy = await this.connection.probeApi();
 
     this.accounts.wipe();
@@ -605,6 +601,16 @@ export class LoginPage implements OnDestroy {
   }
 
   /**
+   * Кнопка «Увійти як …» демо-блоку: підставляє пошту й пароль демо-акаунта у форму й
+   * входить звичайним шляхом (`submitLogin`).
+   */
+  protected signInDemo(account: DemoAccount): Promise<void> {
+    this.loginEmail.set(account.email);
+    this.loginPassword.set(account.password);
+    return this.submitLogin();
+  }
+
+  /**
    * Перевіряє форму адміністратора; якщо все гаразд — створює користувача
    * (`POST /api/v1/users`), одразу входить під ним тими самими даними
    * (`POST /api/v1/auth/login`) і перезапитує статус системи: адмін уже є,
@@ -691,6 +697,8 @@ function loginErrorKey(result: Exclude<LoginResult, 'ok'>): string {
 
 function loginFormErrorKey(result: Exclude<LoginResult, 'ok'>): string {
   switch (result) {
+    case 'busy':
+      return 'demoBusy';
     case 'invalid':
       return 'invalid';
     case 'unauthorized':
