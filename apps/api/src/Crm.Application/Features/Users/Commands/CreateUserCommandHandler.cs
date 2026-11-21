@@ -1,6 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.User;
 using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Consts;
 using Crm.Domain.Entities;
@@ -27,7 +28,9 @@ public partial class CreateUserCommandHandler(
 
     public async ValueTask<Guid> Handle(CreateUserCommand request, CancellationToken cancellationToken)
     {
-        LogCreatingUser(logger, request.Email);
+        var maskedEmail = request.Email.MaskEmail();
+
+        LogCreatingUser(logger, maskedEmail);
 
         await _lock.WaitAsync(cancellationToken);
         try
@@ -37,7 +40,7 @@ public partial class CreateUserCommandHandler(
             var user = await CreateUserAsync(request, cancellationToken);
             await AssignAdminRoleAsync(user.Id, cancellationToken);
 
-            LogUserCreatedSuccessfully(logger, request.Email, user.Id);
+            LogUserCreatedSuccessfully(logger, maskedEmail, user.Id);
 
             return user.Id;
         }
