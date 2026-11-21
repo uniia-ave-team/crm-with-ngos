@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Crm.Api.DemoMode;
 using Crm.Api.Security;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.User;
@@ -26,6 +27,7 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     /// <returns>The generated invitation token.</returns>
     [HttpPost]
     [HasAccessRight(AccessRight.CreateUser)]
+    [DemoBlocked]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -62,6 +64,7 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A DTO containing the JWT access token and refresh token.</returns>
     [HttpPost("accept")]
+    [DemoBlocked]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<AuthTokensDto>> AcceptInvitation(
