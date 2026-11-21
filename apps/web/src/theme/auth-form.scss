@@ -1,0 +1,120 @@
+// Спільний вигляд полів, кнопок і повідомлень у формах входу та реєстрації: сторінки
+// `login`, `join`, `relogin` і вікно входу в акаунт. Класи глобальні, тож компоненти лише
+// ставлять їх на елементи, а власні стилі компонента лишаються для розкладки (відступи).
+
+// Червоний блок помилки над формою (відповідь сервера).
+.auth-error {
+  padding: 12px 16px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid #f1c0bb;
+  background: #fdeceb;
+  color: #a1281f;
+  font-family: var(--font-menu);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+// Рядок у блоці помилки, якщо їх кілька.
+.auth-error__line {
+  margin: 0;
+}
+
+// Підпис над полем.
+.auth-label {
+  font-family: var(--font-login-title);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--nav-fg-active);
+}
+
+// Поле (`ion-input fill="outline"`). Ionic додає власні стилі поля (`.sc-ion-input-md-h`,
+// `.input-fill-outline.sc-ion-input-md-h`) тегом `<style>` уже після цього файлу, тож класу
+// `.auth-input` замало: за однакової ваги перемагає Ionic (шрифт Roboto, кути 4px і його синя
+// й зелена підсвітка). Селектор із тегом і класом заповнення важчий за правила Ionic, тож поле
+// має свій вигляд незалежно від порядку стилів.
+$auth-input: "ion-input.auth-input.input-fill-outline";
+
+#{$auth-input} {
+  // Шрифт і розмір тексту в полях — як у решти застосунку (e-Ukraine, 15px),
+  // а не стандартні Roboto 16px з Ionic.
+  font-family: var(--font-menu);
+  font-size: 15px;
+  --border-radius: 8px;
+  --border-color: var(--nav-border);
+  --padding-start: 12px;
+  --padding-end: 12px;
+  --padding-top: 10px;
+  --padding-bottom: 10px;
+  // Підсвітка рамки (фокус, а також «валідно» після торкання) — зелений
+  // кнопки, а не стандартні синій/зелений Ionic.
+  --highlight-color-focused: #32670b;
+  --highlight-color-valid: #32670b;
+}
+
+// Помилка під полем: тулиться до поля (форми розділяють поля відступом 16px).
+.auth-field-error {
+  margin: -8px 0 0;
+  font-family: var(--font-menu);
+  font-size: 12px;
+  line-height: 1.4;
+  color: #a1281f;
+}
+
+// Головна кнопка форми (`ion-button`).
+.auth-submit {
+  --border-radius: 10px;
+  --background: #32670b;
+  --background-hover: #32670b;
+  --background-activated: #32670b;
+  --color: #ffffff;
+  --box-shadow: none;
+  margin: 0;
+  text-transform: none;
+  font-family: var(--font-menu);
+}
+
+// Другорядне посилання поруч із кнопкою («Забули пароль?»).
+.auth-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-login-body);
+  font-weight: 300;
+  font-size: 14px;
+  color: var(--nav-fg-inactive);
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: #32670b;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .auth-error {
+    border-color: #5a2b27;
+    background: #2a1413;
+    color: #ff9b92;
+  }
+
+  #{$auth-input} {
+    --highlight-color-focused: #478a7f;
+    --highlight-color-valid: #478a7f;
+  }
+
+  .auth-field-error {
+    color: #ff9b92;
+  }
+
+  .auth-submit {
+    --background: #478a7f;
+    --background-hover: #478a7f;
+    --background-activated: #478a7f;
+  }
+
+  .auth-link:hover,
+  .auth-link:focus-visible {
+    color: #478a7f;
+  }
+}

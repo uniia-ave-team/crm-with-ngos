@@ -1,11 +1,10 @@
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { IonicModule } from '@ionic/angular/lazy';
+import { provideIonicAngular } from '@ionic/angular';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../../assets/i18n/uk.json';
-import { LayoutModule } from '../layout.module';
 import { LayoutSection } from '../layout.service';
 import { SecondaryPanelComponent } from './secondary-panel.component';
 
@@ -15,8 +14,8 @@ describe('SecondaryPanelComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [IonicModule.forRoot(), LayoutModule],
-      providers: [provideRouter([]), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
+      imports: [SecondaryPanelComponent],
+      providers: [provideIonicAngular(), provideRouter([]), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
     }).compileComponents();
     // Тексти живуть в uk.json — беремо їх звідти, а не дублюємо.
     TestBed.inject(TranslateService).setTranslation('uk', uk);

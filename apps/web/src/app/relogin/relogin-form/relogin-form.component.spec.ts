@@ -1,59 +1,55 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { AccountsService } from '../../core/accounts/accounts.service';
+import { SignInFormComponent } from '../../core/auth/sign-in-form/sign-in-form.component';
 import { ConnectionService } from '../../core/connection/connection.service';
 import { DEFAULT_LOGIN_IMAGE } from '../../core/login-page-images/login-page-images.service';
-import { ReloginPageModule } from '../relogin.module';
 import { ReloginFormComponent } from './relogin-form.component';
 
 interface FormInternals {
-  address: { set(value: string): void };
-  email: { set(value: string): void };
-  password: { set(value: string): void };
-  submit(): Promise<void>;
+  onServerChange(origin: string | null): Promise<void>;
+  openApp(): Promise<void>;
 }
 
 describe('ReloginFormComponent', () => {
   const server = 'https://first.example:5065';
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.spyOn>;
-  let accounts: AccountsService;
+  let connection: ConnectionService;
   let images: string[];
   let outputs: string[];
 
   beforeEach(() => {
-    vi.useFakeTimers();
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
-      imports: [ReloginPageModule],
+      imports: [ReloginFormComponent],
       providers: [provideRouter([]), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }), provideHttpClient(), provideHttpClientTesting()],
     });
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('uk', uk);
     translate.use('uk');
     http = TestBed.inject(HttpTestingController);
-    accounts = TestBed.inject(AccountsService);
+    connection = TestBed.inject(ConnectionService);
     // Перша перевірка підключення, яку ConnectionService запускає сам при створенні, до форми не належить.
-    http.match(TestBed.inject(ConnectionService).apiHealthUrl());
+    http.match(connection.apiHealthUrl());
+    // Сервер перевіряє сама форма входу (її спек); тут він «недоступний», щоб не було запитів.
+    vi.spyOn(connection, 'probeApi').mockResolvedValue(false);
     navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     images = [];
     outputs = [];
   });
 
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
     localStorage.clear();
   });
 
-  const health = (origin: string) => `${origin}/health`;
   const randomImage = (origin: string) => `${origin}/api/v1/loginpageimages/random`;
 
   function open(inputs: { accountId?: string | null; server?: string; email?: string } = {}): ComponentFixture<ReloginFormComponent> {
@@ -70,33 +66,11 @@ describe('ReloginFormComponent', () => {
 
   const internals = (fixture: ComponentFixture<ReloginFormComponent>) => fixture.componentInstance as unknown as FormInternals;
   const element = (fixture: ComponentFixture<ReloginFormComponent>) => fixture.nativeElement as HTMLElement;
-  const submitButton = (fixture: ComponentFixture<ReloginFormComponent>) => element(fixture).querySelector<HTMLButtonElement>('.relogin-form__submit')!;
-  const fieldError = (fixture: ComponentFixture<ReloginFormComponent>) => element(fixture).querySelector('.relogin-form__field-error')?.textContent?.trim() ?? null;
-  const banner = (fixture: ComponentFixture<ReloginFormComponent>) => element(fixture).querySelector('.relogin-form__error')?.textContent?.trim() ?? null;
-
-  /** Проганяє таймери й чекає, поки відповіді потраплять у шаблон. */
-  async function settle(fixture: ComponentFixture<ReloginFormComponent>, ms = 0): Promise<void> {
-    await vi.advanceTimersByTimeAsync(ms);
-    TestBed.tick();
-    fixture.detectChanges();
-  }
-
-  /** Сервер здоровий, а зображення з нього — `image` (або його нема). */
-  async function serverHealthy(fixture: ComponentFixture<ReloginFormComponent>, origin = server, image: object | null = null): Promise<void> {
-    await settle(fixture);
-    http.expectOne(health(origin)).flush({ status: 'Healthy' });
-    await settle(fixture);
-    const request = http.expectOne(randomImage(origin));
-    if (image) {
-      request.flush(image);
-    } else {
-      request.flush({}, { status: 404, statusText: 'Not Found' });
-    }
-    await settle(fixture);
-  }
+  const signInForm = (fixture: ComponentFixture<ReloginFormComponent>) =>
+    fixture.debugElement.query(By.directive(SignInFormComponent)).componentInstance as SignInFormComponent;
 
   describe('the title row', () => {
-    it('has the title, the back button and the trash button for a saved account', async () => {
+    it('has the title, the back button and the trash button for a saved account', () => {
       const fixture = open({ accountId: 'a' });
       expect(element(fixture).querySelector('.relogin-form__title')!.textContent!.trim()).toBe(uk.relogin.form.title);
       expect(element(fixture).querySelector('.relogin-form__back')!.textContent!.trim()).toBe(uk.common.back);
@@ -104,206 +78,86 @@ describe('ReloginFormComponent', () => {
       expect(trash.querySelector('ion-icon')!.getAttribute('name')).toBe('trash-outline');
       expect(trash.getAttribute('title')).toBe(uk.nav.account.remove);
       expect(trash.getAttribute('aria-label')).toBe(uk.nav.account.remove);
-      await serverHealthy(fixture);
     });
 
-    it('has no trash button when an account is being added', async () => {
-      const fixture = open({ accountId: null });
-      expect(element(fixture).querySelector('.relogin-form__remove')).toBeNull();
-      await serverHealthy(fixture);
+    it('has no trash button when an account is being added', () => {
+      expect(element(open({ accountId: null })).querySelector('.relogin-form__remove')).toBeNull();
     });
 
-    it('reports the clicks on the back and the trash buttons', async () => {
+    it('reports the clicks on the back and the trash buttons', () => {
       const fixture = open({ accountId: 'a' });
       element(fixture).querySelector<HTMLElement>('.relogin-form__back')!.click();
       element(fixture).querySelector<HTMLElement>('.relogin-form__remove')!.click();
       expect(outputs).toEqual(['back', 'remove']);
-      await serverHealthy(fixture);
     });
   });
 
-  describe('the server of the form', () => {
-    it('is checked at once on opening, and the image of the server goes to the page when it is healthy', async () => {
-      const fixture = open({ email: 'first@organization.org' });
-      expect(submitButton(fixture).disabled).toBe(true);
-
-      await serverHealthy(fixture, server, { id: 'abc', url: '/files/login/abc.jpg' });
-
-      expect(images).toEqual([`${server}/files/login/abc.jpg`]);
-      expect(submitButton(fixture).disabled).toBe(false);
-      expect(fieldError(fixture)).toBeNull();
+  describe('the sign-in form', () => {
+    it('is the shared one, with the field of the server address, the given server, e-mail and key', () => {
+      const form = signInForm(open({ accountId: 'a', server, email: 'first@organization.org' }));
+      expect(form.withServer()).toBe(true);
+      expect(form.initialServer()).toBe(server);
+      expect(form.initialEmail()).toBe('first@organization.org');
+      expect(form.accountId()).toBe('a');
     });
 
-    it('is the default image when the server has none', async () => {
+    it('checks the connection of the new active account and opens the planner again after a sign-in', async () => {
       const fixture = open();
-      await serverHealthy(fixture);
-      expect(images).toEqual([DEFAULT_LOGIN_IMAGE]);
-      expect(submitButton(fixture).disabled).toBe(false);
-    });
+      const checkApi = vi.spyOn(connection, 'checkApi').mockResolvedValue('healthy');
+      const order: string[] = [];
+      checkApi.mockImplementation(async () => {
+        order.push('check');
+        return 'healthy';
+      });
+      navigate.mockImplementation(async () => {
+        order.push('navigate');
+        return true;
+      });
 
-    it('writes under the field that the server is unavailable, takes the default image and keeps the button disabled', async () => {
-      const fixture = open();
-      await settle(fixture);
-      http.expectOne(health(server)).error(new ProgressEvent('error'));
-      await settle(fixture);
+      await signInForm(fixture).afterSignIn()!();
 
-      expect(fieldError(fixture)).toBe(uk.login.step1.error.unreachable.replace('{{url}}', server));
-      expect(images).toEqual([DEFAULT_LOGIN_IMAGE]);
-      expect(submitButton(fixture).disabled).toBe(true);
-      http.expectNone(randomImage(server));
-    });
-
-    it('is checked again after every change, once the typing pauses, and the old answer is dropped', async () => {
-      const fixture = open();
-      await serverHealthy(fixture);
-      images.length = 0;
-
-      internals(fixture).address.set('https://second.example:5065');
-      await settle(fixture, 100);
-      internals(fixture).address.set('https://third.example:5065');
-      // Пауза ще не минула: запитів нема.
-      await settle(fixture, 100);
-      http.expectNone(() => true);
-      expect(submitButton(fixture).disabled).toBe(true);
-
-      await settle(fixture, 600);
-      http.expectNone(health('https://second.example:5065'));
-      http.expectOne(health('https://third.example:5065')).flush({ status: 'Healthy' });
-      await settle(fixture);
-      http.expectOne(randomImage('https://third.example:5065')).flush({}, { status: 404, statusText: 'Not Found' });
-      await settle(fixture);
-
-      expect(images).toEqual([DEFAULT_LOGIN_IMAGE]);
-      expect(submitButton(fixture).disabled).toBe(false);
-    });
-
-    it('drops the answer for an address that was changed while the request was running', async () => {
-      const fixture = open();
-      await settle(fixture);
-      const stale = http.expectOne(health(server));
-
-      internals(fixture).address.set('https://second.example:5065');
-      await settle(fixture, 600);
-      stale.flush({ status: 'Healthy' });
-      await settle(fixture);
-      // Відповідь для старої адреси ні на що не впливає: зображення зі старого сервера не просять.
-      http.expectNone(randomImage(server));
-
-      http.expectOne(health('https://second.example:5065')).error(new ProgressEvent('error'));
-      await settle(fixture);
-      expect(submitButton(fixture).disabled).toBe(true);
-    });
-
-    it('is not asked at all when the address does not look like an address: the text under the field and the default image', async () => {
-      const fixture = open({ server: 'not an address!' });
-      await settle(fixture, 600);
-      http.expectNone(() => true);
-      expect(fieldError(fixture)).toBe(uk.login.step1.error.invalid);
-      expect(images).toEqual([DEFAULT_LOGIN_IMAGE]);
-      expect(submitButton(fixture).disabled).toBe(true);
-    });
-  });
-
-  describe('signing in', () => {
-    const loginUrl = (origin = server) => `${origin}/api/v1/auth/login`;
-
-    async function ready(inputs: { accountId?: string | null; email?: string } = {}) {
-      const fixture = open(inputs);
-      await serverHealthy(fixture);
-      return fixture;
-    }
-
-    it('asks for the e-mail and the password first, and sends nothing', async () => {
-      const fixture = await ready();
-      await internals(fixture).submit();
-      fixture.detectChanges();
-      expect(Array.from(element(fixture).querySelectorAll('.relogin-form__field-error')).map((e) => e.textContent!.trim())).toEqual([
-        uk.login.form.error.emailRequired,
-        uk.login.form.error.passwordRequired,
-      ]);
-      http.expectNone(loginUrl());
-    });
-
-    it('sends nothing while the server is not known to be healthy', async () => {
-      const fixture = open({ email: 'first@organization.org' });
-      internals(fixture).password.set('secret');
-      await internals(fixture).submit();
-      await settle(fixture);
-      http.expectNone(loginUrl());
-    });
-
-    it('logs in on the server of the form, makes the account active and opens the planner again', async () => {
-      const fixture = await ready({ email: 'first@organization.org' });
-      internals(fixture).password.set('secret');
-
-      const submitting = internals(fixture).submit();
-      const request = http.expectOne(loginUrl());
-      expect(request.request.body).toEqual({ email: 'first@organization.org', password: 'secret' });
-      request.flush({ accessToken: 'a.b.c', refreshToken: 'r' });
-      // Далі підключення перевіряється вже на сервері нового акаунта.
-      await settle(fixture);
-      http.expectOne(health(server)).flush({ status: 'Healthy' });
-      await submitting;
-
-      expect(accounts.active()).toMatchObject({ server, email: 'first@organization.org' });
+      expect(order).toEqual(['check', 'navigate']);
       expect(navigate).toHaveBeenCalledWith('/planner', { onSameUrlNavigation: 'reload' });
     });
+  });
 
-    it('overwrites the saved account when the e-mail is the same, and adds a new one when it is not', async () => {
-      const saved = accounts.add({ server, accessToken: 'old', refreshToken: 'old', identity: 'user-1', email: 'first@organization.org' });
-      accounts.update(saved.id, { outdated: true });
-      accounts.setActive(null);
-
-      const same = await ready({ accountId: saved.id, email: 'First@Organization.org' });
-      internals(same).password.set('secret');
-      const first = internals(same).submit();
-      http.expectOne(loginUrl()).flush({ accessToken: 'a.b.c', refreshToken: 'r1' });
-      await settle(same);
-      http.expectOne(health(server)).flush({ status: 'Healthy' });
-      await first;
-      expect(accounts.accounts()).toHaveLength(1);
-      expect(accounts.accounts()[0]).toMatchObject({ id: saved.id, outdated: false, refreshToken: 'r1' });
-      same.destroy();
-
-      accounts.setActive(null);
-      const other = await ready({ accountId: saved.id, email: 'other@organization.org' });
-      internals(other).password.set('secret');
-      const second = internals(other).submit();
-      http.expectOne(loginUrl()).flush({ accessToken: 'd.e.f', refreshToken: 'r2' });
-      await settle(other);
-      http.expectOne(health(server)).flush({ status: 'Healthy' });
-      await second;
-      expect(accounts.accounts()).toHaveLength(2);
+  describe('the side image', () => {
+    it('comes from the server of the form when the form reports it healthy', async () => {
+      const fixture = open();
+      // Спершу форма сама повідомляє про свій сервер (тут він «недоступний») — чекаємо на це.
+      await vi.waitFor(() => expect(images).toEqual([DEFAULT_LOGIN_IMAGE]));
+      images.length = 0;
+      signInForm(fixture).serverChange.emit(server);
+      http.expectOne(randomImage(server)).flush({ id: 'abc', url: '/files/login/abc.jpg' });
+      await vi.waitFor(() => expect(images).toEqual([`${server}/files/login/abc.jpg`]));
     });
 
-    it.each([
-      [400, 'invalid'],
-      [401, 'unauthorized'],
-      [500, 'error'],
-    ])('keeps the form open and tells about the error when the server answers HTTP %i', async (status, key) => {
-      const fixture = await ready({ email: 'first@organization.org' });
-      internals(fixture).password.set('wrong');
-
-      const submitting = internals(fixture).submit();
-      http.expectOne(loginUrl()).flush({}, { status, statusText: 'x' });
-      await submitting;
-      fixture.detectChanges();
-
-      expect(banner(fixture)).toBe(uk.login.form.error[key as 'invalid']);
-      expect(navigate).not.toHaveBeenCalled();
-      expect(accounts.accounts()).toHaveLength(0);
-      // Ще раз можна надіслати: кнопка знову активна.
-      expect(submitButton(fixture).disabled).toBe(false);
+    it('is the default one when the server has no image', async () => {
+      const fixture = open();
+      images.length = 0;
+      const loading = internals(fixture).onServerChange(server);
+      http.expectOne(randomImage(server)).flush({}, { status: 404, statusText: 'Not Found' });
+      await loading;
+      expect(images).toEqual([DEFAULT_LOGIN_IMAGE]);
     });
 
-    it('tells that the server does not answer when the request fails on the network', async () => {
-      const fixture = await ready({ email: 'first@organization.org' });
-      internals(fixture).password.set('secret');
-      const submitting = internals(fixture).submit();
-      http.expectOne(loginUrl()).error(new ProgressEvent('error'));
-      await submitting;
-      fixture.detectChanges();
-      expect(banner(fixture)).toBe(uk.login.form.error.unreachable);
+    it('is the default one, with no request, when the form reports no healthy server', async () => {
+      const fixture = open();
+      images.length = 0;
+      await internals(fixture).onServerChange(null);
+      expect(images).toEqual([DEFAULT_LOGIN_IMAGE]);
+      http.expectNone(() => true);
+    });
+
+    it('drops the image of a server that was changed while the image was loading', async () => {
+      const fixture = open();
+      images.length = 0;
+      const first = internals(fixture).onServerChange(server);
+      const stale = http.expectOne(randomImage(server));
+      const second = internals(fixture).onServerChange(null);
+      stale.flush({ id: 'abc', url: '/files/login/abc.jpg' });
+      await Promise.all([first, second]);
+      expect(images).toEqual([DEFAULT_LOGIN_IMAGE]);
     });
   });
 });

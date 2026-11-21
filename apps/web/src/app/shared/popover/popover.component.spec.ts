@@ -1,9 +1,8 @@
-import { Component, signal } from '@angular/core';
+import { ApplicationRef, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
 import { PopoverComponent } from './popover.component';
-import { PopoverModule } from './popover.module';
 
 @Component({
   template: `
@@ -12,7 +11,7 @@ import { PopoverModule } from './popover.module';
       <p class="content">зміст</p>
     </app-popover>
   `,
-  imports: [PopoverModule],
+  imports: [PopoverComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {
@@ -115,6 +114,74 @@ describe('PopoverComponent', () => {
     expect(done).toBe(true);
   });
 
+  describe('opened again while it is still closing', () => {
+    /** Записує, які значення отримує `isOpen` елемента Ionic. */
+    const recordIsOpen = (element: HTMLElement) => {
+      const writes: unknown[] = [];
+      let value = (element as unknown as Record<string, unknown>)['isOpen'];
+      Object.defineProperty(element, 'isOpen', {
+        configurable: true,
+        get: () => value,
+        set: (next) => {
+          writes.push(next);
+          value = next;
+        },
+      });
+      return writes;
+    };
+    const fire = (ion: () => Record<string, unknown>, name: string) =>
+      (ion() as unknown as HTMLElement).dispatchEvent(new CustomEvent(name));
+
+    it('closed by Ionic (Esc, a click outside): opens again only after the closing ends, and stays open', async () => {
+      const { fixture, popover, ion, anchor } = render();
+      anchor.click();
+      fixture.detectChanges();
+      fire(ion, 'willDismiss');
+      fixture.detectChanges();
+      // Під час закриття вікно не привʼязане до елемента: його клацання не відкриє вікно в обхід компонента.
+      expect(ion()['trigger']).toBeUndefined();
+
+      anchor.click();
+      const writes = recordIsOpen(ion() as unknown as HTMLElement);
+      fire(ion, 'didDismiss');
+      await vi.waitFor(() => {
+        TestBed.inject(ApplicationRef).tick();
+        expect(popover.isOpen()).toBe(true);
+        expect(ion()['isOpen']).toBe(true);
+      });
+      // Спершу Ionic отримує «закрито», потім «відкрито»: зміну він помічає лише так.
+      expect(writes).toEqual([false, true]);
+      expect(ion()['trigger']).toBe('anchor');
+    });
+
+    it('closed by close(): opens again right after the closing ends', () => {
+      const { fixture, popover, ion, anchor } = render();
+      anchor.click();
+      fixture.detectChanges();
+      void popover.close();
+      fixture.detectChanges();
+      fire(ion, 'willDismiss');
+
+      anchor.click();
+      expect(popover.isOpen()).toBe(false);
+      fire(ion, 'didDismiss');
+      fixture.detectChanges();
+      expect(popover.isOpen()).toBe(true);
+      expect(ion()['isOpen']).toBe(true);
+    });
+
+    it('stays closed when nobody asked to open it again', () => {
+      const { fixture, popover, ion, anchor } = render();
+      anchor.click();
+      fixture.detectChanges();
+      fire(ion, 'willDismiss');
+      fire(ion, 'didDismiss');
+      fixture.detectChanges();
+      expect(popover.isOpen()).toBe(false);
+      expect(ion()['isOpen']).toBe(false);
+    });
+  });
+
   it('stops waiting for the closing animation after a timeout', async () => {
     vi.useFakeTimers();
     try {
@@ -213,7 +280,7 @@ describe('PopoverComponent', () => {
     @Component({
       template: `<button id="a" (click)="p.open($event)">x</button>
         <app-popover #p width="300px" compactWidth="min(340px, calc(100vw - 24px))">y</app-popover>`,
-      imports: [PopoverModule],
+      imports: [PopoverComponent],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
     })
     class WidthHostComponent {}
@@ -243,7 +310,7 @@ describe('PopoverComponent', () => {
     @Component({
       template: `<button id="a" (click)="p.open($event)">x</button>
         <app-popover #p width="300px">y</app-popover>`,
-      imports: [PopoverModule],
+      imports: [PopoverComponent],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
     })
     class StripHostComponent {}

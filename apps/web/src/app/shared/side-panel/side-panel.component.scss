@@ -42,7 +42,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 16px 0;
+  // Нижній відступ — щоб прокручений зміст ховався не впритик під кнопками шапки.
+  padding: 16px 16px 12px;
 }
 
 // Ліва частина шапки: те, що проєктується з атрибутом `sidePanelHeader`.
@@ -79,8 +80,8 @@
 .side-panel__body {
   flex: 1 1 auto;
   min-height: 0;
-  // Більший відступ від шапки (кнопка дії й хрестик) до змісту, зокрема до заголовка.
-  padding: 28px 16px 16px;
+  // Від кнопок шапки до змісту (зокрема заголовка) разом 28px: 12px шапки й 16px тут.
+  padding: 16px;
   overflow-y: auto;
 }
 

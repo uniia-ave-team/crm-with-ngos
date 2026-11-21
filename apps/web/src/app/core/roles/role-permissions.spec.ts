@@ -1,7 +1,8 @@
+import { PERMISSIONS, Permission } from '../auth/permissions';
 import { ALWAYS_GRANTED_PERMISSIONS, PERMISSION_GROUPS, PermissionGroup, canGrantGroup, claimsOfGroups, diffClaims } from './role-permissions';
 
 describe('role-permissions', () => {
-  const group = (...rights: string[]): PermissionGroup => ({ id: 'g', permissions: rights.map((right) => `Permissions.${right}`) });
+  const group = (...rights: string[]): PermissionGroup => ({ id: 'g', permissions: rights.map((right) => `Permissions.${right}` as Permission) });
 
   describe('canGrantGroup (a group can be given only with ALL of its permissions)', () => {
     it('is true when the user has the only permission of the group', () => {
@@ -38,11 +39,14 @@ describe('role-permissions', () => {
     expect(new Set(all).size).toBe(all.length);
   });
 
+  it('leaves no permission of the server out: each one is in a group, is given to every role, or is CreateNgo of the first user', () => {
+    const placed = [...PERMISSION_GROUPS.flatMap((candidate) => candidate.permissions), ...ALWAYS_GRANTED_PERMISSIONS, PERMISSIONS.createNgo];
+    expect([...placed].sort()).toEqual(Object.values(PERMISSIONS).sort());
+  });
+
   describe('the permissions without settings (they are given to every role)', () => {
-    it('are the ones that everybody has: the viewing of the table templates, not the creating of an organization nor the removed ViewNgo', () => {
+    it('are only the viewing of the table templates (not the creating of an organization nor the removed ViewNgo)', () => {
       expect(ALWAYS_GRANTED_PERMISSIONS).toEqual(['Permissions.ViewTableTemplate']);
-      expect(ALWAYS_GRANTED_PERMISSIONS).not.toContain('Permissions.CreateNgo');
-      expect(ALWAYS_GRANTED_PERMISSIONS).not.toContain('Permissions.ViewNgo');
     });
 
     it('are not among the permissions that can be chosen', () => {
@@ -65,10 +69,22 @@ describe('role-permissions', () => {
     });
 
     it('takes every permission of a merged group', () => {
-      const claims = claimsOfGroups(new Set(['manageTables']));
+      // «Керування таблицями» — підпункт, тож діє лише разом із «Переглядом таблиць» (одне право).
+      const claims = claimsOfGroups(new Set(['viewTables', 'manageTables']));
       expect(claims).toContain('Permissions.CreateCustomTable');
       expect(claims).toContain('Permissions.DeleteCustomRecord');
-      expect(claims).toHaveLength(7 + ALWAYS_GRANTED_PERMISSIONS.length);
+      expect(claims).toHaveLength(1 + 7 + ALWAYS_GRANTED_PERMISSIONS.length);
+    });
+
+    it('gives a sub-item only together with its item ("Managing roles" needs "Viewing colleagues")', () => {
+      expect(claimsOfGroups(new Set(['manageRoles']))).toEqual(ALWAYS_GRANTED_PERMISSIONS);
+      expect(claimsOfGroups(new Set(['editUsers']))).toEqual(ALWAYS_GRANTED_PERMISSIONS);
+      expect(claimsOfGroups(new Set(['manageRoles', 'viewUsers']))).toEqual([
+        'Permissions.ViewUser',
+        'Permissions.ManageRole',
+        'Permissions.AssignRoleToUser',
+        ...ALWAYS_GRANTED_PERMISSIONS,
+      ]);
     });
 
     it('ignores an unknown id and has no repeats', () => {

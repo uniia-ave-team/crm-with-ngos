@@ -2,12 +2,11 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { RolePillComponent } from './role-pill.component';
-import { RolePillModule } from './role-pill.module';
 import { roleColor } from './role-color';
 
 @Component({
   template: `<app-role-pill [name]="name()" [active]="active()" [icon]="icon()" />`,
-  imports: [RolePillModule],
+  imports: [RolePillComponent],
 })
 class HostComponent {
   readonly name = signal('Куратор');
@@ -98,7 +97,7 @@ describe('RolePillComponent', () => {
 
     it('goes away when it is taken away', () => {
       const { fixture, host, element } = render();
-      host.icon.set('ellipse');
+      host.icon.set('ellipse-outline');
       fixture.detectChanges();
       host.icon.set(null);
       fixture.detectChanges();

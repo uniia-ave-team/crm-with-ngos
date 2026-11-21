@@ -2,14 +2,14 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
+import { CreateNgoCommand, NgoDto, UpdateNgoCommand } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
+import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
+import { REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from '../http/timeouts';
 
 const API_NGO_PATH = '/api/v1/ngo';
-const REQUEST_TIMEOUT_MS = 10000;
-/** Завантаження файлу триває довше за звичайний запит. */
-const UPLOAD_TIMEOUT_MS = 60000;
 
 export type CreateNgoResult = 'created' | RequestFailure;
 export type UpdateNgoResult = 'updated' | RequestFailure;
@@ -35,16 +35,15 @@ export class NgoService {
    */
   async create(name: string): Promise<CreateNgoResult> {
     const url = `${this.connection.serverUrl()}${API_NGO_PATH}`;
-    console.log(`[NgoService] Створюю організацію: ${url}`);
+    // Акаунт, від імені якого йде запит: за час запиту активним може стати інший.
+    const accountId = this.accounts.activeId();
 
     try {
-      await firstValueFrom(this.http.post(url, { name }).pipe(timeout(REQUEST_TIMEOUT_MS)));
-      console.log('[NgoService] Організацію створено');
-      // Назва й логотип ГО — частина знімка активного акаунта (плитка у вікні
-      // акаунта). Щойно створена організація логотипа ще не має.
-      const id = this.accounts.activeId();
-      if (id) {
-        this.accounts.update(id, { ngoName: name, ngoLogoUrl: null });
+      await firstValueFrom(this.http.post(url, { name } satisfies CreateNgoCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      // Назва й логотип ГО — частина знімка акаунта (плитка у вікні акаунтів). Щойно
+      // створена організація логотипа ще не має.
+      if (accountId) {
+        this.accounts.update(accountId, { ngoName: name, ngoLogoUrl: null });
       }
       return 'created';
     } catch (error) {
@@ -59,18 +58,18 @@ export class NgoService {
    * `multipart/form-data`, поле `file`; потрібне право `UpdateNgo`; 200 без
    * тіла). Саме зображення, а не посилання: посилання на нього призначає
    * сервер, тож після успіху організація читається заново (`GET /api/v1/ngo`) і
-   * нове посилання потрапляє в знімок активного акаунта.
+   * нове посилання потрапляє в знімок акаунта. І те, і те — на сервері й в акаунті, що
+   * були активні, коли почалося завантаження, навіть якщо тим часом активним став інший.
    */
   async uploadLogo(file: File): Promise<UploadNgoLogoResult> {
-    const url = `${this.connection.serverUrl()}${API_NGO_PATH}/logo`;
+    const server = this.connection.serverUrl();
+    const url = `${server}${API_NGO_PATH}/logo`;
     const accountId = this.accounts.activeId();
-    console.log(`[NgoService] Завантажую логотип організації: ${url}`);
 
     try {
       const form = new FormData();
       form.append('file', file, file.name);
       await firstValueFrom(this.http.post(url, form).pipe(timeout(UPLOAD_TIMEOUT_MS)));
-      console.log('[NgoService] Логотип завантажено');
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[NgoService] Не вдалося завантажити логотип (${failure})`, error);
@@ -78,7 +77,7 @@ export class NgoService {
     }
 
     // Посилання на логотип призначив сервер: читаємо його й оновлюємо знімок.
-    const ngo = await this.fetch();
+    const ngo = await this.fetch(server);
     if (ngo && accountId) {
       this.accounts.update(accountId, { ngoName: ngo.name, ngoLogoUrl: ngo.logoUrl });
     }
@@ -97,11 +96,9 @@ export class NgoService {
   async update(name: string): Promise<UpdateNgoResult> {
     const url = `${this.connection.serverUrl()}${API_NGO_PATH}`;
     const accountId = this.accounts.activeId();
-    console.log(`[NgoService] Оновлюю організацію: ${url}`);
 
     try {
-      await firstValueFrom(this.http.put(url, { name }).pipe(timeout(REQUEST_TIMEOUT_MS)));
-      console.log('[NgoService] Організацію оновлено');
+      await firstValueFrom(this.http.put(url, { name } satisfies UpdateNgoCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
       if (accountId) {
         this.accounts.update(accountId, { ngoName: name });
       }
@@ -114,21 +111,21 @@ export class NgoService {
   }
 
   /**
-   * Організація (`GET <сервер>/api/v1/ngo`): назва й посилання на логотип.
-   * `null`, якщо її нема або користувач не має права на перегляд (403) чи запит
-   * не вдався — це лише прикраса плитки акаунта, тож не помилка.
+   * Організація (`GET <сервер>/api/v1/ngo`): назва й посилання на логотип. `server` — origin
+   * сервера (за замовчуванням поточний). `null`, якщо її нема або користувач не має права на
+   * перегляд (403) чи запит не вдався — це лише прикраса плитки акаунта, тож не помилка.
    */
-  async fetch(): Promise<NgoProfile | null> {
-    const url = `${this.connection.serverUrl()}${API_NGO_PATH}`;
+  async fetch(server: string = this.connection.serverUrl()): Promise<NgoProfile | null> {
+    const url = `${server}${API_NGO_PATH}`;
     try {
       const ngo = await firstValueFrom(
-        this.http.get<{ name?: string; logoUrl?: string | null }>(url).pipe(timeout(REQUEST_TIMEOUT_MS)),
+        this.http.get<Untrusted<NgoDto>>(url).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      const name = ngo?.name?.trim();
+      const name = typeof ngo?.name === 'string' ? ngo.name.trim() : '';
       if (!name) {
         return null;
       }
-      return { name, logoUrl: ngo.logoUrl?.trim() || null };
+      return { name, logoUrl: (typeof ngo?.logoUrl === 'string' && ngo.logoUrl.trim()) || null };
     } catch {
       return null;
     }

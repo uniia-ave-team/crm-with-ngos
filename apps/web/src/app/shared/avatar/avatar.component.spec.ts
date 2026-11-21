@@ -4,11 +4,11 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { ConnectionService } from '../../core/connection/connection.service';
-import { AvatarModule } from './avatar.module';
+import { AvatarComponent } from './avatar.component';
 
 @Component({
   template: `<app-avatar [firstName]="firstName()" [lastName]="lastName()" [avatarUrl]="avatarUrl()" [ngoName]="ngoName()" [outdated]="outdated()" />`,
-  imports: [AvatarModule],
+  imports: [AvatarComponent],
 })
 class HostComponent {
   readonly firstName = signal<string | null | undefined>('');
@@ -31,7 +31,6 @@ describe('AvatarComponent', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       imports: [HostComponent],

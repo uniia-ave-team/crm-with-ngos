@@ -1,4 +1,6 @@
 import { Component, ElementRef, Signal, effect, input, output, signal, viewChild } from '@angular/core';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 /**
  * Універсальне висувне бокове вікно: зміст довільний (`ng-content`), праворуч від
@@ -32,7 +34,7 @@ import { Component, ElementRef, Signal, effect, input, output, signal, viewChild
   templateUrl: './side-panel.component.html',
   styleUrls: ['./side-panel.component.scss'],
   host: { '(document:keydown.escape)': 'onEscape()' },
-  standalone: false,
+  imports: [IonIcon, TranslatePipe],
 })
 export class SidePanelComponent {
   /** Ширина на десктопі (CSS-значення). */

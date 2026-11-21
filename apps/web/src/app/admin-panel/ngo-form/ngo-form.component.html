@@ -58,9 +58,9 @@
           <span class="settings-avatar__name">{{ fileName() ?? ('admin.noFile' | translate) }}</span>
           <input #logoFile class="settings-avatar__input" type="file" [accept]="logoTypes" tabindex="-1" aria-hidden="true" (change)="onFileChosen($event)" />
         </div>
-        <p class="settings-avatar__hint">{{ 'admin.logoHint' | translate }}</p>
+        <p class="settings-avatar__hint">{{ 'admin.logoHint' | translate: { types: imageTypeNames | listText: 'or', size: imageMaxMegabytes } }}</p>
         @if (logoError(); as error) {
-          <p class="settings-field__error" role="alert">{{ 'admin.error.' + error | translate }}</p>
+          <p class="settings-field__error" role="alert">{{ 'admin.error.' + error | translate: { types: imageTypeNames | listText: 'and', size: imageMaxMegabytes } }}</p>
         }
         <!-- Рядок є завжди (лише прихований до вибору), щоб блок не міняв висоту. -->
         <p class="settings-avatar__hint" [class.settings-avatar__hint--hidden]="!previewUrl()">

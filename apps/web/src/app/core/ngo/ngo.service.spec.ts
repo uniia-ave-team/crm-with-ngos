@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { NgoService } from './ngo.service';
+import { addAccountWithSnapshot } from '../accounts/accounts.testing';
 
 describe('NgoService', () => {
   let http: HttpTestingController;
@@ -13,7 +14,6 @@ describe('NgoService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
@@ -39,17 +39,57 @@ describe('NgoService', () => {
 
   it('stores the name of the created NGO in the active account and clears its logo', async () => {
     const accounts = TestBed.inject(AccountsService);
-    const account = accounts.add({
-      server: TestBed.inject(ConnectionService).serverUrl(),
-      accessToken: 'a',
-      refreshToken: 'r',
-      identity: 'u',
-      ngoLogoUrl: '/old.png',
-    });
+    const account = addAccountWithSnapshot(
+      accounts,
+      { server: TestBed.inject(ConnectionService).serverUrl(), accessToken: 'a', refreshToken: 'r', identity: 'u' },
+      { ngoLogoUrl: '/old.png' },
+    );
     const result = service.create('Організація');
     http.expectOne(url).flush(null, { status: 201, statusText: 'Created' });
     expect(await result).toBe('created');
     expect(accounts.accounts().find((a) => a.id === account.id)).toMatchObject({ ngoName: 'Організація', ngoLogoUrl: null });
+  });
+
+  describe('when another account becomes active while the request is running', () => {
+    const otherServer = 'http://other.example:5065';
+
+    /** Акаунт на поточному сервері (активний) і ще один на іншому сервері. */
+    function twoAccounts() {
+      const accounts = TestBed.inject(AccountsService);
+      // Сервер, на який дивиться `url`: беремо до того, як зʼявиться активний акаунт на іншому.
+      const server = TestBed.inject(ConnectionService).serverUrl();
+      const other = accounts.add({ server: otherServer, accessToken: 'a2', refreshToken: 'r2', identity: 'other' });
+      const own = accounts.add({ server, accessToken: 'a', refreshToken: 'r', identity: 'own' });
+      return { accounts, own: own.id, other: other.id };
+    }
+
+    it('writes the name of the created NGO into the account that sent the request', async () => {
+      const { accounts, own, other } = twoAccounts();
+      const result = service.create('Організація');
+      accounts.setActive(other);
+      http.expectOne(url).flush(null, { status: 201, statusText: 'Created' });
+
+      expect(await result).toBe('created');
+      expect(accounts.accounts().map((a) => [a.id, a.ngoName])).toEqual([
+        [other, null],
+        [own, 'Організація'],
+      ]);
+    });
+
+    it('reads the organization again on the server of the upload, not on the one of the new active account', async () => {
+      const { accounts, own, other } = twoAccounts();
+      const result = service.uploadLogo(new File([new Uint8Array(3)], 'logo.png', { type: 'image/png' }));
+      accounts.setActive(other);
+      http.expectOne(`${url}/logo`).flush(null);
+      await vi.waitFor(() => http.expectOne(url)).then((request) => request.flush({ name: 'Організація', logoUrl: '/files/logo.png' }));
+      http.expectNone(`${otherServer}/api/v1/ngo`);
+
+      expect(await result).toBe('uploaded');
+      expect(accounts.accounts().map((a) => [a.id, a.ngoLogoUrl])).toEqual([
+        [other, null],
+        [own, '/files/logo.png'],
+      ]);
+    });
   });
 
   describe('uploadLogo', () => {
@@ -75,14 +115,11 @@ describe('NgoService', () => {
 
     it('reads the organization again after the upload and writes the new logo link into the active account', async () => {
       const accounts = TestBed.inject(AccountsService);
-      const account = accounts.add({
-        server: TestBed.inject(ConnectionService).serverUrl(),
-        accessToken: 'a',
-        refreshToken: 'r',
-        identity: 'u',
-        ngoName: 'Org',
-        ngoLogoUrl: null,
-      });
+      const account = addAccountWithSnapshot(
+        accounts,
+        { server: TestBed.inject(ConnectionService).serverUrl(), accessToken: 'a', refreshToken: 'r', identity: 'u' },
+        { ngoName: 'Org', ngoLogoUrl: null },
+      );
       const result = service.uploadLogo(png());
       http.expectOne(logoUrl()).flush(null, ok);
       const read = await vi.waitFor(() => http.expectOne(url));
@@ -133,14 +170,11 @@ describe('NgoService', () => {
 
     it('writes the new name into the active account and keeps its logo', async () => {
       const accounts = TestBed.inject(AccountsService);
-      const account = accounts.add({
-        server: TestBed.inject(ConnectionService).serverUrl(),
-        accessToken: 'a',
-        refreshToken: 'r',
-        identity: 'u',
-        ngoName: 'Old',
-        ngoLogoUrl: '/old.png',
-      });
+      const account = addAccountWithSnapshot(
+        accounts,
+        { server: TestBed.inject(ConnectionService).serverUrl(), accessToken: 'a', refreshToken: 'r', identity: 'u' },
+        { ngoName: 'Old', ngoLogoUrl: '/old.png' },
+      );
       const result = service.update('New');
       http.expectOne(url).flush(null, { status: 204, statusText: 'No Content' });
       await result;
@@ -150,8 +184,8 @@ describe('NgoService', () => {
     it('writes the new name into localStorage, in the record of the account that sent the request', async () => {
       const accounts = TestBed.inject(AccountsService);
       const server = TestBed.inject(ConnectionService).serverUrl();
-      const first = accounts.add({ server, accessToken: 'a', refreshToken: 'r', identity: 'first', ngoName: 'Old', ngoLogoUrl: '/old.png' });
-      const second = accounts.add({ server, accessToken: 'a2', refreshToken: 'r2', identity: 'second', ngoName: 'Other' });
+      const first = addAccountWithSnapshot(accounts, { server, accessToken: 'a', refreshToken: 'r', identity: 'first' }, { ngoName: 'Old', ngoLogoUrl: '/old.png' });
+      const second = addAccountWithSnapshot(accounts, { server, accessToken: 'a2', refreshToken: 'r2', identity: 'second' }, { ngoName: 'Other' });
       accounts.setActive(first.id);
 
       const result = service.update('New');
@@ -167,14 +201,11 @@ describe('NgoService', () => {
 
     it('does not touch localStorage when the request fails', async () => {
       const accounts = TestBed.inject(AccountsService);
-      const account = accounts.add({
-        server: TestBed.inject(ConnectionService).serverUrl(),
-        accessToken: 'a',
-        refreshToken: 'r',
-        identity: 'u',
-        ngoName: 'Old',
-        ngoLogoUrl: '/old.png',
-      });
+      const account = addAccountWithSnapshot(
+        accounts,
+        { server: TestBed.inject(ConnectionService).serverUrl(), accessToken: 'a', refreshToken: 'r', identity: 'u' },
+        { ngoName: 'Old', ngoLogoUrl: '/old.png' },
+      );
       const result = service.update('New');
       http.expectOne(url).flush({}, { status: 400, statusText: 'x' });
       await result;
@@ -191,13 +222,11 @@ describe('NgoService', () => {
       [500, 'error'],
     ])('maps HTTP %i to %s and leaves the account alone', async (status, expected) => {
       const accounts = TestBed.inject(AccountsService);
-      accounts.add({
-        server: TestBed.inject(ConnectionService).serverUrl(),
-        accessToken: 'a',
-        refreshToken: 'r',
-        identity: 'u',
-        ngoName: 'Old',
-      });
+      addAccountWithSnapshot(
+        accounts,
+        { server: TestBed.inject(ConnectionService).serverUrl(), accessToken: 'a', refreshToken: 'r', identity: 'u' },
+        { ngoName: 'Old' },
+      );
       const result = service.update('New');
       http.expectOne(url).flush({}, { status, statusText: 'x' });
       expect(await result).toBe(expected);

@@ -3,7 +3,6 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { SettingsPageModule } from '../settings.module';
 import { NotificationsPage } from './notifications.page';
 
 // Тексти сторінки живуть в uk.json — беремо їх звідти, а не дублюємо.
@@ -13,7 +12,7 @@ describe('NotificationsPage', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [SettingsPageModule],
+      imports: [NotificationsPage],
       providers: [provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);

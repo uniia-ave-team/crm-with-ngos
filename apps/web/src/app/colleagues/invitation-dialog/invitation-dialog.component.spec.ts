@@ -3,17 +3,18 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { ColleaguesPageModule } from '../colleagues.module';
 import { InvitationShare, InvitationStatus } from './invitation-dialog.component';
+import { InvitationDialogComponent } from './invitation-dialog.component';
 
 @Component({
-  template: `<app-invitation-dialog [email]="email()" [token]="token()" [expiresAt]="expiresAt()" [ngoName]="ngo()" [status]="status()" (copyLink)="copied.push($event)" (shareLink)="shared.push($event)" (dismiss)="dismissed = dismissed + 1" />`,
-  imports: [ColleaguesPageModule],
+  template: `<app-invitation-dialog [email]="email()" [token]="token()" [server]="server()" [expiresAt]="expiresAt()" [ngoName]="ngo()" [status]="status()" (copyLink)="copied.push($event)" (shareLink)="shared.push($event)" (dismiss)="dismissed = dismissed + 1" />`,
+  imports: [InvitationDialogComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {
   readonly email = signal('a@b.org');
   readonly token = signal('eyJ.header.payload.signature-of-a-long-token');
+  readonly server = signal(`${window.location.protocol}//${window.location.hostname}:5065`);
   readonly expiresAt = signal('2026-11-20T10:00:00Z');
   readonly ngo = signal('Організація');
   readonly status = signal<InvitationStatus>('idle');
@@ -54,6 +55,14 @@ describe('InvitationDialogComponent', () => {
     it('is the current domain, /join and the token as the parameter', () => {
       const { q } = render();
       expect(q('.invitation__link').textContent?.trim()).toBe(`${origin()}/join?token=eyJ.header.payload.signature-of-a-long-token`);
+    });
+
+    it('leads to the host of the server of the invitation (without its port) when it is another one', () => {
+      const { fixture, host, q } = render();
+      host.server.set('https://ngo.example.org:5065');
+      host.token.set('t');
+      fixture.detectChanges();
+      expect(q('.invitation__link').textContent?.trim()).toBe('https://ngo.example.org/join?token=t');
     });
 
     it('has the token encoded for the address', () => {

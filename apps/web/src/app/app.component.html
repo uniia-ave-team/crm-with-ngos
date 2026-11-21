@@ -54,6 +54,18 @@
     </div>
   }
 
+  <!-- Браузер не дав записати акаунти (сховище переповнене): зміни живуть лише до перезавантаження.
+       Попередження висить, поки його не закриють. -->
+  <ion-toast
+    class="storage-full"
+    color="warning"
+    position="bottom"
+    [isOpen]="accounts.storageFull()"
+    [message]="'common.storageFull' | translate"
+    [buttons]="[{ text: 'common.close' | translate, role: 'cancel' }]"
+    (didDismiss)="accounts.dismissStorageFull()"
+  ></ion-toast>
+
   <!-- Прелоадер на всю сторінку: поки шукаємо чинний акаунт серед збережених. -->
   <app-preloader [visible]="accountSearch()"></app-preloader>
 </ion-app>
