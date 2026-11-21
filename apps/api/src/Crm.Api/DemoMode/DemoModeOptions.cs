@@ -3,68 +3,51 @@ using System.ComponentModel.DataAnnotations;
 namespace Crm.Api.DemoMode;
 
 /// <summary>
-/// Represents configuration options for Demo Mode instances.
-/// When enabled, mutating operations run in dry-run mode (rolled back before committing),
-/// authentication refresh tokens are kept in a bounded in-memory store, and the database remains read-only.
+/// Configuration of the public demo mode. When enabled, every visitor who signs in works in a private,
+/// short-lived copy of the demo database (a sandbox), so visitors never see each other's changes.
 /// </summary>
 public sealed class DemoModeOptions
 {
     /// <summary>
-    /// Gets the configuration section name used to bind demo mode settings from appsettings.
+    /// The configuration section name.
     /// </summary>
     public const string Position = "DemoMode";
 
     /// <summary>
-    /// Gets the minimum number of path segments required for configured path prefixes
-    /// (for example <c>/api/v1/users</c>) so overly broad prefixes like <c>/</c> or <c>/api/v1</c>
-    /// cannot silently disable Demo Mode protection.
+    /// The minimum number of path segments a blocked path prefix must have (for example <c>/api/v1/users</c>).
     /// </summary>
     public const int MinimumPathSegmentCount = 3;
 
     /// <summary>
-    /// Gets the default request path prefixes excluded from Demo Mode restrictions.
-    /// </summary>
-    public static readonly string[] DefaultExcludedPaths =
-    [
-        "/api/v1/auth/login",
-        "/api/v1/auth/refresh-token",
-        "/api/v1/auth/logout",
-    ];
-
-    /// <summary>
-    /// Gets or sets a value indicating whether demo mode is enabled.
+    /// Gets or sets a value indicating whether demo mode is on.
     /// </summary>
     public bool Enabled { get; set; }
 
     /// <summary>
-    /// Gets or sets request path prefixes excluded from demo mode restrictions.
-    /// Defaults to authentication endpoints (<c>login</c>, <c>refresh-token</c>, <c>logout</c>).
-    /// When configured explicitly in appsettings or environment variables, replaces the defaults.
-    /// </summary>
-    [Required]
-    public string[] ExcludedPaths { get; set; } = [.. DefaultExcludedPaths];
-
-    /// <summary>
-    /// Gets or sets optional request path prefixes whose write operations are strictly blocked with
-    /// <c>403 Forbidden</c> (<c>DEMO_MODE_RESTRICTED</c>) when demo mode is enabled.
-    /// Defaults to an empty array so all mutating endpoints execute in transactional dry-run mode.
+    /// Gets or sets extra path prefixes whose write requests are rejected in demo mode,
+    /// in addition to the endpoints marked with <see cref="DemoBlockedAttribute"/>.
     /// </summary>
     [Required]
     public string[] DemoBlockedPaths { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the maximum number of active refresh tokens retained in the bounded in-memory
-    /// Demo Mode token store to prevent memory exhaustion under repeated public demo logins.
+    /// Gets or sets the sandbox limits.
     /// </summary>
-    [Range(100, 100_000)]
-    public int MaxInMemoryRefreshTokens { get; set; } = 10_000;
+    [Required]
+    public DemoSandboxOptions Sandbox { get; set; } = new();
 
     /// <summary>
-    /// Normalizes a path prefix by trimming whitespace, ensuring a single leading <c>'/'</c>,
-    /// and removing trailing slashes (except for root <c>"/"</c>).
+    /// Gets or sets the demo accounts shown on the sign-in page. Their credentials are public by design.
+    /// When empty, <see cref="DemoAccountOptions.Defaults"/> are used.
     /// </summary>
-    /// <param name="path">The raw path prefix string.</param>
-    /// <returns>The normalized path prefix, or <see langword="null"/> if <paramref name="path"/> is null or whitespace.</returns>
+    [Required]
+    public DemoAccountOptions[] Accounts { get; set; } = [];
+
+    /// <summary>
+    /// Normalizes a path prefix: adds the leading slash and removes the trailing one.
+    /// </summary>
+    /// <param name="path">The configured path prefix.</param>
+    /// <returns>The normalized prefix, or <c>null</c> when the input is empty.</returns>
     public static string? NormalizePathPrefix(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -73,6 +56,7 @@ public sealed class DemoModeOptions
         }
 
         string trimmed = "/" + path.Trim().TrimStart('/');
+
         if (trimmed.Length > 1)
         {
             trimmed = trimmed.TrimEnd('/');
@@ -82,12 +66,10 @@ public sealed class DemoModeOptions
     }
 
     /// <summary>
-    /// Determines whether a normalized path prefix is valid and specific enough for segment matching
-    /// (must start with <c>'/'</c>, contain no query strings or fragments, and have at least
-    /// <see cref="MinimumPathSegmentCount"/> non-empty path segments).
+    /// Checks that a path prefix is specific enough to be used as a blocked path.
     /// </summary>
-    /// <param name="path">The path prefix to validate.</param>
-    /// <returns><see langword="true"/> if valid; otherwise, <see langword="false"/>.</returns>
+    /// <param name="path">The normalized path prefix.</param>
+    /// <returns><c>true</c> when the prefix is valid.</returns>
     public static bool IsValidPathPrefix(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) ||
@@ -99,24 +81,28 @@ public sealed class DemoModeOptions
         }
 
         int segmentCount = path.Split('/', StringSplitOptions.RemoveEmptyEntries).Length;
+
         return segmentCount >= MinimumPathSegmentCount;
     }
 
     /// <summary>
-    /// Normalizes all configured path prefixes in <see cref="ExcludedPaths"/> and <see cref="DemoBlockedPaths"/>.
+    /// Gets the configured demo accounts, or the defaults when none are configured.
+    /// </summary>
+    /// <returns>The effective list of demo accounts.</returns>
+    public IReadOnlyList<DemoAccountOptions> GetEffectiveAccounts() =>
+        Accounts is { Length: > 0 } ? Accounts : DemoAccountOptions.Defaults;
+
+    /// <summary>
+    /// Normalizes all configured path prefixes in place.
     /// </summary>
     public void NormalizePaths()
     {
-        ExcludedPaths = NormalizeArray(ExcludedPaths);
-        DemoBlockedPaths = NormalizeArray(DemoBlockedPaths);
-    }
-
-    private static string[] NormalizeArray(string[]? paths) =>
-        paths is null
+        DemoBlockedPaths = DemoBlockedPaths is null
             ? []
-            : [.. paths
+            : [.. DemoBlockedPaths
                 .Select(NormalizePathPrefix)
                 .Where(static p => p is not null)
                 .Select(static p => p!)
                 .Distinct(StringComparer.OrdinalIgnoreCase)];
+    }
 }

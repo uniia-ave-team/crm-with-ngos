@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Crm.Api.DemoMode;
 using Crm.Api.Dtos;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.User.Commands;
@@ -26,6 +27,7 @@ public class AuthController(
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A DTO containing the JWT access token and refresh token.</returns>
     [HttpPost("login")]
+    [DemoSessionEndpoint(DemoSessionEndpointKind.SignIn)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -44,6 +46,7 @@ public class AuthController(
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A new pair of access and refresh tokens.</returns>
     [HttpPost("refresh-token")]
+    [DemoSessionEndpoint(DemoSessionEndpointKind.Refresh)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
