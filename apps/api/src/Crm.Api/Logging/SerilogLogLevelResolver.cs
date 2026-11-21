@@ -1,4 +1,4 @@
-using Crm.Api.Extensions;
+using Crm.Application.Extensions;
 using Serilog.Events;
 
 namespace Crm.Api.Logging;
@@ -14,9 +14,9 @@ public static class SerilogLogLevelResolver
         : ResolveByStatusCode(httpContext.Response.StatusCode);
 
     private static LogEventLevel ResolveByException(Exception exception) =>
-        exception.MapToStatusCode() >= StatusCodes.Status500InternalServerError
-            ? LogEventLevel.Error
-            : LogEventLevel.Warning;
+        exception.IsClientError()
+            ? LogEventLevel.Warning
+            : LogEventLevel.Error;
 
     private static LogEventLevel ResolveByStatusCode(int statusCode) => statusCode switch
     {

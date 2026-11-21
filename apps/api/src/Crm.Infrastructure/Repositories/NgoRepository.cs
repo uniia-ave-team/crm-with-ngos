@@ -73,6 +73,7 @@ public class NgoRepository(
     /// <exception cref="NotFoundException">Thrown if the NGO is not found in the database.</exception>
     public async Task<Guid> GetIdAsync(CancellationToken cancellationToken = default)
         => await DbSet
+            .OrderBy(n => n.Id)
             .Select(n => (Guid?)n.Id)
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new EntityNotFoundException<Ngo>();
