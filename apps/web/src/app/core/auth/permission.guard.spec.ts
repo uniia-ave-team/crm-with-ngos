@@ -8,6 +8,7 @@ import { ConnectionService } from '../connection/connection.service';
 import { CurrentUserService } from '../users/current-user.service';
 import { requireAnyPermission } from './permission.guard';
 import { ADMIN_PANEL_PERMISSIONS } from './permissions';
+import { addAccountWithSnapshot } from '../accounts/accounts.testing';
 
 describe('requireAnyPermission', () => {
   let http: HttpTestingController;
@@ -17,7 +18,6 @@ describe('requireAnyPermission', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
@@ -44,7 +44,7 @@ describe('requireAnyPermission', () => {
 
   /** Профіль уже в памʼяті, а в знімку акаунта лежать `stored` права. */
   async function signedIn(stored: string[]): Promise<void> {
-    accounts.add({ server, accessToken: jwt(), refreshToken: 'r', identity: 'user-1', permissions: stored });
+    addAccountWithSnapshot(accounts, { server, accessToken: jwt(), refreshToken: 'r', identity: 'user-1' }, { permissions: stored });
     const confirmed = TestBed.inject(CurrentUserService).ensure();
     http.expectOne(meUrl()).flush(profile);
     await confirmed;

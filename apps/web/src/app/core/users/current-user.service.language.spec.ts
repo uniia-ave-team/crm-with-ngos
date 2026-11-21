@@ -27,7 +27,6 @@ describe('CurrentUserService and the interface language', () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem('yavir.language', 'uk');
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting(), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],

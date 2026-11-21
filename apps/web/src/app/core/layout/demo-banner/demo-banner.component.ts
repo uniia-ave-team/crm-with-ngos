@@ -1,4 +1,5 @@
 import { Component, computed, inject } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { ConnectionService } from '../../connection/connection.service';
 import { DemoSessionService, formatCountdown } from '../../demo/demo-session.service';
@@ -15,7 +16,7 @@ import { DemoSessionService, formatCountdown } from '../../demo/demo-session.ser
   selector: 'app-demo-banner',
   templateUrl: './demo-banner.component.html',
   styleUrls: ['./demo-banner.component.scss'],
-  standalone: false,
+  imports: [TranslatePipe],
 })
 export class DemoBannerComponent {
   private readonly session = inject(DemoSessionService);

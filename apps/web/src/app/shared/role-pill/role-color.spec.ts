@@ -1,4 +1,4 @@
-import { contrastWithWhite, relativeLuminance } from '../avatar/avatar-color';
+import { contrastWithWhite, relativeLuminance } from '../color/contrast';
 import { DARK_PAGE_BACKGROUND, roleColor, roleLetterSums } from './role-color';
 
 const rgb = (hex: string): [number, number, number] => [

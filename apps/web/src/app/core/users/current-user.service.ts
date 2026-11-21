@@ -2,19 +2,20 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Injector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { AccountRestoreService } from '../accounts/account-restore.service';
+import { UserProfileDto } from '../../api/generated/models';
 import { AccountThumbnail, AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
+import { Untrusted } from '../http/api-contract';
 import { ProtectedImageService } from '../http/protected-image.service';
+import { REQUEST_TIMEOUT_MS } from '../http/timeouts';
 import { LanguageService } from '../i18n/language.service';
 import { ThumbnailFit, ThumbnailService } from '../images/thumbnail.service';
 import { NgoService } from '../ngo/ngo.service';
-import { UserProfile, sanitizeRoles } from './user-profile';
+import { UserProfile, sanitizeRoles, toUserProfile } from './user-profile';
 import { UsersService } from './users.service';
 
 const API_CURRENT_USER_PATH = '/api/v1/users/me';
-const REQUEST_TIMEOUT_MS = 10000;
 
 /** Профіль поточного користувача (`GET /api/v1/users/me`). */
 export type CurrentUser = UserProfile;
@@ -23,8 +24,8 @@ export type CurrentUser = UserProfile;
  * Результат перевірки входу:
  * - `ok` — сервер підтвердив токен, профіль завантажено;
  * - `unauthorized` — сервер не прийняв токени (навіть після їх оновлення) або їх нема;
- * - `unavailable` — перевірити не вдалося (мережа, 5xx, 404): це не доказ, що
- *   користувач не увійшов.
+ * - `unavailable` — перевірити не вдалося (мережа, 5xx, 404, відповідь не за контрактом,
+ *   або поки йшов запит, активним став інший акаунт): це не доказ, що користувач не увійшов.
  */
 export type CurrentUserResult = 'ok' | 'unauthorized' | 'unavailable';
 
@@ -34,10 +35,15 @@ const AVATAR_THUMBNAIL_SIZE = 96;
 const LOGO_THUMBNAIL_SIZE = 64;
 
 /**
- * Поточний користувач. Перший запит `GET /api/v1/users/me` одночасно
- * перевіряє, що вхід актуальний (токен чинний, користувач активний), і дає
- * профіль, на основі якого далі буде будуватися меню. Профіль живе в памʼяті
- * до кінця сесії (вихід або новий вхід скидає його).
+ * Поточний користувач — профіль активного акаунта. Запит `GET /api/v1/users/me` одночасно
+ * перевіряє, що вхід актуальний (токен чинний, користувач активний), і дає профіль для меню,
+ * аватара й форм. Разом із ним підтягуються права (`/users/me/permissions`) і організація
+ * (`/ngo`) — усе це йде в знімок акаунта.
+ *
+ * Профіль перепитується при кожній зміні сторінки (`authGuard` → `reload`), тож зміни в БД
+ * потрапляють в інтерфейс без перезавантаження. Коли активним стає інший акаунт, профіль
+ * попереднього забувається; новий завантажує той, хто зробив акаунт активним (пошук чи
+ * перемикання акаунта, страж сторінки після входу).
  */
 @Injectable({ providedIn: 'root' })
 export class CurrentUserService {
@@ -60,7 +66,8 @@ export class CurrentUserService {
   /** Права активного акаунта (з його знімка в `localStorage`); порожньо, доки не отримано. */
   readonly permissions: Signal<readonly string[]> = computed(() => this.accounts.active()?.permissions ?? []);
 
-  private inFlight: Promise<CurrentUserResult> | null = null;
+  /** Запити профілю, що тривають: по одному на акаунт. */
+  private readonly requestsInFlight = new Map<string, Promise<CurrentUserResult>>();
   /** Останнє оновлення прав у знімку акаунта (завершене, якщо його не було). */
   private permissionsPromise: Promise<void> = Promise.resolve();
   /** Акаунт (`AuthService.sessionId`), для якого завантажено `user`. */
@@ -74,16 +81,13 @@ export class CurrentUserService {
     const session = this.auth.sessionId();
     return session !== null && this.userSignal() !== null && this.profileSession() === session;
   });
-  /** Активний акаунт, яким ми були востаннє поза пошуком акаунта: з нього видно, що саме змінилось. */
-  private previousSession: string | null = null;
-
   constructor() {
     // Інший акаунт (вихід, вхід, перемикання) — профіль попереднього забуваємо.
     effect(() => {
       const session = this.auth.sessionId();
       // Під час пошуку акаунта (`AccountRestoreService`) і перемикання по плитці активний
       // акаунт змінюється тимчасово й ці зміни не наші: профіль для них вантажить сам пошук.
-      const searching = this.injector.get(AccountRestoreService).searching();
+      const searching = this.accounts.switching();
       untracked(() => {
         // Тимчасове перемикання профіль не скидає: аватар і меню лишаються попередніми, доки
         // перемикання не вдалося (тоді профіль новий, а коли ні — попередній лишається як був).
@@ -94,14 +98,6 @@ export class CurrentUserService {
         // спрацювати вже після відповіді сервера).
         if (this.profileSession() !== session) {
           this.userSignal.set(null);
-        }
-        const previous = this.previousSession;
-        this.previousSession = session;
-        // Активним став інший акаунт без нашої участі (вкладка не змінювала сторінку: інша
-        // вкладка перемкнула акаунт, і подія `storage` дійшла сюди): без нового запиту профіль
-        // лишився б порожнім аж до наступної зміни сторінки, а аватар — без імені й зображення.
-        if (previous && session && previous !== session && this.profileSession() !== session && this.auth.hasTokens()) {
-          void this.ensure();
         }
       });
     });
@@ -120,8 +116,8 @@ export class CurrentUserService {
    * зміни в БД (дані профілю, назва й логотип ГО) потрапляють в інтерфейс без
    * перезавантаження. Викликається при кожній зміні сторінки (`authGuard`).
    * Невдалий запит нічого не скидає: профіль лишається попереднім, а
-   * недійсні токени обробляє `authInterceptor` (оновлення або вихід). Запити,
-   * що збіглися в часі, діляться одним.
+   * недійсні токени обробляє `authInterceptor` (оновлення або вихід). Запити
+   * для одного акаунта, що збіглися в часі, діляться одним.
    */
   reload(): Promise<CurrentUserResult> {
     if (!this.auth.hasTokens()) {
@@ -140,32 +136,45 @@ export class CurrentUserService {
     return this.permissionsPromise;
   }
 
+  /**
+   * Запит профілю активного акаунта. Спільний лише для того самого акаунта: інакше перевірка
+   * одного акаунта отримала б відповідь, що стосується іншого.
+   */
   private request(): Promise<CurrentUserResult> {
-    if (!this.inFlight) {
-      this.inFlight = this.load().finally(() => {
-        this.inFlight = null;
-      });
+    const session = this.auth.sessionId();
+    if (session === null) {
+      return Promise.resolve('unauthorized');
     }
-    return this.inFlight;
+    let inFlight = this.requestsInFlight.get(session);
+    if (!inFlight) {
+      inFlight = this.load(session).finally(() => {
+        this.requestsInFlight.delete(session);
+      });
+      this.requestsInFlight.set(session, inFlight);
+    }
+    return inFlight;
   }
 
-  private async load(): Promise<CurrentUserResult> {
+  private async load(session: string): Promise<CurrentUserResult> {
     const url = `${this.connection.serverUrl()}${API_CURRENT_USER_PATH}`;
-    console.log(`[CurrentUserService] Запитую поточного користувача: ${url}`);
-    const session = this.auth.sessionId();
 
     try {
       // Токен додає, а за потреби оновлює authInterceptor.
-      const user = await firstValueFrom(this.http.get<CurrentUser>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
-      // Поки йшов запит, акаунт змінився (вихід) — результат не береться.
-      if (session === null || session !== this.auth.sessionId()) {
-        return 'unauthorized';
+      const body = await firstValueFrom(this.http.get<Untrusted<UserProfileDto>>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      // Поки йшов запит, активним став інший акаунт — профіль уже не його. Це не відмова
+      // сервера: токени цього акаунта тут ні до чого, тож не `unauthorized`.
+      if (session !== this.auth.sessionId()) {
+        return 'unavailable';
+      }
+      const user = toUserProfile(body);
+      if (!user) {
+        console.warn('[CurrentUserService] Профіль не відповідає контракту', body);
+        return 'unavailable';
       }
       this.profileSession.set(session);
       this.applyProfile(session, user);
       void this.syncNgo(session);
       this.permissionsPromise = this.syncPermissions(session);
-      console.log('[CurrentUserService] Вхід підтверджено', user);
       return 'ok';
     } catch (error) {
       if (error instanceof HttpErrorResponse && error.status === 401) {

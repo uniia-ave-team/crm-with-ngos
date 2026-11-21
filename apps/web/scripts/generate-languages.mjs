@@ -13,7 +13,7 @@ const i18nDir = join(root, 'src', 'assets', 'i18n');
 const output = join(root, 'src', 'app', 'core', 'i18n', 'languages.generated.ts');
 
 /** Список мов за файлами в каталозі: `[{ code, name }]`, за кодом. */
-export function collectLanguages(directory = i18nDir) {
+function collectLanguages(directory = i18nDir) {
   return readdirSync(directory)
     .filter((file) => file.endsWith('.json'))
     .map((file) => {
@@ -30,7 +30,7 @@ export function collectLanguages(directory = i18nDir) {
     .sort((a, b) => a.code.localeCompare(b.code));
 }
 
-export function render(languages) {
+function render(languages) {
   const items = languages.map(({ code, name }) => `  { code: ${JSON.stringify(code)}, name: ${JSON.stringify(name)} },`);
   return `// Згенеровано scripts/generate-languages.mjs з src/assets/i18n/*.json — не редагувати.
 
@@ -47,10 +47,10 @@ ${items.join('\n')}
 `;
 }
 
-// Запуск напряму (`node scripts/generate-languages.mjs`): записує файл.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const languages = collectLanguages();
-  mkdirSync(dirname(output), { recursive: true });
-  writeFileSync(output, render(languages));
-  console.log(`[generate-languages] ${languages.map((l) => `${l.code} (${l.name})`).join(', ')}`);
-}
+// Скрипт завжди записує файл: його ніхто не імпортує, тож перевіряти, чи запущено його напряму,
+// не треба (така перевірка порівнювала б шляхи й мовчки нічого не робила б, якби вони не
+// збіглися — через посилання на теку чи регістр літери диска на Windows).
+const languages = collectLanguages();
+mkdirSync(dirname(output), { recursive: true });
+writeFileSync(output, render(languages));
+console.log(`[generate-languages] ${languages.map((l) => `${l.code} (${l.name})`).join(', ')}`);

@@ -1,16 +1,21 @@
 import { Component, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
+import { AvatarComponent } from '../../../shared/avatar/avatar.component';
 import { PopoverComponent } from '../../../shared/popover/popover.component';
-import { AccountTile, toAccountTiles } from '../../../shared/account-avatar/account-tile';
-import { AddAccountComponent } from '../add-account/add-account.component';
+import { AccountTile, toAccountTiles } from '../../accounts/account-avatar/account-tile';
+import { needsSignIn } from '../../accounts/account-login';
 import { AccountRestoreService } from '../../accounts/account-restore.service';
 import { AccountsService } from '../../accounts/accounts.service';
-import { AuthService, REDIRECT_URL } from '../../auth/auth.service';
+import { REDIRECT_URL } from '../../auth/auth.service';
 import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
-import { mobileLogoBase } from '../../i18n/mobile-logo';
+import { mobileLogoBase } from '../../i18n/logos';
 import { CurrentUserService } from '../../users/current-user.service';
+import { AccountMenuComponent } from '../account-menu/account-menu.component';
+import { AddAccountComponent } from '../add-account/add-account.component';
 
 interface NavItem {
   readonly labelKey: string;
@@ -32,13 +37,21 @@ interface NavItem {
   selector: 'app-primary-nav',
   templateUrl: './primary-nav.component.html',
   styleUrls: ['./primary-nav.component.scss'],
-  standalone: false,
+  imports: [
+    IonIcon,
+    RouterLink,
+    RouterLinkActive,
+    AvatarComponent,
+    PopoverComponent,
+    AccountMenuComponent,
+    AddAccountComponent,
+    TranslatePipe,
+  ],
 })
 export class PrimaryNavComponent {
   private readonly languageService = inject(LanguageService);
   private readonly currentUser = inject(CurrentUserService);
   private readonly router = inject(Router);
-  private readonly auth = inject(AuthService);
   private readonly accountsStore = inject(AccountsService);
   private readonly restore = inject(AccountRestoreService);
 
@@ -64,7 +77,7 @@ export class PrimaryNavComponent {
 
   /**
    * Акаунт, який показують рейл і меню: слідує за активним, але не під час пошуку акаунта й
-   * перемикання по плитці (`AccountRestoreService.searching`). Там активним на мить стає
+   * перемикання по плитці (`AccountsService.switching`). Там активним на мить стає
    * акаунт, на який перемикаються, і якби меню йшло за ним, аватар і пункти мигтіли б чужими,
    * а коли перемикання не вдалось — ще й лишились би порожніми. Змінюється лише після завершення.
    */
@@ -78,7 +91,7 @@ export class PrimaryNavComponent {
   constructor() {
     effect(() => {
       const id = this.accountsStore.activeId();
-      const searching = this.restore.searching();
+      const searching = this.accountsStore.switching();
       untracked(() => {
         if (!searching) {
           this.shownAccountId.set(id);
@@ -127,12 +140,12 @@ export class PrimaryNavComponent {
   /**
    * Клацання по плитці акаунта (вікно закривається):
    * - активний — нічого;
-   * - застарілий через відхилені токени (`outdated`, не `unavailable`) — вікно «Додати
-   *   акаунт» із його сервером, поштою й ключем: увійти знову (збіглася пошта — акаунт
-   *   перезапишеться);
-   * - чинний або застарілий через недоступний сервер — перемикаємось (`activate`: перевірка,
-   *   у тому числі повторне оновлення токенів) і відкриваємо `REDIRECT_URL`. Не вдалось —
-   *   те саме вікно «Додати акаунт»; активним лишається попередній акаунт.
+   * - застарілий (`outdated`, сервер відхилив токени; `needsSignIn`), хай навіть і
+   *   недоступний, — вікно «Додати акаунт» із його сервером, поштою й ключем: увійти знову
+   *   (збіглася пошта — акаунт перезапишеться);
+   * - інший (чинний чи лише недоступний) — перемикаємось (`activate`: перевірка, у тому числі
+   *   повторне оновлення токенів) і відкриваємо `REDIRECT_URL`. Не вдалось — те саме вікно
+   *   «Додати акаунт»; активним лишається попередній акаунт.
    */
   protected async selectAccount(popover: PopoverComponent, dialog: AddAccountComponent, tile: AccountTile): Promise<void> {
     await popover.close();
@@ -143,7 +156,7 @@ export class PrimaryNavComponent {
     if (!account) {
       return;
     }
-    if (account.outdated && !account.unavailable) {
+    if (needsSignIn(account)) {
       dialog.open(account.email, account.id, account.server);
       return;
     }
@@ -168,7 +181,7 @@ export class PrimaryNavComponent {
    */
   protected async signOut(popover: PopoverComponent): Promise<void> {
     await popover.close();
-    await this.auth.logout();
+    await this.restore.signOut();
   }
 
   // Мобільний вордмарк-логотип (з текстом) є в окремих мовних варіантах

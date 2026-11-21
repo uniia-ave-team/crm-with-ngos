@@ -1,14 +1,59 @@
+import { PERMISSIONS, Permission } from '../auth/permissions';
+
 /** Група прав, яку в ролі вмикають одним перемикачем (`id` — ключ назви в мовному файлі). */
 export interface PermissionGroup {
   readonly id: string;
-  /** Права групи (значення `AccessRight` сервера з префіксом `Permissions.`). */
-  readonly permissions: readonly string[];
+  /** Права групи (значення `PERMISSIONS`). */
+  readonly permissions: readonly Permission[];
+  /**
+   * Пункт, від якого цей залежить (`id` групи): без нього цей пункт вимкнений і не входить у
+   * права ролі. У формі він показаний підпунктом одразу під своїм.
+   */
+  readonly parent?: string;
 }
 
-const group = (id: string, ...rights: string[]): PermissionGroup => ({
-  id,
-  permissions: rights.map((right) => `Permissions.${right}`),
-});
+const groupOf = (id: string, ...permissions: Permission[]): PermissionGroup => ({ id, permissions });
+const subgroupOf = (parent: string, id: string, ...permissions: Permission[]): PermissionGroup => ({ id, permissions, parent });
+
+/**
+ * Права, які вибирають у ролі, у порядку форми: кожна група складається із загальних прав
+ * (`PERMISSIONS`). Права, що є в усіх чи видаються автоматично (`CreateNgo`,
+ * `ViewTableTemplate`), сюди не входять.
+ */
+export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
+  // Усе, що стосується колег, — підпункти перегляду колег: без нього не відкрити сторінку колег
+  // (там і ролі), тож решта прав без нього нічого не дає.
+  groupOf('viewUsers', PERMISSIONS.viewUser),
+  subgroupOf('viewUsers', 'viewEmergencyContacts', PERMISSIONS.viewEmergencyContact),
+  subgroupOf('viewUsers', 'viewCustomFields', PERMISSIONS.viewCustomFields),
+  subgroupOf('viewUsers', 'editUsers', PERMISSIONS.createUser, PERMISSIONS.updateUser),
+  subgroupOf('viewUsers', 'resetPasswords', PERMISSIONS.canResetPassword),
+  subgroupOf('viewUsers', 'disableUsers', PERMISSIONS.disableUser, PERMISSIONS.deleteUser),
+  subgroupOf('viewUsers', 'manageRoles', PERMISSIONS.manageRole, PERMISSIONS.assignRoleToUser),
+  groupOf(
+    'editNgo',
+    PERMISSIONS.updateNgo,
+    PERMISSIONS.viewLoginPageImages,
+    PERMISSIONS.createLoginPageImages,
+    PERMISSIONS.deleteLoginPageImages,
+    PERMISSIONS.createTableTemplate,
+    PERMISSIONS.updateTableTemplate,
+    PERMISSIONS.deleteTableTemplate,
+  ),
+  groupOf('viewTables', PERMISSIONS.viewCustomTable),
+  // Керувати таблицями без їх перегляду нема як.
+  subgroupOf(
+    'viewTables',
+    'manageTables',
+    PERMISSIONS.createCustomTable,
+    PERMISSIONS.updateCustomTable,
+    PERMISSIONS.deleteCustomTable,
+    PERMISSIONS.viewCustomRecord,
+    PERMISSIONS.createCustomRecord,
+    PERMISSIONS.updateCustomRecord,
+    PERMISSIONS.deleteCustomRecord,
+  ),
+];
 
 /**
  * Чи може користувач надати групу прав іншим: лише якщо має **всі** її права (AND).
@@ -24,14 +69,19 @@ export function canGrantGroup(group: PermissionGroup, own: readonly string[]): b
  * першого користувача, а не в усіх. Організацію бачить кожен, хто ввійшов, без окремого
  * права (`ViewNgo` сервер прибрав і відхиляє).
  */
-export const ALWAYS_GRANTED_PERMISSIONS: readonly string[] = ['Permissions.ViewTableTemplate'];
+export const ALWAYS_GRANTED_PERMISSIONS: readonly Permission[] = [PERMISSIONS.viewTableTemplate];
+
+/** Чи діє група за вибором `enabledIds`: її ввімкнено, а якщо вона підпункт — то й пункт, від якого вона залежить. */
+export function groupActive(group: PermissionGroup, enabledIds: ReadonlySet<string>): boolean {
+  return enabledIds.has(group.id) && (!group.parent || enabledIds.has(group.parent));
+}
 
 /**
- * Права нової ролі: усі права вибраних груп (у порядку груп) і права без налаштування,
- * без повторів.
+ * Права ролі за вибором у формі: усі права груп, що діють (`groupActive`, у порядку груп), і
+ * права без налаштування, без повторів. Це те, що форма ролі віддає в `permissions`.
  */
 export function claimsOfGroups(enabledIds: ReadonlySet<string>): readonly string[] {
-  const selected = PERMISSION_GROUPS.filter((group) => enabledIds.has(group.id)).flatMap((group) => group.permissions);
+  const selected = PERMISSION_GROUPS.filter((group) => groupActive(group, enabledIds)).flatMap((group) => group.permissions);
   return [...new Set([...selected, ...ALWAYS_GRANTED_PERMISSIONS])];
 }
 
@@ -43,7 +93,7 @@ export interface ClaimsChange {
 
 /**
  * Різниця прав ролі при оновленні. `original` — права ролі з сервера, `permissions` — права
- * увімкнених груп із форми, `own` — права користувача. Зачіпаються лише групи, які користувач
+ * з форми (`claimsOfGroups`), `own` — права користувача. Зачіпаються лише групи, які користувач
  * може надати (є всі права групи, AND): група, увімкнена у формі, додає права, яких у ролі нема;
  * вимкнена прибирає ті свої права, що в ролі є (так виправляється й часткова група). Недоступні
  * користувачеві групи й права поза групами лишаються, як були. Права без налаштування
@@ -65,39 +115,3 @@ export function diffClaims(original: readonly string[], permissions: readonly st
   add.push(...ALWAYS_GRANTED_PERMISSIONS.filter((permission) => !original.includes(permission) && !add.includes(permission)));
   return { add, remove };
 }
-
-/**
- * Права, які вибирають у ролі, у порядку форми. Права, що є в усіх чи
- * видаються автоматично (`CreateNgo`, `ViewTableTemplate`), сюди не
- * входять.
- */
-export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
-  group('viewUsers', 'ViewUser'),
-  group('editUsers', 'CreateUser', 'UpdateUser'),
-  group('disableUsers', 'DisableUser', 'DeleteUser'),
-  group('resetPasswords', 'CanResetPassword'),
-  group('manageRoles', 'ManageRole', 'AssignRoleToUser'),
-  group('viewCustomFields', 'ViewCustomFields'),
-  group('viewEmergencyContacts', 'ViewEmergencyContact'),
-  group(
-    'editNgo',
-    'UpdateNgo',
-    'ViewLoginPageImages',
-    'CreateLoginPageImages',
-    'DeleteLoginPageImages',
-    'CreateTableTemplate',
-    'UpdateTableTemplate',
-    'DeleteTableTemplate',
-  ),
-  group('viewTables', 'ViewCustomTable'),
-  group(
-    'manageTables',
-    'CreateCustomTable',
-    'UpdateCustomTable',
-    'DeleteCustomTable',
-    'ViewCustomRecord',
-    'CreateCustomRecord',
-    'UpdateCustomRecord',
-    'DeleteCustomRecord',
-  ),
-];

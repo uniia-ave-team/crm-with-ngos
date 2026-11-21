@@ -2,6 +2,7 @@ import { Component, Signal, computed, inject, input, signal } from '@angular/cor
 
 import { ConnectionService } from '../../core/connection/connection.service';
 import { avatarColor } from './avatar-color';
+import { ProtectedSrcDirective } from '../protected-src/protected-src.directive';
 
 /**
  * Аватар користувача: зображення (`avatarUrl`) або, якщо його нема, літери
@@ -19,7 +20,7 @@ import { avatarColor } from './avatar-color';
   selector: 'app-avatar',
   templateUrl: './avatar.component.html',
   styleUrls: ['./avatar.component.scss'],
-  standalone: false,
+  imports: [ProtectedSrcDirective],
 })
 export class AvatarComponent {
   readonly firstName = input<string | null | undefined>('');

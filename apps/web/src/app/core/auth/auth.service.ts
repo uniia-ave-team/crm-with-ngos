@@ -1,11 +1,11 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
-import { Injectable, Injector, Signal, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Injectable, Signal, computed, inject, linkedSignal } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { AccountRestoreService } from '../accounts/account-restore.service';
+import { AuthTokensDto, AuthenticateUserCommand, LogoutRequest, RefreshTokensCommand } from '../../api/generated/models';
 import { AccountsService, StoredAccount } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
+import { Untrusted } from '../http/api-contract';
 import {
   DEMO_CAPACITY_REACHED,
   DEMO_SESSION_EXPIRED,
@@ -13,17 +13,27 @@ import {
   readErrorCode,
   toRequestFailure,
 } from '../http/request-failure';
+import { REQUEST_TIMEOUT_MS } from '../http/timeouts';
 import { readJwtExpiry, readJwtSubject } from './jwt';
 
 const API_LOGIN_PATH = '/api/v1/auth/login';
 const API_REFRESH_PATH = '/api/v1/auth/refresh-token';
 const API_LOGOUT_PATH = '/api/v1/auth/logout';
-const REQUEST_TIMEOUT_MS = 10000;
 
 /** Куди переходить користувач, коли сесію завершено (вихід). */
 export const LOGIN_URL = '/login';
 /** Сторінка повторного входу: куди веде відсутність доступних акаунтів, коли збережені ще є. */
 export const RELOGIN_URL = '/relogin';
+
+/**
+ * Куди вести користувача, коли активного акаунта нема: збережені акаунти ще є (застарілі чи
+ * недоступні, їх можна відновити) — на повторний вхід, акаунтів нема взагалі — на вхід.
+ * Єдине місце, де записано це правило; ним користуються стражі, `SessionService`, вихід і
+ * сторінка входу.
+ */
+export function signedOutUrl(accounts: AccountsService): string {
+  return accounts.accounts().length > 0 ? RELOGIN_URL : LOGIN_URL;
+}
 
 /**
  * Куди переходить користувач, коли вхід у систему завершено (після входу, коли
@@ -50,42 +60,51 @@ const REFRESH_TOKEN_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 /** Токени неактивного акаунта оновлюються, коли минула половина терміну refresh-токена. */
 const REFRESH_DUE_AFTER_MS = REFRESH_TOKEN_LIFETIME_MS / 2;
 
-/** Пара токенів, яку віддають вхід і завершення реєстрації за запрошенням. */
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-}
-
-type LoginResponse = AuthTokens;
+/** Пара токенів, яку віддають вхід, оновлення токенів і завершення реєстрації за запрошенням. */
+export type AuthTokens = AuthTokensDto;
 
 /**
- * `busy` — демо зараз не приймає нових відвідувачів: забагато одночасних сеансів
- * (503 `DEMO_CAPACITY_REACHED`) або забагато входів з однієї адреси (429 у демо-режимі).
+ * Пара токенів з відповіді сервера; `null` — відповідь не за контрактом (хоч один токен не
+ * рядок або порожній). З такою відповіддю акаунт лишився б без токенів, тому це помилка, а не
+ * успіх.
  */
-export type LoginResult = 'ok' | 'busy' | RequestFailure;
+export function toAuthTokens(body: Untrusted<AuthTokens>): AuthTokens | null {
+  const { accessToken, refreshToken } = body ?? {};
+  return typeof accessToken === 'string' && accessToken && typeof refreshToken === 'string' && refreshToken
+    ? { accessToken, refreshToken }
+    : null;
+}
+
+/**
+ * Чим закінчився вхід: `ok`, причина невдачі запиту, `storageFull` — сервер вхід прийняв, але
+ * браузер не дав записати акаунт (сховище переповнене), тож входу нема, або `busy` — демо зараз не
+ * приймає нових відвідувачів: забагато одночасних сеансів (503 `DEMO_CAPACITY_REACHED`) чи
+ * забагато входів з однієї адреси (429 на сервері в демо-режимі).
+ */
+export type LoginResult = 'ok' | 'storageFull' | 'busy' | RequestFailure;
 export type RefreshResult = 'ok' | RequestFailure;
 /** `skipped` — токенів уже не було, на сервер запит не йшов. */
 export type LogoutResult = 'ok' | 'skipped' | RequestFailure;
 
 /**
- * Вхід користувача й токени сесії. Токени належать **активному акаунту**
- * (`AccountsService`): вони зберігаються в його записі в `localStorage`, щоб
- * пережити перезавантаження сторінки. Обмін токенів
+ * Вхід користувача й токени сесії. Токени належать акаунту (`AccountsService`): вони
+ * зберігаються в його записі в `localStorage`, щоб пережити перезавантаження сторінки.
+ * Сигнали `accessToken`, `refreshToken`, `hasTokens` — про **активний** акаунт. Обмін токенів
  * (`/auth/refresh-token`) вимагає і refresh-токен, і попередній access-токен.
  *
- * Refresh-токен одноразовий (після обміну сервер видаляє старий), тому обмін
- * іде в одному екземплярі: у межах вкладки — один спільний запит, між
- * вкладками — Web Lock, а запис, оновлений іншою вкладкою, підхоплюється зі
- * сховища, а не обмінюється вдруге.
+ * Refresh-токен одноразовий (після обміну сервер видаляє старий), тому обмін іде в одному
+ * екземплярі: у межах вкладки — один спільний запит на акаунт, між вкладками — Web Lock, а
+ * запис, оновлений іншою вкладкою, підхоплюється зі сховища, а не обмінюється вдруге.
+ *
+ * Сервіс нікуди не переходить: куди вести користувача, коли сесії не стало, вирішує
+ * `SessionService` (і стражі), бо це залежить від того, чи не йде пошук акаунта. Так само й після
+ * кінця демо-сеансу (`endDemoSession`): сервіс лише забуває акаунт і піднімає `demoSessionEnded`.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly connection = inject(ConnectionService);
   private readonly accounts = inject(AccountsService);
-  private readonly router = inject(Router);
-  // Сервіс пошуку акаунта залежить від цього, тож береться лише в момент виходу.
-  private readonly injector = inject(Injector);
 
   readonly accessToken: Signal<string | null> = computed(() => this.accounts.active()?.accessToken ?? null);
   readonly refreshToken: Signal<string | null> = computed(() => this.accounts.active()?.refreshToken ?? null);
@@ -100,18 +119,29 @@ export class AuthService {
    */
   readonly sessionId: Signal<string | null> = this.accounts.activeId;
 
-  private refreshInFlight: Promise<RefreshResult> | null = null;
+  /** Оновлення токенів, що тривають: по одному на акаунт. */
+  private readonly refreshesInFlight = new Map<string, Promise<RefreshResult>>();
 
-  private readonly demoSessionEndedSignal = signal(false);
+  /** Скидається сам, щойно активним стає інший акаунт (вхід, пошук чинного, перемикання). */
+  private readonly demoSessionEndedSignal = linkedSignal({ source: this.accounts.activeId, computation: () => false });
   /**
-   * Демо-сеанс активного акаунта завершився (`endDemoSession`), і користувача повернуто на
-   * сторінку входу: вона показує про це повідомлення. Скидається наступним входом.
+   * Демо-сеанс активного акаунта завершився (`endDemoSession`), і активного акаунта відтоді нема:
+   * `SessionService` веде на сторінку входу, а та пояснює, що сталося. Скидається, щойно активним
+   * стає акаунт (наступний вхід).
    */
   readonly demoSessionEnded: Signal<boolean> = this.demoSessionEndedSignal.asReadonly();
 
-  /** Access-токен прострочений або майже (за `exp` у самому JWT; без токена чи при нечитному — `false`). */
-  accessTokenExpired(): boolean {
-    const exp = readJwtExpiry(this.accessToken());
+  /** Access-токен акаунта (за замовчуванням активного); `null` — акаунта чи токена нема. */
+  accessTokenOf(accountId: string | null = this.accounts.activeId()): string | null {
+    return this.find(accountId)?.accessToken || null;
+  }
+
+  /**
+   * Access-токен акаунта (за замовчуванням активного) прострочений або майже — за `exp` у
+   * самому JWT; без токена чи при нечитному — `false`.
+   */
+  accessTokenExpired(accountId: string | null = this.accounts.activeId()): boolean {
+    const exp = readJwtExpiry(this.accessTokenOf(accountId));
     return exp !== null && exp * 1000 - EXPIRY_SKEW_SECONDS * 1000 <= Date.now();
   }
 
@@ -122,133 +152,126 @@ export class AuthService {
   }
 
   /**
-   * `POST <сервер>/api/v1/auth/refresh-token` з обома токенами активного
-   * акаунта; при успіху зберігає нову пару. Виклики, що збіглися в часі,
-   * діляться одним запитом, а між вкладками обмін іде під Web Lock. Якщо сервер
-   * відхилив токени (400/401), а в сховищі вже лежить нова пара від іншої
-   * вкладки — беремо її; інакше акаунт позначається застарілим (`outdated`) і
-   * перестає бути активним. При мережевій помилці акаунт лишається.
+   * Оновлює токени акаунта `accountId` (за замовчуванням активного):
+   * `POST <сервер>/api/v1/auth/refresh-token` з обома його токенами; при успіху зберігає нову
+   * пару. Акаунт визначається в мить виклику й далі не змінюється: якщо, поки триває оновлення,
+   * активним стане інший, результат однаково стосується того, для кого оновлення просили.
+   *
+   * Виклики для одного акаунта, що збіглися в часі, діляться одним запитом, а між вкладками
+   * обмін іде під Web Lock. Якщо, поки чекали на чергу, пару вже оновив хтось інший (інша
+   * вкладка), обміну нема — `ok`. Якщо сервер відхилив токени (400/401), а в сховищі вже лежить
+   * нова пара від іншої вкладки — беремо її; інакше акаунт позначається застарілим (`outdated`) і
+   * перестає бути активним. При мережевій помилці акаунт лишається як був. Акаунта чи його
+   * токенів нема — `unauthorized`.
    */
-  refresh(): Promise<RefreshResult> {
-    if (!this.refreshInFlight) {
-      this.refreshInFlight = this.runExclusive(() => this.performRefresh()).finally(() => {
-        this.refreshInFlight = null;
+  refresh(accountId: string | null = this.accounts.activeId()): Promise<RefreshResult> {
+    const account = this.find(accountId);
+    if (!account) {
+      return Promise.resolve('unauthorized');
+    }
+    const { id, refreshToken } = account;
+    let inFlight = this.refreshesInFlight.get(id);
+    if (!inFlight) {
+      inFlight = this.runExclusive(() => this.performRefresh(id, refreshToken)).finally(() => {
+        this.refreshesInFlight.delete(id);
       });
+      this.refreshesInFlight.set(id, inFlight);
     }
-    return this.refreshInFlight;
-  }
-
-  /** Забуває акаунт (за замовчуванням активний): його запис і токени видаляються зі сховища. */
-  clearTokens(accountId: string | null = this.accounts.activeId()): void {
-    if (accountId) {
-      this.accounts.remove(accountId);
-    }
+    return inFlight;
   }
 
   /**
    * Сесія акаунта не вдалася (оновити токени не вийшло): акаунт **лишається** в памʼяті, але
    * позначений — токени відхилено (`failure` = `invalid`/`unauthorized`) → `outdated`, сервер
-   * мовчить чи помилився → `unavailable` — і, якщо він був активним, активного акаунта більше нема.
-   * Тоді користувача перекинуто на сторінку повторного входу (акаунти лишились). Акаунт не
-   * видаляється: його користувач зможе відновити. `accountId` — акаунт, чия сесія не вдалася
-   * (його треба передавати: поки йшло оновлення, активним міг стати інший, і тоді
-   * нікуди не переходимо).
+   * мовчить чи помилився → `unavailable` — і, якщо він був активним, активного акаунта більше
+   * нема. Акаунт не видаляється: його користувач зможе відновити. `accountId` — акаунт, чия
+   * сесія не вдалася.
+   *
+   * Сам метод нікуди не переходить: що активного акаунта не стало, помічає `SessionService` і
+   * веде на повторний вхід, а під час пошуку акаунта нічого не робить — там це звичайний крок
+   * (пошук перевіряє наступний акаунт).
    */
   expireSession(accountId: string | null, failure: RefreshResult): void {
-    if (accountId) {
-      if (failure === 'invalid' || failure === 'unauthorized') {
-        this.accounts.markOutdated(accountId);
-      } else if (failure !== 'ok') {
-        this.accounts.markUnavailable(accountId);
-      }
-    }
-    if (this.accounts.activeId() === null) {
-      void this.router.navigateByUrl(this.accounts.accounts().length > 0 ? RELOGIN_URL : LOGIN_URL);
-    }
-  }
-
-  /**
-   * Демо-сеанс акаунта завершився (сервер відповів `DEMO_SESSION_EXPIRED`: копії демо-даних
-   * цього відвідувача вже нема). Оновлювати токени марно, а повторний вхід дасть нову копію,
-   * тож акаунт забувається одразу (без запиту на вихід: відкликати нічого). Якщо він був
-   * активним — на сторінку входу з повідомленням (`demoSessionEnded`); підключення при цьому
-   * перевіряється заново, лише якщо без акаунта застосунок дивиться вже на інший сервер.
-   */
-  endDemoSession(accountId: string | null): void {
-    if (!accountId || !this.accounts.accounts().some((account) => account.id === accountId)) {
+    if (!accountId) {
       return;
     }
-    const wasActive = this.accounts.activeId() === accountId;
-    this.accounts.remove(accountId);
-    console.warn('[AuthService] Демо-сеанс завершився — акаунт забуто');
-    if (wasActive) {
-      this.demoSessionEndedSignal.set(true);
-      void this.connection.checkApiIfServerChanged();
-      void this.router.navigateByUrl(LOGIN_URL);
+    if (failure === 'invalid' || failure === 'unauthorized') {
+      this.accounts.markOutdated(accountId);
+    } else if (failure !== 'ok') {
+      this.accounts.markUnavailable(accountId);
     }
   }
 
   /**
-   * Вихід з активного акаунта: видаляє лише його (запис, місце в індексі, вказівник активного;
-   * мова, інші акаунти й решта памʼяті лишаються) і відкликає його refresh-токен на сервері
-   * (`POST <сервер>/api/v1/auth/logout`). Після цього йде та сама перевірка, що й при вході на
-   * сторінку (`AccountRestoreService`): знайшовся інший чинний акаунт — він стає активним і
-   * відкривається `REDIRECT_URL`; нема — `/relogin`, якщо збережені акаунти ще є, інакше `/login`.
-   *
-   * Спершу беремо токени (прострочений access-токен тихо оновлюємо — сервер вимагає
-   * авторизований запит), далі видаляємо акаунт, і лише потім шлемо запит із заголовком,
-   * зібраним уже з цих токенів: результат запиту ні на що не впливає, локально користувач
-   * вийшов у будь-якому разі.
+   * Демо-сеанс акаунта завершився: сервер відповів `DEMO_SESSION_EXPIRED` (копії демо-даних цього
+   * відвідувача вже нема) або вийшов час за `demo_exp` його токена (`DemoSessionService`).
+   * Оновлювати токени марно, а повторний вхід дасть нову копію, тож акаунт забувається одразу (без
+   * запиту на вихід: відкликати нічого). Якщо він був активним — піднімається `demoSessionEnded`
+   * (куди вести користувача, вирішує `SessionService`), а підключення перевіряється заново, лише
+   * якщо без акаунта застосунок дивиться вже на інший сервер. Невідомий акаунт — нічого.
    */
-  async logout(): Promise<LogoutResult> {
+  endDemoSession(accountId: string | null): void {
+    const account = this.find(accountId);
+    if (!account) {
+      return;
+    }
+    const wasActive = this.accounts.activeId() === account.id;
+    this.accounts.remove(account.id);
+    console.warn('[AuthService] Демо-сеанс завершився — акаунт забуто');
+    if (wasActive) {
+      // Уже без активного акаунта: позначка живе, доки активним не стане інший.
+      this.demoSessionEndedSignal.set(true);
+      void this.connection.checkApiIfServerChanged();
+    }
+  }
+
+  /**
+   * Перша половина виходу: забуває активний акаунт (запис, місце в індексі, вказівник активного;
+   * мова, інші акаунти й решта памʼяті лишаються) і повертає його запис із токенами, щоб їх
+   * можна було відкликати (`revoke`). Прострочений access-токен спершу тихо оновлюється: сервер
+   * вимагає авторизований запит. `null` — активного акаунта не було.
+   *
+   * Що буде після виходу (пошук іншого акаунта, перехід) вирішує `AccountRestoreService.signOut`.
+   */
+  async forgetActive(): Promise<StoredAccount | null> {
     // Виходимо саме з цього акаунта, навіть якщо невдале оновлення токенів зніме з нього активність.
     const id = this.accounts.activeId();
-    if (this.hasTokens() && this.accessTokenExpired()) {
-      await this.refresh();
+    if (this.hasTokens() && this.accessTokenExpired(id)) {
+      await this.refresh(id);
     }
-    const account = this.accounts.accounts().find((candidate) => candidate.id === id);
-    const url = `${account?.server ?? this.connection.serverUrl()}${API_LOGOUT_PATH}`;
-
+    const account = this.find(id);
     if (id) {
       this.accounts.remove(id);
     }
-    void this.moveOnAfterLogout();
+    return account;
+  }
 
-    // Токени, які сервер уже відхилив (оновлення не вдалося), відкликати нічого.
+  /**
+   * Друга половина виходу: відкликає refresh-токен забутого акаунта на його сервері
+   * (`POST <сервер>/api/v1/auth/logout`) із заголовком, зібраним з його ж токенів. Результат ні
+   * на що не впливає: локально користувач уже вийшов. `skipped` — відкликати нічого: акаунта чи
+   * токенів нема або сервер їх уже відхилив (оновлення не вдалося).
+   */
+  async revoke(account: StoredAccount | null): Promise<LogoutResult> {
     if (!account?.accessToken || !account.refreshToken || account.outdated) {
       return 'skipped';
     }
-    console.log(`[AuthService] Виходжу: ${url}`);
+    const url = `${account.server}${API_LOGOUT_PATH}`;
     try {
       await firstValueFrom(
         this.http
           .post(
             url,
-            { refreshToken: account.refreshToken },
+            { refreshToken: account.refreshToken } satisfies LogoutRequest,
             { headers: new HttpHeaders({ Authorization: `Bearer ${account.accessToken}` }) },
           )
           .pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      console.log('[AuthService] Refresh-токен відкликано');
       return 'ok';
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[AuthService] Не вдалося відкликати refresh-токен на сервері (${failure})`, error);
       return failure;
-    }
-  }
-
-  /**
-   * Після виходу: шукає інший чинний акаунт (як `authGuard`; на час пошуку `SessionService`
-   * мовчить). Знайшовся — на `REDIRECT_URL` зі стражами заново; ні — на `/relogin`, якщо
-   * акаунти ще є, інакше на `/login`.
-   */
-  private async moveOnAfterLogout(): Promise<void> {
-    const result = await this.injector.get(AccountRestoreService).restore();
-    if (result === 'restored') {
-      void this.router.navigateByUrl(REDIRECT_URL, { onSameUrlNavigation: 'reload' });
-    } else {
-      void this.router.navigateByUrl(this.accounts.accounts().length > 0 ? RELOGIN_URL : LOGIN_URL);
     }
   }
 
@@ -266,15 +289,19 @@ export class AuthService {
     replaceAccountId?: string,
   ): Promise<LoginResult> {
     const url = `${server}${API_LOGIN_PATH}`;
-    console.log(`[AuthService] Входжу: ${url}`);
 
     try {
-      const tokens = await firstValueFrom(
-        this.http.post<LoginResponse>(url, { email, password }).pipe(timeout(REQUEST_TIMEOUT_MS)),
+      const body = await firstValueFrom(
+        this.http
+          .post<Untrusted<AuthTokens>>(url, { email, password } satisfies AuthenticateUserCommand)
+          .pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      this.adoptTokens(server, tokens, email, replaceAccountId);
-      console.log('[AuthService] Вхід виконано, токени отримано');
-      return 'ok';
+      const tokens = toAuthTokens(body);
+      if (!tokens) {
+        console.warn('[AuthService] Відповідь на вхід без токенів', body);
+        return 'error';
+      }
+      return this.adoptTokens(server, tokens, email, replaceAccountId) ? 'ok' : 'storageFull';
     } catch (error) {
       const failure = this.isDemoBusy(error) ? 'busy' : toRequestFailure(error);
       console.warn(`[AuthService] Не вдалося увійти (${failure})`, error);
@@ -294,10 +321,16 @@ export class AuthService {
    * Додає акаунт (`server` + користувач із токена) зі збереженням токенів і робить його
    * активним. Це спільний кінець входу й завершення реєстрації за запрошенням: обидва
    * запити віддають ту саму пару токенів. `replaceAccountId` — акаунт, який перезаписується.
+   *
+   * Повертає, чи акаунт записано. Якщо браузер не дав його записати (сховище переповнене),
+   * акаунта не додаємо зовсім: після перезавантаження сторінки його однаково не було б, а
+   * користувач думав би, що ввійшов. Тоді памʼять повертається до того, що лежить у сховищі,
+   * активним лишається попередній акаунт, а щойно видані токени відкликаються на сервері.
    */
-  adoptTokens(server: string, tokens: AuthTokens, email: string, replaceAccountId?: string): void {
+  adoptTokens(server: string, tokens: AuthTokens, email: string, replaceAccountId?: string): boolean {
+    const previous = this.accounts.activeId();
     const userId = readJwtSubject(tokens.accessToken);
-    this.accounts.add({
+    const account = this.accounts.add({
       server,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
@@ -307,83 +340,62 @@ export class AuthService {
       // Пошту з /users/me не отримати — запамʼятовуємо ту, з якою ввійшли.
       email: email.trim(),
     }, replaceAccountId);
-    this.demoSessionEndedSignal.set(false);
+    if (this.accounts.isStored(account.id)) {
+      return true;
+    }
+    console.warn('[AuthService] Браузер не дав записати акаунт: сховище переповнене');
+    // Про це скаже сама форма входу (`storageFull`), спливаюче попередження тут зайве.
+    this.accounts.dismissStorageFull();
+    this.accounts.reload();
+    this.accounts.setActive(previous);
+    void this.revoke(account);
+    return false;
   }
 
   /**
-   * Оновлює токени **неактивного** акаунта, якщо минула половина терміну
-   * refresh-токена (див. `REFRESH_TOKEN_LIFETIME_MS`). Так акаунт, що давно не
-   * був активним, не застаріває сам по собі. Той самий обмін, що й для активного
-   * (під Web Lock, з підхопленням нової пари від іншої вкладки), але:
+   * Оновлює токени **неактивного** акаунта, якщо минула половина терміну refresh-токена (див.
+   * `REFRESH_TOKEN_LIFETIME_MS`). Так акаунт, що давно не був активним, не застаріває сам по
+   * собі. Той самий обмін, що й для активного (`refresh`), тож:
    * - відхилення токенів (400/401) позначає акаунт застарілим;
-   * - мережева помилка нічого не змінює: це не доказ, що вхід недійсний, а
-   *   фонове оновлення повториться при наступному запуску.
-   * Повертає результат обміну або `'skipped'` (не активний/застарілий чи ще не час).
+   * - мережева помилка нічого не змінює: це не доказ, що вхід недійсний, а фонове оновлення
+   *   повториться при наступному запуску.
+   * Повертає результат обміну або `'skipped'` (акаунт активний, застарілий, невідомий чи ще
+   * не час).
    */
   refreshStoredIfDue(accountId: string): Promise<RefreshResult | 'skipped'> {
-    if (!this.isStoredRefreshDue(accountId)) {
-      return Promise.resolve('skipped');
-    }
-    return this.runExclusive(async () => {
-      // Поки чекали на блокування, інша вкладка могла вже оновити цей акаунт.
-      this.accounts.syncFromStorage(accountId);
-      if (!this.isStoredRefreshDue(accountId)) {
-        return 'skipped' as const;
-      }
-      const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
-      return account ? this.exchange(account) : ('skipped' as const);
-    });
+    return this.refreshInactive(accountId, true);
   }
 
   /**
-   * Те саме, що `refreshStoredIfDue`, але одразу, не чекаючи половини терміну: обмін токенів
-   * неактивного акаунта, що не застарів. Так повторно перевіряють акаунти, чий сервер не відповідав
-   * (сторінка повторного входу): вдалося — токени нові, `unavailable` знято; відхилено — акаунт
-   * `outdated`; мережева помилка — нічого не змінюється. `'skipped'` — акаунт активний,
-   * застарілий чи невідомий.
+   * Те саме, що `refreshStoredIfDue`, але одразу, не чекаючи половини терміну. Так повторно
+   * перевіряють акаунти, чий сервер не відповідав (сторінка повторного входу): вдалося — токени
+   * нові, `unavailable` знято; відхилено — акаунт `outdated`; мережева помилка — нічого не
+   * змінюється. `'skipped'` — акаунт активний, застарілий чи невідомий.
    */
   refreshStored(accountId: string): Promise<RefreshResult | 'skipped'> {
-    if (!this.isStoredRefreshable(accountId)) {
-      return Promise.resolve('skipped');
-    }
-    return this.runExclusive(async () => {
-      this.accounts.syncFromStorage(accountId);
-      if (!this.isStoredRefreshable(accountId)) {
-        return 'skipped' as const;
-      }
-      const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
-      return account ? this.exchange(account) : ('skipped' as const);
-    });
+    return this.refreshInactive(accountId, false);
   }
 
-  /** Неактивний акаунт, що не застарів. */
-  private isStoredRefreshable(accountId: string): boolean {
-    if (accountId === this.accounts.activeId()) {
-      return false;
-    }
-    const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
-    return !!account && !account.outdated;
+  /** Оновлення токенів неактивного чинного акаунта; `onlyIfDue` — лише коли минула половина терміну. */
+  private refreshInactive(accountId: string, onlyIfDue: boolean): Promise<RefreshResult | 'skipped'> {
+    const account = accountId === this.accounts.activeId() ? null : this.find(accountId);
+    const due = !!account && (!onlyIfDue || Date.now() - account.tokensIssuedAt >= REFRESH_DUE_AFTER_MS);
+    return account && !account.outdated && due ? this.refresh(accountId) : Promise.resolve('skipped');
   }
 
-  /** Неактивний чинний акаунт, у якого минула половина терміну refresh-токена. */
-  private isStoredRefreshDue(accountId: string): boolean {
-    if (accountId === this.accounts.activeId()) {
-      return false;
-    }
-    const account = this.accounts.accounts().find((candidate) => candidate.id === accountId);
-    return !!account && !account.outdated && Date.now() - account.tokensIssuedAt >= REFRESH_DUE_AFTER_MS;
-  }
-
-  private async performRefresh(): Promise<RefreshResult> {
-    // Поки чекали на блокування, інша вкладка могла вже оновити токени.
-    if (this.adoptNewerStoredTokens() && !this.accessTokenExpired()) {
-      console.log('[AuthService] Токени вже оновлено іншою вкладкою');
-      return 'ok';
-    }
-
-    const account = this.accounts.active();
+  /**
+   * Сам обмін, уже під блокуванням. `refreshTokenAtCall` — refresh-токен акаунта в мить, коли
+   * оновлення попросили: якщо тепер він інший, пару вже оновив хтось інший (інша вкладка, поки
+   * ми чекали на блокування), і обмінювати вдруге не треба.
+   */
+  private async performRefresh(accountId: string, refreshTokenAtCall: string): Promise<RefreshResult> {
+    this.accounts.syncFromStorage(accountId);
+    const account = this.find(accountId);
     if (!account?.accessToken || !account.refreshToken) {
       return 'unauthorized';
+    }
+    if (account.refreshToken !== refreshTokenAtCall) {
+      return 'ok';
     }
     return this.exchange(account);
   }
@@ -395,14 +407,19 @@ export class AuthService {
    */
   private async exchange(account: StoredAccount): Promise<RefreshResult> {
     const url = `${account.server}${API_REFRESH_PATH}`;
-    console.log(`[AuthService] Оновлюю токени: ${url}`);
 
     try {
-      const tokens = await firstValueFrom(
+      const body = await firstValueFrom(
         this.http
-          .post<LoginResponse>(url, { accessToken: account.accessToken, refreshToken: account.refreshToken })
+          .post<Untrusted<AuthTokens>>(url, { accessToken: account.accessToken, refreshToken: account.refreshToken } satisfies RefreshTokensCommand)
           .pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
+      const tokens = toAuthTokens(body);
+      if (!tokens) {
+        // Старі токени лишаємо: з такою відповіддю акаунт лишився б узагалі без токенів.
+        console.warn('[AuthService] Відповідь на оновлення токенів без токенів', body);
+        return 'error';
+      }
       this.accounts.update(account.id, {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
@@ -413,7 +430,6 @@ export class AuthService {
         // неактивного акаунта його не «використовує».
         ...(account.id === this.accounts.activeId() ? { lastUsedAt: Date.now() } : {}),
       });
-      console.log('[AuthService] Токени оновлено');
       return 'ok';
     } catch (error) {
       const failure = toRequestFailure(error);
@@ -434,13 +450,8 @@ export class AuthService {
     }
   }
 
-  /**
-   * Якщо у сховищі запис активного акаунта має іншу пару токенів, ніж у памʼяті
-   * (її записала інша вкладка), бере її в памʼять. Повертає, чи так було.
-   */
-  private adoptNewerStoredTokens(): boolean {
-    const id = this.accounts.activeId();
-    return id !== null && this.accounts.syncFromStorage(id) !== null;
+  private find(accountId: string | null): StoredAccount | null {
+    return this.accounts.accounts().find((account) => account.id === accountId) ?? null;
   }
 
   private runExclusive<T>(task: () => Promise<T>): Promise<T> {

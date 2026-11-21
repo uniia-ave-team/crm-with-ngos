@@ -26,6 +26,7 @@
     [showRowMenu]="canOpenRowMenu()"
     [showAddColumn]="canViewCustomFields()"
     [highlightedRowId]="menuRowId()"
+    defaultSortColumnId="name"
     labelKey="page.colleagues"
     (rowMenu)="openRowMenu($event)"
     (sortChange)="onSort($event)"
@@ -95,17 +96,34 @@
 </app-side-panel>
 
 <!-- Запрошення створено: посилання, яким адмін ділиться з колегою (по центру екрана, затемнює весь екран). -->
-<app-modal width="460px" [label]="'colleagues.invitation.title' | translate">
+<app-modal #invitationDialog width="460px" [label]="'colleagues.invitation.title' | translate">
   @if (invitation(); as invite) {
     <app-invitation-dialog
       [email]="invite.email"
       [token]="invite.token"
+      [server]="invite.server"
       [expiresAt]="invite.expiresAt"
       [ngoName]="ngoName()"
       [status]="invitationStatus()"
       (copyLink)="copyInvitationLink($event)"
       (shareLink)="shareInvitation($event)"
       (dismiss)="closeInvitation()"
+    />
+  }
+</app-modal>
+
+<!-- Підтвердження видалення ролі (смітник у вікні «Ролі»): по центру екрана, як вікно входу в акаунт. -->
+<app-modal #roleDeleteDialog width="min(356px, calc(100vw - 32px))" [label]="'colleagues.rolesPanel.delete' | translate" (closed)="onRoleDeleteClosed()">
+  @if (roleToDelete(); as role) {
+    @let deleteError = roleDeleteError();
+    <app-confirm-dialog
+      [message]="'colleagues.rolesPanel.deleteQuestion' | translate: { role: role.name }"
+      [confirmLabel]="'common.yes' | translate"
+      [cancelLabel]="'common.cancel' | translate"
+      [busy]="roleDeleting()"
+      [error]="deleteError ? (deleteError | translate) : null"
+      (confirm)="confirmRoleDelete(role)"
+      (dismiss)="cancelRoleDelete()"
     />
   }
 </app-modal>

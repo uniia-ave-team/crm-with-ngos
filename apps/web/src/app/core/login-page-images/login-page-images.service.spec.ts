@@ -14,7 +14,6 @@ describe('LoginPageImagesService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
@@ -191,7 +190,7 @@ describe('LoginPageImagesService', () => {
   describe('upload', () => {
     const file = () => new File([new Uint8Array(5)], 'photo.png', { type: 'image/png' });
 
-    it('posts the file as multipart/form-data in the field "file" and returns the id of the created image', async () => {
+    it('posts the file as multipart/form-data in the field "file"', async () => {
       const source = file();
       const result = service.upload(source);
       const request = http.expectOne(listUrl());
@@ -201,7 +200,7 @@ describe('LoginPageImagesService', () => {
       expect(sent).toBeInstanceOf(File);
       expect(sent.name).toBe('photo.png');
       request.flush('123e4567-e89b-12d3-a456-426614174000', { status: 201, statusText: 'Created' });
-      expect(await result).toEqual({ id: '123e4567-e89b-12d3-a456-426614174000' });
+      expect(await result).toBe('uploaded');
     });
 
     it('does not set the content type by itself (the browser adds the boundary)', async () => {
@@ -221,6 +220,12 @@ describe('LoginPageImagesService', () => {
       const result = service.upload(file());
       http.expectOne(listUrl()).flush({}, { status, statusText: 'x' });
       expect(await result).toBe(expected);
+    });
+
+    it('takes an answer without the id as success: the file is on the server already, and a repeated upload would double it', async () => {
+      const result = service.upload(file());
+      http.expectOne(listUrl()).flush(null, { status: 201, statusText: 'Created' });
+      expect(await result).toBe('uploaded');
     });
 
     it('reports an unreachable server', async () => {

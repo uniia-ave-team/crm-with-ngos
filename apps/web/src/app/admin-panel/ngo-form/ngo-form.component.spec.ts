@@ -5,10 +5,12 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
+import { IMAGE_MAX_BYTES } from '../../core/images/image-types';
+import { withImageSize, withImageTypes } from '../../core/images/image-types.testing';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { ConnectionService } from '../../core/connection/connection.service';
-import { AdminPanelPageModule } from '../admin-panel.module';
 import { AdminNgoFormComponent } from './ngo-form.component';
+import { addAccountWithSnapshot } from '../../core/accounts/accounts.testing';
 
 // Тексти сторінки живуть в uk.json — беремо їх звідти, а не дублюємо.
 const text = uk.admin;
@@ -34,11 +36,10 @@ describe('AdminNgoFormComponent', () => {
     (URL as unknown as Record<string, unknown>)['createObjectURL'] = createUrl;
     (URL as unknown as Record<string, unknown>)['revokeObjectURL'] = revokeUrl;
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [AdminPanelPageModule],
+      imports: [AdminNgoFormComponent],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);
@@ -66,7 +67,7 @@ describe('AdminNgoFormComponent', () => {
   });
 
   function render(ngoName: string | null = 'Org', ngoLogoUrl: string | null = null, permissions: string[] = ALL_RIGHTS) {
-    accounts.add({ server, accessToken: 'a', refreshToken: 'r', identity: 'u1', ngoName, ngoLogoUrl, permissions });
+    addAccountWithSnapshot(accounts, { server, accessToken: 'a', refreshToken: 'r', identity: 'u1' }, { ngoName, ngoLogoUrl, permissions });
     const fixture = TestBed.createComponent(AdminNgoFormComponent);
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
@@ -91,7 +92,7 @@ describe('AdminNgoFormComponent', () => {
     expect(element.querySelector('#admin-logo-label')?.textContent?.trim()).toBe(text.logo);
     expect(element.querySelector('.settings-avatar__choose')?.textContent?.trim()).toBe(text.chooseFile);
     expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(text.noFile);
-    expect(element.textContent).toContain(text.logoHint);
+    expect(element.textContent).toContain(withImageTypes(text.logoHint, 'or'));
     expect(element.querySelector('.settings-submit')?.textContent?.trim()).toBe(text.save);
   });
 
@@ -314,6 +315,8 @@ describe('AdminNgoFormComponent', () => {
       {},
       { status: 403, statusText: 'Forbidden' },
     );
+    // Після відповіді галерея скидається й отримує список заново — і після невдачі.
+    (await vi.waitFor(() => http.expectOne((r) => r.method === 'GET' && r.url === listUrl()))).flush({ items: [], hasNextPage: false });
     await vi.waitFor(() => {
       fixture.detectChanges();
       expect(element.querySelector('.settings-result')).not.toBeNull();
@@ -535,6 +538,21 @@ describe('AdminNgoFormComponent', () => {
       });
     });
 
+    it('follows the saved name again after a successful update (for instance, when another admin renames it later)', async () => {
+      const { fixture, element } = render('Org');
+      type(element, 'Renamed');
+      submitForm(fixture, element);
+      (await vi.waitFor(() => http.expectOne(ngoUrl()))).flush(null, { status: 204, statusText: 'No Content' });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(block(element)).not.toBeNull();
+      });
+
+      accounts.update(accounts.activeId()!, { ngoName: 'Renamed Elsewhere' });
+      fixture.detectChanges();
+      expect(input(element).value).toBe('Renamed Elsewhere');
+    });
+
     it('shows a green block with what was changed after a successful update, and writes the name to the account', async () => {
       const { fixture, element } = render('Org');
       type(element, 'Renamed');
@@ -714,6 +732,8 @@ describe('AdminNgoFormComponent', () => {
           {},
           { status: 403, statusText: 'Forbidden' },
         );
+        // Після відповіді галерея скидається й отримує список заново — і після невдачі.
+        (await vi.waitFor(() => http.expectOne((r) => r.method === 'GET' && r.url === imagesUrl()))).flush({ items: [], hasNextPage: false });
         await waitResult(fixture, element);
 
         expect(block(element)?.classList).not.toContain('settings-result--success');
@@ -787,6 +807,8 @@ describe('AdminNgoFormComponent', () => {
           {},
           { status: 500, statusText: 'x' },
         );
+        // Після відповіді галерея скидається й отримує список заново — і після невдачі.
+        (await vi.waitFor(() => http.expectOne((r) => r.method === 'GET' && r.url === imagesUrl()))).flush({ items: [], hasNextPage: false });
         await waitResult(fixture, element);
 
         noNgoRequests();
@@ -845,9 +867,9 @@ describe('AdminNgoFormComponent', () => {
   describe('logo', () => {
     const png = (size = 10) => new File([new Uint8Array(size)], 'logo.png', { type: 'image/png' });
 
-    it('offers the same types as for an avatar (png, webp, jpeg, jpg, gif) and svg on top', () => {
+    it('offers the image types the server accepts, the same as for an avatar', () => {
       const { element } = render();
-      expect(fileInput(element).accept).toBe('image/png,image/webp,image/jpeg,image/gif,image/svg+xml');
+      expect(fileInput(element).accept).toBe('image/png,image/webp,image/jpeg,image/gif,image/bmp,image/svg+xml');
     });
 
     it.each([
@@ -856,6 +878,7 @@ describe('AdminNgoFormComponent', () => {
       ['logo.jpeg', 'image/jpeg'],
       ['logo.jpg', 'image/jpeg'],
       ['logo.gif', 'image/gif'],
+      ['logo.bmp', 'image/bmp'],
       ['logo.svg', 'image/svg+xml'],
     ])('accepts %s as a logo', (name, type) => {
       const { fixture, element } = render();
@@ -892,7 +915,6 @@ describe('AdminNgoFormComponent', () => {
 
     it.each([
       ['doc.pdf', 'application/pdf'],
-      ['logo.bmp', 'image/bmp'],
       ['logo.tiff', 'image/tiff'],
     ])('rejects %s (another type), with the error under the logo', (name, type) => {
       const { fixture, element } = render();
@@ -901,16 +923,25 @@ describe('AdminNgoFormComponent', () => {
 
       expect(createUrl).not.toHaveBeenCalled();
       expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(text.noFile);
-      expect(element.querySelector('.settings-avatar__upload .settings-field__error')?.textContent?.trim()).toBe(text.error.logoType);
+      expect(element.querySelector('.settings-avatar__upload .settings-field__error')?.textContent?.trim()).toBe(withImageTypes(text.error.logoType, 'and'));
     });
 
-    it('rejects a file that is larger than 2 MB', () => {
+    it('rejects a file larger than the server takes, with the size in the error', () => {
       const { fixture, element } = render();
-      choose(element, png(2 * 1024 * 1024 + 1));
+      choose(element, png(IMAGE_MAX_BYTES + 1));
       fixture.detectChanges();
 
       expect(createUrl).not.toHaveBeenCalled();
-      expect(element.querySelector('.settings-avatar__upload .settings-field__error')?.textContent?.trim()).toBe(text.error.logoSize);
+      expect(element.querySelector('.settings-avatar__upload .settings-field__error')?.textContent?.trim()).toBe(withImageSize(text.error.logoSize));
+    });
+
+    it('takes a file of the largest size the server takes (more than the former 2 MB)', () => {
+      const { fixture, element } = render();
+      choose(element, png(IMAGE_MAX_BYTES));
+      fixture.detectChanges();
+
+      expect(createUrl).toHaveBeenCalled();
+      expect(element.querySelector('.settings-avatar__upload .settings-field__error')).toBeNull();
     });
 
     it('clears the error when a good file is chosen afterwards', () => {

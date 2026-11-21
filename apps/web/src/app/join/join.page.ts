@@ -1,34 +1,55 @@
 import { Component, computed, effect, inject, input, signal, untracked, WritableSignal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { IonButton, IonContent, IonInput } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { AuthService, REDIRECT_URL } from '../core/auth/auth.service';
+import { PasswordPolicyService } from '../core/auth/password-policy.service';
 import { ConnectionService } from '../core/connection/connection.service';
+import { RequestFailure } from '../core/http/request-failure';
 import { InvitationsService } from '../core/invitations/invitations.service';
-import { isStrongPassword } from '../shared/password-fields/password-rules';
+import { DEFAULT_PASSWORD_POLICY, isStrongPassword } from '../shared/password-fields/password-rules';
+import { PasswordFieldsComponent } from '../shared/password-fields/password-fields.component';
 
 /**
- * Що показує сторінка: перевірку сервера й токена, помилку «сервера не знайдено»,
- * помилку «посилання неактивне» або форму реєстрації.
+ * Що показує сторінка: перевірку сервера й токена, помилку «сервера не знайдено», помилку
+ * «посилання неактивне» (сервер відхилив токен), помилку «не вдалося перевірити» (збій мережі чи
+ * сервера, з кнопкою повтору) або форму реєстрації.
  */
-type JoinView = 'loading' | 'no-server' | 'invalid' | 'form';
+type JoinView = 'loading' | 'no-server' | 'invalid' | 'check-failed' | 'form';
 
 /**
  * Сторінка запрошення (`/join?token=…`): колега переходить за посиланням із
  * діалогу «Додати колегу», завершує реєстрацію й одразу входить. Без стражів і
- * без бічного меню. Сервер — той, на домен якого веде посилання
- * (`ConnectionService.pageServerUrl`), а не сервер активного акаунта.
+ * без бічного меню. Сервер — той, на домен якого веде посилання (`ConnectionService.findPageServer`:
+ * origin сторінки, далі порт 5065), а не сервер активного акаунта.
  */
 @Component({
   selector: 'app-join',
   templateUrl: './join.page.html',
   styleUrls: ['./join.page.scss'],
-  standalone: false,
+  imports: [IonButton, IonContent, IonInput, RouterLink, FormsModule, PasswordFieldsComponent, TranslatePipe],
 })
 export class JoinPage {
   private readonly connection = inject(ConnectionService);
   private readonly invitations = inject(InvitationsService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly passwordPolicies = inject(PasswordPolicyService);
+
+  /** Сервер запрошення: де знайшлося API домену сторінки (`null` — ще шукаємо чи не знайшли). */
+  private readonly server = signal<string | null>(null);
+
+  /**
+   * Умови до пароля сервера, на якому задають пароль (`PasswordPolicyService`); поки сервер не
+   * знайдено — умови за замовчуванням.
+   */
+  protected readonly passwordPolicy = computed(() => {
+    const server = this.server();
+    // Сам виклик (кеш і запит) — не частина обчислення: стежимо лише за сигналом умов.
+    return server ? untracked(() => this.passwordPolicies.policy(server))() : DEFAULT_PASSWORD_POLICY;
+  });
 
   /** Токен із query-параметра `?token=…` (прив'язується роутером через bindToComponentInputs). */
   readonly token = input<string | undefined>();
@@ -64,7 +85,7 @@ export class JoinPage {
     if (!password) {
       return 'passwordRequired';
     }
-    return isStrongPassword(password) ? null : 'passwordWeak';
+    return isStrongPassword(password, this.passwordPolicy()) ? null : 'passwordWeak';
   });
   protected readonly passwordRepeatError = computed(() => {
     if (!this.submitted()) {
@@ -89,9 +110,6 @@ export class JoinPage {
   /** Запит перевірки, що тече: відповідь на застарілий (інший токен) не має нічого змінити. */
   private loadId = 0;
 
-  /** Сервер запрошення: де знайшлося API домену сторінки (`ConnectionService.findPageServer`). */
-  private server = this.connection.pageServerUrl;
-
   constructor() {
     effect(() => {
       const token = this.token();
@@ -101,8 +119,10 @@ export class JoinPage {
 
   /**
    * Спершу шукає сервер за доменом сторінки (`GET /health`: origin сторінки, далі порт 5065), тоді — токен
-   * (`GET /api/v1/invitations/validate`). Будь-яка невдача перевірки токена — «посилання
-   * неактивне»: причини (прострочений, використаний, зіпсований) людині не розрізнити.
+   * (`GET /api/v1/invitations/validate`). Сервер відхилив токен (400) або токена в посиланні
+   * нема — «посилання неактивне»: причини (прострочений, використаний, зіпсований) людині не
+   * розрізнити. Інша невдача (сервер не відповів, помилка сервера, відповідь не за контрактом) —
+   * про токен нічого не каже, тож «не вдалося перевірити» з кнопкою повтору (`retry`).
    */
   private async load(token: string | undefined): Promise<void> {
     const id = ++this.loadId;
@@ -116,18 +136,23 @@ export class JoinPage {
       this.view.set('no-server');
       return;
     }
-    this.server = server;
+    this.server.set(server);
 
     const details = token ? await this.invitations.validate(server, token) : 'invalid';
     if (id !== this.loadId) {
       return;
     }
     if (typeof details === 'string') {
-      this.view.set('invalid');
+      this.view.set(details === 'invalid' ? 'invalid' : 'check-failed');
       return;
     }
     this.email.set(details.email);
     this.view.set('form');
+  }
+
+  /** «Спробувати ще раз» після невдалої перевірки: та сама перевірка заново. */
+  protected retry(): void {
+    void this.load(this.token());
   }
 
   protected onFieldChange(field: WritableSignal<string>, value: string | number | null | undefined): void {
@@ -149,9 +174,12 @@ export class JoinPage {
       return;
     }
 
+    const server = this.server();
+    if (!server) {
+      return;
+    }
     this.saving.set(true);
     this.saveError.set(null);
-    const server = this.server;
     const result = await this.invitations.accept(server, this.token() ?? '', {
       firstName: this.firstName().trim(),
       lastName: this.lastName().trim(),
@@ -165,12 +193,17 @@ export class JoinPage {
       return;
     }
 
-    this.auth.adoptTokens(server, result, this.email());
+    if (!this.auth.adoptTokens(server, result, this.email())) {
+      // Реєстрацію завершено, але браузер не дав записати акаунт: увійти можна буде пізніше.
+      this.saveError.set('storageFull');
+      return;
+    }
     void this.router.navigateByUrl(REDIRECT_URL);
   }
 }
 
-function saveErrorKey(result: 'invalid' | 'unauthorized' | 'forbidden' | 'unreachable' | 'error'): string {
+/** Ключ помилки реєстрації (`join.saveError.<ключ>`) за відповіддю сервера. */
+function saveErrorKey(result: RequestFailure): string {
   switch (result) {
     case 'invalid':
       return 'invalid';

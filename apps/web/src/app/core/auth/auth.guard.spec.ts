@@ -16,7 +16,6 @@ describe('authGuard', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
@@ -99,17 +98,40 @@ describe('authGuard', () => {
       await vi.waitFor(() => expect(user.user()).toMatchObject({ firstName: '  ' }));
     });
 
-    it('does not hold the page back while the profile is being requested, nor lose it when the request fails', async () => {
+    it('does not hold the page back while the profile is being requested, nor lose it when the request fails but the server works', async () => {
       const user = await confirm();
 
       // Запит ще не відповів, а сторінку вже пущено.
       expect(await run()).toBe(true);
       const request = http.expectOne(`${server}/api/v1/users/me`);
       request.error(new ProgressEvent('error'));
-      await vi.waitFor(() => expect(console.warn).toHaveBeenCalled());
+      // Невдача — привід перевірити сервер; він відповідає, тож акаунт лишається.
+      await answerHealth('healthy');
+      await vi.waitFor(() => expect(TestBed.inject(ConnectionService).apiStatus()).toBe('healthy'));
 
       expect(user.user()).toMatchObject({ id: 'user-1' });
       expect(accounts.active()).not.toBeNull();
+    });
+
+    it('makes the account unavailable (no longer the current one, so the session goes to /relogin) when the profile fails and the server does not answer', async () => {
+      await confirm();
+      const id = accounts.activeId()!;
+
+      expect(await run()).toBe(true);
+      http.expectOne(`${server}/api/v1/users/me`).error(new ProgressEvent('error'));
+      await answerHealth('down');
+
+      await vi.waitFor(() => expect(accounts.activeId()).toBeNull());
+      expect(accounts.accounts().find((account) => account.id === id)?.unavailable).toBe(true);
+    });
+
+    it('does not check the server when the profile comes', async () => {
+      await confirm();
+      expect(await run()).toBe(true);
+      http.expectOne(`${server}/api/v1/users/me`).flush(profile);
+      await vi.waitFor(() => expect(accounts.active()).toMatchObject({ firstName: 'Перший' }));
+      http.match(`${server}/api/v1/ngo`);
+      http.expectNone(`${server}/health`);
     });
   });
 

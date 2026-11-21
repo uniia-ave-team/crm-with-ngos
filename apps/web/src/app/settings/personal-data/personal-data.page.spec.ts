@@ -5,13 +5,15 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
+import { IMAGE_MAX_BYTES } from '../../core/images/image-types';
+import { withImageSize, withImageTypes } from '../../core/images/image-types.testing';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { ConnectionService } from '../../core/connection/connection.service';
 import { CurrentUserService } from '../../core/users/current-user.service';
-import { SettingsPageModule } from '../settings.module';
 import { LanguageService } from '../../core/i18n/language.service';
 import { LANGUAGES } from '../../core/i18n/languages.generated';
 import { PersonalDataPage } from './personal-data.page';
+import { addAccountWithSnapshot } from '../../core/accounts/accounts.testing';
 
 // Тексти сторінки живуть в uk.json — беремо їх звідти, а не дублюємо.
 
@@ -43,11 +45,10 @@ describe('PersonalDataPage', () => {
     (URL as unknown as Record<string, unknown>)['createObjectURL'] = createUrl;
     (URL as unknown as Record<string, unknown>)['revokeObjectURL'] = revokeUrl;
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [SettingsPageModule],
+      imports: [PersonalDataPage],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);
@@ -73,9 +74,9 @@ describe('PersonalDataPage', () => {
 
   /** Підтверджує вхід профілем (після цього сторінка бачить користувача). */
   async function signIn(profile: Record<string, unknown>, ngoName = 'Org'): Promise<void> {
-    TestBed.inject(AccountsService).add({ server, accessToken: 'a', refreshToken: 'r', identity: 'u1', ngoName });
+    addAccountWithSnapshot(TestBed.inject(AccountsService), { server, accessToken: 'a', refreshToken: 'r', identity: 'u1' }, { ngoName });
     const result = TestBed.inject(CurrentUserService).ensure();
-    http.expectOne(`${server}/api/v1/users/me`).flush({ id: 'u1', roles: [], customFields: [], ...profile });
+    http.expectOne(`${server}/api/v1/users/me`).flush({ id: 'u1', email: 'a@b.org', firstName: '', lastName: '', roles: [], customFields: [], ...profile });
     await result;
   }
 
@@ -162,7 +163,7 @@ describe('PersonalDataPage', () => {
       uk.settings.personal.preferredLanguage,
     ]);
     expect(element.querySelector('.settings-submit')?.textContent?.trim()).toBe(uk.settings.personal.save);
-    expect(element.textContent).toContain(uk.settings.personal.avatarHint);
+    expect(element.textContent).toContain(withImageTypes(uk.settings.personal.avatarHint, 'or'));
     expect(Array.from(element.querySelectorAll('.settings-check span')).map((s) => s.textContent?.trim())).toEqual([
       uk.settings.personal.pronounShe,
       uk.settings.personal.pronounHe,
@@ -234,6 +235,46 @@ describe('PersonalDataPage', () => {
       await vi.waitFor(() => expect((page.element.querySelector('#settings-last-name') as HTMLInputElement).value).not.toBe(''));
       return page;
     }
+
+    describe('a fresh profile while the form is open (it is asked again in the background on every page change)', () => {
+      const value = (element: HTMLElement, id: string) => (element.querySelector(`#${id}`) as HTMLInputElement).value;
+      /** Приходить свіжий профіль — як від фонового запиту `authGuard`. */
+      async function freshProfile(fixture: { detectChanges(): void }, changes: Record<string, unknown>) {
+        const reload = TestBed.inject(CurrentUserService).reload();
+        http.expectOne(`${server}/api/v1/users/me`).flush({ ...profile, roles: [], customFields: [], ...changes });
+        await reload;
+        fixture.detectChanges();
+      }
+
+      it('fills the fields while nothing has been changed in them', async () => {
+        const { fixture, element } = await open();
+        await freshProfile(fixture, { lastName: 'Renamed' });
+        expect(value(element, 'settings-last-name')).toBe('Renamed');
+      });
+
+      it('does not wipe what the user is typing', async () => {
+        const { fixture, element } = await open();
+        setText(element, 'settings-first-name', 'Typed');
+        await freshProfile(fixture, { firstName: 'FromServer', lastName: 'Renamed' });
+        expect(value(element, 'settings-first-name')).toBe('Typed');
+        // Поля, яких не чіпали, теж лишаються як були: форма не змішує введене зі свіжим.
+        expect(value(element, 'settings-last-name')).toBe('Last');
+      });
+
+      it('follows the profile again after a successful save', async () => {
+        const { fixture, element } = await open();
+        setText(element, 'settings-first-name', 'Typed');
+        save(fixture, element);
+        http.expectOne((r) => r.method === 'PUT' && r.url === putUrl()).flush(null, { status: 204, statusText: 'No Content' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(result(element)).not.toBeNull();
+        });
+
+        await freshProfile(fixture, { firstName: 'Typed', lastName: 'Renamed' });
+        expect(value(element, 'settings-last-name')).toBe('Renamed');
+      });
+    });
 
     describe('prefilling the pronouns from the profile', () => {
       it.each([
@@ -843,7 +884,7 @@ describe('PersonalDataPage', () => {
         const hints = Array.from(element.querySelectorAll('.settings-avatar__hint'));
         // Примітка іде одразу після підказки про розмір файлу.
         expect(hints).toHaveLength(2);
-        expect(hints[0].textContent).toContain(uk.settings.personal.avatarHint);
+        expect(hints[0].textContent).toContain(withImageTypes(uk.settings.personal.avatarHint, 'or'));
         return hints[1] as HTMLElement;
       };
 
@@ -956,7 +997,7 @@ describe('PersonalDataPage', () => {
     const click = vi.spyOn(input, 'click').mockImplementation(() => undefined);
     (element.querySelector('.settings-avatar__choose') as HTMLButtonElement).click();
     expect(click).toHaveBeenCalled();
-    expect(input.accept).toBe('image/png,image/webp,image/jpeg,image/gif');
+    expect(input.accept).toBe('image/png,image/webp,image/jpeg,image/gif,image/bmp,image/svg+xml');
   });
 
   describe('avatar file types', () => {
@@ -969,7 +1010,7 @@ describe('PersonalDataPage', () => {
 
     it('lists the types in the hint, from the language file', () => {
       const { element } = render();
-      expect(element.textContent).toContain(uk.settings.personal.avatarHint);
+      expect(element.textContent).toContain(withImageTypes(uk.settings.personal.avatarHint, 'or'));
     });
 
     it.each([
@@ -978,6 +1019,8 @@ describe('PersonalDataPage', () => {
       ['photo.jpeg', 'image/jpeg'],
       ['photo.jpg', 'image/jpeg'],
       ['photo.gif', 'image/gif'],
+      ['photo.bmp', 'image/bmp'],
+      ['photo.svg', 'image/svg+xml'],
     ])('accepts %s', (name, type) => {
       const { fixture, element } = render();
       choose(element, new File(['x'], name, { type }));
@@ -988,8 +1031,7 @@ describe('PersonalDataPage', () => {
     });
 
     it.each([
-      ['photo.svg', 'image/svg+xml'],
-      ['photo.bmp', 'image/bmp'],
+      ['photo.tiff', 'image/tiff'],
       ['notes.txt', 'text/plain'],
     ])('rejects %s, with the error from the language file, and keeps "no file"', (name, type) => {
       const { fixture, element } = render();
@@ -997,12 +1039,21 @@ describe('PersonalDataPage', () => {
       fixture.detectChanges();
 
       expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(uk.settings.personal.noFile);
-      expect(error(element)?.textContent?.trim()).toBe(uk.settings.personal.error.avatarType);
+      expect(error(element)?.textContent?.trim()).toBe(withImageTypes(uk.settings.personal.error.avatarType, 'and'));
+    });
+
+    it('rejects a file larger than the server takes, with the size in the error, and keeps "no file"', () => {
+      const { fixture, element } = render();
+      choose(element, new File([new Uint8Array(IMAGE_MAX_BYTES + 1)], 'big.png', { type: 'image/png' }));
+      fixture.detectChanges();
+
+      expect(element.querySelector('.settings-avatar__name')?.textContent?.trim()).toBe(uk.settings.personal.noFile);
+      expect(error(element)?.textContent?.trim()).toBe(withImageSize(uk.settings.personal.error.avatarSize));
     });
 
     it('clears the error when an allowed file is chosen afterwards', () => {
       const { fixture, element } = render();
-      choose(element, new File(['x'], 'photo.svg', { type: 'image/svg+xml' }));
+      choose(element, new File(['x'], 'photo.tiff', { type: 'image/tiff' }));
       fixture.detectChanges();
       expect(error(element)).not.toBeNull();
 
