@@ -19,7 +19,7 @@
 | API Docs | Scalar + OpenAPI 3.1 | 2.x |
 | Logging | Serilog (console + rolling files) | 4.x / 10.x |
 | Style Analysis | StyleCop.Analyzers | 1.2.x |
-| Test Framework | xUnit + NSubstitute + Shouldly | 2.x / 6.x / 4.x |
+| Test Framework | xUnit v3 + NSubstitute + Shouldly + NetArchTest.Rules | 4.x / 6.x / 4.x / 1.x |
 | Integration Tests | Testcontainers.PostgreSql + Respawn | 4.x / 7.x |
 
 ---
@@ -33,34 +33,38 @@ apps/api/
 ├── Dockerfile                        # Multi-stage build: sdk:10.0 → aspnet:10.0-alpine
 │
 └── src/
-    ├── Crm.Domain/                   # Core business models — entities, enums, interfaces, exceptions
+    ├── Crm.Domain/                   # Core business models — entities, enums, expressions, interfaces, exceptions
     │   ├── Entities/                 # Domain entities (User, Ngo, Role, CustomTable, CustomRecord, TableTemplate, etc.)
     │   ├── Enums/                    # Domain enumerations (AccessRight, FieldDataType, status flags)
-    │   ├── Exceptions/               # Base domain exception types
-    │   └── Interfaces/               # Repository contracts (IRepository<T>, IFieldSchema)
+    │   ├── Exceptions/               # Domain validation, not-found, and conflict exceptions (ConflictException, ConcurrencyConflictException, etc.)
+    │   ├── Expressions/              # Reusable LINQ expression trees
+    │   └── Interfaces/               # Repository & schema contracts (IGenericRepository<T>, IFieldSchema, etc.)
     │
     ├── Crm.Application/              # Use-case layer — CQRS handlers, DTOs, validators
-    │   ├── Features/                 # Vertical slices: Users, Ngos, Roles, System, LoginPageImages
+    │   ├── Features/                 # Vertical slices: Users, Ngos, Roles, System, LoginPageImages, CustomTables, CustomRecords, CustomTemplates, etc.
     │   ├── Dtos/                     # Request / Response transfer objects
     │   ├── Interfaces/               # Service abstractions (IIdentityService, ITokenService, etc.)
-    │   └── Common/                   # Shared behaviors (validation pipeline, transaction behavior)
+    │   └── Common/                   # Pipeline behaviors (authorization, validation, transactions), scoping interfaces, constants
     │
     ├── Crm.Infrastructure/           # Infrastructure implementations
-    │   ├── Persistence/              # EF Core DbContext (ApplicationDbContext)
+    │   ├── Persistence/              # EF Core DbContext (ApplicationDbContext), entity configurations, seeders, and Interceptors (DbExceptionTranslationInterceptor, PostgresDbExceptionTranslator)
     │   ├── Migrations/               # EF Core database migrations
-    │   ├── Repositories/             # PostgreSQL repository implementations
+    │   ├── Repositories/             # PostgreSQL repository implementations and generic join-table helpers
+    │   ├── Helpers/                  # Query filter expression helpers
     │   ├── Services/                 # Identity, token, file storage service implementations
     │   ├── Options/                  # Strongly-typed config classes (JwtOptions, etc.)
     │   ├── BackgroundServices/       # Hosted background workers
     │   └── RateLimiting/             # Rate-limiting policy configuration
     │
     ├── Crm.Api/                      # Presentation layer — HTTP entry point
-    │   ├── Controllers/V1/           # Versioned REST controllers (Auth, Users, Ngos, Roles, etc.)
-    │   ├── Middleware/               # Global exception handler (ProblemDetails RFC 9457)
+    │   ├── Controllers/V1/           # Versioned REST controllers (Auth, Users, Ngo, Roles, Invitations, System, CustomTables, etc.)
+    │   ├── Middleware/               # Global exception handler (ProblemDetails RFC 9457, incl. 409 Conflict mapping)
     │   ├── Extensions/               # Service registration & pipeline configuration
+    │   ├── ModelBinding/             # UTC DateTime model binder for query/route/form parameters
+    │   ├── Serialization/            # UTC DateTime JSON converter for PostgreSQL timestamptz compatibility
     │   ├── Security/                 # Authorization policies and requirements
     │   ├── HealthChecks/             # Custom health check implementations
-    │   ├── OpenApi/                  # Scalar / OpenAPI transformers
+    │   ├── OpenApi/                  # Scalar / OpenAPI transformers (incl. JsonIgnoreParameterOperationTransformer)
     │   ├── appsettings.json          # Base configuration (non-secret defaults)
     │   └── Program.cs                # App entry point — DI wiring, migration, seeding
     │
@@ -69,11 +73,11 @@ apps/api/
     │   ├── Parsing/                  # CLI argument parser
     │   └── Program.cs                # CLI entry point
     │
-    ├── Crm.Domain.Tests/             # Unit tests — domain entity invariants
-    ├── Crm.Application.Tests/        # Unit tests — CQRS handlers and validators
-    ├── Crm.Infrastructure.Tests/     # Integration tests — services and repositories
-    ├── Crm.Architecture.Tests/       # Architecture fitness tests (layer dependency rules)
-    └── Crm.Api.Tests/                # End-to-end integration tests (Testcontainers + WebApplicationFactory)
+    ├── Crm.Domain.Tests/             # Unit tests — domain entity invariants, exceptions, extensions
+    ├── Crm.Application.Tests/        # Unit tests — CQRS handlers, validators, and pipeline behaviors
+    ├── Crm.Infrastructure.Tests/     # Integration tests — services, repositories, PostgreSQL queries, DB exception translation
+    ├── Crm.Architecture.Tests/       # Architecture fitness tests (NetArchTest.Rules enforcing Clean Architecture boundaries)
+    └── Crm.Api.Tests/                # End-to-end & HTTP pipeline integration tests (Testcontainers + WebApplicationFactory)
 ```
 
 ---
@@ -215,7 +219,7 @@ All settings live in `appsettings.json` (committed, non-secret defaults). Secret
 
 | Key | Required | Default | Description |
 |---|---|---|---|
-| `CorsSettings:AllowedOrigins` | Optional | `["http://localhost:4200"]` | Array of allowed CORS origins |
+| `CorsSettings:AllowedOrigins` | Optional | `["http://localhost:4200"]` | Array of allowed CORS origins (allowed HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`) |
 
 ### Rate Limiting (`RateLimiting`)
 
@@ -231,6 +235,7 @@ All settings live in `appsettings.json` (committed, non-secret defaults). Secret
 |---|---|---|---|
 | `FileStorage:UploadDirectory` | ✅ **Required** | `"uploads"` (dev) / `/data/uploads` (Docker) | Directory path for uploaded files |
 | `FileStorage:BaseUrl` | ✅ **Required** | `"http://localhost:5065"` | Public base URL for constructing file access URLs |
+| `FileStorage:MaxTotalBytes` | Optional | `107374182400` (100 GB) | Maximum total file storage quota in bytes across the entire installation |
 
 ### Logging (`SerilogOptions`)
 
@@ -263,16 +268,18 @@ All settings live in `appsettings.json` (committed, non-secret defaults). Secret
 dotnet test Crm.slnx
 ```
 
-Integration tests in `Crm.Api.Tests` and `Crm.Infrastructure.Tests` spin up a real PostgreSQL instance automatically via **Testcontainers** — no manual database setup required.
+Integration tests in `Crm.Api.Tests` and `Crm.Infrastructure.Tests` spin up a real PostgreSQL instance automatically via **Testcontainers** (with **Respawn** cleanup) — no manual database setup required.
+
+`Crm.Architecture.Tests` uses **NetArchTest.Rules** to enforce Clean Architecture layer boundaries (preventing upper-layer, EF Core, or Npgsql dependencies from leaking into `Crm.Domain`, `Crm.Application`, `Crm.Api` extensions/middleware, or `GenericRepository`).
 
 ### Run a specific test project
 
 ```bash
-dotnet test src/Crm.Api.Tests             # End-to-end integration tests
-dotnet test src/Crm.Application.Tests     # CQRS handler & validator unit tests
-dotnet test src/Crm.Domain.Tests          # Domain entity invariant tests
-dotnet test src/Crm.Architecture.Tests    # Enforce layer dependency rules
-dotnet test src/Crm.Infrastructure.Tests  # Repository & service integration tests
+dotnet test src/Crm.Api.Tests             # End-to-end & HTTP pipeline integration tests
+dotnet test src/Crm.Application.Tests     # CQRS handler, validator & authorization unit tests
+dotnet test src/Crm.Domain.Tests          # Domain entity invariant & exception unit tests
+dotnet test src/Crm.Architecture.Tests    # Enforce Clean Architecture layer dependency rules
+dotnet test src/Crm.Infrastructure.Tests  # Repository, PostgreSQL query & DB exception translation tests
 ```
 
 ### Code formatting
@@ -429,6 +436,7 @@ docker run \
 | **ASP.NET Core Identity + JWT** | Автентифікація, ролі, права доступу та генерація токенів |
 | **Scalar + OpenAPI 3.1** | Генерація специфікації API та інтерактивна документація |
 | **Serilog** | Структуроване логування подій у консоль та ротовані файли |
+| **xUnit v3 + NSubstitute + Shouldly + NetArchTest.Rules** | Модульні, інтеграційні (Testcontainers + Respawn) та архітектурні тести |
 
 ---
 
@@ -440,46 +448,50 @@ docker run \
 apps/api/
 ├── Crm.slnx                     # Файл рішення .NET
 ├── Dockerfile                   # Багатоетапна збірка API у контейнер
-├── src/
-│   ├── Crm.Domain/              # Корневий шар бізнес-моделей
-│   │   ├── Entities/            # Доменні сутності (User, Ngo, Role, CustomTable, CustomRecord, TableTemplate тощо)
-│   │   ├── Enums/               # Переліки прав (AccessRight), типів полів (FieldDataType), статусів тощо
-│   │   ├── Exceptions/          # Базові доменні винятки
-│   │   └── Interfaces/          # Інтерфейси репозиторіїв (IRepository, IFieldSchema)
-│   │
-│   ├── Crm.Application/         # Шар бізнес-логіки та сценаріїв
-│   │   ├── Behaviors/           # Mediator pipeline behaviors (валідація, транзакції)
-│   │   ├── Dtos/                # Об'єкти передачі даних (Requests, Responses)
-│   │   ├── Features/            # Вертикальні зрізи функцій (Commands, Queries, Handlers)
-│   │   ├── Interfaces/          # Інтерфейси сервісів (IIdentityService, ITokenService тощо)
-│   │   └── Validators/          # Правила валідації FluentValidation
-│   │
-│   ├── Crm.Infrastructure/      # Шар реалізації інфраструктури
-│   │   ├── Data/                # EF Core ApplicationDbContext та міграції
-│   │   ├── Entities/            # Сутності Identity (AuthUser, AuthRole)
-│   │   ├── Options/             # Класи типізованої конфігурації (JwtOptions, CustomIdentityOptions)
-│   │   ├── Repositories/        # Реалізація репозиторіїв для PostgreSQL
-│   │   └── Services/            # Реалізація сервісів токенів, файлів, Identity
-│   │
-│   ├── Crm.Api/                 # Веб-застосунок (Presentation Layer)
-│   │   ├── Controllers/V1/      # REST-контролери (Users, Ngo, System, Invitations тощо)
-│   │   ├── Middleware/          # Обробка винятків (ProblemDetails) та безпека
-│   │   ├── appsettings.json     # Базова конфігурація
-│   │   └── Program.cs           # Точка входу веб-сервера та налаштування DI
-│   │
-│   └── Crm.Cli/                 # Консольна утиліта адміністрування (CLI)
-│       ├── Abstractions/        # Інтерфейс команд ICliCommand
-│       ├── Commands/            # Реалізація команд
-│       ├── Extensions/          # DI та конфігурація для консолі
-│       ├── Parsing/             # Парсер аргументів командного рядка
-│       └── Program.cs           # Точка входу CLI застосунку
-│
-└── tests/                       # Проєкти автоматизованого тестування
-    ├── Crm.Domain.Tests/        # Модульні тести доменних сутностей
-    ├── Crm.Application.Tests/   # Тести обробників і валідаторів
-    ├── Crm.Infrastructure.Tests/# Тести сервісів та бази даних
-    ├── Crm.Architecture.Tests/  # Архітектурні тести
-    └── Crm.Api.Tests/           # Інтеграційні тести ендпоінтів
+└── src/
+    ├── Crm.Domain/              # Кореневий шар бізнес-моделей
+    │   ├── Entities/            # Доменні сутності (User, Ngo, Role, CustomTable, CustomRecord, TableTemplate тощо)
+    │   ├── Enums/               # Переліки прав (AccessRight), типів полів (FieldDataType), статусів тощо
+    │   ├── Exceptions/          # Доменні винятки валідації, відсутності сутностей і конфліктів (ConflictException, ConcurrencyConflictException тощо)
+    │   ├── Expressions/         # Перевикористовувані LINQ-вирази
+    │   └── Interfaces/          # Контракти репозиторіїв і схем (IGenericRepository<T>, IFieldSchema тощо)
+    │
+    ├── Crm.Application/         # Шар бізнес-логіки та сценаріїв
+    │   ├── Common/              # Поведінки конвеєра Mediator (авторизація, валідація, транзакції), інтерфейси контексту, константи
+    │   ├── Dtos/                # Об'єкти передачі даних (Requests, Responses)
+    │   ├── Features/            # Вертикальні зрізи: Users, Ngos, Roles, System, LoginPageImages, CustomTables, CustomRecords, CustomTemplates тощо
+    │   └── Interfaces/          # Інтерфейси сервісів (IIdentityService, ITokenService тощо)
+    │
+    ├── Crm.Infrastructure/      # Шар реалізації інфраструктури
+    │   ├── Persistence/         # EF Core ApplicationDbContext, конфігурації сутностей, сидери та Interceptors (DbExceptionTranslationInterceptor, PostgresDbExceptionTranslator)
+    │   ├── Migrations/          # Міграції EF Core
+    │   ├── Entities/            # Сутності Identity (AuthUser, AuthRole)
+    │   ├── Helpers/             # Допоміжні вирази фільтрації запитів (QueryFilterExpressions)
+    │   ├── Options/             # Класи типізованої конфігурації (JwtOptions, CustomIdentityOptions)
+    │   ├── Repositories/        # Реалізація репозиторіїв для PostgreSQL та хелпери для зв'язкових таблиць
+    │   └── Services/            # Реалізація сервісів токенів, файлів, Identity
+    │
+    ├── Crm.Api/                 # Веб-застосунок (Presentation Layer)
+    │   ├── Controllers/V1/      # REST-контролери (Auth, Users, Ngo, Roles, Invitations, System, CustomTables тощо)
+    │   ├── Middleware/          # Глобальна обробка винятків (ProblemDetails RFC 9457, мапінг ConflictException у 409)
+    │   ├── ModelBinding/        # UTC DateTime model binder для query/route/form параметрів
+    │   ├── Serialization/       # UTC DateTime JSON-конвертер для сумісності з PostgreSQL timestamptz
+    │   ├── OpenApi/             # Трансформери Scalar / OpenAPI (зокрема JsonIgnoreParameterOperationTransformer)
+    │   ├── appsettings.json     # Базова конфігурація
+    │   └── Program.cs           # Точка входу веб-сервера та налаштування DI
+    │
+    ├── Crm.Cli/                 # Консольна утиліта адміністрування (CLI)
+    │   ├── Abstractions/        # Інтерфейс команд ICliCommand
+    │   ├── Commands/            # Реалізація команд
+    │   ├── Extensions/          # DI та конфігурація для консолі
+    │   ├── Parsing/             # Парсер аргументів командного рядка
+    │   └── Program.cs           # Точка входу CLI застосунку
+    │
+    ├── Crm.Domain.Tests/        # Модульні тести доменних сутностей, винятків і розширень
+    ├── Crm.Application.Tests/   # Тести обробників, валідаторів і поведінок конвеєра
+    ├── Crm.Infrastructure.Tests/# Інтеграційні тести сервісів, PostgreSQL-запитів і перекладу помилок БД
+    ├── Crm.Architecture.Tests/  # Архітектурні тести (NetArchTest.Rules для перевірки меж шарів)
+    └── Crm.Api.Tests/           # Інтеграційні тести ендпоінтів і HTTP-конвеєра
 ```
 
 ---
@@ -605,13 +617,15 @@ docker compose exec -e CRM_CLI_Logging__LogLevel__Microsoft=Information api crm 
 
 ## 🧪 Тестування та перевірки якості коду
 
+Інтеграційні тести в `Crm.Api.Tests` та `Crm.Infrastructure.Tests` автоматично запускають PostgreSQL через **Testcontainers** (з очищенням через **Respawn**). `Crm.Architecture.Tests` перевіряє межі шарів Clean Architecture за допомогою **NetArchTest.Rules** (відсутність витоку залежностей верхніх шарів, EF Core та Npgsql у `Crm.Domain`, `Crm.Application`, розширення/middleware `Crm.Api` та `GenericRepository`).
+
 Всі команди можна запускати з кореневого каталогу за допомогою `just` або напряму через .NET CLI:
 
 ```bash
 # Форматування коду
 dotnet format Crm.slnx
 
-# Запуск модульних та інтеграційних тестів
+# Запуск модульних, архітектурних та інтеграційних тестів
 dotnet test Crm.slnx
 
 # Перевірка синхронізації контракту openapi.json з кодом

@@ -46,4 +46,16 @@ public enum AccessRight
     CreateCustomRecord = 24,
     UpdateCustomRecord = 25,
     DeleteCustomRecord = 26,
+
+    // --- Projects ---
+    ViewProject = 27,
+    CreateProject = 28,
+    UpdateProject = 29,
+    DeleteProject = 30,
+
+    // --- Tasks ---
+    ViewTask = 31,
+    CreateTask = 32,
+    UpdateTask = 33,
+    DeleteTask = 34,
 }

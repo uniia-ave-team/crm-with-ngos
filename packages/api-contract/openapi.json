@@ -1811,6 +1811,3256 @@
         ]
       }
     },
+    "/api/v1/projects": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Retrieves a paginated, filtered, and sorted list of projects visible to the currently authenticated user.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewProject`",
+        "operationId": "ProjectsGetProjects",
+        "parameters": [
+          {
+            "name": "SearchTerm",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "OrderBy",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortOrder",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfProjectSummaryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Creates a new project, validating view and edit visibility combinations.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.CreateProject`",
+        "operationId": "ProjectsCreateProject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{id}": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Retrieves detailed information about a specific project by its unique identifier.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewProject`",
+        "operationId": "ProjectsGetProjectById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Updates an existing project's details and visibility settings.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsUpdateProject",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the project to update.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Deletes a project and all its associated tasks, topics, tags, and member assignments.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.DeleteProject`",
+        "operationId": "ProjectsDeleteProject",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the project to delete.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/members": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Retrieves all members assigned to a specific project, including their functional role titles and project claims.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewProject`",
+        "operationId": "ProjectsGetMembers",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectMemberDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Assigns an active user to a project with a custom functional role title and project-level permission claims.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsAssignMember",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignProjectMemberCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/members/{userId}": {
+      "put": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Updates an existing project member's custom functional role title and project-level permission claims.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsUpdateMember",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "The unique identifier of the user on the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectMemberCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Removes a user from a project.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsRemoveMember",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "The unique identifier of the user to remove.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/topics": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Retrieves a paginated, filtered, and sorted list of board topics/sections for a project.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewProject`",
+        "operationId": "ProjectsGetTopics",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "SearchTerm",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "OrderBy",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortOrder",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfTopicDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Creates a new board topic/section within a project.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsCreateTopic",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTopicCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/topics/{topicId}": {
+      "put": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Updates an existing board topic/section within a project.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsUpdateTopic",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "topicId",
+            "in": "path",
+            "description": "The unique identifier of the topic to update.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTopicCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Deletes a board topic/section from a project.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsDeleteTopic",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "topicId",
+            "in": "path",
+            "description": "The unique identifier of the topic to delete.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tags": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Retrieves a paginated, filtered, and sorted list of tags strictly scoped to a specific project.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewProject`",
+        "operationId": "ProjectsGetTags",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "SearchTerm",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "OrderBy",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortOrder",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Pagination, sorting, and search query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfTagDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Creates a new project-scoped tag.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsCreateTag",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTagCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tags/{tagId}": {
+      "put": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Updates an existing project-scoped tag's title.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsUpdateTag",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "description": "The unique identifier of the tag to update.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTagCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Deletes a project-scoped tag.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateProject`",
+        "operationId": "ProjectsDeleteTag",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "description": "The unique identifier of the tag to delete.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks": {
+      "get": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Retrieves a paginated, filtered, and sorted list of project tasks\n(supports `filter=mine` for personal tasks, tag/status/priority/date filters, text search, and null-safe date sorting).",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "ProjectTasksGetTasks",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Filter",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "TopicId",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Status",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "$ref": "#/components/schemas/ProjectTaskStatus"
+            }
+          },
+          {
+            "name": "Priority",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "$ref": "#/components/schemas/TaskPriority"
+            }
+          },
+          {
+            "name": "TagIds",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "name": "StartDateFrom",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "StartDateTo",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "EndDateFrom",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "EndDateTo",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "SearchTerm",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "OrderBy",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortOrder",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfTaskSummaryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "post": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Creates a new task within a project. Automatically populates `EndDate` if created with `Completed` status and null `EndDate`.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.CreateTask`",
+        "operationId": "ProjectTasksCreateTask",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks/{taskId}": {
+      "get": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Retrieves detailed information about a specific task within a project.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "ProjectTasksGetTaskById",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "put": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Updates an existing task within a project. Automatically populates `EndDate` when transitioning to `Completed` status if `EndDate` is null.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateTask`",
+        "operationId": "ProjectTasksUpdateTask",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task to update.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Deletes a task and removes all associated file attachments from storage.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.DeleteTask`",
+        "operationId": "ProjectTasksDeleteTask",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task to delete.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks/{taskId}/status": {
+      "patch": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Partially updates a task's status, board topic/section, or completion date.\nAutomatically populates `EndDate` with the current UTC timestamp if status becomes `Completed` and `EndDate` is null.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateTask`",
+        "operationId": "ProjectTasksUpdateTaskStatus",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskStatusCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks/{taskId}/assignees/{userId}": {
+      "post": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Assigns a user to a task.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateTask`",
+        "operationId": "ProjectTasksAssignUser",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "The unique identifier of the user to assign.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Removes a user assignment from a task.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateTask`",
+        "operationId": "ProjectTasksUnassignUser",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "The unique identifier of the user to unassign.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks/{taskId}/tags/{tagId}": {
+      "post": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Attaches a project-scoped tag to a task.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateTask`",
+        "operationId": "ProjectTasksAddTag",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "description": "The unique identifier of the project tag.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Detaches a project-scoped tag from a task.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateTask`",
+        "operationId": "ProjectTasksRemoveTag",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "description": "The unique identifier of the project tag to remove.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks/{taskId}/comments": {
+      "get": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Retrieves a paginated list of comments on a task, ordered chronologically.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "ProjectTasksGetComments",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "description": "Pagination query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Pagination query parameters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfTaskCommentDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "post": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Posts a new comment on a task.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "ProjectTasksCreateComment",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskCommentCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks/{taskId}/comments/{commentId}": {
+      "put": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Updates an existing comment on a task.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "ProjectTasksUpdateComment",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "commentId",
+            "in": "path",
+            "description": "The unique identifier of the comment to update.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskCommentCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Deletes a comment from a task.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "ProjectTasksDeleteComment",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "commentId",
+            "in": "path",
+            "description": "The unique identifier of the comment to delete.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks/{taskId}/comments/read": {
+      "post": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Marks all comments on a task as read for the currently authenticated user.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "ProjectTasksMarkCommentsAsRead",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks/{taskId}/attachments": {
+      "get": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Retrieves metadata and download URLs for all files attached to a task.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "ProjectTasksGetAttachments",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskAttachmentDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "post": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Uploads and attaches a file to a task using the Docker volume file storage system.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateTask`",
+        "operationId": "ProjectTasksUploadAttachment",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskAttachmentDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/projects/{projectId}/tasks/{taskId}/attachments/{attachmentId}": {
+      "get": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Downloads/retrieves the file stream of a specific task attachment.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "ProjectTasksDownloadAttachment",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "description": "The unique identifier of the attachment.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "ProjectTasks"
+        ],
+        "summary": "Deletes a file attachment from a task and removes the stored file from disk.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateTask`",
+        "operationId": "ProjectTasksDeleteAttachment",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "description": "The unique identifier of the project.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "description": "The unique identifier of the task.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "description": "The unique identifier of the attachment to delete.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
     "/api/v1/roles": {
       "get": {
         "tags": [
@@ -2734,6 +5984,194 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
+    "/api/v1/tasks": {
+      "get": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Retrieves a paginated, filtered, and sorted list of tasks across all projects visible to the currently authenticated user\n(supports `filter=mine` for global personal tasks, tag/status/priority/date filters, text search, and null-safe date sorting).",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewTask`",
+        "operationId": "TasksGetTasks",
+        "parameters": [
+          {
+            "name": "Filter",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "TopicId",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Status",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "$ref": "#/components/schemas/ProjectTaskStatus"
+            }
+          },
+          {
+            "name": "Priority",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "$ref": "#/components/schemas/TaskPriority"
+            }
+          },
+          {
+            "name": "TagIds",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "name": "StartDateFrom",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "StartDateTo",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "EndDateFrom",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "EndDateTo",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "SearchTerm",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "OrderBy",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortOrder",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Query parameters for filtering (e.g., `filter=mine`), sorting, and pagination.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfTaskSummaryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
@@ -4086,6 +7524,27 @@
         },
         "description": "Represents a request to add a new custom key-value field to a user profile."
       },
+      "AssignProjectMemberCommand": {
+        "required": [
+          "userId"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "roleTitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "claim": {
+            "$ref": "#/components/schemas/ProjectClaim"
+          }
+        }
+      },
       "AuthenticateUserCommand": {
         "required": [
           "email",
@@ -4267,6 +7726,40 @@
           }
         }
       },
+      "CreateProjectCommand": {
+        "required": [
+          "title",
+          "description",
+          "visibility",
+          "startDate"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ProjectVisibility"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "CreateRoleCommand": {
         "required": [
           "name",
@@ -4317,6 +7810,110 @@
           }
         }
       },
+      "CreateTagCommand": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateTaskCommand": {
+        "required": [
+          "topicId",
+          "title",
+          "assigneeIds",
+          "tagIds",
+          "description",
+          "startDate"
+        ],
+        "type": "object",
+        "properties": {
+          "topicId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "assigneeIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "tagIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectTaskStatus"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TaskPriority"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "externalLinks": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TaskExternalLinkDto"
+            }
+          },
+          "metadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          }
+        }
+      },
+      "CreateTaskCommentCommand": {
+        "required": [
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        }
+      },
       "CreateTemplateFieldDto": {
         "required": [
           "name",
@@ -4338,6 +7935,26 @@
           },
           "isRequired": {
             "type": "boolean"
+          },
+          "order": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint8"
+          }
+        }
+      },
+      "CreateTopicCommand": {
+        "required": [
+          "title",
+          "order"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
           },
           "order": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -4878,6 +8495,61 @@
           }
         }
       },
+      "PagedResultOfProjectSummaryDto": {
+        "required": [
+          "items",
+          "totalCount",
+          "pageNumber",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectSummaryDto"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          }
+        }
+      },
       "PagedResultOfRoleDto": {
         "required": [
           "items",
@@ -4946,6 +8618,226 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/TableTemplateDto"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PagedResultOfTagDto": {
+        "required": [
+          "items",
+          "totalCount",
+          "pageNumber",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagDto"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PagedResultOfTaskCommentDto": {
+        "required": [
+          "items",
+          "totalCount",
+          "pageNumber",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskCommentDto"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PagedResultOfTaskSummaryDto": {
+        "required": [
+          "items",
+          "totalCount",
+          "pageNumber",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskSummaryDto"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PagedResultOfTopicDto": {
+        "required": [
+          "items",
+          "totalCount",
+          "pageNumber",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopicDto"
             }
           },
           "totalCount": {
@@ -5080,6 +8972,179 @@
             ]
           }
         }
+      },
+      "ProjectClaim": {
+        "type": "integer"
+      },
+      "ProjectDto": {
+        "required": [
+          "id",
+          "title",
+          "description",
+          "visibility",
+          "startDate",
+          "endDate",
+          "createdBy",
+          "members",
+          "topics",
+          "tags"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ProjectVisibility"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectMemberDto"
+            }
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopicDto"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagDto"
+            }
+          }
+        }
+      },
+      "ProjectMemberDto": {
+        "required": [
+          "projectId",
+          "userId",
+          "firstName",
+          "lastName",
+          "patronymic",
+          "avatarUrl",
+          "roleTitle",
+          "claim"
+        ],
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "patronymic": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "roleTitle": {
+            "type": "string"
+          },
+          "claim": {
+            "$ref": "#/components/schemas/ProjectClaim"
+          }
+        }
+      },
+      "ProjectSummaryDto": {
+        "required": [
+          "id",
+          "title",
+          "description",
+          "visibility",
+          "startDate",
+          "endDate",
+          "createdBy"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ProjectVisibility"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "ProjectTaskStatus": {
+        "type": "integer"
+      },
+      "ProjectVisibility": {
+        "type": "integer"
       },
       "PronounCategory": {
         "type": "integer"
@@ -5260,6 +9325,420 @@
           }
         }
       },
+      "TagDto": {
+        "required": [
+          "id",
+          "projectId",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "TaskAssigneeDto": {
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "patronymic",
+          "avatarUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "patronymic": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "TaskAttachmentDto": {
+        "required": [
+          "id",
+          "taskId",
+          "uploadedBy",
+          "originalFileName",
+          "contentType",
+          "fileSize",
+          "url",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "uploadedBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "originalFileName": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "fileSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TaskCommentDto": {
+        "required": [
+          "id",
+          "taskId",
+          "userId",
+          "authorFirstName",
+          "authorLastName",
+          "authorPatronymic",
+          "authorAvatarUrl",
+          "content",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "authorFirstName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "authorLastName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "authorPatronymic": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "authorAvatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TaskDto": {
+        "required": [
+          "id",
+          "projectId",
+          "topicId",
+          "topicTitle",
+          "title",
+          "description",
+          "status",
+          "priority",
+          "startDate",
+          "endDate",
+          "endDateWasAuto",
+          "unreadCommentsCount",
+          "assignedUsers",
+          "tags",
+          "attachments",
+          "externalLinks",
+          "metadata",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "topicId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "topicTitle": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectTaskStatus"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TaskPriority"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "endDateWasAuto": {
+            "type": "boolean"
+          },
+          "unreadCommentsCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "assignedUsers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskAssigneeDto"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagDto"
+            }
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskAttachmentDto"
+            }
+          },
+          "externalLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskExternalLinkDto"
+            }
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TaskExternalLinkDto": {
+        "required": [
+          "title",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "TaskPriority": {
+        "type": "integer"
+      },
+      "TaskSummaryDto": {
+        "required": [
+          "id",
+          "projectId",
+          "topicId",
+          "topicTitle",
+          "title",
+          "description",
+          "status",
+          "priority",
+          "startDate",
+          "endDate",
+          "endDateWasAuto",
+          "unreadCommentsCount",
+          "attachmentsCount",
+          "assignedUsers",
+          "tags",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "topicId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "topicTitle": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectTaskStatus"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TaskPriority"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "endDateWasAuto": {
+            "type": "boolean"
+          },
+          "unreadCommentsCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "attachmentsCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "assignedUsers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskAssigneeDto"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagDto"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "TemplateFieldDto": {
         "required": [
           "id",
@@ -5310,6 +9789,36 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "TopicDto": {
+        "required": [
+          "id",
+          "projectId",
+          "title",
+          "order"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "order": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint8"
           }
         }
       },
@@ -5520,6 +10029,54 @@
         },
         "description": "Represents a command to update the profile details of the currently authenticated user."
       },
+      "UpdateProjectCommand": {
+        "required": [
+          "title",
+          "description",
+          "visibility",
+          "startDate"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ProjectVisibility"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "UpdateProjectMemberCommand": {
+        "type": "object",
+        "properties": {
+          "roleTitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "claim": {
+            "$ref": "#/components/schemas/ProjectClaim"
+          }
+        }
+      },
       "UpdateRoleRequest": {
         "required": [
           "newName",
@@ -5578,6 +10135,137 @@
         },
         "description": "Represents the HTTP request payload to update an existing table template and its field structure."
       },
+      "UpdateTagCommand": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateTaskCommand": {
+        "required": [
+          "topicId",
+          "title",
+          "assigneeIds",
+          "tagIds",
+          "description",
+          "startDate",
+          "status",
+          "priority"
+        ],
+        "type": "object",
+        "properties": {
+          "topicId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "assigneeIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "tagIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectTaskStatus"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TaskPriority"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "externalLinks": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TaskExternalLinkDto"
+            }
+          },
+          "metadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ]
+          }
+        }
+      },
+      "UpdateTaskCommentCommand": {
+        "required": [
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateTaskStatusCommand": {
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ProjectTaskStatus"
+          },
+          "topicId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "UpdateTemplateFieldDto": {
         "required": [
           "id",
@@ -5607,6 +10295,26 @@
           },
           "isRequired": {
             "type": "boolean"
+          },
+          "order": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint8"
+          }
+        }
+      },
+      "UpdateTopicCommand": {
+        "required": [
+          "title",
+          "order"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
           },
           "order": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -5850,6 +10558,12 @@
       "name": "Ngo"
     },
     {
+      "name": "Projects"
+    },
+    {
+      "name": "ProjectTasks"
+    },
+    {
       "name": "Roles"
     },
     {
@@ -5857,6 +10571,9 @@
     },
     {
       "name": "TableTemplates"
+    },
+    {
+      "name": "Tasks"
     },
     {
       "name": "Users"

@@ -1,6 +1,8 @@
 using Crm.Api.DemoMode;
 using Crm.Api.Logging;
 using Crm.Api.Middleware;
+using Crm.Api.ModelBinding;
+using Crm.Api.Serialization;
 using Crm.Application.Extensions;
 using Crm.Infrastructure.Extensions;
 using Crm.Infrastructure.Options;
@@ -33,7 +35,14 @@ public static class HostingExtensions
             options.LowercaseUrls = true;
         });
 
-        builder.Services.AddControllers();
+        builder.Services.AddControllers(options =>
+        {
+            options.ModelBinderProviders.Insert(0, new UtcDateTimeModelBinderProvider());
+        })
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
+        });
 
         builder.Services.AddCustomApiVersioning();
 
@@ -68,8 +77,14 @@ public static class HostingExtensions
     /// <returns>The configured <see cref="WebApplication"/>.</returns>
     public static WebApplication ConfigurePipeline(this WebApplication app)
     {
-        app.UseExceptionHandler();
         app.UseForwardedHeaders();
+
+        app.UseSerilogRequestLogging(options =>
+        {
+            options.GetLevel = (httpContext, _, ex) => SerilogLogLevelResolver.Resolve(httpContext, ex);
+        });
+
+        app.UseExceptionHandler();
 
         if (app.Environment.IsDevelopment())
         {
@@ -89,11 +104,6 @@ public static class HostingExtensions
         {
             app.UseHsts();
         }
-
-        app.UseSerilogRequestLogging(options =>
-        {
-            options.GetLevel = (httpContext, _, ex) => SerilogLogLevelResolver.Resolve(httpContext, ex);
-        });
 
         app.UseHttpsRedirection();
 
