@@ -2,8 +2,12 @@ import { RequestFailure } from '../http/request-failure';
 import { StoredAccount } from './accounts.service';
 
 /** Ключ перекладу помилки входу (`login.form.error.<ключ>`) за відповіддю сервера. */
-export function loginErrorKey(result: RequestFailure): 'invalid' | 'unauthorized' | 'unreachable' | 'error' {
+export function loginErrorKey(
+  result: RequestFailure | 'busy',
+): 'invalid' | 'unauthorized' | 'unreachable' | 'demoBusy' | 'error' {
   switch (result) {
+    case 'busy':
+      return 'demoBusy';
     case 'invalid':
       return 'invalid';
     case 'unauthorized':

@@ -118,16 +118,18 @@ export class AddAccountComponent {
       return;
     }
     this.submitted.set(true);
-    const server = parseServerAddress(this.address())?.origin;
-    if (!server || this.emailError() || this.passwordError()) {
+    const typed = parseServerAddress(this.address())?.origin;
+    if (!typed || this.emailError() || this.passwordError()) {
       return;
     }
 
     this.saving.set(true);
     this.banner.set(null);
-    if (!(await this.connection.probeApi(server))) {
+    // Без порту API шукаємо за адресою як є, далі на порту 5065; акаунт запамʼятає ту, де воно знайшлося.
+    const server = await this.connection.resolveServer(this.address());
+    if (!server) {
       this.saving.set(false);
-      this.banner.set({ key: 'login.step1.error.unreachable', params: { url: server } });
+      this.banner.set({ key: 'login.step1.error.unreachable', params: { url: typed } });
       return;
     }
 

@@ -24,3 +24,14 @@ export function readJwtSubject(token: string | null | undefined): string | null 
   const sub = readJwtPayload(token)?.['sub'];
   return typeof sub === 'string' && sub ? sub : null;
 }
+
+/**
+ * Поле `demo_exp` JWT — Unix-час (секунди), коли буде видалено демо-дані відвідувача. Його
+ * мають токени, видані в демо-режимі; сервер може віддати число або рядок із числом.
+ * `null` — поля нема чи воно не схоже на час.
+ */
+export function readJwtDemoExpiry(token: string | null | undefined): number | null {
+  const raw = readJwtPayload(token)?.['demo_exp'];
+  const seconds = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() ? Number(raw) : NaN;
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}

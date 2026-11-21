@@ -4,7 +4,9 @@
          панелі, просто маршрутизований вміст на всю площу. -->
     <ion-router-outlet></ion-router-outlet>
   } @else {
-    <div class="shell">
+    <!-- Демо-режим: тонкий банер над усією оболонкою (поза демо він порожній). -->
+    <app-demo-banner></app-demo-banner>
+    <div class="shell" [class.shell--below-banner]="demo()">
       <app-primary-nav></app-primary-nav>
 
       <ion-split-pane contentId="main-content" when="lg">

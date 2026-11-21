@@ -66,8 +66,13 @@ export class ReloginFormComponent {
   private readonly submitted = signal(false);
 
   protected readonly serverState = signal<ServerState>('checking');
-  /** Origin сервера, якщо адресу вдалося розібрати. */
+  /** Origin введеної адреси (для тексту помилки), якщо її вдалося розібрати. */
   private readonly origin = computed(() => parseServerAddress(this.address())?.origin ?? null);
+  /**
+   * Origin, за яким знайшлося API введеної адреси (`ConnectionService.resolveServer`: без порту —
+   * адреса як є, далі порт 5065); з ним іде вхід, і його запамʼятовує акаунт. `null` — ще не знайдено.
+   */
+  private server: string | null = null;
 
   /** Помилка під полем адреси: сервер недоступний або адреса не схожа на адресу. */
   protected readonly addressError = computed<{ key: string; params?: { url: string } } | null>(() => {
@@ -103,8 +108,8 @@ export class ReloginFormComponent {
   private scheduleCheck(address: string): void {
     this.clearTimer();
     const id = ++this.checkId;
-    const origin = parseServerAddress(address)?.origin;
-    if (!origin) {
+    this.server = null;
+    if (!parseServerAddress(address)) {
       this.serverState.set('invalid');
       this.imageChange.emit(DEFAULT_LOGIN_IMAGE);
       return;
@@ -113,22 +118,23 @@ export class ReloginFormComponent {
     // Першу перевірку (відкрили форму) робимо одразу, наступні — коли користувач перестав друкувати.
     const delay = this.checkedOnce ? CHECK_DELAY_MS : 0;
     this.checkedOnce = true;
-    this.timer = setTimeout(() => void this.checkServer(origin, id), delay);
+    this.timer = setTimeout(() => void this.checkServer(address, id), delay);
   }
 
-  private async checkServer(origin: string, id: number): Promise<void> {
+  private async checkServer(address: string, id: number): Promise<void> {
     this.timer = null;
-    const healthy = await this.connection.probeApi(origin);
+    const server = await this.connection.resolveServer(address);
     if (id !== this.checkId) {
       return;
     }
-    if (!healthy) {
+    if (!server) {
       this.serverState.set('unavailable');
       this.imageChange.emit(DEFAULT_LOGIN_IMAGE);
       return;
     }
+    this.server = server;
     this.serverState.set('ok');
-    const image = await this.images.random(origin);
+    const image = await this.images.random(server);
     if (id === this.checkId) {
       this.imageChange.emit(image?.url ?? DEFAULT_LOGIN_IMAGE);
     }
@@ -142,8 +148,8 @@ export class ReloginFormComponent {
   }
 
   protected async submit(): Promise<void> {
-    const origin = this.origin();
-    if (this.saving() || this.serverState() !== 'ok' || !origin) {
+    const server = this.server;
+    if (this.saving() || this.serverState() !== 'ok' || !server) {
       return;
     }
     this.submitted.set(true);
@@ -154,7 +160,7 @@ export class ReloginFormComponent {
     this.saving.set(true);
     this.banner.set(null);
     const email = this.email().trim();
-    const login = await this.auth.login(email, this.password(), origin, accountToReplace(this.accounts.accounts(), this.accountId(), email));
+    const login = await this.auth.login(email, this.password(), server, accountToReplace(this.accounts.accounts(), this.accountId(), email));
     this.saving.set(false);
     if (login !== 'ok') {
       this.banner.set({ key: `login.form.error.${loginErrorKey(login)}` });

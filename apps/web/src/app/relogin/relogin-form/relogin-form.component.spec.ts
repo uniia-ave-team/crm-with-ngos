@@ -41,7 +41,8 @@ describe('ReloginFormComponent', () => {
     http = TestBed.inject(HttpTestingController);
     accounts = TestBed.inject(AccountsService);
     // Перша перевірка підключення, яку ConnectionService запускає сам при створенні, до форми не належить.
-    http.match(TestBed.inject(ConnectionService).apiHealthUrl());
+    TestBed.inject(ConnectionService);
+    http.match((request) => request.url.endsWith('/health'));
     navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     images = [];
     outputs = [];
@@ -222,6 +223,48 @@ describe('ReloginFormComponent', () => {
         uk.login.form.error.passwordRequired,
       ]);
       http.expectNone(loginUrl());
+    });
+
+    it('looks for the API of an address without a port as typed first, then on port 5065, and logs in where it was found', async () => {
+      const typed = 'https://crm.example.org';
+      const fixture = open({ server: typed, email: 'first@organization.org' });
+      await settle(fixture);
+      // Адреса як є віддає оболонку веб-клієнта (200, не JSON) — API знайшлося на порту 5065.
+      http.expectOne(health(typed)).error(new ProgressEvent('error'), { status: 200, statusText: 'OK' });
+      http.expectOne(health(`${typed}:5065`)).flush({ status: 'Healthy' });
+      await settle(fixture);
+      http.expectOne(randomImage(`${typed}:5065`)).flush({}, { status: 404, statusText: 'Not Found' });
+      await settle(fixture);
+      expect(submitButton(fixture).disabled).toBe(false);
+
+      internals(fixture).password.set('secret');
+      const submitting = internals(fixture).submit();
+      http.expectOne(`${typed}:5065/api/v1/auth/login`).flush({ accessToken: 'a.b.c', refreshToken: 'r' });
+      await settle(fixture);
+      http.expectOne(health(`${typed}:5065`)).flush({ status: 'Healthy' });
+      await submitting;
+
+      expect(accounts.active()?.server).toBe(`${typed}:5065`);
+    });
+
+    it('logs in at the address as typed when the API answers there', async () => {
+      const typed = 'https://crm.example.org';
+      const fixture = open({ server: typed, email: 'first@organization.org' });
+      await settle(fixture);
+      http.expectOne(health(typed)).flush({ status: 'Healthy' });
+      expect(http.expectOne(health(`${typed}:5065`)).cancelled).toBe(true);
+      await settle(fixture);
+      http.expectOne(randomImage(typed)).flush({}, { status: 404, statusText: 'Not Found' });
+      await settle(fixture);
+
+      internals(fixture).password.set('secret');
+      const submitting = internals(fixture).submit();
+      http.expectOne(`${typed}/api/v1/auth/login`).flush({ accessToken: 'a.b.c', refreshToken: 'r' });
+      await settle(fixture);
+      http.expectOne(health(typed)).flush({ status: 'Healthy' });
+      await submitting;
+
+      expect(accounts.active()?.server).toBe(typed);
     });
 
     it('sends nothing while the server is not known to be healthy', async () => {

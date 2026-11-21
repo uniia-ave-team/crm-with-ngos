@@ -11,11 +11,18 @@ import { ModalModule } from '../../shared/modal/modal.module';
 import { PopoverModule } from '../../shared/popover/popover.module';
 import { AccountMenuComponent } from './account-menu/account-menu.component';
 import { AddAccountComponent } from './add-account/add-account.component';
+import { DemoBannerComponent } from './demo-banner/demo-banner.component';
 import { PrimaryNavComponent } from './primary-nav/primary-nav.component';
 import { SecondaryPanelComponent } from './secondary-panel/secondary-panel.component';
 
 @NgModule({
-  declarations: [PrimaryNavComponent, SecondaryPanelComponent, AccountMenuComponent, AddAccountComponent],
+  declarations: [
+    PrimaryNavComponent,
+    SecondaryPanelComponent,
+    AccountMenuComponent,
+    AddAccountComponent,
+    DemoBannerComponent,
+  ],
   // TranslatePipe стандалонний (ngx-translate 18 більше не має NgModule),
   // тому додається напряму в imports поряд з CommonModule/IonicModule.
   imports: [
@@ -29,6 +36,6 @@ import { SecondaryPanelComponent } from './secondary-panel/secondary-panel.compo
     ModalModule,
     PopoverModule,
   ],
-  exports: [PrimaryNavComponent, SecondaryPanelComponent],
+  exports: [PrimaryNavComponent, SecondaryPanelComponent, DemoBannerComponent],
 })
 export class LayoutModule {}

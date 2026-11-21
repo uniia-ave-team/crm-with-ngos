@@ -29,7 +29,9 @@ describe('connectionGuard', () => {
   /** Викликає guard і збирає його єдину відповідь. */
   function runGuard() {
     const connection = TestBed.inject(ConnectionService);
+    // API шукаємо за origin сторінки й на порту 5065; тут порт мовчить, тож усе вирішує origin.
     const request = http.expectOne(connection.apiHealthUrl());
+    http.expectOne(`${location.protocol}//${location.hostname}:5065/health`).error(new ProgressEvent('error'));
     const results: Array<boolean | UrlTree> = [];
     const result = TestBed.runInInjectionContext(() =>
       connectionGuard({} as ActivatedRouteSnapshot, {} as RouterStateSnapshot),

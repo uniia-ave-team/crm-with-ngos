@@ -89,6 +89,9 @@ export class JoinPage {
   /** Запит перевірки, що тече: відповідь на застарілий (інший токен) не має нічого змінити. */
   private loadId = 0;
 
+  /** Сервер запрошення: де знайшлося API домену сторінки (`ConnectionService.findPageServer`). */
+  private server = this.connection.pageServerUrl;
+
   constructor() {
     effect(() => {
       const token = this.token();
@@ -97,7 +100,7 @@ export class JoinPage {
   }
 
   /**
-   * Спершу перевіряє, чи є сервер за посиланням (`GET /health`), тоді — токен
+   * Спершу шукає сервер за доменом сторінки (`GET /health`: origin сторінки, далі порт 5065), тоді — токен
    * (`GET /api/v1/invitations/validate`). Будь-яка невдача перевірки токена — «посилання
    * неактивне»: причини (прострочений, використаний, зіпсований) людині не розрізнити.
    */
@@ -105,16 +108,17 @@ export class JoinPage {
     const id = ++this.loadId;
     this.view.set('loading');
 
-    const healthy = await this.connection.probeApi(this.connection.pageServerUrl);
+    const server = await this.connection.findPageServer();
     if (id !== this.loadId) {
       return;
     }
-    if (!healthy) {
+    if (!server) {
       this.view.set('no-server');
       return;
     }
+    this.server = server;
 
-    const details = token ? await this.invitations.validate(this.connection.pageServerUrl, token) : 'invalid';
+    const details = token ? await this.invitations.validate(server, token) : 'invalid';
     if (id !== this.loadId) {
       return;
     }
@@ -147,7 +151,7 @@ export class JoinPage {
 
     this.saving.set(true);
     this.saveError.set(null);
-    const server = this.connection.pageServerUrl;
+    const server = this.server;
     const result = await this.invitations.accept(server, this.token() ?? '', {
       firstName: this.firstName().trim(),
       lastName: this.lastName().trim(),

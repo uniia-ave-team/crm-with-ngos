@@ -42,7 +42,8 @@ describe('AdminImagesGalleryComponent', () => {
     TestBed.inject(TranslateService).setTranslation('uk', uk);
     http = TestBed.inject(HttpTestingController);
     const connection = TestBed.inject(ConnectionService);
-    http.expectOne(connection.apiHealthUrl());
+    // Пошук API на старті (origin сторінки й порт 5065): обидва запити забираємо без відповіді.
+    http.match((request) => request.url.endsWith('/health'));
     server = connection.serverUrl();
   });
 
