@@ -20,6 +20,17 @@ interface JoinPageInternals {
   submit(): Promise<void>;
 }
 
+/** Сховище браузера переповнене: записи акаунтів не пишуться (решта, як-от мова, — пишеться). */
+function fillStorageForAccounts(): void {
+  const setItem = Storage.prototype.setItem;
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+    if (key.startsWith('yavir.account.')) {
+      throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    }
+    setItem.call(this, key, value);
+  });
+}
+
 describe('JoinPage', () => {
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.spyOn>;
@@ -29,7 +40,6 @@ describe('JoinPage', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [
@@ -61,10 +71,10 @@ describe('JoinPage', () => {
 
   /** Відповідь на перевірку сервера за посиланням (разом із першою перевіркою самого сервісу підключення). */
   function answerHealth(fixture: { detectChanges(): void }, body: unknown = { status: 'Healthy' }): void {
-    for (const request of http.match(`${location.origin}/health`)) {
+    for (const request of http.match(`${location.origin}/health`).filter((r) => !r.cancelled)) {
       request.flush('Not found', { status: 404, statusText: 'Not Found' });
     }
-    for (const request of http.match(`${server}/health`)) {
+    for (const request of http.match(`${server}/health`).filter((r) => !r.cancelled)) {
       if (body === null) {
         request.error(new ProgressEvent('error'));
       } else {
@@ -112,7 +122,7 @@ describe('JoinPage', () => {
   it('shows a loading state while the server is being checked', () => {
     const { element } = create();
     expect(element.textContent).toContain(uk.join.loading);
-    expect(element.querySelector('.join__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
     expect(element.querySelector('ion-input')).toBeNull();
   });
 
@@ -140,6 +150,8 @@ describe('JoinPage', () => {
     );
     validate.flush({ email: 'a@b.org', ngoId: 'n', roleId: 'r' });
     await settled(fixture, element);
+    // Умови до пароля — того самого сервера.
+    http.expectOne(`${location.origin}/api/v1/system/identity-options`);
 
     fill(page, { lastName: 'Шевченко', firstName: 'Тарас', password: 'Abcde1!x', passwordRepeat: 'Abcde1!x' });
     const done = page.submit();
@@ -157,7 +169,7 @@ describe('JoinPage', () => {
     answerHealth(fixture, body);
     await settled(fixture, element);
 
-    const error = element.querySelector('.join__error');
+    const error = element.querySelector('.auth-error');
     expect(error?.getAttribute('role')).toBe('alert');
     expect(error?.textContent).toContain(uk.join.noServer);
     const link = error?.querySelector('a');
@@ -168,19 +180,46 @@ describe('JoinPage', () => {
     http.expectNone((r) => r.url.includes('/invitations/validate'));
   });
 
-  it.each([
-    ['the server rejects the token', 400],
-    ['the server fails', 500],
-  ])('says the link is inactive, with a link to the login page, when %s', async (_name, status) => {
+  it('says the link is inactive, with a link to the login page, when the server rejects the token', async () => {
     const { fixture, element } = create();
     answerHealth(fixture);
-    await answerValidate(fixture, element, {}, status);
+    await answerValidate(fixture, element, {}, 400);
 
-    const error = element.querySelector('.join__error');
+    const error = element.querySelector('.auth-error');
     expect(error?.textContent).toContain(uk.join.invalid);
     expect(error?.textContent).not.toContain(uk.join.noServer);
     expect(error?.querySelector('a')?.getAttribute('href')).toBe('/login');
     expect(element.querySelector('ion-input')).toBeNull();
+  });
+
+  it.each([
+    ['the server fails', 500],
+    ['the server answers without the e-mail', 200],
+  ])('does not call the link inactive when %s: it says the check failed and offers to try again', async (_name, status) => {
+    const { fixture, element } = create();
+    answerHealth(fixture);
+    await answerValidate(fixture, element, {}, status);
+
+    const error = element.querySelector('.auth-error');
+    expect(error?.getAttribute('role')).toBe('alert');
+    expect(error?.textContent).toContain(uk.join.checkFailed);
+    expect(error?.textContent).not.toContain(uk.join.invalid);
+    const retry = error?.querySelector('button') as HTMLButtonElement;
+    expect(retry.textContent?.trim()).toBe(uk.join.retry);
+    expect(retry.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('checks the server and the token again by "Try again", and shows the form when it works now', async () => {
+    const { fixture, element } = create();
+    answerHealth(fixture);
+    await answerValidate(fixture, element, {}, 500);
+
+    (element.querySelector('.auth-error button') as HTMLButtonElement).click();
+    answerHealth(fixture);
+    await answerValidate(fixture, element, { email: 'a@b.org' });
+
+    expect(element.querySelector('.auth-error')).toBeNull();
+    expect(element.querySelector('ion-input')).not.toBeNull();
   });
 
   it('says the link is inactive without asking the server when there is no token', async () => {
@@ -189,7 +228,7 @@ describe('JoinPage', () => {
     await settled(fixture, element);
 
     http.expectNone((r) => r.url.includes('/invitations/validate'));
-    expect(element.querySelector('.join__error')?.textContent).toContain(uk.join.invalid);
+    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.join.invalid);
   });
 
   it('shows the form with the e-mail of the invitation as the first, disabled field', async () => {
@@ -204,7 +243,7 @@ describe('JoinPage', () => {
     expect(inputs[1].placeholder).toBe(`${uk.join.lastName} *`);
     expect(inputs[3].placeholder).toBe(uk.join.patronymic);
     expect(element.querySelector('app-password-fields')).not.toBeNull();
-    expect(element.querySelector('.join__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
     expect(element.textContent).toContain(uk.join.title);
   });
 
@@ -214,7 +253,7 @@ describe('JoinPage', () => {
     fixture.detectChanges();
 
     http.expectNone(`${server}/api/v1/invitations/accept`);
-    const banner = element.querySelector('.join__error')?.textContent;
+    const banner = element.querySelector('.auth-error')?.textContent;
     expect(banner).toContain(uk.join.error.lastNameRequired);
     expect(element.querySelector('.join__card')?.textContent).toContain(uk.join.error.firstNameRequired);
     expect(element.textContent).toContain(uk.join.error.passwordRequired);
@@ -253,6 +292,22 @@ describe('JoinPage', () => {
     expect(accounts.accounts()).toHaveLength(1);
     expect(accounts.active()).toMatchObject({ server, accessToken: 'access', refreshToken: 'refresh', email: 'a@b.org' });
     expect(navigate).toHaveBeenCalledWith(REDIRECT_URL);
+  });
+
+  it('says the registration is done but the account cannot be stored when the storage of the browser is full', async () => {
+    const { fixture, element, page } = await createForm();
+    fillStorageForAccounts();
+    fill(page, { lastName: 'Другий', firstName: 'Перший', password: 'Abcde1!x', passwordRepeat: 'Abcde1!x' });
+
+    const done = page.submit();
+    acceptRequest().flush({ accessToken: 'access', refreshToken: 'refresh' });
+    await done;
+    fixture.detectChanges();
+
+    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.join.saveError.storageFull);
+    expect(TestBed.inject(AccountsService).accounts()).toEqual([]);
+    expect(navigate).not.toHaveBeenCalled();
+    http.match(() => true);
   });
 
   it('adds the account next to the saved ones and makes the new one active', async () => {
@@ -305,7 +360,7 @@ describe('JoinPage', () => {
     await first;
     fixture.detectChanges();
 
-    const error = element.querySelector('.join__error');
+    const error = element.querySelector('.auth-error');
     expect(error?.textContent).toContain(text);
     expect(error?.nextElementSibling?.classList.contains('join__card')).toBe(true);
     expect(element.querySelector('ion-input')).not.toBeNull();
@@ -317,7 +372,7 @@ describe('JoinPage', () => {
     acceptRequest().flush({ accessToken: 'access', refreshToken: 'refresh' });
     await second;
     fixture.detectChanges();
-    expect(element.querySelector('.join__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
     expect(navigate).toHaveBeenCalledWith(REDIRECT_URL);
   });
 
@@ -337,7 +392,7 @@ describe('JoinPage', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(element.querySelector('.join__error')).toBeNull();
+    expect(element.querySelector('.auth-error')).toBeNull();
     expect((element.querySelector('ion-input') as unknown as { value: string }).value).toBe('new@b.org');
   });
 });

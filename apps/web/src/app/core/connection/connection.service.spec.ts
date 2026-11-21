@@ -28,7 +28,6 @@ describe('ConnectionService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
@@ -72,36 +71,6 @@ describe('ConnectionService', () => {
     return service;
   }
 
-  describe('parseServerAddress and serverAddressCandidates', () => {
-    it('keeps the address as typed: no port is added', () => {
-      expect(parseServerAddress('crm.example.org')?.origin).toBe(`${location.protocol}//crm.example.org`);
-      expect(parseServerAddress('https://crm.example.org:8443/some/path?x=1')?.origin).toBe('https://crm.example.org:8443');
-    });
-
-    it('without a port tries the address as typed first, then port 5065', () => {
-      expect(serverAddressCandidates('https://crm.example.org')).toEqual([
-        'https://crm.example.org',
-        'https://crm.example.org:5065',
-      ]);
-      expect(serverAddressCandidates('192.168.0.5')).toEqual([
-        `${location.protocol}//192.168.0.5`,
-        `${location.protocol}//192.168.0.5:5065`,
-      ]);
-    });
-
-    it('with an explicit port tries only that one, also when it is the default port of the scheme', () => {
-      expect(serverAddressCandidates('http://192.168.0.7:5065')).toEqual(['http://192.168.0.7:5065']);
-      expect(serverAddressCandidates('crm.example.org:8443/path')).toEqual([`${location.protocol}//crm.example.org:8443`]);
-      expect(serverAddressCandidates('https://crm.example.org:443')).toEqual(['https://crm.example.org']);
-      expect(serverAddressCandidates('http://crm.example.org:80/')).toEqual(['http://crm.example.org']);
-    });
-
-    it.each(['', '   ', 'http://', 'ftp://crm.example.org', 'not a host', null])('gives nothing for "%s"', (value) => {
-      expect(parseServerAddress(value)).toBeNull();
-      expect(serverAddressCandidates(value)).toEqual([]);
-    });
-  });
-
   describe('without a provided server address', () => {
     it('takes the domain from the current page and looks for the API on the page origin and on port 5065', () => {
       const { service, origin, port } = create();
@@ -129,7 +98,6 @@ describe('ConnectionService', () => {
       expect(service.pageServerUrl).toBe(sameOrigin);
       // Менш пріоритетний кандидат більше не потрібен.
       expect(port.cancelled).toBe(true);
-      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('API існує й працює'));
       http.expectOne(statusUrl(sameOrigin));
     });
 
@@ -152,6 +120,7 @@ describe('ConnectionService', () => {
         request.flush({ title: 'Not Found', status: 404 }, { status: 404, statusText: 'Not Found' })],
       ['text that is not JSON', (request) => request.flush('OK')],
       ['JSON without a status field', (request) => request.flush({ ok: true })],
+      ['JSON with a status that is not a string', (request) => request.flush({ status: 200 })],
       ['an HTML error page', (request) => request.flush('<html></html>', { status: 502, statusText: 'Bad Gateway' })],
       ['no response', noResponse],
     ])('moves on to port 5065 when the page origin answers with %s', (_name, answer) => {
@@ -289,7 +258,7 @@ describe('ConnectionService', () => {
         identity: 'someone',
       });
       const service = TestBed.inject(ConnectionService);
-      http.expectOne('https://other.example:5065/health');
+      const accountCheck = http.expectOne('https://other.example:5065/health');
 
       const found = service.findPageServer();
       appShell(http.expectOne(health(sameOrigin)));
@@ -299,6 +268,7 @@ describe('ConnectionService', () => {
       expect(service.pageServerUrl).toBe(apiPort);
       expect(service.serverUrl()).toBe('https://other.example:5065');
       expect(service.apiStatus()).toBe('checking');
+      noResponse(accountCheck);
     });
 
     it('finds no page server when neither candidate is a healthy API', async () => {
@@ -504,6 +474,21 @@ describe('ConnectionService', () => {
       http.expectOne(`${location.protocol}//crm.example.org:5065/health`);
     });
 
+    it('gives the one who waited for a cancelled check the result of the check that replaced it, not "checking"', async () => {
+      const service = createDisconnected();
+
+      const first = service.checkApi();
+      const second = service.checkApi();
+      const requests = http.match(health(sameOrigin));
+      expect(requests.map((r) => r.cancelled)).toEqual([true, false]);
+      expect(http.match(health(apiPort)).map((r) => r.cancelled)).toEqual([true, false]);
+      requests[1].flush({ status: 'Healthy' });
+
+      expect(await second).toBe('healthy');
+      expect(await first).toBe('healthy');
+      http.expectOne(statusUrl(sameOrigin));
+    });
+
     it('goes back to the page domain when the address is cleared', () => {
       const service = createDisconnected();
       service.setServerAddress('crm.example.org:5065');
@@ -518,7 +503,7 @@ describe('ConnectionService', () => {
   });
 
   describe('system status', () => {
-    it('requests /api/v1/system/status as soon as the API is connected and logs the result', () => {
+    it('requests /api/v1/system/status as soon as the API is connected', () => {
       const { service, systemStatus } = connect();
       expect(service.systemStatusState()).toBe('loading');
       expect(systemStatus.request.method).toBe('GET');
@@ -526,7 +511,6 @@ describe('ConnectionService', () => {
 
       expect(service.systemStatus()).toEqual(status);
       expect(service.systemStatusState()).toBe('loaded');
-      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Статус системи отримано'), status);
     });
 
     it('does not request the status of an API that is not healthy', () => {
@@ -534,15 +518,6 @@ describe('ConnectionService', () => {
       request.flush({ status: 'Degraded' });
       expect(service.systemStatusState()).toBe('idle');
       http.expectNone(statusUrl(apiPort));
-    });
-
-    it('shares the request still in flight instead of sending a second one', async () => {
-      const { service, systemStatus } = connect();
-
-      const again = service.loadSystemStatus();
-      http.expectNone(statusUrl(apiPort));
-      systemStatus.flush(status);
-      expect(await again).toEqual(status);
     });
 
     it('requests the status again on demand once the previous request has finished', async () => {
@@ -578,6 +553,49 @@ describe('ConnectionService', () => {
       expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('HTTP 500'));
     });
 
+    it.each([
+      ['has no fields', {}],
+      ['misses a field', { hasAdmin: true, hasNgo: true }],
+      ['has a field of another type', { hasAdmin: 'yes', hasNgo: true, isSetupComplete: true }],
+      ['is not an object', null],
+    ])('fails when the answer %s: it is not the status of the contract, and nothing may be decided by it', async (_name, body) => {
+      const { service, systemStatus } = connect();
+      const result = service.loadSystemStatus();
+      expect(systemStatus.cancelled).toBe(true);
+      http.expectOne(statusUrl(apiPort)).flush(body);
+
+      expect(await result).toBeNull();
+      expect(service.systemStatus()).toBeNull();
+      expect(service.systemStatusState()).toBe('failed');
+    });
+
+    it('gives the one who waited for a cancelled request the answer of the request that replaced it', async () => {
+      const { service, systemStatus } = connect();
+      systemStatus.flush(status);
+
+      const first = service.loadSystemStatus();
+      const second = service.loadSystemStatus();
+      const requests = http.match(statusUrl(apiPort));
+      expect(requests.map((r) => r.cancelled)).toEqual([true, false]);
+      requests[1].flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+
+      expect(await first).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      expect(await second).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+    });
+
+    it('gives null for a request that a new check of the connection has cancelled: the target has changed', async () => {
+      const { service, systemStatus } = connect();
+      systemStatus.flush(status);
+
+      const result = service.loadSystemStatus();
+      service.checkApi();
+
+      expect(await result).toBeNull();
+      expect(http.match(statusUrl(apiPort)).map((r) => r.cancelled)).toEqual([true]);
+      http.expectOne(health(sameOrigin));
+      http.expectOne(health(apiPort));
+    });
+
     it('forgets a stale status when the connection is checked again', () => {
       const { service, systemStatus } = connect();
       systemStatus.flush(status);
@@ -602,6 +620,7 @@ describe('ConnectionService', () => {
       service.loadSystemStatus();
       http.expectOne(statusUrl(apiPort)).flush({ ...status, demo: null });
       expect(service.isDemo()).toBe(false);
+      expect(service.systemStatus()).toEqual(status);
     });
 
     it('exposes the demo accounts and session limits from the status', () => {
@@ -611,6 +630,27 @@ describe('ConnectionService', () => {
       expect(service.isDemo()).toBe(true);
       expect(service.demo()).toEqual(demo);
       expect(service.systemStatus()?.demo).toEqual(demo);
+    });
+
+    it('takes the length of the session given as a numeric string (the contract allows it)', () => {
+      const { service, systemStatus } = connect();
+      systemStatus.flush({ ...status, demo: { ...demo, sessionMinutes: '45' } });
+      expect(service.demo()?.sessionMinutes).toBe(45);
+    });
+
+    it.each([
+      ['the accounts are not a list', { accounts: 'olena', sessionMinutes: 60 }],
+      ['an account misses its password', { accounts: [{ name: 'Олена', email: 'olena@demo.example' }], sessionMinutes: 60 }],
+      ['the length of the session is not a number', { accounts: [], sessionMinutes: 'soon' }],
+      ['the length of the session is zero', { accounts: [], sessionMinutes: 0 }],
+      ['it is not an object', 'yes'],
+    ])('treats a demo that is not of the contract (%s) as no demo, but keeps the status', (_name, broken) => {
+      const { service, systemStatus } = connect();
+      systemStatus.flush({ ...status, demo: broken });
+
+      expect(service.isDemo()).toBe(false);
+      expect(service.systemStatus()).toEqual(status);
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Демо-режим'), broken);
     });
 
     it('knows about the demo for a signed-in user after a reload (active account from the start)', () => {
@@ -651,5 +691,43 @@ describe('ConnectionService', () => {
       });
       expect(service.isDemo()).toBe(false);
     });
+  });
+});
+
+describe('parseServerAddress and serverAddressCandidates', () => {
+  it('keeps the address as typed: no port is added', () => {
+    expect(parseServerAddress('crm.example.org')?.origin).toBe(`${location.protocol}//crm.example.org`);
+    expect(parseServerAddress('https://crm.example.org:8443/some/path?x=1')?.origin).toBe('https://crm.example.org:8443');
+  });
+
+  it('without a port tries the address as typed first, then port 5065', () => {
+    expect(serverAddressCandidates('https://crm.example.org')).toEqual(['https://crm.example.org', 'https://crm.example.org:5065']);
+    expect(serverAddressCandidates('192.168.0.5')).toEqual([
+      `${location.protocol}//192.168.0.5`,
+      `${location.protocol}//192.168.0.5:5065`,
+    ]);
+  });
+
+  it('with an explicit port tries only that one, also when it is the default port of the scheme', () => {
+    expect(serverAddressCandidates('http://192.168.0.7:5065')).toEqual(['http://192.168.0.7:5065']);
+    expect(serverAddressCandidates('crm.example.org:8443/path')).toEqual([`${location.protocol}//crm.example.org:8443`]);
+    expect(serverAddressCandidates('https://crm.example.org:443')).toEqual(['https://crm.example.org']);
+    expect(serverAddressCandidates('http://crm.example.org:80/')).toEqual(['http://crm.example.org']);
+  });
+
+  it.each(['', '   ', 'http://', 'ftp://crm.example.org', 'not a host', null])('gives nothing for "%s"', (value) => {
+    expect(parseServerAddress(value)).toBeNull();
+    expect(serverAddressCandidates(value)).toEqual([]);
+  });
+
+  it('takes a Cyrillic domain (the .укр zone): the requests go to its Latin record, as typed and then with port 5065', () => {
+    const url = parseServerAddress('приклад.укр');
+    expect(url?.hostname).toBe('xn--80aikifvh.xn--j1amh');
+    expect(url?.port).toBe('');
+    expect(serverAddressCandidates('приклад.укр')).toEqual([
+      `${location.protocol}//xn--80aikifvh.xn--j1amh`,
+      `${location.protocol}//xn--80aikifvh.xn--j1amh:5065`,
+    ]);
+    expect(parseServerAddress('https://Приклад.укр:8443/path?x=1')?.origin).toBe('https://xn--80aikifvh.xn--j1amh:8443');
   });
 });

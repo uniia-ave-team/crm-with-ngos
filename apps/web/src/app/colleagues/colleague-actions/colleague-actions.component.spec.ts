@@ -5,11 +5,11 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { ColleagueAction, ColleagueActionItem } from './colleague-actions.component';
-import { ColleaguesPageModule } from '../colleagues.module';
+import { ColleagueActionsComponent } from './colleague-actions.component';
 
 @Component({
   template: `<app-colleague-actions [items]="items()" (choose)="chosen.push($event)" />`,
-  imports: [ColleaguesPageModule],
+  imports: [ColleagueActionsComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {

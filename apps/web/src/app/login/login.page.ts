@@ -1,18 +1,29 @@
-import { Component, computed, effect, inject, input, OnDestroy, signal, untracked, WritableSignal } from '@angular/core';
+import { Component, computed, effect, inject, OnDestroy, signal, untracked, viewChild, WritableSignal } from '@angular/core';
 import { Router } from '@angular/router';
+import { NgTemplateOutlet } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { IonButton, IonContent, IonIcon, IonInput } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
-import { NO_CONNECTION_ERROR } from '../core/connection/connection.guard';
 import { AccountRestoreService } from '../core/accounts/account-restore.service';
 import { AccountsService } from '../core/accounts/accounts.service';
-import { AuthService, LoginResult, REDIRECT_URL, RELOGIN_URL } from '../core/auth/auth.service';
+import { AuthService, LOGIN_URL, LoginResult, REDIRECT_URL, signedOutUrl } from '../core/auth/auth.service';
+import { PasswordPolicyService } from '../core/auth/password-policy.service';
+import { AfterSignIn, SignInFormComponent } from '../core/auth/sign-in-form/sign-in-form.component';
 import { ConnectionService, DemoAccount } from '../core/connection/connection.service';
-import { AppLanguage, LanguageService } from '../core/i18n/language.service';
-import { mobileLogoBase } from '../core/i18n/mobile-logo';
-import { NGO_LOGO_MAX_BYTES, NGO_LOGO_TYPES, NGO_NAME_MAX_LENGTH } from '../core/ngo/logo-rules';
+import { serverAddressToUnicode } from '../core/connection/idn';
+import { LanguageService } from '../core/i18n/language.service';
+import { mobileLogoBase, uniiaLogoBase } from '../core/i18n/logos';
+import { IMAGE_MAX_BYTES, IMAGE_MAX_MEGABYTES, IMAGE_TYPES, IMAGE_TYPE_NAMES } from '../core/images/image-types';
+import { NGO_NAME_MAX_LENGTH } from '../core/ngo/logo-rules';
 import { DEFAULT_LOGIN_IMAGE, LoginPageImagesService } from '../core/login-page-images/login-page-images.service';
 import { CreateNgoResult, NgoService, UploadNgoLogoResult } from '../core/ngo/ngo.service';
 import { CreateUserResult, UsersService } from '../core/users/users.service';
+import { isEmail } from '../shared/email/email';
+import { ListTextPipe } from '../shared/list-text/list-text.pipe';
 import { isStrongPassword } from '../shared/password-fields/password-rules';
+import { PasswordFieldsComponent } from '../shared/password-fields/password-fields.component';
+import { LoginDemoComponent } from './login-demo/login-demo.component';
 
 /**
  * Що показує сторінка: перевірку підключення (або запит статусу системи),
@@ -21,60 +32,67 @@ import { isStrongPassword } from '../shared/password-fields/password-rules';
  */
 type LoginView = 'loading' | 'step1' | 'ngo' | 'admin' | 'setup-error' | 'login';
 
-/** Зображення форми входу за замовчуванням: його лишаємо, коли в системі нема власних. */
-
 /** Помилка поля назви або логотипа у формі організації. */
 type NgoNameError = 'required' | 'too-long';
 type NgoLogoError = 'type' | 'size';
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const UNIIA_UKRAINIAN_LANGUAGES: readonly AppLanguage[] = ['uk', 'crh', 'be'];
-
-
 /** Помилка над формою кроку 1. */
-type LoginError = 'invalid' | 'unreachable' | 'unhealthy' | 'no-connection';
+type LoginError = 'invalid' | 'unreachable' | 'unhealthy';
 
 @Component({
   selector: 'app-login',
   templateUrl: './login.page.html',
   styleUrls: ['./login.page.scss'],
-  standalone: false,
+  imports: [
+    IonButton,
+    IonContent,
+    IonIcon,
+    IonInput,
+    SignInFormComponent,
+    LoginDemoComponent,
+    NgTemplateOutlet,
+    FormsModule,
+    PasswordFieldsComponent,
+    ListTextPipe,
+    TranslatePipe,
+  ],
 })
 export class LoginPage implements OnDestroy {
   protected readonly connection = inject(ConnectionService);
-  private readonly ngoService = inject(NgoService);
-  private readonly usersService = inject(UsersService);
-  private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
   private readonly accounts = inject(AccountsService);
   private readonly restoreService = inject(AccountRestoreService);
+  private readonly ngoService = inject(NgoService);
+  private readonly usersService = inject(UsersService);
+  private readonly passwordPolicies = inject(PasswordPolicyService);
   private readonly languageService = inject(LanguageService);
   private readonly loginPageImages = inject(LoginPageImagesService);
+  private readonly router = inject(Router);
 
   /** Вордмарк «Явір» вгорі форми входу (як мобільне лого меню; `.svg` / `_dark.svg`). */
   protected readonly logoBase = computed(() => mobileLogoBase(this.languageService.language()));
 
-  /** Лого Унії: для української, кримськотатарської й білоруської — укр., для інших — англ. */
-  protected readonly uniiaLogo = computed(() =>
-    UNIIA_UKRAINIAN_LANGUAGES.includes(this.languageService.language()) ? 'Uniia' : 'Uniia_en',
-  );
-  private readonly auth = inject(AuthService);
+  /** Лого Унії за мовою (`uniiaLogoBase`): той самий принцип вибору, що й для лого «Явір». */
+  protected readonly uniiaLogo = computed(() => uniiaLogoBase(this.languageService.language()));
 
   /**
-   * Query-параметр `?error=…` (прив'язується роутером через
-   * bindToComponentInputs): connectionGuard переадресовує сюди з
-   * `error=no-connection`, коли користувач відкрив іншу сторінку без
-   * підключення до API.
+   * Умови до пароля адміністратора — поточного сервера (на ньому його й створюють); змінилась
+   * адреса сервера — умови беруться з нового.
    */
-  readonly error = input<string | undefined>();
+  protected readonly passwordPolicy = computed(() => {
+    const server = this.connection.serverUrl();
+    // Сам виклик (кеш і запит) — не частина обчислення: стежимо лише за сигналом умов.
+    return untracked(() => this.passwordPolicies.policy(server))();
+  });
 
   /** Те, що введено в поле кроку 1; початково — раніше надана адреса. */
   protected readonly address = signal(this.connection.serverAddress() ?? '');
 
+  /** Адреса сервера для повідомлень: кириличний домен кирилицею, а не записом браузера (`xn--…`). */
+  protected readonly shownServerUrl = computed(() => serverAddressToUnicode(this.connection.serverUrl()));
+
   /** Введене не схоже на адресу сервера (валідація до будь-якого запиту). */
   private readonly invalid = signal(false);
-
-
 
   /**
    * Чи надсилали форму кроку 1. Доки ні, перевірка, що тече при завантаженні
@@ -89,6 +107,9 @@ export class LoginPage implements OnDestroy {
    * якщо поточний сервер працює, доки не буде надано нову адресу.
    */
   private readonly forceAddressStep = signal(false);
+
+  /** Іде перевірка поточного сервера після натискання «змінити сервер». */
+  protected readonly resettingServer = signal(false);
 
   /**
    * Пошук чинного акаунта на старті завершено, і жодного не знайдено (знайдено —
@@ -157,9 +178,8 @@ export class LoginPage implements OnDestroy {
   }
 
   /**
-   * Помилка над формою кроку 1. Про недоступність/нездорове API кажемо, коли
-   * користувач уже надавав адресу або його переадресували сюди через
-   * відсутність підключення. Якщо ж просто відкрито /login і API за доменом
+   * Помилка над формою кроку 1. Про недоступність чи нездорове API кажемо, лише коли
+   * користувач уже надавав адресу. Якщо ж просто відкрито /login і API за доменом
    * сторінки не знайшлося, це не помилка, а звичайний привід для кроку 1.
    */
   protected readonly formError = computed<LoginError | null>(() => {
@@ -168,15 +188,7 @@ export class LoginPage implements OnDestroy {
     }
     const status = this.connection.apiStatus();
     const failed = status === 'unreachable' || status === 'unhealthy';
-    if (this.connection.serverAddress() && failed) {
-      return status;
-    }
-    // Адреси ще не надавали, але нас сюди переадресували через відсутність
-    // підключення (за доменом сторінки API не знайдено) — кажемо про це.
-    if (failed && this.error() === NO_CONNECTION_ERROR) {
-      return 'no-connection';
-    }
-    return null;
+    return this.connection.serverAddress() && failed ? status : null;
   });
 
   /** Форма створення організації. */
@@ -184,7 +196,11 @@ export class LoginPage implements OnDestroy {
   protected readonly ngoLogo = signal<File | null>(null);
   protected readonly ngoLogoPreview = signal<string | null>(null);
   /** Значення `accept` вибору файлу логотипа (типи з `core/images/image-types.ts`). */
-  protected readonly logoTypes = NGO_LOGO_TYPES.join(',');
+  protected readonly logoTypes = IMAGE_TYPES.join(',');
+  /** Назви дозволених форматів для підказки й помилки (зʼєднує канал `listText`). */
+  protected readonly imageTypeNames = IMAGE_TYPE_NAMES;
+  /** Найбільший розмір зображення в мегабайтах для підказки й помилки (`{{size}}`). */
+  protected readonly imageMaxMegabytes = IMAGE_MAX_MEGABYTES;
   /** Файл тягнуть над зоною завантаження логотипа. */
   protected readonly logoDragOver = signal(false);
   protected readonly ngoSaving = signal(false);
@@ -223,30 +239,24 @@ export class LoginPage implements OnDestroy {
     ];
   });
 
-  /** Форма входу. */
-  protected readonly loginEmail = signal('');
-  protected readonly loginPassword = signal('');
-  protected readonly loginSaving = signal(false);
-  private readonly loginSubmitted = signal(false);
-  /** Ключ помилки запиту (`login.form.error.<ключ>`) або `null`. */
-  private readonly loginSaveError = signal<string | null>(null);
-
-  protected readonly loginEmailError = computed(() =>
-    this.loginSubmitted() && !this.loginEmail().trim() ? 'emailRequired' : null,
-  );
-  protected readonly loginPasswordError = computed(() =>
-    this.loginSubmitted() && !this.loginPassword() ? 'passwordRequired' : null,
-  );
-  /** Відповідь сервера — блоком над формою (ключ перекладу). */
-  protected readonly loginBannerError = computed(() => {
-    const key = this.loginSaveError();
-    return key ? `login.form.error.${key}` : null;
-  });
   /**
-   * Сюди повернуло завершення демо-сеансу (`AuthService.endDemoSession`): над формою входу —
-   * пояснення, доки не буде нової спроби входу, що закінчилась помилкою (тоді показуємо її).
+   * Помилка форми входу, що сталася вже після входу (ключ перекладу): живе тут, а не у формі,
+   * бо поки запитується стан системи, сторінка показує «завантаження» і форма зникає.
    */
-  protected readonly demoSessionEnded = computed(() => this.auth.demoSessionEnded() && !this.loginSaveError());
+  protected readonly loginError = signal<string | null>(null);
+
+  /** Форма входу (`app-sign-in-form`): кнопки демо-блоку входять через неї. */
+  private readonly signInForm = viewChild(SignInFormComponent);
+  /** Іде вхід у формі входу — кнопки демо-блоку вимкнено. */
+  protected readonly signingIn = computed(() => this.signInForm()?.busy() ?? false);
+
+  /** Після завершення демо-сеансу вже була нова спроба входу (її помилку покаже сама форма). */
+  private readonly signInAttempted = signal(false);
+  /**
+   * Сюди повернуло завершення демо-сеансу (`AuthService.demoSessionEnded`): над формою входу —
+   * пояснення, доки не почнеться нова спроба входу.
+   */
+  protected readonly demoSessionEnded = computed(() => this.auth.demoSessionEnded() && !this.signInAttempted());
 
   /** Форма адміністратора. */
   protected readonly adminEmail = signal('');
@@ -275,7 +285,7 @@ export class LoginPage implements OnDestroy {
     if (!email) {
       return 'emailRequired';
     }
-    return EMAIL_PATTERN.test(email) ? null : 'emailInvalid';
+    return isEmail(email) ? null : 'emailInvalid';
   });
   protected readonly adminLastNameError = computed(() =>
     this.adminSubmitted() && !this.adminLastName().trim() ? 'lastNameRequired' : null,
@@ -299,7 +309,7 @@ export class LoginPage implements OnDestroy {
     if (!password) {
       return 'passwordRequired';
     }
-    return isStrongPassword(password) ? null : 'passwordWeak';
+    return isStrongPassword(password, this.passwordPolicy()) ? null : 'passwordWeak';
   });
   protected readonly adminPasswordRepeatError = computed(() => {
     if (!this.adminSubmitted()) {
@@ -322,8 +332,8 @@ export class LoginPage implements OnDestroy {
       void this.restoreAccounts();
     }
 
-    // Стан первинного налаштування системи (від нього залежить, що показати: форму
-    // адміна, організації чи входу) запитує сам `ConnectionService`, щойно підключення є.
+    // Стан первинного налаштування системи (від нього залежить, що показати: форму адміна,
+    // організації чи входу) запитує сам `ConnectionService`, щойно підключення є.
 
     // Показано форму входу — підтягуємо її зображення з сервера (раз на сервер).
     effect(() => {
@@ -348,8 +358,13 @@ export class LoginPage implements OnDestroy {
   }
 
   private async loadLoginImage(): Promise<void> {
-    const image = await this.loginPageImages.random();
-    // Для іншого сервера зображення вже не те (змінили адресу, поки йшов запит).
+    const server = this.connection.serverUrl();
+    const image = await this.loginPageImages.random(server);
+    // Поки йшов запит, змінили адресу: відповідь від попереднього сервера вже не потрібна (для
+    // нового зображення запитує той самий ефект).
+    if (server !== this.connection.serverUrl()) {
+      return;
+    }
     this.loginImage.set(image?.url ?? DEFAULT_LOGIN_IMAGE);
   }
 
@@ -373,8 +388,9 @@ export class LoginPage implements OnDestroy {
     }
     // Доступного акаунта нема, але збережені лишились (застарілі чи недоступні) — їх відновлюють
     // на сторінці повторного входу; форми тут лишаються, коли акаунтів нема взагалі.
-    if (this.accounts.accounts().length > 0) {
-      void this.router.navigateByUrl(RELOGIN_URL);
+    const url = signedOutUrl(this.accounts);
+    if (url !== LOGIN_URL) {
+      void this.router.navigateByUrl(url);
       return;
     }
     this.restoreDone.set(true);
@@ -397,15 +413,14 @@ export class LoginPage implements OnDestroy {
     }
   }
 
-  /** Іде перевірка поточного сервера після натискання «змінити сервер». */
-  protected readonly resettingServer = signal(false);
-
   /**
    * Кнопка «змінити сервер» (праворуч угорі кожної форми). Спершу один раз
-   * перевіряє поточний сервер (`/health`); тоді повністю очищає `localStorage`
-   * (адреса сервера, токени, мова тощо), забуває введене у формах і повертає на
-   * крок 1. Якщо сервер був здоровий — його адресу підставлено в поле кроку 1,
-   * щоб її було легко поправити.
+   * перевіряє поточний сервер (`/health`); тоді очищає все сховище браузера для
+   * застосунку (`AccountsService.wipe`: акаунти з токенами, мову, решту в
+   * `localStorage` і `sessionStorage` вкладки), забуває надану адресу сервера (вона
+   * живе в памʼяті `ConnectionService`) і введене у формах і повертає на крок 1.
+   * Якщо сервер був здоровий — його адресу підставлено в поле кроку 1, щоб її було
+   * легко поправити.
    */
   protected async resetServer(): Promise<void> {
     if (this.resettingServer()) {
@@ -421,7 +436,7 @@ export class LoginPage implements OnDestroy {
     this.accounts.wipe();
     this.connection.clearServerAddress();
     this.resetForms();
-    this.address.set(healthy ? currentAddress : '');
+    this.address.set(healthy ? serverAddressToUnicode(currentAddress) : '');
     this.invalid.set(false);
     this.submitted.set(false);
     this.forceAddressStep.set(true);
@@ -430,10 +445,7 @@ export class LoginPage implements OnDestroy {
 
   /** Забуває все, що введено й показано у формах входу, адміна та ГО. */
   private resetForms(): void {
-    this.loginEmail.set('');
-    this.loginPassword.set('');
-    this.loginSubmitted.set(false);
-    this.loginSaveError.set(null);
+    this.loginError.set(null);
     this.adminEmail.set('');
     this.adminLastName.set('');
     this.adminFirstName.set('');
@@ -493,11 +505,11 @@ export class LoginPage implements OnDestroy {
   }
 
   private setLogo(file: File): void {
-    if (!NGO_LOGO_TYPES.includes(file.type)) {
+    if (!IMAGE_TYPES.includes(file.type)) {
       this.ngoLogoError.set('type');
       return;
     }
-    if (file.size > NGO_LOGO_MAX_BYTES) {
+    if (file.size > IMAGE_MAX_BYTES) {
       this.ngoLogoError.set('size');
       return;
     }
@@ -567,48 +579,34 @@ export class LoginPage implements OnDestroy {
     field.set(value == null ? '' : String(value));
   }
 
+  /** Почалась нова спроба входу у формі: її власна помилка замінить і помилку сторінки, і пояснення. */
+  protected onSignInAttempt(): void {
+    this.loginError.set(null);
+    this.signInAttempted.set(true);
+  }
+
   /**
-   * Вхід (`POST /api/v1/auth/login`): токени записуються (`AuthService`), далі
-   * запитується статус системи. Немає ГО — лишаємось на сторінці, і вона
-   * показує форму створення ГО (токени вже є). ГО є — одразу на «Планер».
+   * Кнопка «Ввійти як …» демо-блоку: форма входу вписує пошту й пароль демо-акаунта й входить
+   * звичайним шляхом (з тими самими помилками й `afterLogin`).
    */
-  protected async submitLogin(): Promise<void> {
-    if (this.loginSaving()) {
-      return;
-    }
-    this.loginSubmitted.set(true);
-    if (this.loginEmailError() || this.loginPasswordError()) {
-      return;
-    }
+  protected signInDemo(account: DemoAccount): Promise<void> {
+    return this.signInForm()?.signInAs(account.email, account.password) ?? Promise.resolve();
+  }
 
-    this.loginSaving.set(true);
-    this.loginSaveError.set(null);
-    const login = await this.auth.login(this.loginEmail().trim(), this.loginPassword());
-    if (login !== 'ok') {
-      this.loginSaving.set(false);
-      this.loginSaveError.set(loginFormErrorKey(login));
-      return;
-    }
-
+  /**
+   * Після входу у формі входу (`app-sign-in-form`; токени вже записано): запитується статус
+   * системи. Немає ГО — лишаємось на сторінці, і вона показує форму створення ГО. ГО є — одразу
+   * на «Планер». Статус отримати не вдалося — форма показує про це помилку (`loginError`).
+   */
+  protected readonly afterLogin: AfterSignIn = async () => {
     const status = await this.connection.loadSystemStatus();
-    this.loginSaving.set(false);
     if (!status) {
-      this.loginSaveError.set('statusFailed');
+      this.loginError.set('login.form.error.statusFailed');
     } else if (status.hasNgo) {
       void this.router.navigateByUrl(REDIRECT_URL);
     }
     // Немає ГО: view() за статусом і токенами сам покаже форму створення ГО.
-  }
-
-  /**
-   * Кнопка «Увійти як …» демо-блоку: підставляє пошту й пароль демо-акаунта у форму й
-   * входить звичайним шляхом (`submitLogin`).
-   */
-  protected signInDemo(account: DemoAccount): Promise<void> {
-    this.loginEmail.set(account.email);
-    this.loginPassword.set(account.password);
-    return this.submitLogin();
-  }
+  };
 
   /**
    * Перевіряє форму адміністратора; якщо все гаразд — створює користувача
@@ -647,7 +645,7 @@ export class LoginPage implements OnDestroy {
       });
       if (created !== 'created') {
         this.adminSaving.set(false);
-        this.adminSaveError.set(createUserErrorKey(created));
+        this.adminSaveError.set(adminCreateErrorKey(created));
         return;
       }
       this.adminCreated = true;
@@ -658,7 +656,7 @@ export class LoginPage implements OnDestroy {
     if (login === 'ok') {
       this.connection.loadSystemStatus();
     } else {
-      this.adminSaveError.set(loginErrorKey(login));
+      this.adminSaveError.set(adminLoginErrorKey(login));
     }
   }
 
@@ -671,7 +669,8 @@ export class LoginPage implements OnDestroy {
   }
 }
 
-function createUserErrorKey(result: Exclude<CreateUserResult, 'created'>): string {
+/** Ключ помилки створення адміністратора (`login.admin.saveError.<ключ>`) за відповіддю сервера. */
+function adminCreateErrorKey(result: Exclude<CreateUserResult, 'created'>): string {
   switch (result) {
     case 'invalid':
       return 'createInvalid';
@@ -682,8 +681,15 @@ function createUserErrorKey(result: Exclude<CreateUserResult, 'created'>): strin
   }
 }
 
-function loginErrorKey(result: Exclude<LoginResult, 'ok'>): string {
+/**
+ * Ключ помилки входу щойно створеного адміністратора (`login.admin.saveError.<ключ>`): тексти
+ * інші, ніж у формі входу (`loginErrorKey` з `account-login.ts`), — у них сказано, що
+ * адміністратора вже створено.
+ */
+function adminLoginErrorKey(result: Exclude<LoginResult, 'ok'>): string {
   switch (result) {
+    case 'storageFull':
+      return 'loginStorageFull';
     case 'invalid':
       return 'loginInvalid';
     case 'unauthorized':
@@ -692,20 +698,5 @@ function loginErrorKey(result: Exclude<LoginResult, 'ok'>): string {
       return 'loginUnreachable';
     default:
       return 'loginError';
-  }
-}
-
-function loginFormErrorKey(result: Exclude<LoginResult, 'ok'>): string {
-  switch (result) {
-    case 'busy':
-      return 'demoBusy';
-    case 'invalid':
-      return 'invalid';
-    case 'unauthorized':
-      return 'unauthorized';
-    case 'unreachable':
-      return 'unreachable';
-    default:
-      return 'error';
   }
 }

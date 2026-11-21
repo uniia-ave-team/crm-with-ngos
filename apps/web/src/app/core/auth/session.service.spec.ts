@@ -5,7 +5,6 @@ import { Router } from '@angular/router';
 
 import { ConnectionService } from '../connection/connection.service';
 import { AccountsService } from '../accounts/accounts.service';
-import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AuthService } from './auth.service';
 import { SessionService } from './session.service';
 
@@ -21,6 +20,13 @@ describe('SessionService', () => {
   let server: string;
   let navigate: ReturnType<typeof vi.spyOn>;
 
+  /** Забуває акаунт (за замовчуванням активний) — як вихід з нього. */
+  const forget = (id = TestBed.inject(AccountsService).activeId()): void => {
+    if (id) {
+      TestBed.inject(AccountsService).remove(id);
+    }
+  };
+
   function signIn(expiresInSeconds: number, refresh = 'refresh'): void {
     TestBed.inject(AccountsService).add({
       server,
@@ -34,7 +40,6 @@ describe('SessionService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
@@ -183,7 +188,7 @@ describe('SessionService', () => {
 
   it('moves to /login when the tokens disappear (for example, a sign-out in another tab)', () => {
     signIn(600);
-    auth.clearTokens();
+    forget();
     TestBed.tick();
     expect(navigate).toHaveBeenCalledWith('/login');
   });
@@ -202,11 +207,24 @@ describe('SessionService', () => {
     expect(navigate).not.toHaveBeenCalledWith('/login');
   });
 
-  it('moves to /relogin when another tab clears the active account while the others are kept', () => {
+  it('moves to /login, not /relogin, when the demo session of the active account has ended, even with other accounts saved', () => {
+    TestBed.inject(AccountsService).add({ server, accessToken: jwt(600), refreshToken: 'other', identity: 'user-2' });
     signIn(600);
     TestBed.tick();
-    localStorage.removeItem('yavir.activeAccount');
-    window.dispatchEvent(new StorageEvent('storage', { key: 'yavir.activeAccount' }));
+
+    // Копії демо-даних уже нема: акаунт забуто, а пояснення — на сторінці входу.
+    auth.endDemoSession(TestBed.inject(AccountsService).activeId());
+    TestBed.tick();
+    expect(navigate).toHaveBeenCalledWith('/login');
+    expect(navigate).not.toHaveBeenCalledWith('/relogin');
+  });
+
+  it('moves to /relogin when another tab marks the active account outdated (the server rejected its tokens)', () => {
+    signIn(600);
+    TestBed.tick();
+    const key = `yavir.account.${TestBed.inject(AccountsService).activeId()}`;
+    localStorage.setItem(key, JSON.stringify({ ...JSON.parse(localStorage.getItem(key)!), outdated: true }));
+    window.dispatchEvent(new StorageEvent('storage', { key }));
     TestBed.tick();
     expect(navigate).toHaveBeenCalledWith('/relogin');
   });
@@ -214,7 +232,7 @@ describe('SessionService', () => {
   it('does not redirect from /relogin when the tokens disappear there', () => {
     Object.defineProperty(TestBed.inject(Router), 'url', { get: () => '/relogin', configurable: true });
     signIn(600);
-    auth.clearTokens();
+    forget();
     TestBed.tick();
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -222,7 +240,7 @@ describe('SessionService', () => {
   it('does not redirect from /login when the tokens disappear there', () => {
     Object.defineProperty(TestBed.inject(Router), 'url', { get: () => '/login?error=x', configurable: true });
     signIn(600);
-    auth.clearTokens();
+    forget();
     TestBed.tick();
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -234,11 +252,10 @@ describe('SessionService', () => {
 
   it('does not move to /login while the search for a valid account is running, even though the active account is switched', () => {
     signIn(600);
-    const restore = TestBed.inject(AccountRestoreService);
     // Під час пошуку акаунти по черзі стають активними й тимчасово «зникають».
-    (restore as unknown as { searchingSignal: { set(v: boolean): void } }).searchingSignal.set(true);
+    TestBed.inject(AccountsService).setSwitching(true);
     TestBed.tick();
-    auth.clearTokens();
+    forget();
     TestBed.tick();
     expect(navigate).not.toHaveBeenCalled();
   });

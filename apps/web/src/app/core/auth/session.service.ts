@@ -1,9 +1,8 @@
 import { Injectable, effect, inject, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountsService } from '../accounts/accounts.service';
-import { AuthService, LOGIN_URL, RELOGIN_URL } from './auth.service';
+import { AuthService, LOGIN_URL, RELOGIN_URL, signedOutUrl } from './auth.service';
 
 /** За скільки до кінця терміну access-токен оновлюється заздалегідь. */
 const REFRESH_LEAD_MS = 60_000;
@@ -23,14 +22,15 @@ const INACTIVE_CHECK_INTERVAL_MS = 60 * 60_000;
  *   refresh-токена (`AuthService.refreshStoredIfDue`): після завершення пошуку
  *   акаунта (старт), коли вкладка знову стає видимою й раз на годину;
  * - якщо токени зникли (вихід в іншій вкладці, невдале оновлення), а ми не на
- *   сторінці входу чи повторного входу — переносить на /relogin (збережені акаунти ще є) або /login.
+ *   сторінці входу чи повторного входу — переносить на /relogin (збережені акаунти ще є) або /login;
+ *   завершився демо-сеанс (`AuthService.demoSessionEnded`) — завжди на /login: там пояснення, а
+ *   повторний вхід дає свіжі демо-дані.
  */
 @Injectable({ providedIn: 'root' })
 export class SessionService {
   private readonly auth = inject(AuthService);
   private readonly accounts = inject(AccountsService);
   private readonly router = inject(Router);
-  private readonly restore = inject(AccountRestoreService);
 
   private timer: ReturnType<typeof setTimeout> | null = null;
   private hadTokens = false;
@@ -48,17 +48,16 @@ export class SessionService {
     // «зникає» — це не вихід, тож тоді нічого не робимо.
     effect(() => {
       const hasTokens = this.auth.hasTokens();
-      const searching = this.restore.searching();
+      const searching = this.accounts.switching();
       untracked(() => {
         if (searching) {
           return;
         }
         const path = this.router.url.split('?')[0];
         if (this.hadTokens && !hasTokens && !path.startsWith(LOGIN_URL) && !path.startsWith(RELOGIN_URL)) {
-          // Акаунти лишились, але жоден не доступний (застарілі чи недоступні) — на повторний
-          // вхід, інакше на вхід.
-          const noneAvailable = this.accounts.accounts().length > 0 && this.accounts.activeId() === null;
-          void this.router.navigateByUrl(noneAvailable ? RELOGIN_URL : LOGIN_URL);
+          // Акаунти лишились (застарілі чи недоступні) — на повторний вхід, інакше на вхід. Кінець
+          // демо-сеансу пояснює сторінка входу.
+          void this.router.navigateByUrl(this.auth.demoSessionEnded() ? LOGIN_URL : signedOutUrl(this.accounts));
         }
         this.hadTokens = hasTokens;
       });
@@ -66,7 +65,7 @@ export class SessionService {
 
     // Пошук акаунта завершено (старт застосунку) — час подбати про неактивні.
     effect(() => {
-      if (!this.restore.searching()) {
+      if (!this.accounts.switching()) {
         untracked(() => void this.refreshInactiveAccounts());
       }
     });
@@ -85,7 +84,7 @@ export class SessionService {
    * (активний тоді перемикається) і не паралельно з попереднім проходом.
    */
   private refreshInactiveAccounts(): Promise<void> {
-    if (this.restore.searching()) {
+    if (this.accounts.switching()) {
       return Promise.resolve();
     }
     if (!this.inactiveRefresh) {

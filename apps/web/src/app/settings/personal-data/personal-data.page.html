@@ -85,9 +85,9 @@
         <span class="settings-avatar__name">{{ fileName() ?? ('settings.personal.noFile' | translate) }}</span>
         <input #avatarFile class="settings-avatar__input" type="file" [accept]="avatarTypes" tabindex="-1" aria-hidden="true" (change)="onFileChosen($event)" />
       </div>
-      <p class="settings-avatar__hint">{{ 'settings.personal.avatarHint' | translate }}</p>
+      <p class="settings-avatar__hint">{{ 'settings.personal.avatarHint' | translate: { types: imageTypeNames | listText: 'or', size: imageMaxMegabytes } }}</p>
       @if (avatarError(); as errorKey) {
-        <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+        <p class="settings-field__error" role="alert">{{ errorKey | translate: { types: imageTypeNames | listText: 'and', size: imageMaxMegabytes } }}</p>
       }
       <!-- Після вибору фото: нагадування, що змінити його можна лише кнопкою «Зберегти».
            Рядок є завжди (лише прихований до вибору), щоб блок не міняв висоту. -->

@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { Component, computed, inject, input, output } from '@angular/core';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateService, TranslatePipe } from '@ngx-translate/core';
+import { IonIcon } from '@ionic/angular';
 
 import { LanguageService } from '../../core/i18n/language.service';
 
@@ -16,7 +17,8 @@ export interface InvitationShare {
 
 /**
  * Зміст модального вікна «Запрошення створено» (`app-modal`): посилання, яким адмін ділиться з
- * колегою (`<поточний домен>/join?token=<токен>`), далі пошта, для якої створено запрошення, і до
+ * колегою (`<адреса застосунку на домені сервера>/join?token=<токен>`, див. `link`), далі
+ * пошта, для якої створено запрошення, і до
  * коли воно діє. Посилання в один рядок із горизонтальною прокруткою, виділяється одним кліком;
  * справа від нього дві кнопки: копіювання (`copy-outline`) і «Поділитися» (`share-social`, через
  * вбудовані засоби браузера чи системи; без підтримки `navigator.share` її нема). Разом із
@@ -29,18 +31,23 @@ export interface InvitationShare {
   selector: 'app-invitation-dialog',
   templateUrl: './invitation-dialog.component.html',
   styleUrls: ['./invitation-dialog.component.scss'],
-  standalone: false,
+  imports: [IonIcon, TranslatePipe],
 })
 export class InvitationDialogComponent {
   private readonly language = inject(LanguageService).language;
   private readonly translate = inject(TranslateService);
   private readonly document = inject(DOCUMENT);
-  private readonly origin = this.document.location.origin;
+  private readonly page = this.document.location;
 
   /** Пошта, для якої створено запрошення. */
   readonly email = input.required<string>();
   /** Токен запрошення (стає параметром `token` посилання). */
   readonly token = input.required<string>();
+  /**
+   * Origin сервера, на якому створено запрошення: `<протокол>://<хост>` (API за зворотним проксі на
+   * origin застосунку) або `<протокол>://<хост>:5065`.
+   */
+  readonly server = input.required<string>();
   /** До коли діє запрошення (ISO-дата); порожньо, коли сервер дати не віддав. */
   readonly expiresAt = input('');
   /** Назва організації, що користується системою (з підпису поширення); порожньо — підпис без неї. */
@@ -57,8 +64,24 @@ export class InvitationDialogComponent {
   /** Чи вміє браузер (система) поширювати: без цього кнопки «Поділитися» нема. */
   protected readonly canShare = typeof this.document.defaultView?.navigator?.share === 'function';
 
-  /** Посилання для колеги: `<поточний домен>/join?token=<токен>` (токен кодується для адреси). */
-  protected readonly link = computed(() => `${this.origin}/join?token=${encodeURIComponent(this.token())}`);
+  /**
+   * Посилання для колеги: `<адреса застосунку>/join?token=<токен>` (токен кодується для адреси).
+   * Застосунок і API живуть на одному хості (API — на origin застосунку за зворотним проксі або на
+   * порту 5065), а `/join` шукає сервер за доменом сторінки (спершу її origin, далі порт 5065). Тому посилання веде на хост сервера, де створено запрошення: якщо це той
+   * самий хост, що й у цієї сторінки, — на цю ж адресу (так і під час розробки, коли застосунок
+   * на іншому порту); якщо інший — на той хост зі стандартним портом.
+   */
+  protected readonly link = computed(() => `${this.appOrigin()}/join?token=${encodeURIComponent(this.token())}`);
+
+  private readonly appOrigin = computed(() => {
+    let server: URL;
+    try {
+      server = new URL(this.server());
+    } catch {
+      return this.page.origin;
+    }
+    return server.hostname === this.page.hostname ? this.page.origin : `${server.protocol}//${server.hostname}`;
+  });
 
   protected share(): void {
     const t = (key: string, params?: Record<string, string>) => this.translate.instant(key, params) as string;

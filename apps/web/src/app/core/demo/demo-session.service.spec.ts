@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
+import { SessionService } from '../auth/session.service';
 import { ConnectionService } from '../connection/connection.service';
 import { DEMO_ENDING_SECONDS, DemoSessionService, formatCountdown } from './demo-session.service';
 
@@ -65,7 +66,6 @@ describe('DemoSessionService', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-20T12:00:00Z'));
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
@@ -76,6 +76,8 @@ describe('DemoSessionService', () => {
     accounts = TestBed.inject(AccountsService);
     auth = TestBed.inject(AuthService);
     navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    // Обидва стартують разом із застосунком: на сторінку входу після кінця сеансу веде `SessionService`.
+    TestBed.inject(SessionService);
     service = TestBed.inject(DemoSessionService);
     TestBed.tick();
   });
@@ -154,6 +156,7 @@ describe('DemoSessionService', () => {
     expect(navigate).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1000);
+    TestBed.tick();
     // Те саме, що й після відповіді DEMO_SESSION_EXPIRED: акаунт забуто, сторінка входу з поясненням.
     expect(accounts.accounts().some((account) => account.id === id)).toBe(false);
     expect(auth.hasTokens()).toBe(false);
@@ -171,6 +174,7 @@ describe('DemoSessionService', () => {
 
   it('ends the session at once when the token says the demo data is already gone', () => {
     signIn(jwt(nowSeconds() - 60));
+    TestBed.tick();
 
     expect(auth.hasTokens()).toBe(false);
     expect(auth.demoSessionEnded()).toBe(true);
@@ -207,13 +211,17 @@ describe('DemoSessionService', () => {
 
   it('stops counting after a sign-out', async () => {
     const id = signIn(jwt(nowSeconds() + 5));
+    const end = vi.spyOn(auth, 'endDemoSession');
     accounts.remove(id);
     TestBed.tick();
     expect(service.secondsLeft()).toBeNull();
 
     await vi.advanceTimersByTimeAsync(10_000);
+    TestBed.tick();
+    expect(end).not.toHaveBeenCalled();
     expect(auth.demoSessionEnded()).toBe(false);
-    expect(navigate).not.toHaveBeenCalled();
+    // Звичайний вихід: на сторінку входу веде `SessionService`, один раз, без пояснення про демо.
+    expect(navigate).toHaveBeenCalledTimes(1);
   });
 
   it('clears its timer when it is destroyed', async () => {

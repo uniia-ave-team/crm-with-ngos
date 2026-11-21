@@ -1,0 +1,72 @@
+<div class="sign-in-form">
+  @if (shownError(); as error) {
+    <div class="auth-error sign-in-form__error" role="alert">{{ error | translate }}</div>
+  }
+
+  @if (withServer()) {
+    <label class="auth-label sign-in-form__label" [attr.for]="idPrefix + '-address'">{{ 'login.step1.label' | translate }}</label>
+    <ion-input
+      tabindex="0"
+      class="auth-input sign-in-form__input sign-in-form__address"
+      fill="outline"
+      type="text"
+      inputmode="url"
+      [id]="idPrefix + '-address'"
+      [placeholder]="'login.step1.placeholder' | translate"
+      [attr.aria-label]="'login.step1.label' | translate"
+      [ngModel]="address()"
+      (ngModelChange)="onFieldChange(address, $event)"
+      (keyup.enter)="submit()"
+    ></ion-input>
+    @if (addressError(); as fieldError) {
+      <p class="auth-field-error sign-in-form__field-error" role="alert">{{ fieldError.key | translate: fieldError.params }}</p>
+    }
+  }
+
+  <label class="auth-label sign-in-form__label" [attr.for]="idPrefix + '-email'">{{ 'login.form.email' | translate }}</label>
+  <ion-input
+    tabindex="0"
+    class="auth-input sign-in-form__input sign-in-form__email"
+    fill="outline"
+    type="email"
+    autocomplete="email"
+    [id]="idPrefix + '-email'"
+    [attr.aria-label]="'login.form.email' | translate"
+    [ngModel]="email()"
+    (ngModelChange)="onFieldChange(email, $event)"
+    (keyup.enter)="submit()"
+  ></ion-input>
+  @if (emailError(); as fieldError) {
+    <p class="auth-field-error sign-in-form__field-error" role="alert">{{ fieldError | translate }}</p>
+  }
+
+  <label class="auth-label sign-in-form__label" [attr.for]="idPrefix + '-password'">{{ 'login.form.password' | translate }}</label>
+  <ion-input
+    tabindex="0"
+    class="auth-input sign-in-form__input sign-in-form__password"
+    fill="outline"
+    type="password"
+    autocomplete="current-password"
+    [id]="idPrefix + '-password'"
+    [attr.aria-label]="'login.form.password' | translate"
+    [ngModel]="password()"
+    (ngModelChange)="onFieldChange(password, $event)"
+    (keyup.enter)="submit()"
+  ></ion-input>
+  @if (passwordError(); as fieldError) {
+    <p class="auth-field-error sign-in-form__field-error" role="alert">{{ fieldError | translate }}</p>
+  }
+
+  <div class="sign-in-form__actions">
+    <ion-button
+      tabindex="0"
+      class="auth-submit sign-in-form__submit"
+      type="button"
+      [disabled]="saving() || !serverReady()"
+      (click)="submit()"
+    >
+      {{ (saving() ? 'login.form.saving' : 'login.form.submit') | translate }}
+    </ion-button>
+    <button tabindex="0" class="auth-link sign-in-form__forgot" type="button">{{ 'login.form.forgot' | translate }}</button>
+  </div>
+</div>

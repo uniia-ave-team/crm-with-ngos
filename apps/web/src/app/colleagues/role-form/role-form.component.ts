@@ -1,6 +1,9 @@
 import { Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
-import { PERMISSION_GROUPS, canGrantGroup } from '../../core/roles/role-permissions';
+import { PERMISSION_GROUPS, canGrantGroup, claimsOfGroups, groupActive } from '../../core/roles/role-permissions';
 import { ROLE_NAME_MAX_LENGTH } from '../../core/roles/role-rules';
 import { Role, RoleDetails } from '../../core/roles/roles.service';
 import { CurrentUserService } from '../../core/users/current-user.service';
@@ -10,7 +13,7 @@ export interface NewRole {
   readonly name: string;
   readonly feminitiveName: string | null;
   readonly pluralName: string | null;
-  /** Права вибраних груп (у порядку груп, без повторів); без вибору — порожньо. */
+  /** Права ролі: вибраних груп (у порядку груп) і права без налаштування (`claimsOfGroups`). */
   readonly permissions: readonly string[];
 }
 
@@ -32,7 +35,7 @@ export interface NewRole {
   selector: 'app-role-form',
   templateUrl: './role-form.component.html',
   styleUrls: ['../../settings/settings-section.scss', './role-form.component.scss'],
-  standalone: false,
+  imports: [FormsModule, IonIcon, TranslatePipe],
 })
 export class RoleFormComponent implements OnInit {
   /** Роль, яку редагують (початкові значення полів); без неї — нова роль. */
@@ -46,6 +49,27 @@ export class RoleFormComponent implements OnInit {
 
   protected readonly maxLength = ROLE_NAME_MAX_LENGTH;
   protected readonly permissionGroups = PERMISSION_GROUPS;
+  /**
+   * Гілка (лінії дерева) перед назвою підпункту: `last` — останній підпункт свого пункту (лінія
+   * закінчується заокругленим кутом), `middle` — за ним ще є підпункти (лінія йде далі вниз).
+   * Пункти без батька гілки не мають.
+   */
+  protected readonly branches: ReadonlyMap<string, 'middle' | 'last'> = new Map(
+    PERMISSION_GROUPS.filter((group) => group.parent).map((group, _index, children) => {
+      const siblings = children.filter((child) => child.parent === group.parent);
+      return [group.id, siblings.at(-1) === group ? 'last' : 'middle'];
+    }),
+  );
+  /**
+   * Пункти, за якими йде підпункт тієї самої гілки (пункт перед своїм першим підпунктом і
+   * підпункт перед наступним): між ними нема розділювальної лінії, гілка читається одним блоком.
+   */
+  protected readonly joinedToNext: ReadonlySet<string> = new Set(
+    PERMISSION_GROUPS.filter((group, index) => {
+      const next = PERMISSION_GROUPS[index + 1];
+      return !!next?.parent && next.parent === (group.parent ?? group.id);
+    }).map((group) => group.id),
+  );
   private readonly ownPermissions = inject(CurrentUserService).permissions;
   /** `id` груп, які користувач може надати: у нього є всі їхні права. */
   protected readonly grantable = computed<ReadonlySet<string>>(
@@ -74,7 +98,9 @@ export class RoleFormComponent implements OnInit {
       this.pluralName.set(role.pluralName ?? '');
       const claims = 'claims' in role ? role.claims : [];
       const has = (group: (typeof PERMISSION_GROUPS)[number]) => group.permissions.filter((permission) => claims.includes(permission)).length;
-      this.enabledGroups.set(new Set(PERMISSION_GROUPS.filter((group) => has(group) === group.permissions.length).map((group) => group.id)));
+      const full = new Set(PERMISSION_GROUPS.filter((group) => has(group) === group.permissions.length).map((group) => group.id));
+      // Підпункт без свого пункту не діє: показуємо його вимкненим (оновлення ролі прибере його права).
+      this.enabledGroups.set(new Set(PERMISSION_GROUPS.filter((group) => groupActive(group, full)).map((group) => group.id)));
       this.partialGroups.set(
         new Set(PERMISSION_GROUPS.filter((group) => has(group) > 0 && has(group) < group.permissions.length).map((group) => group.id)),
       );
@@ -85,11 +111,17 @@ export class RoleFormComponent implements OnInit {
     field.set((event.target as HTMLInputElement).value);
   }
 
+  /** Підпункт, чий пункт вимкнено: його перемикач вимкнений і сірий, поки пункт не ввімкнуть. */
+  protected waitsForParent(group: (typeof PERMISSION_GROUPS)[number]): boolean {
+    return !!group.parent && !this.enabledGroups().has(group.parent);
+  }
+
   protected togglePermission(id: string, event: Event): void {
     const checkbox = event.target as HTMLInputElement;
-    if (!this.grantable().has(id)) {
-      // Права, яких нема в самого користувача, змінити не можна, навіть обійшовши вимкнений
-      // перемикач: він повертається до стану, який мав (вимкнений для нової ролі, як у ролі для існуючої).
+    const group = PERMISSION_GROUPS.find((candidate) => candidate.id === id);
+    if (!group || !this.grantable().has(id) || this.waitsForParent(group)) {
+      // Права, яких нема в самого користувача, і підпункт без свого пункту змінити не можна,
+      // навіть обійшовши вимкнений перемикач: він повертається до стану, який мав.
       checkbox.checked = this.enabledGroups().has(id);
       return;
     }
@@ -98,6 +130,10 @@ export class RoleFormComponent implements OnInit {
       enabled.add(id);
     } else {
       enabled.delete(id);
+      // Вимкнений пункт вимикає й свої підпункти.
+      for (const child of PERMISSION_GROUPS.filter((candidate) => candidate.parent === id)) {
+        enabled.delete(child.id);
+      }
     }
     this.enabledGroups.set(enabled);
   }
@@ -115,7 +151,7 @@ export class RoleFormComponent implements OnInit {
       name: this.name().trim(),
       feminitiveName: nullable(this.feminitiveName()),
       pluralName: nullable(this.pluralName()),
-      permissions: PERMISSION_GROUPS.filter((group) => this.enabledGroups().has(group.id)).flatMap((group) => group.permissions),
+      permissions: claimsOfGroups(this.enabledGroups()),
     });
   }
 }

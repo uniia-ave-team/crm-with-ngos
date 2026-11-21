@@ -1,20 +1,59 @@
 import { Component, inject } from '@angular/core';
+import {
+  IonApp,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonMenu,
+  IonRouterOutlet,
+  IonSplitPane,
+  IonTitle,
+  IonToast,
+  IonToolbar,
+} from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
-import { AccountRestoreService } from './core/accounts/account-restore.service';
+import { AccountsService } from './core/accounts/accounts.service';
 import { ConnectionService } from './core/connection/connection.service';
+import { DemoBannerComponent } from './core/layout/demo-banner/demo-banner.component';
 import { LayoutService, LayoutSection } from './core/layout/layout.service';
+import { PrimaryNavComponent } from './core/layout/primary-nav/primary-nav.component';
+import { SecondaryPanelComponent } from './core/layout/secondary-panel/secondary-panel.component';
+import { PreloaderComponent } from './shared/preloader/preloader.component';
 
 @Component({
   selector: 'app-root',
   templateUrl: 'app.component.html',
   styleUrls: ['app.component.scss'],
-  standalone: false,
+  imports: [
+    IonApp,
+    IonButton,
+    IonButtons,
+    IonContent,
+    IonHeader,
+    IonIcon,
+    IonMenu,
+    IonRouterOutlet,
+    IonSplitPane,
+    IonTitle,
+    IonToast,
+    IonToolbar,
+    TranslatePipe,
+    DemoBannerComponent,
+    PrimaryNavComponent,
+    SecondaryPanelComponent,
+    PreloaderComponent,
+  ],
 })
 export class AppComponent {
   protected readonly layout = inject(LayoutService);
 
-  /** Іде пошук чинного акаунта — на весь час показуємо прелоадер. */
-  protected readonly accountSearch = inject(AccountRestoreService).searching;
+  protected readonly accounts = inject(AccountsService);
+
+  /** Іде пошук чинного акаунта чи перемикання на інший — на весь час показуємо прелоадер. */
+  protected readonly accountSearch = this.accounts.switching;
 
   /** Сервер у демо-режимі: над оболонкою стоїть банер (`app-demo-banner`), і вона займає решту висоти. */
   protected readonly demo = inject(ConnectionService).isDemo;

@@ -1,0 +1,72 @@
+// Вікно підтвердження в `app-modal`: питання і дві кнопки в рядок. Кольори — токени меню
+// (світла/темна тема); підтвердження небезпечної дії — червоне (`--nav-unavailable-icon`).
+:host {
+  display: block;
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px;
+  color: var(--nav-fg-active);
+  font-family: var(--font-menu);
+}
+
+.confirm__message {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.confirm__error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--nav-unavailable-icon);
+}
+
+.confirm__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm__button {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  font-family: var(--font-login-title);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+.confirm__button--confirm {
+  background: var(--nav-unavailable-icon);
+  color: #fff;
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+}
+
+.confirm__button--cancel {
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-active);
+}
+
+@media (prefers-color-scheme: dark) {
+  // Світло-червоне тло темної теми: білий текст на ньому погано читається.
+  .confirm__button--confirm {
+    color: var(--ion-background-color);
+  }
+}

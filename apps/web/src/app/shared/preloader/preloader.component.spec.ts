@@ -4,11 +4,11 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { LanguageService } from '../../core/i18n/language.service';
-import { PreloaderModule } from './preloader.module';
+import { PreloaderComponent } from './preloader.component';
 
 @Component({
   template: `<app-preloader [visible]="visible()" />`,
-  imports: [PreloaderModule],
+  imports: [PreloaderComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {
@@ -55,14 +55,14 @@ describe('PreloaderComponent', () => {
   });
 
   it('uses the mobile logo of the language for both themes', () => {
-    TestBed.inject(LanguageService).setLanguage('uk');
+    TestBed.inject(LanguageService).applyPreferred('uk');
     const { element } = render();
     const sources = Array.from(element.querySelectorAll('.preloader img')).map((i) => i.getAttribute('src'));
     expect(sources).toEqual(['assets/logo_mobile_ukrainian.svg', 'assets/logo_mobile_ukrainian_dark.svg']);
   });
 
   it('switches to the Latin logo for English', () => {
-    TestBed.inject(LanguageService).setLanguage('en');
+    TestBed.inject(LanguageService).applyPreferred('en');
     const { element } = render();
     const sources = Array.from(element.querySelectorAll('.preloader img')).map((i) => i.getAttribute('src'));
     expect(sources).toEqual(['assets/logo_mobile_latin.svg', 'assets/logo_mobile_latin_dark.svg']);

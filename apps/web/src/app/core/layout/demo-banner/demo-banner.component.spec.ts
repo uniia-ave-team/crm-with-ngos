@@ -1,16 +1,14 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import { IonicModule } from '@ionic/angular/lazy';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../../assets/i18n/uk.json';
 import { AccountsService } from '../../accounts/accounts.service';
 import { AuthService } from '../../auth/auth.service';
+import { SessionService } from '../../auth/session.service';
 import { ConnectionService } from '../../connection/connection.service';
-import { LayoutModule } from '../layout.module';
 import { DemoBannerComponent } from './demo-banner.component';
 
 describe('DemoBannerComponent', () => {
@@ -32,11 +30,9 @@ describe('DemoBannerComponent', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-20T12:00:00Z'));
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
-      schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [IonicModule.forRoot(), LayoutModule],
+      imports: [DemoBannerComponent],
       providers: [
         provideRouter([]),
         provideHttpClient(),
@@ -142,6 +138,8 @@ describe('DemoBannerComponent', () => {
 
   it('ends the demo session when the countdown reaches zero', async () => {
     const { element, answer, wait } = render(jwt(2));
+    // На сторінку входу веде `SessionService`, що стартує разом із застосунком.
+    TestBed.inject(SessionService);
     answer();
     expect(time(element)).toBe('00:02');
 
