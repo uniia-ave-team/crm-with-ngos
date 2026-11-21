@@ -6,6 +6,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { accountToReplace, loginErrorKey } from '../../accounts/account-login';
 import { AccountsService } from '../../accounts/accounts.service';
 import { ConnectionService, parseServerAddress } from '../../connection/connection.service';
+import { serverAddressToUnicode } from '../../connection/idn';
 import { AuthService } from '../auth.service';
 
 const EMAIL_REQUIRED = 'login.form.error.emailRequired';
@@ -86,7 +87,8 @@ export class SignInFormComponent {
   /** Унікальний префікс `id` полів: форм на сторінці може бути кілька. */
   protected readonly idPrefix = `sign-in-${SignInFormComponent.nextId++}`;
 
-  protected readonly address = linkedSignal(() => this.initialServer());
+  /** Адреса в полі; кириличний домен показано кирилицею, а не записом браузера (`xn--…`). */
+  protected readonly address = linkedSignal(() => serverAddressToUnicode(this.initialServer()));
   protected readonly email = linkedSignal(() => this.initialEmail());
   protected readonly password = signal('');
   protected readonly saving = signal(false);
@@ -197,7 +199,11 @@ export class SignInFormComponent {
 
     // Акаунт уже активний; пароль у формі більше не потрібен.
     this.password.set('');
-    await this.afterSignIn()?.();
-    this.saving.set(false);
+    try {
+      await this.afterSignIn()?.();
+    } finally {
+      // Навіть якщо те, що йде після входу, зламалось, форма не має лишитися зайнятою.
+      this.saving.set(false);
+    }
   }
 }

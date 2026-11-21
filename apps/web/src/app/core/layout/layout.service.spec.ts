@@ -17,7 +17,10 @@ describe('LayoutService', () => {
     imports: [EmptyPage],
     providers: [
         provideRouter([
+            { path: '', redirectTo: 'login', pathMatch: 'full' },
             { path: 'login', component: EmptyPage, data: { layout: 'none' } },
+            { path: 'join', component: EmptyPage, data: { layout: 'none' } },
+            { path: 'relogin', component: EmptyPage, data: { layout: 'none' } },
             { path: 'planner', component: EmptyPage, data: { layoutSection: 'planner' } },
             { path: 'colleagues', component: EmptyPage },
             {
@@ -44,14 +47,14 @@ describe('LayoutService', () => {
   describe('hideShell at the very first read, before the router has matched anything', () => {
     it.each([
       ['/login', true],
-      ['/login?error=no-connection', true],
+      ['/login?returnUrl=%2Fplanner', true],
       ['/join', true],
       ['/relogin', true],
       ['/', true],
       ['/planner', false],
       ['/settings/password', false],
       ['/loginx', false],
-    ])('for %s is %s (taken from the address itself)', (path, hidden) => {
+    ])('for %s is %s (taken from the address and the routes, as the router would)', (path, hidden) => {
       expect(createAt(path).hideShell()).toBe(hidden);
     });
   });

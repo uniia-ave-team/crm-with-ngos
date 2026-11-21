@@ -1,7 +1,9 @@
-import { Component, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, inject, signal, untracked, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
 
+import { PasswordPolicyService } from '../../core/auth/password-policy.service';
+import { ConnectionService } from '../../core/connection/connection.service';
 import { UsersService } from '../../core/users/users.service';
 import { PasswordFieldsComponent } from '../../shared/password-fields/password-fields.component';
 import { isStrongPassword } from '../../shared/password-fields/password-rules';
@@ -12,7 +14,7 @@ type PasswordResult = 'success' | 'failed' | 'unreachable' | 'error';
 const ERROR_PREFIX = 'settings.password.error.';
 
 /**
- * Вкладка «Зміна паролю» (`/settings/password`): поточний пароль, новий, його
+ * Вкладка «Зміна пароля» (`/settings/password`): поточний пароль, новий, його
  * повтор і кнопка. Перевірка перед запитом — на льоту після першої спроби
  * (як у формі адміністратора на сторінці входу); сервер лишається головним, а
  * клієнт лише швидко підказує.
@@ -25,7 +27,16 @@ const ERROR_PREFIX = 'settings.password.error.';
 })
 export class PasswordPage {
   private readonly users = inject(UsersService);
+  private readonly connection = inject(ConnectionService);
+  private readonly passwordPolicies = inject(PasswordPolicyService);
   private readonly passwordFields = viewChild(PasswordFieldsComponent);
+
+  /** Умови до пароля сервера активного акаунта (на ньому пароль і змінюють). */
+  protected readonly passwordPolicy = computed(() => {
+    const server = this.connection.serverUrl();
+    // Сам виклик (кеш і запит) — не частина обчислення: стежимо лише за сигналом умов.
+    return untracked(() => this.passwordPolicies.policy(server))();
+  });
 
   protected readonly currentPassword = signal('');
   protected readonly newPassword = signal('');
@@ -50,7 +61,7 @@ export class PasswordPage {
     if (!password) {
       return `${ERROR_PREFIX}passwordRequired`;
     }
-    if (!isStrongPassword(password)) {
+    if (!isStrongPassword(password, this.passwordPolicy())) {
       return `${ERROR_PREFIX}passwordWeak`;
     }
     return password === this.currentPassword() ? `${ERROR_PREFIX}sameAsCurrent` : null;

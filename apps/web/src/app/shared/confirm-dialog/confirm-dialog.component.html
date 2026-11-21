@@ -1,0 +1,14 @@
+<div class="confirm">
+  <p class="confirm__message">{{ message() }}</p>
+  @if (error(); as text) {
+    <p class="confirm__error" role="alert">{{ text }}</p>
+  }
+  <div class="confirm__actions">
+    <button type="button" class="confirm__button confirm__button--confirm" tabindex="0" [disabled]="busy()" (click)="confirm.emit()">
+      {{ confirmLabel() }}
+    </button>
+    <button type="button" class="confirm__button confirm__button--cancel" tabindex="0" (click)="dismiss.emit()">
+      {{ cancelLabel() }}
+    </button>
+  </div>
+</div>

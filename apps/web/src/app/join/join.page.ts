@@ -5,16 +5,19 @@ import { IonButton, IonContent, IonInput } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { AuthService, REDIRECT_URL } from '../core/auth/auth.service';
+import { PasswordPolicyService } from '../core/auth/password-policy.service';
 import { ConnectionService } from '../core/connection/connection.service';
+import { RequestFailure } from '../core/http/request-failure';
 import { InvitationsService } from '../core/invitations/invitations.service';
 import { isStrongPassword } from '../shared/password-fields/password-rules';
 import { PasswordFieldsComponent } from '../shared/password-fields/password-fields.component';
 
 /**
- * Що показує сторінка: перевірку сервера й токена, помилку «сервера не знайдено»,
- * помилку «посилання неактивне» або форму реєстрації.
+ * Що показує сторінка: перевірку сервера й токена, помилку «сервера не знайдено», помилку
+ * «посилання неактивне» (сервер відхилив токен), помилку «не вдалося перевірити» (збій мережі чи
+ * сервера, з кнопкою повтору) або форму реєстрації.
  */
-type JoinView = 'loading' | 'no-server' | 'invalid' | 'form';
+type JoinView = 'loading' | 'no-server' | 'invalid' | 'check-failed' | 'form';
 
 /**
  * Сторінка запрошення (`/join?token=…`): колега переходить за посиланням із
@@ -33,6 +36,9 @@ export class JoinPage {
   private readonly invitations = inject(InvitationsService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+
+  /** Умови до пароля сервера, на якому задають пароль (`PasswordPolicyService`). */
+  protected readonly passwordPolicy = inject(PasswordPolicyService).policy(this.connection.pageServerUrl);
 
   /** Токен із query-параметра `?token=…` (прив'язується роутером через bindToComponentInputs). */
   readonly token = input<string | undefined>();
@@ -68,7 +74,7 @@ export class JoinPage {
     if (!password) {
       return 'passwordRequired';
     }
-    return isStrongPassword(password) ? null : 'passwordWeak';
+    return isStrongPassword(password, this.passwordPolicy()) ? null : 'passwordWeak';
   });
   protected readonly passwordRepeatError = computed(() => {
     if (!this.submitted()) {
@@ -102,8 +108,10 @@ export class JoinPage {
 
   /**
    * Спершу перевіряє, чи є сервер за посиланням (`GET /health`), тоді — токен
-   * (`GET /api/v1/invitations/validate`). Будь-яка невдача перевірки токена — «посилання
-   * неактивне»: причини (прострочений, використаний, зіпсований) людині не розрізнити.
+   * (`GET /api/v1/invitations/validate`). Сервер відхилив токен (400) або токена в посиланні
+   * нема — «посилання неактивне»: причини (прострочений, використаний, зіпсований) людині не
+   * розрізнити. Інша невдача (сервер не відповів, помилка сервера, відповідь не за контрактом) —
+   * про токен нічого не каже, тож «не вдалося перевірити» з кнопкою повтору (`retry`).
    */
   private async load(token: string | undefined): Promise<void> {
     const id = ++this.loadId;
@@ -123,11 +131,16 @@ export class JoinPage {
       return;
     }
     if (typeof details === 'string') {
-      this.view.set('invalid');
+      this.view.set(details === 'invalid' ? 'invalid' : 'check-failed');
       return;
     }
     this.email.set(details.email);
     this.view.set('form');
+  }
+
+  /** «Спробувати ще раз» після невдалої перевірки: та сама перевірка заново. */
+  protected retry(): void {
+    void this.load(this.token());
   }
 
   protected onFieldChange(field: WritableSignal<string>, value: string | number | null | undefined): void {
@@ -165,12 +178,17 @@ export class JoinPage {
       return;
     }
 
-    this.auth.adoptTokens(server, result, this.email());
+    if (!this.auth.adoptTokens(server, result, this.email())) {
+      // Реєстрацію завершено, але браузер не дав записати акаунт: увійти можна буде пізніше.
+      this.saveError.set('storageFull');
+      return;
+    }
     void this.router.navigateByUrl(REDIRECT_URL);
   }
 }
 
-function saveErrorKey(result: 'invalid' | 'unauthorized' | 'forbidden' | 'unreachable' | 'error'): string {
+/** Ключ помилки реєстрації (`join.saveError.<ключ>`) за відповіддю сервера. */
+function saveErrorKey(result: RequestFailure): string {
   switch (result) {
     case 'invalid':
       return 'invalid';

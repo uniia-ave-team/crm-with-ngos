@@ -1,4 +1,4 @@
-import { contrastWithWhite, relativeLuminance } from '../avatar/avatar-color';
+import { Rgb, contrast, contrastWithWhite, darkenUntil, letterCodes, lightenUntil, parseHex, toHex } from '../color/contrast';
 
 /**
  * Мінімальний контраст кольору плашки ролі: 7:1 — рівень AAA для звичайного
@@ -11,6 +11,7 @@ const MIN_CONTRAST = 7;
  * від нього рахується контраст кольору рамки й тексту неактивної плашки.
  */
 export const DARK_PAGE_BACKGROUND = '#1b1c1f';
+const DARK_PAGE = parseHex(DARK_PAGE_BACKGROUND);
 
 /** Золотий кут: сусідні значення сум потрапляють у далекі відтінки. */
 const GOLDEN_ANGLE = 137.508;
@@ -22,8 +23,6 @@ const GOLDEN_ANGLE = 137.508;
 const SECOND_SUM_HUE_STEP = 71.46;
 const SATURATION = 0.7;
 const LIGHTNESS = 0.5;
-
-type Rgb = readonly [number, number, number];
 
 /** Кольори плашки ролі (`#rrggbb`). */
 export interface RoleColor {
@@ -76,16 +75,16 @@ export function roleColor(roleName: string): RoleColor | null {
   }
   const hue = (((sums.total * GOLDEN_ANGLE + sums.second * SECOND_SUM_HUE_STEP) % 360) + 360) % 360;
   const vivid = hslToRgb(hue, SATURATION, LIGHTNESS);
-  const base = contrastWithWhite(vivid) >= MIN_CONTRAST ? vivid : darkenForWhite(vivid);
-  const light = lightenForDarkPage(base);
+  const base =
+    contrastWithWhite(vivid) >= MIN_CONTRAST ? vivid : darkenUntil(vivid, (candidate) => contrastWithWhite(candidate) >= MIN_CONTRAST);
+  const enoughOnDarkPage = (candidate: Rgb) => contrast(candidate, DARK_PAGE) >= MIN_CONTRAST;
+  const light = enoughOnDarkPage(base) ? base : lightenUntil(base, enoughOnDarkPage);
   return { base: toHex(base), light: toHex(light) };
 }
 
 /** Суми літер назви; `null`, якщо літер нема. */
 export function roleLetterSums(roleName: string): RoleLetterSums | null {
-  const letters = Array.from(roleName)
-    .filter((character) => /\p{L}/u.test(character))
-    .map((letter) => letter.codePointAt(0)!);
+  const letters = letterCodes(roleName);
   if (letters.length === 0) {
     return null;
   }
@@ -97,51 +96,6 @@ export function roleLetterSums(roleName: string): RoleLetterSums | null {
   return { first, second, third, total: first + third - second };
 }
 
-/** Найбільший коефіцієнт затемнення (бінарний пошук), за якого контраст із білим ≥ 7:1. */
-function darkenForWhite(color: Rgb): Rgb {
-  let low = 0; // чорний — контраст 21, точно підходить
-  let high = 1; // вихідний колір — не підходить
-  for (let i = 0; i < 24; i++) {
-    const middle = (low + high) / 2;
-    if (contrastWithWhite(scaleDown(color, middle)) >= MIN_CONTRAST) {
-      low = middle;
-    } else {
-      high = middle;
-    }
-  }
-  return scaleDown(color, low);
-}
-
-/** Найменша частка білого (бінарний пошук), за якої контраст із тлом темної теми ≥ 7:1. */
-function lightenForDarkPage(color: Rgb): Rgb {
-  const background = relativeLuminance(parseHex(DARK_PAGE_BACKGROUND));
-  const contrast = (candidate: Rgb) => (relativeLuminance(candidate) + 0.05) / (background + 0.05);
-  if (contrast(color) >= MIN_CONTRAST) {
-    return color;
-  }
-  let low = 0; // вихідний колір — не підходить
-  let high = 1; // білий — контраст понад 15, точно підходить
-  for (let i = 0; i < 24; i++) {
-    const middle = (low + high) / 2;
-    if (contrast(mixWithWhite(color, middle)) >= MIN_CONTRAST) {
-      high = middle;
-    } else {
-      low = middle;
-    }
-  }
-  return mixWithWhite(color, high);
-}
-
-// Округлення вниз: колір лише темнішає, тож контраст із білим не впаде нижче порога.
-function scaleDown([r, g, b]: Rgb, factor: number): Rgb {
-  return [Math.floor(r * factor), Math.floor(g * factor), Math.floor(b * factor)];
-}
-
-// Округлення вгору: колір лише світлішає, тож контраст із темним тлом не впаде нижче порога.
-function mixWithWhite([r, g, b]: Rgb, share: number): Rgb {
-  return [Math.ceil(r + (255 - r) * share), Math.ceil(g + (255 - g) * share), Math.ceil(b + (255 - b) * share)];
-}
-
 function hslToRgb(hue: number, saturation: number, lightness: number): Rgb {
   const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
   const section = hue / 60;
@@ -150,12 +104,4 @@ function hslToRgb(hue: number, saturation: number, lightness: number): Rgb {
     section < 1 ? [chroma, x, 0] : section < 2 ? [x, chroma, 0] : section < 3 ? [0, chroma, x] : section < 4 ? [0, x, chroma] : section < 5 ? [x, 0, chroma] : [chroma, 0, x];
   const offset = lightness - chroma / 2;
   return [Math.round((r + offset) * 255), Math.round((g + offset) * 255), Math.round((b + offset) * 255)];
-}
-
-function parseHex(hex: string): Rgb {
-  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
-}
-
-function toHex([r, g, b]: Rgb): string {
-  return '#' + [r, g, b].map((channel) => channel.toString(16).padStart(2, '0')).join('');
 }

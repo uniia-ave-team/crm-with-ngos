@@ -28,8 +28,14 @@
   color: var(--nav-fg-active);
 }
 
-// Поле (`ion-input fill="outline"`).
-.auth-input {
+// Поле (`ion-input fill="outline"`). Ionic додає власні стилі поля (`.sc-ion-input-md-h`,
+// `.input-fill-outline.sc-ion-input-md-h`) тегом `<style>` уже після цього файлу, тож класу
+// `.auth-input` замало: за однакової ваги перемагає Ionic (шрифт Roboto, кути 4px і його синя
+// й зелена підсвітка). Селектор із тегом і класом заповнення важчий за правила Ionic, тож поле
+// має свій вигляд незалежно від порядку стилів.
+$auth-input: "ion-input.auth-input.input-fill-outline";
+
+#{$auth-input} {
   // Шрифт і розмір тексту в полях — як у решти застосунку (e-Ukraine, 15px),
   // а не стандартні Roboto 16px з Ionic.
   font-family: var(--font-menu);
@@ -92,7 +98,7 @@
     color: #ff9b92;
   }
 
-  .auth-input {
+  #{$auth-input} {
     --highlight-color-focused: #478a7f;
     --highlight-color-valid: #478a7f;
   }

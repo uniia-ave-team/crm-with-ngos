@@ -6,6 +6,8 @@ import { Router } from '@angular/router';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../assets/i18n/uk.json';
+import { IMAGE_MAX_BYTES } from '../core/images/image-types';
+import { withImageSize, withImageTypes } from '../core/images/image-types.testing';
 import { AccountsService } from '../core/accounts/accounts.service';
 import { AuthService } from '../core/auth/auth.service';
 import { SignInFormComponent } from '../core/auth/sign-in-form/sign-in-form.component';
@@ -42,7 +44,6 @@ describe('LoginPage', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [
@@ -215,18 +216,7 @@ describe('LoginPage', () => {
     http.expectNone(`${connection.serverUrl()}/api/v1/system/status`);
   });
 
-  it('explains a redirect caused by a missing connection even though no address was provided yet', () => {
-    const { fixture, element, request } = create();
-    fixture.componentRef.setInput('error', 'no-connection');
-    request.error(new ProgressEvent('error'));
-    fixture.detectChanges();
-
-    const error = element.querySelector('.auth-error');
-    expect(error?.textContent).toContain(beforeUrl(uk.login.step1.error.noConnection));
-    expect(element.querySelector('.login__card')?.textContent).toContain(uk.login.step1.title);
-  });
-
-  it('shows no redirect error when /login was simply opened and no API was found', () => {
+  it('shows no error when /login was simply opened and no API was found', () => {
     const { fixture, element, request } = create();
     request.error(new ProgressEvent('error'));
     fixture.detectChanges();
@@ -302,6 +292,21 @@ describe('LoginPage', () => {
         expect(sideImage(element)).toBe('assets/login_image.jpg');
       });
 
+      it('drops an image that comes from the previous server after the address has changed', async () => {
+        const { connection, fixture, element } = createLoginForm();
+        const request = http.expectOne(randomUrl(connection));
+        const previous = connection.serverUrl();
+        connection.setServerAddress('https://other.example');
+        expect(connection.serverUrl()).not.toBe(previous);
+        request.flush({ id: 'a', url: '/files/login/a.jpg' });
+        await Promise.resolve();
+        await Promise.resolve();
+        fixture.detectChanges();
+        // Форма зникла (іде перевірка нової адреси), тож дивимось на саме зображення сторінки.
+        expect((fixture.componentInstance as unknown as { loginImage(): string }).loginImage()).toBe('assets/login_image.jpg');
+        expect(element.querySelector('.login-form__image')).toBeNull();
+      });
+
       it('asks only once while the form stays on the screen', async () => {
         const { connection, fixture } = createLoginForm();
         http.expectOne(randomUrl(connection)).flush({ id: 'a', url: '/files/login/a.jpg' });
@@ -319,7 +324,7 @@ describe('LoginPage', () => {
     });
 
     it('uses the mobile menu logo of the language for both themes', () => {
-      TestBed.inject(LanguageService).setLanguage('uk');
+      TestBed.inject(LanguageService).applyPreferred('uk');
       const { element } = createLoginForm();
       expect(srcs(element)).toContain('assets/logo_mobile_ukrainian.svg');
       expect(srcs(element)).toContain('assets/logo_mobile_ukrainian_dark.svg');
@@ -331,7 +336,7 @@ describe('LoginPage', () => {
       ['be', 'Uniia'],
       ['en', 'Uniia_en'],
     ] as const)('uses the %s Uniia logo file %s', (language, file) => {
-      TestBed.inject(LanguageService).setLanguage(language);
+      TestBed.inject(LanguageService).applyPreferred(language);
       const { element } = createLoginForm();
       expect(srcs(element)).toContain(`assets/logos/${file}.svg`);
       expect(srcs(element)).toContain(`assets/logos_white/${file}.svg`);
@@ -451,6 +456,26 @@ describe('LoginPage', () => {
       });
       const input = ctx.element.querySelector('.login__card ion-input') as HTMLIonInputElement;
       expect(input.value).toBe('192.168.0.9');
+    });
+
+    it('writes a Cyrillic domain of the account in Cyrillic, not in the record the browser keeps (xn--…)', async () => {
+      const ctx = create();
+      ctx.request.flush({ status: 'Healthy' });
+      TestBed.inject(AccountsService).add({
+        server: 'http://xn--80aikifvh.xn--j1amh:5065',
+        accessToken: 'a',
+        refreshToken: 'r',
+        identity: 'user-1',
+      });
+      answerStatus(ctx.connection, ctx.fixture, { hasAdmin: true, hasNgo: false, isSetupComplete: false });
+
+      button(ctx.element)!.click();
+      http.expectOne('http://xn--80aikifvh.xn--j1amh:5065/health').flush({ status: 'Healthy' });
+      const input = () => ctx.element.querySelector('.login__card ion-input') as HTMLIonInputElement | null;
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(input()?.value).toBe('http://приклад.укр:5065');
+      });
     });
 
     it('puts the connection address of the active account into the field when its server is healthy', async () => {
@@ -1039,11 +1064,24 @@ describe('LoginPage', () => {
       });
     });
 
+    it('asks the current server for its password policy and shows it in the form', async () => {
+      const { fixture, connection, element } = createAdmin();
+      http
+        .expectOne(`${connection.serverUrl()}/api/v1/system/identity-options`)
+        .flush({ requiredLength: 14, requireDigit: false, requireNonAlphanumeric: false, requireUppercase: false, requireLowercase: true, requireUniqueEmail: true });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        const icons = Array.from(element.querySelectorAll('.password-fields__requirement-icon')).map((icon) => icon.textContent?.trim());
+        expect(icons).toEqual(['14', 'a', '=']);
+      });
+    });
+
     it('sends no request while the form is invalid', () => {
       const { fill, submit } = createAdmin();
       fill({ ...valid, repeat: 'other' });
       submit();
-      http.expectNone(() => true);
+      // Іде лише запит умов до пароля (його форма робить, щойно відкрилась).
+      http.expectNone((request) => !request.url.endsWith('/api/v1/system/identity-options'));
     });
 
     it('creates the admin, logs in with the same data, then moves on to the NGO form', async () => {
@@ -1151,7 +1189,7 @@ describe('LoginPage', () => {
         '#',
       ]);
       expect(items().map((i) => i.querySelector('span:not(.password-fields__requirement-icon)')?.textContent?.trim())).toEqual([
-        uk.common.passwordRequirements.length,
+        uk.common.passwordRequirements.length.replace('{{count}}', '8'),
         uk.common.passwordRequirements.lowercase,
         uk.common.passwordRequirements.uppercase,
         uk.common.passwordRequirements.digit,
@@ -1451,7 +1489,7 @@ describe('LoginPage', () => {
       pickLogo(element, new File(['x'], 'doc.pdf', { type: 'application/pdf' }));
       fixture.detectChanges();
       const logoError = element.querySelector('.login__logo .auth-field-error');
-      expect(logoError?.textContent).toContain(uk.login.ngo.logoTypeError);
+      expect(logoError?.textContent).toContain(withImageTypes(uk.login.ngo.logoTypeError, 'and'));
       expect(element.querySelector('.auth-error')).toBeNull();
 
       form.onNgoNameChange('Організація');
@@ -1477,15 +1515,15 @@ describe('LoginPage', () => {
       const { fixture, element } = createWithoutNgo();
       pickLogo(element, new File(['x'], 'doc.pdf', { type: 'application/pdf' }));
       fixture.detectChanges();
-      expect(element.textContent).toContain(uk.login.ngo.logoTypeError);
+      expect(element.textContent).toContain(withImageTypes(uk.login.ngo.logoTypeError, 'and'));
       expect(element.querySelector('.login__logo-preview')).toBeNull();
     });
 
     it('rejects a logo that is too large', () => {
       const { fixture, element } = createWithoutNgo();
-      pickLogo(element, new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' }));
+      pickLogo(element, new File([new Uint8Array(IMAGE_MAX_BYTES + 1)], 'big.png', { type: 'image/png' }));
       fixture.detectChanges();
-      expect(element.textContent).toContain(uk.login.ngo.logoSizeError);
+      expect(element.textContent).toContain(withImageSize(uk.login.ngo.logoSizeError));
     });
 
     it('accepts a logo dropped onto the drop zone and highlights it while dragging', () => {
@@ -1517,7 +1555,7 @@ describe('LoginPage', () => {
       });
       zone.dispatchEvent(drop);
       fixture.detectChanges();
-      expect(element.textContent).toContain(uk.login.ngo.logoTypeError);
+      expect(element.textContent).toContain(withImageTypes(uk.login.ngo.logoTypeError, 'and'));
     });
 
     it('previews a valid logo and lets it be removed', () => {
@@ -1539,13 +1577,5 @@ describe('LoginPage', () => {
       expect(element.querySelector('.login__logo-remove')).toBeNull();
       expect(revoke).toHaveBeenCalledWith('blob:logo');
     });
-  });
-
-  it('does not show the redirect error when the connection is fine', () => {
-    const { fixture, element, request } = create();
-    fixture.componentRef.setInput('error', 'no-connection');
-    request.flush({ status: 'Healthy' });
-    fixture.detectChanges();
-    expect(element.querySelector('.auth-error')).toBeNull();
   });
 });

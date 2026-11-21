@@ -97,7 +97,7 @@ describe('RolePillComponent', () => {
 
     it('goes away when it is taken away', () => {
       const { fixture, host, element } = render();
-      host.icon.set('ellipse');
+      host.icon.set('ellipse-outline');
       fixture.detectChanges();
       host.icon.set(null);
       fixture.detectChanges();

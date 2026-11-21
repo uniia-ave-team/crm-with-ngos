@@ -13,9 +13,18 @@ describe('CurrentUserService', () => {
   let service: CurrentUserService;
   let auth: AuthService;
   let url: string;
+
+  /** Забуває акаунт (за замовчуванням активний) — як вихід з нього. */
+  const forget = (id = TestBed.inject(AccountsService).activeId()): void => {
+    if (id) {
+      TestBed.inject(AccountsService).remove(id);
+    }
+  };
   // Імена в тестах — пробіли: «старе» значення один пробіл, «нове» (після
   // оновлення чи збереження) — два, щоб їх можна було відрізнити.
   const profile = { id: 'u1', email: 'a@b.org', firstName: ' ', lastName: ' ', roles: [], customFields: [] };
+  /** Профіль так, як його бачить застосунок: без полів, яких він не читає (`customFields`). */
+  const shownProfile = { id: 'u1', email: 'a@b.org', firstName: ' ', lastName: ' ', roles: [] };
 
   function signIn(): void {
     const server = TestBed.inject(ConnectionService).serverUrl();
@@ -24,7 +33,6 @@ describe('CurrentUserService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
@@ -42,11 +50,63 @@ describe('CurrentUserService', () => {
     localStorage.clear();
   });
 
+  describe('a profile that is not the one of the contract', () => {
+    it.each([
+      ['has no id', { ...profile, id: undefined }],
+      ['has an empty id', { ...profile, id: '' }],
+      ['has no e-mail', { ...profile, email: undefined }],
+      ['has a first name of another type', { ...profile, firstName: 7 }],
+      ['has no last name', { ...profile, lastName: undefined }],
+      ['is not an object', null],
+    ])('is not taken when it %s: the check of the login is "unavailable" and nothing is written', async (_name, body) => {
+      const before = TestBed.inject(AccountsService).active();
+      const result = service.ensure();
+      http.expectOne(url).flush(body);
+
+      expect(await result).toBe('unavailable');
+      expect(service.user()).toBeNull();
+      expect(TestBed.inject(AccountsService).active()).toEqual(before);
+    });
+
+    it('keeps the optional fields that are text or null and drops the ones of another type, and the damaged roles', async () => {
+      const result = service.ensure();
+      http.expectOne(url).flush({
+        ...profile,
+        patronymic: null,
+        phoneNumber: '+380123456789',
+        country: 5,
+        avatarUrl: { url: '/a.png' },
+        roles: [{ id: 'r1', name: 'Перша' }, { id: 2 }],
+      });
+
+      expect(await result).toBe('ok');
+      expect(service.user()).toEqual({ ...shownProfile, patronymic: null, phoneNumber: '+380123456789', roles: [{ id: 'r1', name: 'Перша' }] });
+    });
+  });
+
+  it('asks again for the profile of a newly active account instead of sharing the request of the previous one, which then counts as unavailable', async () => {
+    const accounts = TestBed.inject(AccountsService);
+    const firstRequest = service.reload();
+    const forFirst = http.expectOne(url);
+    accounts.add({ server: TestBed.inject(ConnectionService).serverUrl(), accessToken: 'access-2', refreshToken: 'refresh-2', identity: 'u2' });
+    TestBed.tick();
+
+    const secondRequest = service.ensure();
+    // Окремий запит для нового акаунта (запит попереднього `expectOne` уже забрав).
+    const forSecond = http.expectOne(url);
+    forSecond.flush({ ...profile, id: 'u2' });
+    forFirst.flush(profile);
+
+    expect(await secondRequest).toBe('ok');
+    expect(await firstRequest).toBe('unavailable');
+    expect(service.user()?.id).toBe('u2');
+  });
+
   it('requests the profile once, keeps it and does not ask again', async () => {
     const first = service.ensure();
     http.expectOne(url).flush(profile);
     expect(await first).toBe('ok');
-    expect(service.user()).toEqual(profile);
+    expect(service.user()).toEqual(shownProfile);
 
     expect(await service.ensure()).toBe('ok');
     http.expectNone(url);
@@ -119,7 +179,7 @@ describe('CurrentUserService', () => {
     await first;
     expect(service.user()).not.toBeNull();
 
-    auth.clearTokens();
+    forget();
     TestBed.tick();
     expect(service.user()).toBeNull();
 
@@ -131,56 +191,6 @@ describe('CurrentUserService', () => {
     http.expectOne(url).flush({ ...profile, id: 'u2' });
     await second;
     expect(service.user()?.id).toBe('u2');
-  });
-
-  describe('when the active account is changed without this tab doing it (another tab switched it)', () => {
-    const activeKey = 'yavir.activeAccount';
-    let first: string;
-    let second: string;
-
-    /** Профіль першого акаунта завантажено; другий лежить у сховищі, але неактивний. */
-    async function twoAccounts(): Promise<void> {
-      const accounts = TestBed.inject(AccountsService);
-      first = accounts.activeId()!;
-      const server = TestBed.inject(ConnectionService).serverUrl();
-      second = accounts.add({ server, accessToken: 'access-2', refreshToken: 'refresh-2', identity: 'u2' }).id;
-      accounts.setActive(first);
-      TestBed.tick();
-      const loading = service.ensure();
-      http.expectOne(url).flush(profile);
-      await loading;
-      TestBed.tick();
-    }
-
-    /** Те, що робить інша вкладка: пише вказівник на активний акаунт, і сюди приходить `storage`. */
-    function otherTabSwitchesTo(id: string): void {
-      localStorage.setItem(activeKey, id);
-      window.dispatchEvent(new StorageEvent('storage', { key: activeKey }));
-      TestBed.tick();
-    }
-
-    it('asks for the profile of the new account, so the avatar is not left empty until the next page change', async () => {
-      await twoAccounts();
-
-      otherTabSwitchesTo(second);
-      expect(service.user()).toBeNull();
-      http.expectOne(url).flush({ ...profile, id: 'u2' });
-      await vi.waitFor(() => expect(service.user()?.id).toBe('u2'));
-    });
-
-    it('asks nothing when the other tab did not change the account', async () => {
-      await twoAccounts();
-      otherTabSwitchesTo(first);
-      http.expectNone(url);
-      expect(service.user()?.id).toBe('u1');
-    });
-
-    it('asks nothing for an account without tokens', async () => {
-      await twoAccounts();
-      auth.clearTokens(second);
-      otherTabSwitchesTo(second);
-      http.expectNone(url);
-    });
   });
 
   describe('a temporary switch of the active account (the search for an account, the click on a tile)', () => {
@@ -254,12 +264,13 @@ describe('CurrentUserService', () => {
     });
   });
 
-  it('does not take a profile that arrived after the user signed out', async () => {
+  it('does not take a profile that arrived after the user signed out, and does not call it a rejection of the tokens', async () => {
     const result = service.ensure();
     const request = http.expectOne(url);
-    auth.clearTokens();
+    forget();
     request.flush(profile);
-    expect(await result).toBe('unauthorized');
+    // Це не відмова сервера: токени того акаунта тут ні до чого.
+    expect(await result).toBe('unavailable');
     expect(service.user()).toBeNull();
   });
 
@@ -270,7 +281,7 @@ describe('CurrentUserService', () => {
     http.expectOne(url).flush(profile);
     await result;
     TestBed.tick();
-    expect(fresh.user()).toEqual(profile);
+    expect(fresh.user()).toEqual(shownProfile);
   });
 
   describe('permissions (GET /users/me/permissions together with /users/me)', () => {
@@ -326,7 +337,7 @@ describe('CurrentUserService', () => {
       const request = http.expectOne(permissionsUrl());
       const id = TestBed.inject(AccountsService).activeId()!;
 
-      auth.clearTokens();
+      forget();
       request.flush(['ViewUser']);
       await Promise.resolve();
       expect(JSON.parse(localStorage.getItem(`yavir.account.${id}`) ?? 'null')?.permissions ?? []).toEqual([]);
@@ -368,11 +379,11 @@ describe('CurrentUserService', () => {
       const result = service.reload();
       http.expectOne(url).flush({}, { status, statusText: 'x' });
       expect(await result).toBe('unavailable');
-      expect(service.user()).toEqual(profile);
+      expect(service.user()).toEqual(shownProfile);
     });
 
     it('sends nothing without tokens', async () => {
-      auth.clearTokens();
+      forget();
       expect(await service.reload()).toBe('unauthorized');
       http.expectNone(url);
     });

@@ -2,20 +2,9 @@ import { Component, input, output } from '@angular/core';
 import { IonIcon } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
 
-import { RequestFailure } from '../../core/http/request-failure';
 import { Role } from '../../core/roles/roles.service';
 import { RolePillComponent } from '../../shared/role-pill/role-pill.component';
-
-/** Що показує список ролей. */
-export type RolesStatus = 'loading' | 'ready' | 'failed';
-
-/** Стан списку ролей: що з запитом і які ролі вже є (при оновленні лишається попередній список). */
-export interface RolesView {
-  readonly status: RolesStatus;
-  readonly roles: readonly Role[];
-  /** Причина невдачі (лише для `failed`). */
-  readonly failure: RequestFailure | null;
-}
+import { RolesView } from '../roles-view';
 
 /**
  * Зміст бічного вікна «Ролі»: заголовок і ролі плашками (`app-role-pill`, колір за

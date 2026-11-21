@@ -22,10 +22,13 @@ function files(dir, extension) {
 
 /**
  * Рядкові літерали у виразі шаблону, які є назвами іконок: `a ? 'x' : 'y'` → x, y. Літерал, з
- * яким щось порівнюють (`direction === 'asc'`), — не назва іконки.
+ * яким щось порівнюють, — не назва іконки, з якого боку порівняння він не стояв би:
+ * `direction === 'asc'` чи `'asc' === direction`.
  */
 const literals = (expression) =>
-  [...expression.matchAll(/([=!]==?\s*)?'([a-z][a-z-]*)'/g)].filter((match) => !match[1]).map((match) => match[2]);
+  [...expression.matchAll(/([=!]==?\s*)?'([a-z][a-z-]*)'(\s*[=!]==?)?/g)]
+    .filter((match) => !match[1] && !match[3])
+    .map((match) => match[2]);
 
 /** Назва іконки → файли, де її вжито. */
 const used = new Map();
@@ -61,7 +64,13 @@ for (const file of files(appDir, '.ts')) {
   }
 }
 
-const registered = new Set([...readFileSync(registryFile, 'utf8').matchAll(/^\s*'([a-z-]+)':/gm)].map((match) => match[1]));
+// Назва в реєстрі — ключ обʼєкта: в одинарних, подвійних лапках чи без них (`'bulb': bulb`,
+// `"bulb": bulb`, `bulb: bulb`) — усе це коректний TypeScript.
+const registered = new Set(
+  [...readFileSync(registryFile, 'utf8').matchAll(/^\s*(?:'([a-z-]+)'|"([a-z-]+)"|([a-z][a-zA-Z]*))\s*:/gm)].map(
+    (match) => match[1] ?? match[2] ?? match[3],
+  ),
+);
 
 const missing = [...used.keys()].filter((name) => !registered.has(name)).sort();
 const unused = [...registered].filter((name) => !used.has(name)).sort();

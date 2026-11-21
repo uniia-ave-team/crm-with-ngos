@@ -3,7 +3,7 @@ import { NgModel, FormsModule } from '@angular/forms';
 import { IonInput } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
 
-import { PASSWORD_RULES } from './password-rules';
+import { DEFAULT_PASSWORD_POLICY, PasswordPolicy, passwordRules } from './password-rules';
 
 let nextId = 0;
 
@@ -13,11 +13,12 @@ let nextId = 0;
  * (реєстрація адміністратора) і в налаштуваннях (зміна пароля).
  *
  * Компонент нічого не зберігає: значення приходять входами, зміни — подіями, а
- * помилки (ключі перекладу) підставляє батько після своєї перевірки. Чи
- * пароль достатньо складний, батько перевіряє через `isStrongPassword`.
+ * помилки (ключі перекладу) підставляє батько після своєї перевірки. Умови до
+ * пароля (`policy`) — сервера, на якому пароль задають (`PasswordPolicyService`); батько
+ * перевіряє пароль за тими самими умовами (`isStrongPassword(password, policy)`).
  *
  *   <app-password-fields
- *     [password]="password()" [repeat]="repeat()"
+ *     [password]="password()" [repeat]="repeat()" [policy]="passwordPolicy()"
  *     [passwordLabel]="'…' | translate" [repeatLabel]="'…' | translate"
  *     (passwordChange)="password.set($event)" (repeatChange)="repeat.set($event)"
  *   />
@@ -36,6 +37,8 @@ let nextId = 0;
 export class PasswordFieldsComponent {
   readonly password = input('');
   readonly repeat = input('');
+  /** Умови до пароля сервера; без них — стандартні. Показуються лише ті, що сервер вимагає. */
+  readonly policy = input<PasswordPolicy>(DEFAULT_PASSWORD_POLICY);
   /** Напис поля пароля: підказка в полі (або видимий напис над ним, див. `showLabels`) і `aria-label`. */
   readonly passwordLabel = input.required<string>();
   readonly repeatLabel = input.required<string>();
@@ -57,7 +60,7 @@ export class PasswordFieldsComponent {
   /** Умови до пароля й чи виконано кожну (оновлюється під час введення). */
   protected readonly requirements = computed(() => {
     const password = this.password();
-    return PASSWORD_RULES.map(({ key, icon, test }) => ({ key, icon, met: test(password) }));
+    return passwordRules(this.policy()).map(({ key, icon, params, test }) => ({ key, icon, params, met: test(password) }));
   });
 
   /** Повтор пароля збігається з паролем (порожній повтор не рахується). */

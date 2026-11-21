@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { RolesView } from '../roles-panel/roles-panel.component';
+import { RolesView } from '../roles-view';
 import { ColleagueFormComponent, NewColleague } from './colleague-form.component';
 
 @Component({
@@ -193,7 +193,7 @@ describe('ColleagueFormComponent', () => {
       expect(error?.getAttribute('role')).toBe('alert');
     });
 
-    it.each(['abc', 'a@b', 'a b@c.org', '@b.org'])('does not give "%s" as an email', (value) => {
+    it.each(['abc', 'a@@b.org', 'a@', 'a b@c.org', '@b.org'])('does not give "%s" as an email (the same rule as on the server)', (value) => {
       const { host, element, type, submit } = render();
       type(value);
       submit();

@@ -5,7 +5,7 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { Role } from '../../core/roles/roles.service';
-import { RolesView } from './roles-panel.component';
+import { RolesView } from '../roles-view';
 import { RolesPanelComponent } from './roles-panel.component';
 
 @Component({

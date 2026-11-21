@@ -5,6 +5,7 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { PasswordFieldsComponent } from './password-fields.component';
+import { PasswordPolicy } from './password-rules';
 
 // Тексти живуть в uk.json — беремо їх звідти, а не дублюємо. Напис полів і
 // помилки — ті, що компонент отримує на формі адміністратора.
@@ -17,6 +18,7 @@ const errorTexts = { weak: uk.login.admin.error.passwordWeak, mismatch: uk.login
     <app-password-fields
       [password]="password()"
       [repeat]="repeat()"
+      [policy]="policy()"
       [passwordLabel]="labels.password"
       [repeatLabel]="labels.repeat"
       [showLabels]="showLabels()"
@@ -34,6 +36,7 @@ class HostComponent {
   readonly labels = fieldLabels;
   readonly password = signal('');
   readonly repeat = signal('');
+  readonly policy = signal<PasswordPolicy>({ minLength: 8, requireLowercase: true, requireUppercase: true, requireDigit: true, requireSpecial: true });
   readonly showLabels = signal(false);
   readonly required = signal(false);
   readonly passwordError = signal<string | null>(null);
@@ -71,7 +74,7 @@ describe('PasswordFieldsComponent', () => {
     const items = (index: number) => Array.from(lists()[index].querySelectorAll('.password-fields__requirement'));
     expect(items(0).map((i) => i.querySelector('.password-fields__requirement-icon')?.textContent?.trim())).toEqual(['8', 'a', 'A', '123', '#']);
     expect(items(0).map((i) => i.querySelector('span:not(.password-fields__requirement-icon)')?.textContent?.trim())).toEqual([
-      requirements.length,
+      requirements.length.replace('{{count}}', '8'),
       requirements.lowercase,
       requirements.uppercase,
       requirements.digit,
@@ -80,6 +83,15 @@ describe('PasswordFieldsComponent', () => {
     expect(items(1)).toHaveLength(1);
     expect(items(1)[0].querySelector('.password-fields__requirement-icon')?.textContent?.trim()).toBe('=');
     expect(items(1)[0].textContent).toContain(requirements.match);
+  });
+
+  it('shows only the requirements of the server, with its length, and follows a change of them', () => {
+    const { fixture, host, lists } = render();
+    host.policy.set({ minLength: 12, requireLowercase: false, requireUppercase: true, requireDigit: false, requireSpecial: false });
+    fixture.detectChanges();
+    const items = Array.from(lists()[0].querySelectorAll('.password-fields__requirement'));
+    expect(items.map((i) => i.querySelector('.password-fields__requirement-icon')?.textContent?.trim())).toEqual(['12', 'A']);
+    expect(items[0].textContent).toContain(requirements.length.replace('{{count}}', '12'));
   });
 
   it('ticks off the requirements as the password changes', () => {

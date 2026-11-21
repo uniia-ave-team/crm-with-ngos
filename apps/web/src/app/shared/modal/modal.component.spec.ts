@@ -1,4 +1,4 @@
-import { Component, CUSTOM_ELEMENTS_SCHEMA, signal } from '@angular/core';
+import { ApplicationRef, Component, CUSTOM_ELEMENTS_SCHEMA, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { ModalComponent } from './modal.component';
@@ -90,6 +90,64 @@ describe('ModalComponent', () => {
     ion().dispatchEvent(new CustomEvent('didDismiss'));
     await closing;
     expect(done).toBe(true);
+  });
+
+  describe('opened again while it is still closing', () => {
+    it('closed by Ionic (the backdrop, Escape): opens again only after the closing ends, and stays open', async () => {
+      const { fixture, host, modal, ion, opener } = render();
+      opener.click();
+      fixture.detectChanges();
+      ion().dispatchEvent(new CustomEvent('willDismiss'));
+
+      opener.click();
+      const writes: unknown[] = [];
+      let value = ion()['isOpen'];
+      Object.defineProperty(ion(), 'isOpen', {
+        configurable: true,
+        get: () => value,
+        set: (next) => {
+          writes.push(next);
+          value = next;
+        },
+      });
+      ion().dispatchEvent(new CustomEvent('didDismiss'));
+      expect(host.events).toEqual(['closed']);
+
+      await vi.waitFor(() => {
+        TestBed.inject(ApplicationRef).tick();
+        expect(modal.isOpen()).toBe(true);
+        expect(ion()['isOpen']).toBe(true);
+      });
+      // Спершу Ionic отримує «закрито», потім «відкрито»: зміну він помічає лише так.
+      expect(writes).toEqual([false, true]);
+    });
+
+    it('closed by close(): opens again right after the closing ends', () => {
+      const { fixture, modal, ion, opener } = render();
+      opener.click();
+      fixture.detectChanges();
+      void modal.close();
+      fixture.detectChanges();
+      ion().dispatchEvent(new CustomEvent('willDismiss'));
+
+      opener.click();
+      expect(modal.isOpen()).toBe(false);
+      ion().dispatchEvent(new CustomEvent('didDismiss'));
+      fixture.detectChanges();
+      expect(modal.isOpen()).toBe(true);
+      expect(ion()['isOpen']).toBe(true);
+    });
+
+    it('stays closed when nobody asked to open it again', () => {
+      const { fixture, modal, ion, opener } = render();
+      opener.click();
+      fixture.detectChanges();
+      ion().dispatchEvent(new CustomEvent('willDismiss'));
+      ion().dispatchEvent(new CustomEvent('didDismiss'));
+      fixture.detectChanges();
+      expect(modal.isOpen()).toBe(false);
+      expect(ion()['isOpen']).toBe(false);
+    });
   });
 
   it('stops waiting for the closing animation after a timeout', async () => {

@@ -3,7 +3,7 @@ import { IonSpinner } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { LanguageService } from '../../core/i18n/language.service';
-import { mobileLogoBase } from '../../core/i18n/mobile-logo';
+import { mobileLogoBase } from '../../core/i18n/logos';
 
 /**
  * Прелоадер на всю сторінку: оверлей 100vw × 100vh із заливкою меню, а в центрі

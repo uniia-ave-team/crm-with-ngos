@@ -5,13 +5,11 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { AccountTile, accountTooltip } from '../../accounts/account-avatar/account-tile';
 import { AccountAvatarComponent } from '../../accounts/account-avatar/account-avatar.component';
 
-export type { AccountTile };
-
 /**
  * Зміст вікна акаунта (відкривається клацанням по аватару в меню): акаунти
  * користувача в різних середовищах (аватар + логотип ГО), кнопка додавання
- * ще одного, «Налаштування профілю», лінія й «Вийти». Поки лише вигляд:
- * події віддаємо назовні, самі нічого не робимо.
+ * ще одного, «Налаштування профілю», лінія й «Вийти». Компонент лише показує й
+ * сповіщає подіями, що вибрали; що робити далі, вирішує меню (`primary-nav`).
  */
 @Component({
   selector: 'app-account-menu',

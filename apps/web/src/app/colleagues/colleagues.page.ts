@@ -4,17 +4,19 @@ import { TranslateService, TranslatePipe } from '@ngx-translate/core';
 import { IonButtons, IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonTitle, IonToolbar } from '@ionic/angular';
 
 import { AccountsService } from '../core/accounts/accounts.service';
+import { ConnectionService } from '../core/connection/connection.service';
 import { PERMISSIONS, hasAnyPermission } from '../core/auth/permissions';
 import { LanguageService } from '../core/i18n/language.service';
 import { RequestFailure } from '../core/http/request-failure';
 import { InvitationsService } from '../core/invitations/invitations.service';
-import { ALWAYS_GRANTED_PERMISSIONS, diffClaims } from '../core/roles/role-permissions';
+import { diffClaims } from '../core/roles/role-permissions';
 import { Role, RoleDetails, RolesService } from '../core/roles/roles.service';
 import { CurrentUserService } from '../core/users/current-user.service';
 import { PRONOUN_CATEGORY } from '../core/users/pronouns';
 import { UserRole } from '../core/users/user-profile';
 import { UserSummary, UsersService, UsersSort } from '../core/users/users.service';
 import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent, DataTableSort, DataTableComponent } from '../shared/data-table/data-table.component';
+import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { ModalComponent } from '../shared/modal/modal.component';
 import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
@@ -22,7 +24,8 @@ import { ColleagueAction, ColleagueActionItem, ColleagueActionsComponent } from 
 import { ColleagueFormComponent, NewColleague } from './colleague-form/colleague-form.component';
 import { InvitationShare, InvitationStatus, InvitationDialogComponent } from './invitation-dialog/invitation-dialog.component';
 import { NewRole, RoleFormComponent } from './role-form/role-form.component';
-import { RolesView, RolesPanelComponent } from './roles-panel/roles-panel.component';
+import { RolesPanelComponent } from './roles-panel/roles-panel.component';
+import { RolesView } from './roles-view';
 import { AvatarComponent } from '../shared/avatar/avatar.component';
 import { RolePillComponent } from '../shared/role-pill/role-pill.component';
 
@@ -36,6 +39,14 @@ export interface RoleEditView {
 
 /** Скільки колег підвантажується за один запит. */
 export const COLLEAGUES_PAGE_SIZE = 20;
+
+/**
+ * Порядок колег, поки користувач не вибрав інший: за ПІБ, від А до Я (таблиця позначає це
+ * на заголовку «ПІБ», `defaultSortColumnId`). Без сортування сервер
+ * віддає колег за `id`, тобто в порядку, що для людини виглядає випадковим. `LastName` сервер
+ * розуміє як «прізвище, потім імʼя, потім по батькові».
+ */
+const DEFAULT_SORT: UsersSort = { orderBy: 'LastName', sortOrder: 'asc' };
 
 /** Стан таблиці колег: що з запитом, які колеги вже є й чи є ще сторінки. */
 export interface ColleaguesView {
@@ -128,10 +139,10 @@ interface ColleagueRow extends DataTableRow {
 
 /**
  * Вкладка «Колеги» (`/colleagues`): шапка з кнопками «Ролі», «Додати» і пошуку та
- * таблиця (`app-data-table`). Кнопки й крапки в кінці рядків поки нічого не
- * роблять. Колонки (`columns`) і рядки (`rows`) задаються кодом, тож їх можна
- * змінити, не чіпаючи розмітки; вигляд складних комірок — шаблони внизу
- * розмітки сторінки.
+ * таблиця (`app-data-table`). «Ролі» й «Додати» працюють (список і форми ролей, запрошення
+ * колеги); пошук і дії з колегою в меню біля трьох крапок поки не зроблено. Колонки
+ * (`columns`) і рядки (`rows`) задаються кодом, тож їх можна змінити, не чіпаючи розмітки;
+ * вигляд складних комірок — шаблони внизу розмітки сторінки.
  *
  * Що показується, залежить від прав користувача (права активного акаунта зі
  * знімка в `localStorage`): кнопка «Додати» — з `Permissions.CreateUser`; три
@@ -146,13 +157,15 @@ interface ColleagueRow extends DataTableRow {
  * (`PrimaryNavComponent`).
  *
  * Бічне вікно (`app-side-panel`) відкривають кнопки «Ролі» й «Додати» та кожна дія
- * з меню біля трьох крапок (функції-заглушки нижче); що в ньому показувати, ще не
- * зроблено — вікно порожнє, а `panel` каже, що саме його відкрило й для якого колеги.
+ * з меню біля трьох крапок. Для «Ролі» й «Додати» в ньому список ролей, форми ролі й
+ * форма колеги; для дій (функції-заглушки нижче) вікно поки порожнє, а `panel` каже, що
+ * саме його відкрило й для якого колеги.
  *
  * Колеги приходять із `GET /api/v1/users` по 20 (перша сторінка при відкритті,
- * далі підвантаження при прокрутці до кінця таблиці, `ion-infinite-scroll`); у
- * рядках поки лише імʼя й пошта з відповіді, решта — плейсхолдери з мовного
- * файлу (`colleagues.sample.*`).
+ * далі підвантаження при прокрутці до кінця таблиці, `ion-infinite-scroll`). У рядках —
+ * ПІБ, аватар, займенники, ролі, пошта й телефон з відповіді; чого нема — прочерк. Рядки
+ * «проєкт — роль» під ролями поки зразкові (`colleagues.sample.line`): проєктів сервер ще
+ * не віддає.
  */
 @Component({
   selector: 'app-colleagues',
@@ -175,6 +188,7 @@ interface ColleagueRow extends DataTableRow {
     ColleagueFormComponent,
     RolesPanelComponent,
     ModalComponent,
+    ConfirmDialogComponent,
     InvitationDialogComponent,
     AvatarComponent,
     RolePillComponent,
@@ -191,6 +205,7 @@ export class ColleaguesPage implements OnInit {
   private readonly permissions = this.currentUser.permissions;
   private readonly router = inject(Router);
   private readonly accounts = inject(AccountsService);
+  private readonly connection = inject(ConnectionService);
 
   /**
    * Назва організації для кольору аватарів: колеги з тієї самої організації, що й
@@ -212,14 +227,27 @@ export class ColleaguesPage implements OnInit {
 
   private readonly rowMenu = viewChild(PopoverComponent);
   private readonly sidePanel = viewChild(SidePanelComponent);
-  private readonly invitationModal = viewChild(ModalComponent);
+  private readonly invitationModal = viewChild<ModalComponent>('invitationDialog');
+  private readonly roleDeleteModal = viewChild<ModalComponent>('roleDeleteDialog');
+  /** Роль у вікні підтвердження видалення (лишається, поки вікно закривається). */
+  protected readonly roleToDelete = signal<Role | null>(null);
+  /** Іде видалення ролі: кнопка «Так» вимкнена. */
+  protected readonly roleDeleting = signal(false);
+  /** Ключ помилки видалення ролі (`null` — нема). */
+  protected readonly roleDeleteError = signal<string | null>(null);
   private readonly colleagueForm = viewChild(ColleagueFormComponent);
   /** Іде відправка форми нового колеги. */
   protected readonly colleagueSaving = signal(false);
   /** Ключ помилки відправки форми нового колеги (`null` — нема). */
   protected readonly colleagueSaveError = signal<string | null>(null);
   /** Створене запрошення для вікна з токеном (лишається, поки вікно закривається). */
-  protected readonly invitation = signal<{ readonly email: string; readonly token: string; readonly expiresAt: string } | null>(null);
+  protected readonly invitation = signal<{
+    readonly email: string;
+    readonly token: string;
+    readonly expiresAt: string;
+    /** Origin сервера, на якому створено запрошення (за ним будується посилання). */
+    readonly server: string;
+  } | null>(null);
   /** Що вийшло з копіюванням чи поширенням посилання у вікні запрошення. */
   protected readonly invitationStatus = signal<InvitationStatus>('idle');
 
@@ -270,11 +298,10 @@ export class ColleaguesPage implements OnInit {
   private readonly positionCell = viewChild<TemplateRef<DataTableCellContext>>('positionCell');
 
   /**
-   * Колонки; `orderBy` — що йде в `OrderBy` запиту при сортуванні за колонкою. Сервер
-   * приймає одне імʼя властивості (з `UserDto`), тож для «ПІБ» не вийде передати
-   * одразу прізвище, імʼя й по батькові: беремо прізвище. «Посада» поки без
-   * сортування (порожній), «Телефон» — `PhoneNumber` (списку сервер цього поля поки
-   * не віддає, тож сортування за ним ще не діє).
+   * Колонки; `orderBy` — що йде в `OrderBy` запиту при сортуванні за колонкою (одне імʼя
+   * властивості `UserDto`). «ПІБ» — `LastName`: сервер сортує за ним прізвище, потім імʼя,
+   * потім по батькові. «Посада» поки без сортування (порожній), «Пошта» — `Email`,
+   * «Телефон» — `PhoneNumber`.
    */
   protected readonly columns = computed<readonly DataTableColumn[]>(() => [
     { id: 'name', labelKey: 'colleagues.columns.name', width: '30%', template: this.personCell(), orderBy: 'LastName' },
@@ -287,26 +314,30 @@ export class ColleaguesPage implements OnInit {
   protected readonly colleagues = signal<ColleaguesView>({ status: 'loading', users: [], failure: null, hasMore: false });
   private nextPage = 1;
   private colleaguesLoading = false;
-  /** Сортування таблиці (клік по заголовку); `null` — без аргументів сортування. Діє й на наступні сторінки. */
-  private sort: UsersSort | null = null;
+  /**
+   * Сортування запиту колег: колонка, за якою клацнули, а поки не клацнули (чи сортування
+   * зняли, чи колонка не сортується) — за ПІБ (`DEFAULT_SORT`). Діє й на наступні сторінки.
+   */
+  private sort: UsersSort = DEFAULT_SORT;
   /** Номер «покоління» списку: зростає при кожному новому сортуванні, відповідь на давніший запит ігнорується. */
   private colleaguesGeneration = 0;
 
   /**
-   * Рядки з полів колеги (`UserSummary`); порожнє поле (телефон, імʼя, пошта)
-   * заміняє тимчасовий плейсхолдер із мовного файлу (`colleagues.sample.*`),
-   * займенники — за `pronounsText`. Тексти перераховуються при зміні мови.
+   * Рядки з полів колеги (`UserSummary`): ПІБ («Прізвище Імʼя По батькові», як на плитках
+   * акаунтів), пошта й телефон; чого нема — прочерк (`common.empty`), а не вигадане значення.
+   * Займенники — за `pronounsText`. Тексти перераховуються при зміні мови.
    */
   protected readonly rows = computed<readonly ColleagueRow[]>(() => {
     this.language();
     const t = (key: string) => this.translate.instant(key) as string;
+    const empty = t('common.empty');
     const lineText = t('colleagues.sample.line');
     return this.colleagues().users.map((user) => ({
       id: user.id,
-      name: `${user.firstName} ${user.lastName}`.trim() || t('colleagues.sample.name'),
-      email: user.email.trim() || t('colleagues.sample.email'),
+      name: fullName(user) || empty,
+      email: user.email.trim() || empty,
       pronouns: this.pronounsText(user),
-      phone: user.phoneNumber?.trim() || t('colleagues.sample.phone'),
+      phone: user.phoneNumber?.trim() || empty,
       avatarUrl: user.avatarUrl,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -359,12 +390,12 @@ export class ColleaguesPage implements OnInit {
   /**
    * Клік по заголовку колонки (див. `app-data-table`): таблиця очищається й список
    * запитується з першої сторінки заново. Перший клік — `OrderBy` колонки й
-   * `SortOrder=asc`, другий — `desc`, третій — без аргументів сортування. Колонка
-   * з порожнім `orderBy` теж очищає таблицю, але сортування не передає. Вибране
-   * сортування діє й на наступні сторінки при прокрутці.
+   * `SortOrder=asc`, другий — `desc`, третій — знову сортування за замовчуванням (за ПІБ).
+   * Колонка з порожнім `orderBy` теж очищає таблицю, але сортується за замовчуванням.
+   * Вибране сортування діє й на наступні сторінки при прокрутці.
    */
   protected onSort(sort: DataTableSort | null): void {
-    this.sort = sort && sort.column.orderBy ? { orderBy: sort.column.orderBy, sortOrder: sort.direction } : null;
+    this.sort = sort && sort.column.orderBy ? { orderBy: sort.column.orderBy, sortOrder: sort.direction } : DEFAULT_SORT;
     this.colleaguesGeneration++;
     this.colleaguesLoading = false;
     this.nextPage = 1;
@@ -427,7 +458,7 @@ export class ColleaguesPage implements OnInit {
       return;
     }
     const user = this.colleagues().users.find((candidate) => candidate.id === id);
-    const colleague: ColleagueRef = { id, name: user ? `${user.firstName} ${user.lastName}`.trim() || null : null };
+    const colleague: ColleagueRef = { id, name: user ? fullName(user) || null : null };
     switch (action) {
       case 'permissions':
         this.changePermissions(colleague);
@@ -487,7 +518,8 @@ export class ColleaguesPage implements OnInit {
    * «Додати» у формі нового колеги: створює запрошення (`POST /api/v1/invitations`, пошта й
    * вибрані ролі). Поки йде відправка, кнопка вимкнена. Успіх очищає форму, закриває бічне
    * вікно й показує в модальному вікні посилання для колеги з отриманим токеном
-   * (`<домен>/join?token=…`); невдача лишає форму з помилкою за причиною.
+   * (`<домен сервера>/join?token=…`, див. `InvitationDialogComponent`); невдача лишає форму з
+   * помилкою за причиною.
    */
   protected async createColleague(colleague: NewColleague): Promise<void> {
     if (this.colleagueSaving()) {
@@ -495,16 +527,18 @@ export class ColleaguesPage implements OnInit {
     }
     this.colleagueSaving.set(true);
     this.colleagueSaveError.set(null);
+    // Сервер, на якому створюється запрошення: посилання для колеги має вести саме на нього.
+    const server = this.connection.serverUrl();
     const result = await this.invitations.invite(colleague.email, colleague.roleIds);
     this.colleagueSaving.set(false);
     if (typeof result === 'string') {
       this.colleagueSaveError.set(`colleagues.colleagueForm.saveError.${result}`);
       return;
     }
-    this.invitation.set({ email: colleague.email, token: result.token, expiresAt: result.expiresAt });
+    this.invitation.set({ email: colleague.email, token: result.token, expiresAt: result.expiresAt, server });
     this.invitationStatus.set('idle');
     this.colleagueForm()?.reset();
-    void this.sidePanel()?.close();
+    this.sidePanel()?.close();
     this.invitationModal()?.open();
   }
 
@@ -541,8 +575,8 @@ export class ColleaguesPage implements OnInit {
 
   /**
    * «Додати» у формі нової ролі: створює роль (`POST /api/v1/roles`) і додає їй права
-   * вибраних груп та права без налаштування (`ALWAYS_GRANTED_PERMISSIONS`, у будь-якому
-   * випадку) окремими запитами. Поки йде відправка, кнопка вимкнена. Успіх повертає до
+   * з форми — вибраних груп і права без налаштування (`claimsOfGroups`) — окремими
+   * запитами. Поки йде відправка, кнопка вимкнена. Успіх повертає до
    * списку ролей і оновлює його (якщо якісь права не додалися — з попередженням); невдача
    * лишає форму з помилкою за причиною.
    */
@@ -552,10 +586,9 @@ export class ColleaguesPage implements OnInit {
     }
     this.roleSaving.set(true);
     this.roleSaveError.set(null);
-    const claims = [...new Set([...role.permissions, ...ALWAYS_GRANTED_PERMISSIONS])];
     const result = await this.roles.create(
       { name: role.name, feminitiveName: role.feminitiveName, pluralName: role.pluralName },
-      claims,
+      role.permissions,
     );
     this.roleSaving.set(false);
     if (typeof result === 'string') {
@@ -614,9 +647,51 @@ export class ColleaguesPage implements OnInit {
     void this.loadRoles();
   }
 
-  /** «Видалити» (смітник) біля ролі у вікні «Ролі». Заглушка: отримує роль. */
+  /** «Видалити» (смітник) біля ролі у вікні «Ролі»: питає підтвердження у вікні по центру екрана. */
   protected deleteRole(role: Role): void {
-    console.log(`[ColleaguesPage] Видалити роль: ${role.id} (поки не реалізовано)`);
+    if (this.roleDeleting()) {
+      return;
+    }
+    this.roleToDelete.set(role);
+    this.roleDeleteError.set(null);
+    this.roleDeleteModal()?.open();
+  }
+
+  /**
+   * «Так» у вікні підтвердження: `DELETE /api/v1/roles/{id}`. Поки йде запит, кнопка вимкнена.
+   * Успіх закриває вікно, прибирає роль зі списку й оновлює його з сервера; невдача лишає вікно
+   * з помилкою за причиною (зокрема 400: роль має хтось із колег або вона системна).
+   */
+  protected async confirmRoleDelete(role: Role): Promise<void> {
+    if (this.roleDeleting()) {
+      return;
+    }
+    this.roleDeleting.set(true);
+    this.roleDeleteError.set(null);
+    const result = await this.roles.delete(role.id);
+    this.roleDeleting.set(false);
+    if (result !== 'deleted') {
+      this.roleDeleteError.set(`colleagues.rolesPanel.deleteError.${result}`);
+      return;
+    }
+    void this.roleDeleteModal()?.close();
+    this.rolesNotice.set(null);
+    this.rolesView.update((view) => ({ ...view, roles: view.roles.filter((candidate) => candidate.id !== role.id) }));
+    void this.loadRoles();
+  }
+
+  /** «Скасувати» у вікні підтвердження видалення ролі. */
+  protected cancelRoleDelete(): void {
+    void this.roleDeleteModal()?.close();
+  }
+
+  /** Вікно підтвердження закрито будь-яким способом: забуваємо роль і помилку (якщо запит не йде). */
+  protected onRoleDeleteClosed(): void {
+    if (this.roleDeleting()) {
+      return;
+    }
+    this.roleToDelete.set(null);
+    this.roleDeleteError.set(null);
   }
 
   /**
@@ -648,37 +723,31 @@ export class ColleaguesPage implements OnInit {
 
   /** «Змінити ролі» (`AssignRoleToUser` або `ManageRole`). Заглушка. */
   protected changePermissions(colleague: ColleagueRef): void {
-    console.log(`[ColleaguesPage] Змінити права користувача: ${colleague.id} (поки не реалізовано)`);
     this.openPanel('permissions', colleague);
   }
 
   /** «Редагувати» (`UpdateUser`). Заглушка. */
   protected editColleague(colleague: ColleagueRef): void {
-    console.log(`[ColleaguesPage] Редагувати користувача: ${colleague.id} (поки не реалізовано)`);
     this.openPanel('edit', colleague);
   }
 
   /** «Скинути пароль» (`CanResetPassword`). Заглушка. */
   protected resetPassword(colleague: ColleagueRef): void {
-    console.log(`[ColleaguesPage] Скинути пароль користувача: ${colleague.id} (поки не реалізовано)`);
     this.openPanel('resetPassword', colleague);
   }
 
   /** «Вимкнути акаунт» (`DisableUser`). Заглушка. */
   protected disableColleague(colleague: ColleagueRef): void {
-    console.log(`[ColleaguesPage] Вимкнути користувача: ${colleague.id} (поки не реалізовано)`);
     this.openPanel('disable', colleague);
   }
 
   /** «Ввімкнути акаунт» (`UpdateUser`). Заглушка. */
   protected enableColleague(colleague: ColleagueRef): void {
-    console.log(`[ColleaguesPage] Ввімкнути користувача: ${colleague.id} (поки не реалізовано)`);
     this.openPanel('enable', colleague);
   }
 
   /** «Видалити» (`DeleteUser`). Заглушка. */
   protected deleteColleague(colleague: ColleagueRef): void {
-    console.log(`[ColleaguesPage] Видалити користувача: ${colleague.id} (поки не реалізовано)`);
     this.openPanel('delete', colleague);
   }
 
@@ -686,4 +755,12 @@ export class ColleaguesPage implements OnInit {
   protected asColleague(row: DataTableRow): ColleagueRow {
     return row as ColleagueRow;
   }
+}
+
+/** ПІБ колеги: прізвище, імʼя й по батькові (що з них є) через пробіл; нічого нема — порожньо. */
+function fullName(user: UserSummary): string {
+  return [user.lastName, user.firstName, user.patronymic ?? '']
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(' ');
 }

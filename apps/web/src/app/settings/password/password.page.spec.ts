@@ -28,7 +28,6 @@ describe('PasswordPage', () => {
 
   beforeEach(async () => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
@@ -95,7 +94,7 @@ describe('PasswordPage', () => {
         (s) => s.textContent?.trim(),
       );
       expect(texts).toEqual([
-        requirements.length,
+        requirements.length.replace('{{count}}', '8'),
         requirements.lowercase,
         requirements.uppercase,
         requirements.digit,
@@ -140,6 +139,25 @@ describe('PasswordPage', () => {
       await submit();
       expect(errors()).toEqual([text.error.passwordWeak]);
       http.expectNone(passwordUrl);
+    });
+
+    it('checks the new password by the policy of the server: a longer length there, and no special character needed', async () => {
+      const options = http.expectOne(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/system/identity-options`);
+      options.flush({ requiredLength: 10, requireDigit: true, requireNonAlphanumeric: false, requireUppercase: true, requireLowercase: true, requireUniqueEmail: true });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelector('.password-fields__requirement-icon')?.textContent?.trim()).toBe('10');
+      });
+
+      fill({ current: 'Old1!aaa', password: 'New1!bb', repeat: 'New1!bb' });
+      await submit();
+      expect(errors()).toEqual([text.error.passwordWeak]);
+
+      fill({ current: 'Old1!aaa', password: 'Newpass123', repeat: 'Newpass123' });
+      const done = submit();
+      expect(errors()).toEqual([]);
+      http.expectOne(passwordUrl).flush(null, { status: 204, statusText: 'No Content' });
+      await done;
     });
 
     it('rejects a new password equal to the current one, under the new password field', async () => {

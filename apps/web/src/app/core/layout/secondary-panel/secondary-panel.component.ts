@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, input } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { IonIcon } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -28,8 +28,8 @@ interface TreeGroup {
 
 /**
  * Вміст другої (контекстної) панелі — дерево розділу. Показується лише на
- * сторінках, для яких app.component.html знайшов LayoutSection за поточним
- * маршрутом (knowledge-base, planner).
+ * сторінках, для яких `LayoutService` знайшов розділ (`LayoutSection`) за поточним
+ * маршрутом: knowledge-base, planner, settings.
  *
  * Дерево «Бази знань» — статичний макет для дизайну; бекенду документів ще
  * немає (див. apps/web/README.md, розділ «Ще не зроблено»), тому пункти,
@@ -45,7 +45,7 @@ interface TreeGroup {
   imports: [IonIcon, RouterLink, RouterLinkActive, TranslatePipe],
 })
 export class SecondaryPanelComponent {
-  @Input({ required: true }) section!: LayoutSection;
+  readonly section = input.required<LayoutSection>();
 
   protected readonly settingsItems: readonly MenuItem[] = [
     { labelKey: 'settings.menu.personal', icon: 'person-outline', url: '/settings/personal-data' },

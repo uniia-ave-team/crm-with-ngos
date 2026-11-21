@@ -44,6 +44,12 @@
 // Посилання «На головну» в блоці помилки: того ж кольору, що й текст помилки.
 .join__link {
   color: inherit;
+  // Кнопка «Спробувати ще раз» виглядає так само, як посилання «На головну».
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
   font-weight: 600;
   text-decoration: underline;
 

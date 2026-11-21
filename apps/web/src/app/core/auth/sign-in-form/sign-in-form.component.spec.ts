@@ -24,6 +24,17 @@ interface FormInputs {
   error?: string | null;
 }
 
+/** Сховище браузера переповнене: записи акаунтів не пишуться (решта, як-от мова, — пишеться). */
+function fillStorageForAccounts(): void {
+  const setItem = Storage.prototype.setItem;
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+    if (key.startsWith('yavir.account.')) {
+      throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    }
+    setItem.call(this, key, value);
+  });
+}
+
 describe('SignInFormComponent', () => {
   const server = 'https://first.example:5065';
   let http: HttpTestingController;
@@ -35,7 +46,6 @@ describe('SignInFormComponent', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       imports: [SignInFormComponent],
@@ -99,6 +109,28 @@ describe('SignInFormComponent', () => {
     await settle(fixture);
     return fixture;
   }
+
+  describe('a Cyrillic domain (the .укр zone)', () => {
+    const stored = 'https://xn--80aikifvh.xn--j1amh:5065';
+    const shownAddress = (fixture: ComponentFixture<SignInFormComponent>) => (fixture.componentInstance as unknown as { address(): string }).address();
+
+    it('is written in the address field in Cyrillic, while the server is checked at the record the browser keeps', async () => {
+      const fixture = await withHealthyServer({ server: stored });
+      expect(shownAddress(fixture)).toBe('https://приклад.укр:5065');
+      expect(servers.at(-1)).toBe(stored);
+    });
+
+    it('is taken when it is typed in Cyrillic', async () => {
+      const fixture = await withHealthyServer();
+      internals(fixture).address.set('приклад.укр:5065');
+      await settle(fixture, 1000);
+      const request = http.expectOne((r) => r.url.endsWith('/health'));
+      expect(new URL(request.request.url).hostname).toBe('xn--80aikifvh.xn--j1amh');
+      request.flush({ status: 'Healthy' });
+      await settle(fixture);
+      expect(fieldErrors(fixture)).toEqual([]);
+    });
+  });
 
   describe('the fields', () => {
     it('has the e-mail, the password, the button and the forgot-password link, with the texts of the sign-in form', () => {
@@ -281,6 +313,18 @@ describe('SignInFormComponent', () => {
       expect(submitButton(fixture).disabled).toBe(false);
     });
 
+    it('is not left busy when what the host asked for fails', async () => {
+      const afterSignIn = vi.fn(() => Promise.reject(new Error('broken')));
+      const fixture = await withHealthyServer({ email: 'first@organization.org', afterSignIn });
+      internals(fixture).password.set('secret');
+
+      const submitting = internals(fixture).submit();
+      http.expectOne(loginUrl(server)).flush({ accessToken: 'a.b.c', refreshToken: 'r' });
+      await expect(submitting).rejects.toThrow('broken');
+      fixture.detectChanges();
+      expect(submitButton(fixture).disabled).toBe(false);
+    });
+
     it('does not send the form twice while it is being sent', async () => {
       const fixture = await withHealthyServer({ email: 'first@organization.org' });
       internals(fixture).password.set('secret');
@@ -364,6 +408,22 @@ describe('SignInFormComponent', () => {
     it('is shown above the fields when the form has no error of its own', () => {
       const fixture = open({ error: 'login.form.error.statusFailed' });
       expect(banner(fixture)).toBe(uk.login.form.error.statusFailed);
+    });
+
+    it('says the browser cannot store the account when its storage is full, and stays on the form', async () => {
+      const afterSignIn = vi.fn(() => Promise.resolve());
+      const fixture = open({ email: 'first@organization.org', afterSignIn });
+      fillStorageForAccounts();
+      internals(fixture).password.set('secret');
+      const submitting = internals(fixture).submit();
+      http.expectOne(loginUrl(current)).flush({ accessToken: 'a.b.c', refreshToken: 'r' });
+      await submitting;
+      fixture.detectChanges();
+
+      expect(banner(fixture)).toBe(uk.login.form.error.storageFull);
+      expect(afterSignIn).not.toHaveBeenCalled();
+      expect(submitButton(fixture).disabled).toBe(false);
+      http.match(() => true);
     });
 
     it('gives way to the error of the sign-in itself', async () => {

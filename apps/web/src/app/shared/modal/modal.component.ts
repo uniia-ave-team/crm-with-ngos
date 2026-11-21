@@ -1,8 +1,7 @@
-import { Component, Signal, computed, input, output, signal } from '@angular/core';
+import { Component, Injector, Signal, afterNextRender, computed, inject, input, output, signal } from '@angular/core';
 import { IonModal } from '@ionic/angular';
 
-/** Скільки (мс) чекаємо завершення анімації закриття, перш ніж вважати вікно закритим. */
-const CLOSE_TIMEOUT_MS = 1000;
+import { ClosingWaiters } from '../overlay/closing-waiters';
 
 /**
  * Універсальне модальне вікно: діалог по центру екрана, що затемнює весь інший вміст —
@@ -41,19 +40,31 @@ export class ModalComponent {
 
   private readonly openSignal = signal(false);
   /** Ті, хто чекає завершення закриття (`close()`). */
-  private closeWaiters: Array<() => void> = [];
+  private readonly closing = new ClosingWaiters();
   readonly isOpen: Signal<boolean> = this.openSignal.asReadonly();
 
   protected readonly effectiveWidth: Signal<string> = computed(() => this.width() ?? 'fit-content');
 
+  private readonly injector = inject(Injector);
+  /** Ionic закриває вікно: між `willDismiss` і `didDismiss`. */
+  private dismissing = false;
+  /** Вікно попросили відкрити знову, поки воно ще закривалося. */
+  private reopenRequested = false;
+
   /** Відкриває вікно по центру екрана. */
   open(): void {
+    if (this.dismissing) {
+      // Вікно ще закривається: відкриємо знову, щойно закриється (`onDismissed`). Якщо змінити
+      // стан зараз, Ionic відкрив би вікно, а запізніле завершення закриття одразу його закрило б.
+      this.reopenRequested = true;
+      return;
+    }
     this.openSignal.set(true);
   }
 
   /**
    * Закриває вікно. Проміс виконується, коли анімацію закриття завершено (або минув
-   * `CLOSE_TIMEOUT_MS`): якщо одразу після закриття прибрати сторінку, вікно, що ще
+   * `CLOSE_TIMEOUT_MS` з `ClosingWaiters`): якщо одразу після закриття прибрати сторінку, вікно, що ще
    * закривається, лишилося б висіти без стилів.
    */
   close(): Promise<void> {
@@ -61,26 +72,35 @@ export class ModalComponent {
       return Promise.resolve();
     }
     this.openSignal.set(false);
-    return new Promise((resolve) => {
-      const timer = setTimeout(done, CLOSE_TIMEOUT_MS);
-      const waiters = this.closeWaiters;
-      function done(): void {
-        clearTimeout(timer);
-        resolve();
-      }
-      waiters.push(done);
-    });
+    return this.closing.wait();
   }
 
   protected onPresented(): void {
     this.opened.emit();
   }
 
+  /** Ionic почав закривати вікно (затемнення, Esc чи `close()`). */
+  protected onWillDismiss(): void {
+    this.dismissing = true;
+  }
+
   protected onDismissed(): void {
+    // Закрилося саме (затемнення, Esc): ion-modal досі має `isOpen` = true.
+    const closedByIonic = this.openSignal();
+    this.dismissing = false;
     this.openSignal.set(false);
-    const waiters = this.closeWaiters;
-    this.closeWaiters = [];
-    waiters.forEach((done) => done());
+    this.closing.settle();
     this.closed.emit();
+
+    if (this.reopenRequested) {
+      this.reopenRequested = false;
+      // Якщо закрив сам Ionic, спершу має дійти `isOpen` = false (після рендеру), інакше
+      // нове `true` він не помітить.
+      if (closedByIonic) {
+        afterNextRender(() => this.open(), { injector: this.injector });
+      } else {
+        this.open();
+      }
+    }
   }
 }

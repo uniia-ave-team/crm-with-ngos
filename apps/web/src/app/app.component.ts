@@ -1,5 +1,18 @@
 import { Component, inject } from '@angular/core';
-import { IonApp, IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonMenu, IonRouterOutlet, IonSplitPane, IonTitle, IonToolbar } from '@ionic/angular';
+import {
+  IonApp,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonIcon,
+  IonMenu,
+  IonRouterOutlet,
+  IonSplitPane,
+  IonTitle,
+  IonToast,
+  IonToolbar,
+} from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { AccountsService } from './core/accounts/accounts.service';
@@ -23,6 +36,7 @@ import { PreloaderComponent } from './shared/preloader/preloader.component';
     IonRouterOutlet,
     IonSplitPane,
     IonTitle,
+    IonToast,
     IonToolbar,
     TranslatePipe,
     PrimaryNavComponent,
@@ -33,8 +47,10 @@ import { PreloaderComponent } from './shared/preloader/preloader.component';
 export class AppComponent {
   protected readonly layout = inject(LayoutService);
 
+  protected readonly accounts = inject(AccountsService);
+
   /** Іде пошук чинного акаунта чи перемикання на інший — на весь час показуємо прелоадер. */
-  protected readonly accountSearch = inject(AccountsService).switching;
+  protected readonly accountSearch = this.accounts.switching;
 
   // Ключі перекладу (не готовий текст) — заголовок другої панелі
   // перекладається через `| translate` у шаблоні.

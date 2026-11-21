@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { TimeoutError } from 'rxjs';
 
 import { toRequestFailure } from './request-failure';
 
@@ -19,12 +20,15 @@ describe('toRequestFailure', () => {
     expect(toRequestFailure(new HttpErrorResponse({ status: 0 }))).toBe('unreachable');
   });
 
+  it('reads a request that ran out of time as unreachable', () => {
+    expect(toRequestFailure(new TimeoutError())).toBe('unreachable');
+  });
+
   it.each([
-    ['a timeout', Object.assign(new Error('Timeout has occurred'), { name: 'TimeoutError' })],
     ['an ordinary error', new Error('boom')],
     ['a thrown text', 'boom'],
     ['nothing', undefined],
-  ])('reads %s, which is not an HTTP answer, as unreachable', (_name, error) => {
-    expect(toRequestFailure(error)).toBe('unreachable');
+  ])('reads %s, which is neither an HTTP answer nor a timeout, as error: the server is not to blame', (_name, error) => {
+    expect(toRequestFailure(error)).toBe('error');
   });
 });

@@ -13,7 +13,6 @@ describe('UsersService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
@@ -53,7 +52,7 @@ describe('UsersService', () => {
   });
 
   describe('list (GET /users, one page of the colleagues)', () => {
-    const NO_EXTRA = { phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] };
+    const NO_EXTRA = { patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] };
     const page = (n: number) => http.expectOne((request) => request.url === url && request.params.get('PageNumber') === String(n));
 
     it('asks for the page with the number and the size that were given (GET, no body)', async () => {
@@ -136,7 +135,7 @@ describe('UsersService', () => {
 
     it.each([
       ['an older server that does not give them', {}],
-      ['null values', { phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: null }],
+      ['null values', { patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: null }],
       ['empty or blank texts', { phoneNumber: '', pronouns: '  ', avatarUrl: ' ' }],
       ['values of a wrong type', { phoneNumber: 5, pronouns: {}, pronounCategory: '2', avatarUrl: 7, roles: 'x' }],
     ])('gives null and an empty list of roles for %s', async (_name, extra) => {
@@ -327,12 +326,11 @@ describe('UsersService', () => {
     });
 
     it('never writes the passwords to the console', async () => {
-      const log = vi.mocked(console.log);
       const warn = vi.mocked(console.warn);
       const result = service.changePassword('Old1!aaa', 'New1!bbb');
       http.expectOne(passwordUrl()).flush({ detail: 'Old1!aaa' }, { status: 400, statusText: 'Bad Request' });
       await result;
-      const printed = JSON.stringify([...log.mock.calls, ...warn.mock.calls]);
+      const printed = JSON.stringify(warn.mock.calls);
       expect(printed).not.toContain('Old1!aaa');
       expect(printed).not.toContain('New1!bbb');
     });

@@ -5,10 +5,12 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { GALLERY_PERMISSIONS, PERMISSIONS, hasAnyPermission } from '../../core/auth/permissions';
 import { ConnectionService } from '../../core/connection/connection.service';
-import { NGO_LOGO_MAX_BYTES, NGO_LOGO_TYPES, NGO_NAME_MAX_LENGTH } from '../../core/ngo/logo-rules';
+import { IMAGE_MAX_BYTES, IMAGE_MAX_MEGABYTES, IMAGE_TYPES, IMAGE_TYPE_NAMES } from '../../core/images/image-types';
+import { NGO_NAME_MAX_LENGTH } from '../../core/ngo/logo-rules';
 import { NgoService, UpdateNgoResult } from '../../core/ngo/ngo.service';
 import { CurrentUserService } from '../../core/users/current-user.service';
 import { AdminImagesGalleryComponent } from '../images-gallery/images-gallery.component';
+import { ListTextPipe } from '../../shared/list-text/list-text.pipe';
 import { ProtectedSrcDirective } from '../../shared/protected-src/protected-src.directive';
 
 /** Чому обраний файл не підійшов (ключ у `admin.error.*`). */
@@ -48,7 +50,7 @@ interface ResultLine {
   selector: 'app-admin-ngo-form',
   templateUrl: './ngo-form.component.html',
   styleUrls: ['../../settings/settings-section.scss', '../../settings/avatar-block.scss', './ngo-form.component.scss'],
-  imports: [FormsModule, ProtectedSrcDirective, AdminImagesGalleryComponent, TranslatePipe],
+  imports: [FormsModule, ProtectedSrcDirective, AdminImagesGalleryComponent, ListTextPipe, TranslatePipe],
 })
 export class AdminNgoFormComponent {
   private readonly accounts = inject(AccountsService);
@@ -75,7 +77,11 @@ export class AdminNgoFormComponent {
   protected readonly canSeeGallery = computed(() => hasAnyPermission(this.permissions(), GALLERY_PERMISSIONS));
 
   protected readonly nameMaxLength = NGO_NAME_MAX_LENGTH;
-  protected readonly logoTypes = NGO_LOGO_TYPES.join(',');
+  protected readonly logoTypes = IMAGE_TYPES.join(',');
+  /** Назви дозволених форматів для підказки й помилки (зʼєднує канал `listText`). */
+  protected readonly imageTypeNames = IMAGE_TYPE_NAMES;
+  /** Найбільший розмір зображення в мегабайтах для підказки й помилки (`{{size}}`). */
+  protected readonly imageMaxMegabytes = IMAGE_MAX_MEGABYTES;
 
   protected readonly name = signal('');
   /** Назву вже редагували: оновлення знімка її більше не перезаписує. */
@@ -155,12 +161,12 @@ export class AdminNgoFormComponent {
       return;
     }
     // Фільтр діалогу можна обійти: перевіряємо тип і розмір самі.
-    if (!NGO_LOGO_TYPES.includes(file.type)) {
+    if (!IMAGE_TYPES.includes(file.type)) {
       this.logoError.set('logoType');
       input.value = '';
       return;
     }
-    if (file.size > NGO_LOGO_MAX_BYTES) {
+    if (file.size > IMAGE_MAX_BYTES) {
       this.logoError.set('logoSize');
       input.value = '';
       return;
@@ -208,6 +214,9 @@ export class AdminNgoFormComponent {
         const outcome = await this.ngo.update(name);
         if (outcome === 'updated') {
           lines.push({ key: 'admin.result.name', ok: true });
+          // Назву збережено, і вона вже у знімку: далі поле знову йде за знімком (зокрема
+          // підхопить назву, яку пізніше змінить хтось інший).
+          this.nameEdited.set(false);
         } else {
           ngoReady = false;
           lines.push({ key: `admin.result.ngoFailed.${outcome}`, ok: false });

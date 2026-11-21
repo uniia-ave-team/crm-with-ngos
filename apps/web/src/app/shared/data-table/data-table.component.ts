@@ -1,4 +1,4 @@
-import { Component, TemplateRef, input, output, signal } from '@angular/core';
+import { Component, TemplateRef, input, linkedSignal, output } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { IonIcon } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -58,7 +58,9 @@ export interface DataTableColumn {
  * бейдж, кілька рядків), колонці дають `template` (`<ng-template let-row>`). В
  * кінці кожного рядка стоїть кнопка з трьома крапками: вона з'являється при
  * наведенні на рядок (на пристроях без наведення — завжди) і подає `rowMenu` з
- * цим рядком і самою кнопкою (до неї прив'язують спливаюче вікно); в кінці рядка заголовків — завжди видимий «+», що подає `columnAdd`. Наведений рядок виділяється акцентним кольором (`--nav-active-bg`).
+ * цим рядком і самою кнопкою (до неї прив'язують спливаюче вікно). В кінці рядка
+ * заголовків — завжди видимий «+», що подає `columnAdd`. Наведений рядок
+ * виділяється акцентним кольором (`--nav-active-bg`).
  *
  * Заголовки колонок — кнопки сортування. Клік по заголовку: перший раз «від меншого
  * до більшого» (іконка `caret-down-outline`), другий — навпаки (`caret-up-outline`),
@@ -66,6 +68,10 @@ export interface DataTableColumn {
  * лишається лише один заголовок: клік по іншому починає з першого кроку. Кожен
  * крок подається `sortChange` (колонка й напрям, а після скидання — `null`); саме
  * сортування (запит) робить той, хто використовує таблицю.
+ *
+ * Якщо дані й без вибору впорядковано за якоюсь колонкою (`defaultSortColumnId`), її
+ * заголовок одразу позначено «від меншого до більшого», а скидання повертає до неї. Тоді
+ * перший клік по ній — уже «навпаки».
  */
 @Component({
   selector: 'app-data-table',
@@ -84,6 +90,11 @@ export class DataTableComponent {
   readonly showRowMenu = input(true);
   /** Рядок, який лишається виділеним, як при наведенні (наприклад, поки відкрите його меню); `null` — нема. */
   readonly highlightedRowId = input<string | null>(null);
+  /**
+   * Колонка, за якою дані впорядковано, поки нічого не вибрано (від меншого до більшого);
+   * `null` — без порядку за замовчуванням.
+   */
+  readonly defaultSortColumnId = input<string | null>(null);
   /** Натиснули кнопку з трьома крапками в кінці рядка. */
   readonly rowMenu = output<DataTableRowMenuEvent>();
   /** Натиснули «+» в кінці рядка заголовків. */
@@ -92,7 +103,9 @@ export class DataTableComponent {
   readonly sortChange = output<DataTableSort | null>();
 
   /** Колонка (`id`), за якою відсортовано, і напрям; `null` — без сортування. */
-  protected readonly sorted = signal<{ readonly id: string; readonly direction: DataTableSortDirection } | null>(null);
+  protected readonly sorted = linkedSignal<{ readonly id: string; readonly direction: DataTableSortDirection } | null>(() =>
+    this.defaultSorted(),
+  );
 
   /** Клік по заголовку: нова колонка — «за зростанням», та сама — «за спаданням», потім скидання. */
   protected toggleSort(column: DataTableColumn): void {
@@ -104,9 +117,15 @@ export class DataTableComponent {
       this.sorted.set({ id: column.id, direction: 'desc' });
       this.sortChange.emit({ column, direction: 'desc' });
     } else {
-      this.sorted.set(null);
+      this.sorted.set(this.defaultSorted());
       this.sortChange.emit(null);
     }
+  }
+
+  /** Сортування, яке діє без вибору: колонка за замовчуванням від меншого до більшого. */
+  private defaultSorted(): { readonly id: string; readonly direction: DataTableSortDirection } | null {
+    const id = this.defaultSortColumnId();
+    return id ? { id, direction: 'asc' } : null;
   }
 
   protected sortDirection(column: DataTableColumn): DataTableSortDirection | null {

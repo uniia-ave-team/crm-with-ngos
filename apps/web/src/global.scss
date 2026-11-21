@@ -9,6 +9,18 @@
  * https://ionicframework.com/docs/layout/global-stylesheets
  */
 
+/*
+ * Власні частини глобальних стилів (`@use`: Sass вимагає їх перед будь-якими іншими правилами).
+ * У зібраний CSS вони однаково йдуть після стилів Ionic нижче: звичайні CSS-`@import` Sass
+ * виносить на самий початок файлу.
+ */
+/* Кольорові токени бічного меню й перемикач картинок за темою. */
+@use "theme/nav-tokens";
+/* Шрифт e-Ukraine для бічного меню. */
+@use "theme/fonts";
+/* Поля, кнопки й повідомлення форм входу та реєстрації (login, join, relogin, вікно входу). */
+@use "theme/auth-form";
+
 /* Core CSS required for Ionic components to work properly */
 @import "@ionic/angular/css/core.css";
 
@@ -35,15 +47,6 @@
 /* @import "@ionic/angular/css/palettes/dark.always.css"; */
 /* @import "@ionic/angular/css/palettes/dark.class.css"; */
 @import "@ionic/angular/css/palettes/dark.system.css";
-
-/* Кольорові токени бічного меню й перемикач картинок за темою. */
-@import "theme/nav-tokens.scss";
-
-/* Шрифт e-Ukraine для бічного меню. */
-@import "theme/fonts.scss";
-
-/* Поля, кнопки й повідомлення форм входу та реєстрації (login, join, relogin, вікно входу). */
-@import "theme/auth-form.scss";
 
 /*
  * Тулбар шапки сторінки (ion-toolbar): тло й контур знизу — ті самі токени,

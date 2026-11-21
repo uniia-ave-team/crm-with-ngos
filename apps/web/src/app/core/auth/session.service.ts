@@ -2,7 +2,7 @@ import { Injectable, effect, inject, untracked } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { AccountsService } from '../accounts/accounts.service';
-import { AuthService, LOGIN_URL, RELOGIN_URL } from './auth.service';
+import { AuthService, LOGIN_URL, RELOGIN_URL, signedOutUrl } from './auth.service';
 
 /** За скільки до кінця терміну access-токен оновлюється заздалегідь. */
 const REFRESH_LEAD_MS = 60_000;
@@ -53,10 +53,8 @@ export class SessionService {
         }
         const path = this.router.url.split('?')[0];
         if (this.hadTokens && !hasTokens && !path.startsWith(LOGIN_URL) && !path.startsWith(RELOGIN_URL)) {
-          // Акаунти лишились, але жоден не доступний (застарілі чи недоступні) — на повторний
-          // вхід, інакше на вхід.
-          const noneAvailable = this.accounts.accounts().length > 0 && this.accounts.activeId() === null;
-          void this.router.navigateByUrl(noneAvailable ? RELOGIN_URL : LOGIN_URL);
+          // Акаунти лишились (застарілі чи недоступні) — на повторний вхід, інакше на вхід.
+          void this.router.navigateByUrl(signedOutUrl(this.accounts));
         }
         this.hadTokens = hasTokens;
       });

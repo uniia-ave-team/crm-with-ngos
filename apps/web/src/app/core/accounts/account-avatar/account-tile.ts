@@ -2,11 +2,12 @@ import { AccountThumbnail, StoredAccount } from '../accounts.service';
 
 /** Акаунт у списку: знімок із запису акаунта (імʼя, аватар, назва й логотип ГО). */
 export interface AccountTile {
-  readonly id: string | number;
-  readonly firstName: string | null | undefined;
-  readonly lastName: string | null | undefined;
+  readonly id: string;
+  readonly firstName: string;
+  readonly lastName: string;
   readonly patronymic?: string | null;
-  readonly avatarUrl: string | null | undefined;
+  /** Зображення аватара (`data:`-посилання мініатюри); `null` — нема, на плитці будуть літери. */
+  readonly avatarUrl: string | null;
   /** Назва організації акаунта (впливає на колір аватара). */
   readonly ngoName?: string | null;
   /** Логотип ГО (будь-яке зображення з прозорістю); без нього значка на плитці нема. */

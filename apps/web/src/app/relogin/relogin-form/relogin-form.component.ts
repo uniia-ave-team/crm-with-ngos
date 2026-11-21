@@ -9,7 +9,7 @@ import { ConnectionService } from '../../core/connection/connection.service';
 import { DEFAULT_LOGIN_IMAGE, LoginPageImagesService } from '../../core/login-page-images/login-page-images.service';
 
 /**
- * Форма входу на сторінці повторного входу (`/relogin`): «Назад», заголовок «Вхід в акаунт» зі
+ * Форма входу на сторінці повторного входу (`/relogin`): «Назад», заголовок «Ввійти в акаунт» зі
  * смітником (лише для збереженого акаунта) і сама форма входу з полем адреси сервера
  * (`app-sign-in-form`: перевірка сервера, вхід, помилки — усе в ній).
  *

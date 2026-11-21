@@ -18,7 +18,6 @@ describe('AccountRestoreService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
@@ -39,6 +38,49 @@ describe('AccountRestoreService', () => {
   const idOf = (server: string) => accounts.accounts().find((account) => account.server === server)!.id;
   const waitFor = (url: string) => vi.waitFor(() => http.expectOne(url));
 
+  describe('the search and the switch by a tile go one at a time', () => {
+    it('starts a search asked for during a switch only after the switch, and keeps switching on all that time', async () => {
+      const switched = restore.activate(idOf(second));
+      const health = await waitFor(`${second}/health`);
+      // Під час перемикання хтось просить пошук (наприклад, страж сторінки).
+      const searched = restore.restore();
+      http.expectNone(`${first}/health`);
+      expect(accounts.activeId()).toBe(idOf(second));
+
+      health.flush({ status: 'Healthy' });
+      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', email: 'u2@organization.org', firstName: '', lastName: '', roles: [], customFields: [] });
+      http.match((request) => request.url.includes('/permissions') || request.url.endsWith('/ngo'));
+      expect(await switched).toBe('ok');
+      expect(accounts.switching()).toBe(true);
+
+      // Тепер пошук: активний першим — щойно перевірений акаунт, і профіль у нього вже є.
+      (await waitFor(`${second}/health`)).flush({ status: 'Healthy' });
+      expect(await searched).toBe('restored');
+      expect(accounts.activeId()).toBe(idOf(second));
+      expect(accounts.switching()).toBe(false);
+    });
+
+    it('starts a switch asked for during a search only after the search', async () => {
+      const searched = restore.restore();
+      const health = await waitFor(`${first}/health`);
+      const switched = restore.activate(idOf(second));
+      http.expectNone(`${second}/health`);
+      expect(accounts.activeId()).toBe(idOf(first));
+
+      health.flush({ status: 'Healthy' });
+      (await waitFor(`${first}/api/v1/users/me`)).flush({ id: 'u1', email: 'u1@organization.org', firstName: '', lastName: '', roles: [], customFields: [] });
+      http.match((request) => request.url.includes('/permissions') || request.url.endsWith('/ngo'));
+      expect(await searched).toBe('restored');
+
+      (await waitFor(`${second}/health`)).flush({ status: 'Healthy' });
+      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', email: 'u2@organization.org', firstName: '', lastName: '', roles: [], customFields: [] });
+      http.match((request) => request.url.includes('/permissions') || request.url.endsWith('/ngo'));
+      expect(await switched).toBe('ok');
+      expect(accounts.activeId()).toBe(idOf(second));
+      expect(accounts.switching()).toBe(false);
+    });
+  });
+
   describe('activate', () => {
     it('makes a valid account active after the server and the profile confirm it', async () => {
       const result = restore.activate(idOf(second));
@@ -48,7 +90,7 @@ describe('AccountRestoreService', () => {
       expect(accounts.switching()).toBe(true);
       expect(accounts.activeId()).toBe(idOf(second));
       health.flush({ status: 'Healthy' });
-      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', roles: [], customFields: [] });
+      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', email: 'u2@organization.org', firstName: '', lastName: '', roles: [], customFields: [] });
       // Права підтягуються після профілю й нічого не вирішують.
       http.match(() => true);
 
@@ -64,7 +106,7 @@ describe('AccountRestoreService', () => {
       const result = restore.activate(idOf(second));
 
       (await waitFor(`${second}/health`)).flush({ status: 'Healthy' });
-      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', roles: [], customFields: [] });
+      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', email: 'u2@organization.org', firstName: '', lastName: '', roles: [], customFields: [] });
       http.match(() => true);
 
       expect(await result).toBe('ok');
@@ -151,7 +193,7 @@ describe('AccountRestoreService', () => {
       const result = restore.restore();
 
       (await waitFor(`${first}/health`)).flush({ status: 'Healthy' });
-      (await waitFor(`${first}/api/v1/users/me`)).flush({ id: 'u1', roles: [], customFields: [] });
+      (await waitFor(`${first}/api/v1/users/me`)).flush({ id: 'u1', email: 'u1@organization.org', firstName: '', lastName: '', roles: [], customFields: [] });
       http.match(() => true);
 
       expect(await result).toBe('restored');
@@ -168,7 +210,7 @@ describe('AccountRestoreService', () => {
 
       // Перший недоступний (за порядком додавання) відповів — він і стає активним, решту не чіпаємо.
       (await waitFor(`${second}/health`)).flush({ status: 'Healthy' });
-      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', roles: [], customFields: [] });
+      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', email: 'u2@organization.org', firstName: '', lastName: '', roles: [], customFields: [] });
       http.match(() => true);
 
       expect(await result).toBe('restored');
@@ -185,7 +227,7 @@ describe('AccountRestoreService', () => {
 
       (await waitFor(`${second}/health`)).error(fail());
       (await waitFor(`${first}/health`)).flush({ status: 'Healthy' });
-      (await waitFor(`${first}/api/v1/users/me`)).flush({ id: 'u1', roles: [], customFields: [] });
+      (await waitFor(`${first}/api/v1/users/me`)).flush({ id: 'u1', email: 'u1@organization.org', firstName: '', lastName: '', roles: [], customFields: [] });
       http.match(() => true);
 
       expect(await result).toBe('restored');
@@ -273,7 +315,7 @@ describe('AccountRestoreService', () => {
       expect(revoke.request.body).toEqual({ refreshToken: 'r1' });
       expect(revoke.request.headers.get('Authorization')).toBe('Bearer a1');
       (await waitFor(`${second}/health`)).flush({ status: 'Healthy' });
-      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', roles: [], customFields: [] });
+      (await waitFor(`${second}/api/v1/users/me`)).flush({ id: 'u2', email: 'u2@organization.org', firstName: '', lastName: '', roles: [], customFields: [] });
       http.match(() => true);
       revoke.flush(null, { status: 204, statusText: 'No Content' });
 

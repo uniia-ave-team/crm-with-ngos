@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { AuthService, LOGIN_URL, LogoutResult, REDIRECT_URL, RELOGIN_URL } from '../auth/auth.service';
+import { AuthService, LogoutResult, REDIRECT_URL, signedOutUrl } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
 import { CurrentUserService } from '../users/current-user.service';
 import { AccountsService } from './accounts.service';
@@ -53,22 +53,26 @@ export class AccountRestoreService {
 
   private readonly router = inject(Router);
 
-  private inFlight: Promise<RestoreResult> | null = null;
+  /** Пошук, що чекає в черзі чи триває: виклики, що збіглися в часі, діляться ним. */
+  private searchInFlight: Promise<RestoreResult> | null = null;
+  /** Кінець черги: пошук і перемикання йдуть строго по одному (див. `enqueue`). */
+  private queueTail: Promise<void> = Promise.resolve();
+  /** Скільки дій у черзі разом із тією, що йде: поки їх більше нуля, увімкнено `switching`. */
+  private queued = 0;
 
   /**
    * Шукає чинний акаунт; виклики, що збіглися в часі, діляться одним пошуком. На час пошуку
    * вмикається `AccountsService.switching`: акаунти по черзі стають активними, тож «активного
-   * нема» в цей час не означає виходу (на цьому тримається `SessionService`).
+   * нема» в цей час не означає виходу (на цьому тримається `SessionService`). Якщо саме йде
+   * перемикання по плитці (`activate`), пошук почнеться після нього.
    */
   restore(): Promise<RestoreResult> {
-    if (!this.inFlight) {
-      this.accounts.setSwitching(true);
-      this.inFlight = this.search().finally(() => {
-        this.accounts.setSwitching(false);
-        this.inFlight = null;
+    if (!this.searchInFlight) {
+      this.searchInFlight = this.enqueue(() => this.search()).finally(() => {
+        this.searchInFlight = null;
       });
     }
-    return this.inFlight;
+    return this.searchInFlight;
   }
 
   /**
@@ -76,45 +80,72 @@ export class AccountRestoreService {
    * чинного акаунта (сервер відповідає → токени придатні, за потреби оновлюються → сервер
    * підтверджує вхід), а під час перевірки він активний — підключення й токени беруться
    * від активного.
-   * - перевірка пройшла → акаунт лишається активним і стає чинним (`outdated: false`), якщо
-   *   був застарілим: так «сервер не відповідав» знімається, коли сервер знову відповів;
+   * - перевірка пройшла → акаунт лишається активним, а обидві його позначки знімаються:
+   *   і «сеанс закінчився» (`outdated`), і «сервер не відповів» (`unavailable`);
    * - не пройшла → активним повертається попередній акаунт, а цей позначається: сервер
    *   відхилив токени — застарілим (`markOutdated`), не відповів — недоступним
    *   (`markUnavailable`); підключення й профіль знову належать попередньому.
-   * На час перевірки так само, як і під час пошуку, вмикається `AccountsService.switching`: тимчасове
-   * перемикання активного акаунта не вважається виходом. Невідомий `id` — `unavailable`
-   * без жодних змін.
+   *
+   * Пошук і перемикання йдуть по одному: якщо саме йде пошук чи інше перемикання, це
+   * почнеться після нього. На час перевірки, як і під час пошуку, увімкнено
+   * `AccountsService.switching`: тимчасове перемикання активного акаунта не вважається
+   * виходом. Невідомий `id` (зокрема акаунт, що зник, поки чекали черги) — `unavailable` без
+   * жодних змін.
    */
-  async activate(id: string): Promise<ActivateResult> {
+  activate(id: string): Promise<ActivateResult> {
+    if (!this.accounts.accounts().some((account) => account.id === id)) {
+      return Promise.resolve('unavailable');
+    }
+    return this.enqueue(() => this.switchTo(id));
+  }
+
+  private async switchTo(id: string): Promise<ActivateResult> {
     if (!this.accounts.accounts().some((account) => account.id === id)) {
       return 'unavailable';
     }
-    // Іде пошук чинного акаунта (старт застосунку) — дочекаємось його, щоб не перемикати паралельно.
-    await this.inFlight?.catch(() => undefined);
-
     const previous = this.accounts.activeId();
-    this.accounts.setSwitching(true);
-    try {
-      this.accounts.setActive(id);
-      const check = await this.check();
-      if (check === 'ok') {
-        this.accounts.update(id, { outdated: false, unavailable: false, lastUsedAt: Date.now() });
-        return 'ok';
-      }
-      // Спершу повертаємо попередній, інакше позначення активного акаунта застарілим
-      // саме підбере «перший чинний».
-      this.accounts.setActive(previous);
-      this.markFailed(id, check);
-      await this.connection.checkApi();
-      // Профіль скинувся при перемиканні на цей акаунт — повертаємо профіль попереднього
-      // (у фоні: чекати на нього не треба). Попереднього не було — повертати нічого.
-      if (previous) {
-        void this.currentUser.ensure();
-      }
-      return check;
-    } finally {
-      this.accounts.setSwitching(false);
+    this.accounts.setActive(id);
+    const check = await this.check();
+    if (check === 'ok') {
+      this.accounts.update(id, { outdated: false, unavailable: false, lastUsedAt: Date.now() });
+      return 'ok';
     }
+    // Спершу повертаємо попередній, а тоді позначаємо цей: він уже не активний, тож
+    // позначка нічого не знімає з активного.
+    this.accounts.setActive(previous);
+    this.markFailed(id, check);
+    await this.connection.checkApi();
+    // Профіль скинувся при перемиканні на цей акаунт — повертаємо профіль попереднього
+    // (у фоні: чекати на нього не треба). Попереднього не було — повертати нічого.
+    if (previous) {
+      void this.currentUser.ensure();
+    }
+    return check;
+  }
+
+  /**
+   * Ставить дію (пошук чи перемикання) в чергу: вона почнеться, коли завершиться попередня.
+   * Обидві по черзі роблять активними різні акаунти й перевіряють «активний», тож разом вони
+   * перевіряли б чужі акаунти. `switching` увімкнено від постановки першої дії до кінця
+   * останньої, без проміжку між ними.
+   */
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    // Черга порожня — дія починається одразу, ще в цьому виклику (як і без черги): перші
+    // запити йдуть синхронно, і ніхто не встигає побачити проміжний стан.
+    const idle = this.queued === 0;
+    this.queued += 1;
+    this.accounts.setSwitching(true);
+    const run = idle ? task() : this.queueTail.then(task);
+    this.queueTail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run.finally(() => {
+      this.queued -= 1;
+      if (this.queued === 0) {
+        this.accounts.setSwitching(false);
+      }
+    });
   }
 
   /**
@@ -135,7 +166,7 @@ export class AccountRestoreService {
     if ((await this.restore()) === 'restored') {
       void this.router.navigateByUrl(REDIRECT_URL, { onSameUrlNavigation: 'reload' });
     } else {
-      void this.router.navigateByUrl(this.accounts.accounts().length > 0 ? RELOGIN_URL : LOGIN_URL);
+      void this.router.navigateByUrl(signedOutUrl(this.accounts));
     }
   }
 

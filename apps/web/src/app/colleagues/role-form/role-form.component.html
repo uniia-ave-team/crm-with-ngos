@@ -48,11 +48,24 @@
     <legend class="settings-field__label">{{ 'colleagues.roleForm.permissionsTitle' | translate }}</legend>
     @for (group of permissionGroups; track group.id) {
       @let locked = !grantable().has(group.id);
+      @let waits = waitsForParent(group);
       <label
         class="role-form__permission"
-        [class.role-form__permission--locked]="locked"
-        [attr.title]="locked ? ('colleagues.roleForm.permissionLocked' | translate) : null"
+        [class.role-form__permission--child]="!!group.parent"
+        [class.role-form__permission--joined]="joinedToNext.has(group.id)"
+        [class.role-form__permission--locked]="locked || waits"
+        [attr.title]="
+          locked
+            ? ('colleagues.roleForm.permissionLocked' | translate)
+            : waits
+              ? ('colleagues.roleForm.permissionNeedsParent' | translate: { parent: ('colleagues.roleForm.permissions.' + group.parent | translate) })
+              : null
+        "
       >
+        @if (branches.get(group.id); as branch) {
+          <!-- Підпункт: лінії дерева від пункту вище до назви; в останнього — заокруглений кут. -->
+          <span class="role-form__branch" [class.role-form__branch--last]="branch === 'last'" aria-hidden="true"></span>
+        }
         <span class="role-form__permission-name">{{ 'colleagues.roleForm.permissions.' + group.id | translate }}</span>
         @if (partialGroups().has(group.id)) {
           <!-- Роль має лише частину прав цього пункту: попередження з поясненням при наведенні чи фокусі.
@@ -77,7 +90,7 @@
           class="role-form__switch"
           tabindex="0"
           [checked]="enabledGroups().has(group.id)"
-          [disabled]="locked"
+          [disabled]="locked || waits"
           (change)="togglePermission(group.id, $event)"
         />
       </label>

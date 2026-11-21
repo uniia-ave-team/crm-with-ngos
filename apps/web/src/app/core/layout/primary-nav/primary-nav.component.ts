@@ -3,18 +3,19 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { IonIcon } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
 
+import { AvatarComponent } from '../../../shared/avatar/avatar.component';
 import { PopoverComponent } from '../../../shared/popover/popover.component';
 import { AccountTile, toAccountTiles } from '../../accounts/account-avatar/account-tile';
-import { AddAccountComponent } from '../add-account/add-account.component';
+import { needsSignIn } from '../../accounts/account-login';
 import { AccountRestoreService } from '../../accounts/account-restore.service';
 import { AccountsService } from '../../accounts/accounts.service';
 import { REDIRECT_URL } from '../../auth/auth.service';
 import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
-import { mobileLogoBase } from '../../i18n/mobile-logo';
+import { mobileLogoBase } from '../../i18n/logos';
 import { CurrentUserService } from '../../users/current-user.service';
-import { AvatarComponent } from '../../../shared/avatar/avatar.component';
 import { AccountMenuComponent } from '../account-menu/account-menu.component';
+import { AddAccountComponent } from '../add-account/add-account.component';
 
 interface NavItem {
   readonly labelKey: string;
@@ -139,12 +140,12 @@ export class PrimaryNavComponent {
   /**
    * Клацання по плитці акаунта (вікно закривається):
    * - активний — нічого;
-   * - застарілий через відхилені токени (`outdated`, не `unavailable`) — вікно «Додати
-   *   акаунт» із його сервером, поштою й ключем: увійти знову (збіглася пошта — акаунт
-   *   перезапишеться);
-   * - чинний або застарілий через недоступний сервер — перемикаємось (`activate`: перевірка,
-   *   у тому числі повторне оновлення токенів) і відкриваємо `REDIRECT_URL`. Не вдалось —
-   *   те саме вікно «Додати акаунт»; активним лишається попередній акаунт.
+   * - застарілий (`outdated`, сервер відхилив токени; `needsSignIn`), хай навіть і
+   *   недоступний, — вікно «Додати акаунт» із його сервером, поштою й ключем: увійти знову
+   *   (збіглася пошта — акаунт перезапишеться);
+   * - інший (чинний чи лише недоступний) — перемикаємось (`activate`: перевірка, у тому числі
+   *   повторне оновлення токенів) і відкриваємо `REDIRECT_URL`. Не вдалось — те саме вікно
+   *   «Додати акаунт»; активним лишається попередній акаунт.
    */
   protected async selectAccount(popover: PopoverComponent, dialog: AddAccountComponent, tile: AccountTile): Promise<void> {
     await popover.close();
@@ -155,7 +156,7 @@ export class PrimaryNavComponent {
     if (!account) {
       return;
     }
-    if (account.outdated && !account.unavailable) {
+    if (needsSignIn(account)) {
       dialog.open(account.email, account.id, account.server);
       return;
     }

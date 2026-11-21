@@ -6,4 +6,4 @@ import { registerIcons } from './app/core/icons';
 
 registerIcons();
 
-bootstrapApplication(AppComponent, appConfig).catch((err) => console.log(err));
+bootstrapApplication(AppComponent, appConfig).catch((error: unknown) => console.error(error));

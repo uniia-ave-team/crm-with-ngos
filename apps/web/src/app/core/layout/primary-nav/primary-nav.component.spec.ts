@@ -7,12 +7,13 @@ import { provideIonicAngular } from '@ionic/angular';
 import { provideTranslateService } from '@ngx-translate/core';
 
 import { AccountRestoreService } from '../../accounts/account-restore.service';
-import { AccountsService } from '../../accounts/accounts.service';
+import { AccountPatch, AccountsService } from '../../accounts/accounts.service';
 import { AuthService, REDIRECT_URL } from '../../auth/auth.service';
 import { ConnectionService } from '../../connection/connection.service';
 import { CurrentUserService } from '../../users/current-user.service';
 import { PrimaryNavComponent } from './primary-nav.component';
 import { PopoverComponent } from '../../../shared/popover/popover.component';
+import { addAccountWithSnapshot } from '../../accounts/accounts.testing';
 
 describe('PrimaryNavComponent avatar initials', () => {
   let http: HttpTestingController;
@@ -21,7 +22,6 @@ describe('PrimaryNavComponent avatar initials', () => {
 
   beforeEach(async () => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
@@ -94,8 +94,8 @@ describe('PrimaryNavComponent avatar initials', () => {
 
     it('shows the stored accounts instead of a placeholder, in the order they were added', () => {
       const store = TestBed.inject(AccountsService);
-      store.add({ server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity: 'u1', firstName: 'Перший', lastName: 'Другий', ngoName: 'Організація' });
-      store.add({ server: 'http://two.example:5065', accessToken: 'a2', refreshToken: 'r2', identity: 'u2', firstName: 'Третій', lastName: 'Четвертий' });
+      addAccountWithSnapshot(store, { server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity: 'u1' }, { firstName: 'Перший', lastName: 'Другий', ngoName: 'Організація' });
+      addAccountWithSnapshot(store, { server: 'http://two.example:5065', accessToken: 'a2', refreshToken: 'r2', identity: 'u2' }, { firstName: 'Третій', lastName: 'Четвертий' });
       const fixture = TestBed.createComponent(PrimaryNavComponent);
       fixture.detectChanges();
 
@@ -128,8 +128,8 @@ describe('PrimaryNavComponent avatar initials', () => {
 
       function twoAccounts() {
         const store = TestBed.inject(AccountsService);
-        const first = store.add({ server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity: 'u1', ngoName: 'Перша організація' });
-        const second = store.add({ server: 'http://two.example:5065', accessToken: 'a2', refreshToken: 'r2', identity: 'u2', ngoName: 'Друга організація' });
+        const first = addAccountWithSnapshot(store, { server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity: 'u1' }, { ngoName: 'Перша організація' });
+        const second = addAccountWithSnapshot(store, { server: 'http://two.example:5065', accessToken: 'a2', refreshToken: 'r2', identity: 'u2' }, { ngoName: 'Друга організація' });
         store.setActive(first.id);
         return { store, first: first.id, second: second.id };
       }
@@ -180,7 +180,7 @@ describe('PrimaryNavComponent avatar initials', () => {
         expect(ngoName(fixture)).toBe('Друга організація');
       });
 
-      it('follows the active account at once outside of a switch (for instance, another tab changed it)', () => {
+      it('follows the active account at once outside of a switch (for instance, a sign-in in the window "Add account")', () => {
         const { store, second } = twoAccounts();
         const fixture = TestBed.createComponent(PrimaryNavComponent);
         fixture.detectChanges();
@@ -193,8 +193,12 @@ describe('PrimaryNavComponent avatar initials', () => {
     });
 
     describe('the pictures on the tiles (they come from the thumbnails in the snapshot of the account, with no requests)', () => {
-      const add = (identity: string, extra: Record<string, unknown> = {}) =>
-        TestBed.inject(AccountsService).add({ server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity, ...extra });
+      const add = (identity: string, snapshot: AccountPatch = {}) =>
+        addAccountWithSnapshot(
+          TestBed.inject(AccountsService),
+          { server: 'http://one.example:5065', accessToken: 'a', refreshToken: 'r', identity },
+          snapshot,
+        );
       const thumbs = (id: string, avatar: [string, string] | null, logo: [string, string] | null) =>
         TestBed.inject(AccountsService).update(id, {
           avatarThumb: avatar ? { url: avatar[0], data: avatar[1] } : null,
@@ -206,13 +210,11 @@ describe('PrimaryNavComponent avatar initials', () => {
       it('takes the avatar and the logo from the thumbnails of each account, not from the links to the server', () => {
         const first = add('u1', { avatarUrl: '/files/a.png', ngoLogoUrl: 'files/logo.png' });
         thumbs(first.id, ['/files/a.png', 'data:image/webp;base64,AVATAR1'], ['files/logo.png', 'data:image/webp;base64,LOGO1']);
-        const second = TestBed.inject(AccountsService).add({
-          server: 'http://two.example:5065',
-          accessToken: 'a2',
-          refreshToken: 'r2',
-          identity: 'u2',
-          avatarUrl: 'https://cdn.example/b.png',
-        });
+        const second = addAccountWithSnapshot(
+          TestBed.inject(AccountsService),
+          { server: 'http://two.example:5065', accessToken: 'a2', refreshToken: 'r2', identity: 'u2' },
+          { avatarUrl: 'https://cdn.example/b.png' },
+        );
         thumbs(second.id, ['https://cdn.example/b.png', 'data:image/webp;base64,AVATAR2'], null);
 
         const fixture = TestBed.createComponent(PrimaryNavComponent);
@@ -293,7 +295,6 @@ describe('PrimaryNavComponent admin item', () => {
 
   beforeEach(async () => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
@@ -375,7 +376,6 @@ describe('PrimaryNavComponent admin item', () => {
 describe('PrimaryNavComponent colleagues item', () => {
   beforeEach(async () => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
@@ -449,7 +449,6 @@ describe('PrimaryNavComponent: a click on the tile of an account', () => {
 
   beforeEach(async () => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     popover.close.mockClear();
     dialog.open.mockClear();
@@ -477,8 +476,8 @@ describe('PrimaryNavComponent: a click on the tile of an account', () => {
   function setup(patch: { outdated?: boolean; unavailable?: boolean } = {}) {
     const other = accounts.add({ server: second, accessToken: 'a2', refreshToken: 'r2', identity: 'u2', email: 'b@b.org' });
     const active = accounts.add({ server: first, accessToken: 'a1', refreshToken: 'r1', identity: 'u1', email: 'a@b.org' });
-    if (patch.outdated) {
-      accounts.update(other.id, { outdated: true, unavailable: patch.unavailable ?? false });
+    if (patch.outdated || patch.unavailable) {
+      accounts.update(other.id, { outdated: patch.outdated ?? false, unavailable: patch.unavailable ?? false });
     }
     TestBed.inject(HttpTestingController).match(() => true);
     const fixture = TestBed.createComponent(PrimaryNavComponent);
@@ -515,8 +514,11 @@ describe('PrimaryNavComponent: a click on the tile of an account', () => {
     expect(dialog.open).not.toHaveBeenCalled();
   });
 
-  it('opens the form of adding an account with the server, the e-mail and the key, without a try, when the tokens were rejected', async () => {
-    const { other, click } = setup({ outdated: true, unavailable: false });
+  it.each([
+    ['the tokens were rejected', { outdated: true, unavailable: false }],
+    ['the tokens were rejected, even though the server did not answer later', { outdated: true, unavailable: true }],
+  ])('opens the form of adding an account with the server, the e-mail and the key, without a try, when %s', async (_name, patch) => {
+    const { other, click } = setup(patch);
     mockActivate('ok');
     await click(other.id);
 
@@ -526,7 +528,7 @@ describe('PrimaryNavComponent: a click on the tile of an account', () => {
   });
 
   it('tries to switch to an account whose server did not answer, and goes there when it works', async () => {
-    const { other, click } = setup({ outdated: true, unavailable: true });
+    const { other, click } = setup({ unavailable: true });
     mockActivate('ok');
     await click(other.id);
 
@@ -536,7 +538,7 @@ describe('PrimaryNavComponent: a click on the tile of an account', () => {
   });
 
   it.each([
-    ['an outdated account whose server still does not answer', { outdated: true, unavailable: true }, 'unavailable'],
+    ['an account whose server still does not answer', { unavailable: true }, 'unavailable'],
     ['a valid account that has just turned out to be outdated', {}, 'stale'],
   ] as const)('opens the form of adding an account with its data when the switch to %s fails', async (_name, patch, result) => {
     const { other, click } = setup(patch);

@@ -2,6 +2,11 @@ import { Directive, ElementRef, effect, inject, input } from '@angular/core';
 
 import { AlphaOutlineFilters } from './alpha-outline-filters.service';
 
+/** Товщина контуру за замовчуванням, px. */
+const DEFAULT_WIDTH = 2;
+/** Колір контуру за замовчуванням. */
+const DEFAULT_COLOR = '#000';
+
 /**
  * Малює контур навколо зображення за його альфа-каналом (а не по рамці
  * елемента): однаково для растра з прозорістю (PNG, WebP) і для вектора (SVG)
@@ -17,7 +22,7 @@ import { AlphaOutlineFilters } from './alpha-outline-filters.service';
  * Контур виходить за межі елемента, тож місце під нього (відступ від сусідів)
  * лишається на розсуд розмітки.
  */
-@Directive({ selector: '[appAlphaOutline]', })
+@Directive({ selector: '[appAlphaOutline]' })
 export class AlphaOutlineDirective {
   readonly appAlphaOutline = input<number | string>('');
   readonly outlineColor = input<string | null>(null);
@@ -32,9 +37,6 @@ export class AlphaOutlineDirective {
     });
   }
 }
-
-const DEFAULT_WIDTH = 2;
-const DEFAULT_COLOR = '#000';
 
 /** Товщина з атрибута: порожнє або некоректне значення — стандартна. */
 function parseWidth(value: number | string): number {

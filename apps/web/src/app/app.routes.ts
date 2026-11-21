@@ -1,17 +1,28 @@
-import { Routes } from '@angular/router';
+import { Route, Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { requireAnyPermission } from './core/auth/permission.guard';
 import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS } from './core/auth/permissions';
 import { connectionGuard } from './core/connection/connection.guard';
 
-// Усі сторінки, крім /login, /join і /relogin, проходять два стражі. authGuard: шукає чинний
-// акаунт серед збережених (як сторінка входу), перший знайдений стає поточним;
-// акаунтів нема чи всі застарілі — переадресація на /login. connectionGuard:
-// без підключення до API активного акаунта — переадресація на /login з помилкою.
-// `runGuardsAndResolvers: 'always'`: стражі спрацьовують при кожній зміні сторінки
-// (також між вкладками налаштувань), а не лише коли маршрут активується вперше —
-// authGuard на цьому перепитує профіль (`GET /users/me`).
+/**
+ * Те, що потрібне кожній сторінці для того, хто увійшов (усі, крім /login, /join і /relogin):
+ * два стражі й їхній запуск при кожній зміні сторінки. Нова така сторінка бере це цілком
+ * (`...SIGNED_IN`), тож забути стража не вийде; сторінка з правами додає свій страж після цих.
+ *
+ * - `authGuard` шукає чинний акаунт серед збережених (як сторінка входу), перший знайдений стає
+ *   поточним; доступного нема — переадресація на /relogin (збережені акаунти є) чи /login.
+ * - `connectionGuard`: сервер активного акаунта не відповідає — акаунт позначається
+ *   недоступним, переадресація на /relogin.
+ * - `runGuardsAndResolvers: 'always'`: стражі спрацьовують при кожній зміні сторінки (також між
+ *   вкладками налаштувань), а не лише коли маршрут активується вперше — authGuard на цьому
+ *   перепитує профіль (`GET /users/me`).
+ */
+const SIGNED_IN = {
+  canActivate: [authGuard, connectionGuard],
+  runGuardsAndResolvers: 'always',
+} as const satisfies Pick<Route, 'canActivate' | 'runGuardsAndResolvers'>;
+
 export const routes: Routes = [
   {
     path: '',
@@ -21,42 +32,38 @@ export const routes: Routes = [
   {
     path: 'calendar',
     loadComponent: () => import('./calendar/calendar.page').then((m) => m.CalendarPage),
-    canActivate: [authGuard, connectionGuard],
-    runGuardsAndResolvers: 'always',
+    ...SIGNED_IN,
   },
   {
     path: 'planner',
     loadComponent: () => import('./planner/planner.page').then((m) => m.PlannerPage),
-    canActivate: [authGuard, connectionGuard],
-    runGuardsAndResolvers: 'always',
+    ...SIGNED_IN,
     data: { layoutSection: 'planner' },
   },
   {
     path: 'knowledge-base',
     loadComponent: () => import('./knowledge-base/knowledge-base.page').then((m) => m.KnowledgeBasePage),
-    canActivate: [authGuard, connectionGuard],
-    runGuardsAndResolvers: 'always',
+    ...SIGNED_IN,
     data: { layoutSection: 'knowledge-base' },
   },
   {
     path: 'colleagues',
     loadComponent: () => import('./colleagues/colleagues.page').then((m) => m.ColleaguesPage),
     // Без права ViewUser — на REDIRECT_URL (те саме, що ховає пункт меню «Колеги»).
-    canActivate: [authGuard, connectionGuard, requireAnyPermission(COLLEAGUES_PERMISSIONS)],
-    runGuardsAndResolvers: 'always',
+    ...SIGNED_IN,
+    canActivate: [...SIGNED_IN.canActivate, requireAnyPermission(COLLEAGUES_PERMISSIONS)],
   },
   {
     path: 'admin-panel',
     loadComponent: () => import('./admin-panel/admin-panel.page').then((m) => m.AdminPanelPage),
     // Без жодного з прав адмінки — на REDIRECT_URL (те саме, що ховає пункт меню «Адмін»).
-    canActivate: [authGuard, connectionGuard, requireAnyPermission(ADMIN_PANEL_PERMISSIONS)],
-    runGuardsAndResolvers: 'always',
+    ...SIGNED_IN,
+    canActivate: [...SIGNED_IN.canActivate, requireAnyPermission(ADMIN_PANEL_PERMISSIONS)],
   },
   {
     path: 'settings',
     loadChildren: () => import('./settings/settings.routes').then((m) => m.SETTINGS_ROUTES),
-    canActivate: [authGuard, connectionGuard],
-    runGuardsAndResolvers: 'always',
+    ...SIGNED_IN,
     data: { layoutSection: 'settings' },
   },
   {
@@ -78,5 +85,13 @@ export const routes: Routes = [
     loadComponent: () => import('./relogin/relogin.page').then((m) => m.ReloginPage),
     // Сторінка повторного входу: без стражів і без бічного меню, як /login й /join.
     data: { layout: 'none' },
+  },
+  {
+    // Невідома адреса (стара закладка, помилка в посиланні) — туди ж, що й корінь: на /login,
+    // а звідти пошук акаунта відкриває першу сторінку чи форму входу. Без цього навігація
+    // падала б з помилкою, а екран лишався б порожнім. Саме 'login', а не '': переадресацію
+    // кореня роутер слідом уже не виконав би й лишився б на порожньому `/`.
+    path: '**',
+    redirectTo: 'login',
   },
 ];

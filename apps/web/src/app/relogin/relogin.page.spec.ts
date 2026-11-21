@@ -20,7 +20,6 @@ describe('ReloginPage', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       imports: [ReloginPage],
       providers: [provideRouter([]), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }), provideHttpClient(), provideHttpClientTesting()],
@@ -104,6 +103,24 @@ describe('ReloginPage', () => {
       expect(rows(element)).toHaveLength(2);
       expect(rows(element).map(name)).toEqual(['Другий Перший Третій — Організація 1', 'Другий Перший Третій — Організація 2']);
       expect(element.querySelectorAll('.relogin-account app-account-avatar')).toHaveLength(2);
+    });
+
+    it('shows an account that another tab has added while the page is open, without making it active here', () => {
+      const first = addAccount('u1', { ngoName: 'Організація 1' });
+      const fixture = openPage();
+      const element = fixture.nativeElement as HTMLElement;
+      expect(rows(element)).toHaveLength(1);
+
+      // Інша вкладка ввійшла в новий акаунт: пише його запис та індекс, і сюди приходить `storage`.
+      const added = { ...JSON.parse(localStorage.getItem(`yavir.account.${first}`)!), id: 'other', identity: 'u2', ngoName: 'Організація 2' };
+      localStorage.setItem('yavir.account.other', JSON.stringify(added));
+      localStorage.setItem('yavir.accounts', JSON.stringify([first, 'other']));
+      window.dispatchEvent(new StorageEvent('storage', { key: 'yavir.accounts' }));
+      TestBed.tick();
+      fixture.detectChanges();
+
+      expect(rows(element).map(name)).toEqual(['Другий Перший Третій — Організація 1', 'Другий Перший Третій — Організація 2']);
+      expect(accounts.activeId()).toBeNull();
     });
 
     it('writes the state under the name only for an account in trouble, with the texts of the account menu', () => {

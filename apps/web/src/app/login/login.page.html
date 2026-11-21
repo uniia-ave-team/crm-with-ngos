@@ -149,10 +149,13 @@
               [attr.aria-label]="'login.ngo.logoLabel' | translate"
               (change)="onLogoSelected($event)"
             />
-            <p class="login__hint">{{ 'login.ngo.formatHint' | translate }}</p>
+            <p class="login__hint">{{ 'login.ngo.formatHint' | translate: { types: imageTypeNames | listText: 'or', size: imageMaxMegabytes } }}</p>
             @if (ngoLogoError(); as logoError) {
               <p class="auth-field-error" role="alert">
-                {{ (logoError === 'type' ? 'login.ngo.logoTypeError' : 'login.ngo.logoSizeError') | translate }}
+                {{
+                  (logoError === 'type' ? 'login.ngo.logoTypeError' : 'login.ngo.logoSizeError')
+                    | translate: { types: imageTypeNames | listText: 'and', size: imageMaxMegabytes }
+                }}
               </p>
             }
           </div>
@@ -233,6 +236,7 @@
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           <app-password-fields
+            [policy]="passwordPolicy()"
             [password]="adminPassword()"
             [repeat]="adminPasswordRepeat()"
             [required]="true"
@@ -266,10 +270,7 @@
       @case ('step1') {
         @if (formError(); as currentError) {
           <div class="auth-error" role="alert">
-            {{
-              ('login.step1.error.' + (currentError === 'no-connection' ? 'noConnection' : currentError))
-                | translate: { url: connection.serverUrl() }
-            }}
+            {{ 'login.step1.error.' + currentError | translate: { url: shownServerUrl() } }}
           </div>
         }
 

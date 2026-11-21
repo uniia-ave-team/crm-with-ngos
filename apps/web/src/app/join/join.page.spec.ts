@@ -20,6 +20,17 @@ interface JoinPageInternals {
   submit(): Promise<void>;
 }
 
+/** Сховище браузера переповнене: записи акаунтів не пишуться (решта, як-от мова, — пишеться). */
+function fillStorageForAccounts(): void {
+  const setItem = Storage.prototype.setItem;
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
+    if (key.startsWith('yavir.account.')) {
+      throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    }
+    setItem.call(this, key, value);
+  });
+}
+
 describe('JoinPage', () => {
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.spyOn>;
@@ -27,7 +38,6 @@ describe('JoinPage', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [
@@ -143,19 +153,46 @@ describe('JoinPage', () => {
     http.expectNone((r) => r.url.includes('/invitations/validate'));
   });
 
-  it.each([
-    ['the server rejects the token', 400],
-    ['the server fails', 500],
-  ])('says the link is inactive, with a link to the login page, when %s', async (_name, status) => {
+  it('says the link is inactive, with a link to the login page, when the server rejects the token', async () => {
     const { fixture, element } = create();
     answerHealth(fixture);
-    await answerValidate(fixture, element, {}, status);
+    await answerValidate(fixture, element, {}, 400);
 
     const error = element.querySelector('.auth-error');
     expect(error?.textContent).toContain(uk.join.invalid);
     expect(error?.textContent).not.toContain(uk.join.noServer);
     expect(error?.querySelector('a')?.getAttribute('href')).toBe('/login');
     expect(element.querySelector('ion-input')).toBeNull();
+  });
+
+  it.each([
+    ['the server fails', 500],
+    ['the server answers without the e-mail', 200],
+  ])('does not call the link inactive when %s: it says the check failed and offers to try again', async (_name, status) => {
+    const { fixture, element } = create();
+    answerHealth(fixture);
+    await answerValidate(fixture, element, {}, status);
+
+    const error = element.querySelector('.auth-error');
+    expect(error?.getAttribute('role')).toBe('alert');
+    expect(error?.textContent).toContain(uk.join.checkFailed);
+    expect(error?.textContent).not.toContain(uk.join.invalid);
+    const retry = error?.querySelector('button') as HTMLButtonElement;
+    expect(retry.textContent?.trim()).toBe(uk.join.retry);
+    expect(retry.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('checks the server and the token again by "Try again", and shows the form when it works now', async () => {
+    const { fixture, element } = create();
+    answerHealth(fixture);
+    await answerValidate(fixture, element, {}, 500);
+
+    (element.querySelector('.auth-error button') as HTMLButtonElement).click();
+    answerHealth(fixture);
+    await answerValidate(fixture, element, { email: 'a@b.org' });
+
+    expect(element.querySelector('.auth-error')).toBeNull();
+    expect(element.querySelector('ion-input')).not.toBeNull();
   });
 
   it('says the link is inactive without asking the server when there is no token', async () => {
@@ -228,6 +265,22 @@ describe('JoinPage', () => {
     expect(accounts.accounts()).toHaveLength(1);
     expect(accounts.active()).toMatchObject({ server, accessToken: 'access', refreshToken: 'refresh', email: 'a@b.org' });
     expect(navigate).toHaveBeenCalledWith(REDIRECT_URL);
+  });
+
+  it('says the registration is done but the account cannot be stored when the storage of the browser is full', async () => {
+    const { fixture, element, page } = await createForm();
+    fillStorageForAccounts();
+    fill(page, { lastName: 'Другий', firstName: 'Перший', password: 'Abcde1!x', passwordRepeat: 'Abcde1!x' });
+
+    const done = page.submit();
+    acceptRequest().flush({ accessToken: 'access', refreshToken: 'refresh' });
+    await done;
+    fixture.detectChanges();
+
+    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.join.saveError.storageFull);
+    expect(TestBed.inject(AccountsService).accounts()).toEqual([]);
+    expect(navigate).not.toHaveBeenCalled();
+    http.match(() => true);
   });
 
   it('adds the account next to the saved ones and makes the new one active', async () => {

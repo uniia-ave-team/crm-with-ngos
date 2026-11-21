@@ -11,6 +11,7 @@ import { AccountsService } from '../core/accounts/accounts.service';
 import { ConnectionService } from '../core/connection/connection.service';
 import { CurrentUserService } from '../core/users/current-user.service';
 import { UsersService } from '../core/users/users.service';
+import { ALWAYS_GRANTED_PERMISSIONS, PERMISSION_GROUPS } from '../core/roles/role-permissions';
 import { avatarColor } from '../shared/avatar/avatar-color';
 import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
@@ -33,7 +34,6 @@ const ROW_ACTIONS = [
 describe('ColleaguesPage', () => {
   beforeEach(async () => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
@@ -169,17 +169,17 @@ describe('ColleaguesPage', () => {
       ]);
     });
 
-    it('draws a row for every colleague of the server: the name and the email are theirs, the rest are the placeholders', async () => {
+    it('draws a row for every colleague of the server: the full name (the last name first) and the email are theirs, a dash for the rest', async () => {
       const { element } = await renderLoaded();
       const rows = Array.from(element.querySelectorAll('tbody tr'));
       rows.forEach((row, index) => {
         const n = index + 1;
         expect(row.querySelector('app-avatar')).not.toBeNull();
-        expect(row.querySelector('.person__name')?.textContent?.trim()).toBe(`Перший${n} Колега${n}`);
+        expect(row.querySelector('.person__name')?.textContent?.trim()).toBe(`Колега${n} Перший${n}`);
         expect(row.querySelector('.person__pronouns')?.textContent?.trim()).toBe(uk.common.empty);
         const cells = row.querySelectorAll('td');
         expect(cells[2].textContent?.trim()).toBe(`user${n}@example.org`);
-        expect(cells[3].textContent?.trim()).toBe(uk.colleagues.sample.phone);
+        expect(cells[3].textContent?.trim()).toBe(uk.common.empty);
       });
     });
 
@@ -211,6 +211,11 @@ describe('ColleaguesPage', () => {
         return ctx;
       }
 
+      it('shows the full name with the patronymic: the last name, the first name, the patronymic', async () => {
+        const { element } = await renderWith({ ...full, patronymic: ' Третє ' });
+        expect(element.querySelector('.person__name')?.textContent?.trim()).toBe('Колега Перший Третє');
+      });
+
       it('shows the pronouns, the phone and the avatar of the colleague, the roles as pills', async () => {
         const { element } = await renderWith(full);
         const row = element.querySelector('tbody tr') as HTMLElement;
@@ -221,11 +226,11 @@ describe('ColleaguesPage', () => {
         expect(Array.from(row.querySelectorAll('.position app-role-pill .pill')).map((p) => p.textContent?.trim())).toEqual(['Перша', 'Друга']);
       });
 
-      it('keeps the dash for the pronouns and the placeholder of the phone for what is empty, and shows no roles', async () => {
+      it('puts a dash for the pronouns and the phone that are empty, and shows no roles', async () => {
         const { element } = await renderWith({ ...full, roles: [], pronouns: '  ', phoneNumber: null });
         const row = element.querySelector('tbody tr') as HTMLElement;
         expect(row.querySelector('.person__pronouns')?.textContent?.trim()).toBe(uk.common.empty);
-        expect(row.querySelectorAll('td')[3].textContent?.trim()).toBe(uk.colleagues.sample.phone);
+        expect(row.querySelectorAll('td')[3].textContent?.trim()).toBe(uk.common.empty);
         expect(row.querySelector('app-role-pill')).toBeNull();
       });
 
@@ -270,15 +275,15 @@ describe('ColleaguesPage', () => {
       expect(avatar.style.backgroundColor).toBe(swatch.style.backgroundColor);
     });
 
-    it('puts the placeholders of the name and the email in place of those that are empty', async () => {
+    it('puts a dash in place of the name and the email that are empty', async () => {
       const { fixture, element } = render();
       usersRequest().flush({ items: [user(1, { firstName: ' ', lastName: '', email: '' })], hasNextPage: false });
       await vi.waitFor(() => {
         fixture.detectChanges();
         expect(element.querySelectorAll('tbody tr')).toHaveLength(1);
       });
-      expect(element.querySelector('.person__name')?.textContent?.trim()).toBe(uk.colleagues.sample.name);
-      expect(element.querySelectorAll('tbody td')[2].textContent?.trim()).toBe(uk.colleagues.sample.email);
+      expect(element.querySelector('.person__name')?.textContent?.trim()).toBe(uk.common.empty);
+      expect(element.querySelectorAll('tbody td')[2].textContent?.trim()).toBe(uk.common.empty);
     });
 
     describe('the column "Position" (the roles of the colleague)', () => {
@@ -288,6 +293,7 @@ describe('ColleaguesPage', () => {
         email: `user${n}@example.org`,
         firstName: `Перший${n}`,
         lastName: `Колега${n}`,
+        patronymic: null,
         phoneNumber: null,
         country: null,
         emergencyContact: null,
@@ -520,7 +526,7 @@ describe('ColleaguesPage', () => {
         for (const [name, spy] of spies) {
           if (name === method) {
             expect(spy).toHaveBeenCalledTimes(1);
-            expect(spy).toHaveBeenCalledWith({ id: 'user-3', name: 'Перший3 Колега3' });
+            expect(spy).toHaveBeenCalledWith({ id: 'user-3', name: 'Колега3 Перший3' });
           } else {
             expect(spy).not.toHaveBeenCalled();
           }
@@ -679,16 +685,16 @@ describe('ColleaguesPage', () => {
       page['onActionChosen'](action);
       fixture.detectChanges();
 
-      expect(stub).toHaveBeenCalledWith({ id: 'user-4', name: 'Перший4 Колега4' });
+      expect(stub).toHaveBeenCalledWith({ id: 'user-4', name: 'Колега4 Перший4' });
       expect(panelOf(fixture).isOpen()).toBe(true);
-      expect(state(fixture)).toEqual({ kind: action, userId: 'user-4', userName: 'Перший4 Колега4' });
+      expect(state(fixture)).toEqual({ kind: action, userId: 'user-4', userName: 'Колега4 Перший4' });
     });
 
     it('gives the name of the colleague from the request to the panel with the id, and null when the colleague has no name', async () => {
       vi.spyOn(UsersService.prototype, 'list').mockResolvedValue({
         items: [
-          { id: 'user-1', email: '', firstName: ' ', lastName: '', phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] },
-          { id: 'user-2', email: '', firstName: 'Перший', lastName: 'Колега', phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] },
+          { id: 'user-1', email: '', firstName: ' ', lastName: '', patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] },
+          { id: 'user-2', email: '', firstName: 'Перший', lastName: 'Колега', patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] },
         ],
         hasNextPage: false,
       });
@@ -700,7 +706,7 @@ describe('ColleaguesPage', () => {
       const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
       for (const [index, expected] of [
         [0, { userId: 'user-1', userName: null }],
-        [1, { userId: 'user-2', userName: 'Перший Колега' }],
+        [1, { userId: 'user-2', userName: 'Колега Перший' }],
       ] as const) {
         (element.querySelectorAll('tbody .data-table__menu')[index] as HTMLButtonElement).click();
         fixture.detectChanges();
@@ -795,7 +801,7 @@ describe('ColleaguesPage', () => {
         expect(rowsCount(element)).toBe(25);
       });
       expect(complete).toHaveBeenCalled();
-      expect(element.querySelectorAll('.person__name')[20].textContent?.trim()).toBe('Перший21 Колега21');
+      expect(element.querySelectorAll('.person__name')[20].textContent?.trim()).toBe('Колега21 Перший21');
     });
 
     it('does not ask again when the server says there are no more pages, but still finishes the scroll', async () => {
@@ -888,6 +894,20 @@ describe('ColleaguesPage', () => {
     });
 
     describe('sorting by a click on the header (OrderBy and SortOrder of the request)', () => {
+      it('asks for the colleagues sorted by the full name before any click: without it the server gives them in a random-looking order', async () => {
+        render();
+        expect(params(usersRequest(1))).toEqual({ orderBy: 'LastName', sortOrder: 'asc' });
+      });
+
+      it('shows that order on the header of the name, so the first click on it sorts the other way', async () => {
+        const ctx = await loaded();
+        const nameHead = ctx.element.querySelectorAll('thead th')[0] as HTMLElement;
+        expect(nameHead.getAttribute('aria-sort')).toBe('ascending');
+
+        clickHead(ctx, 0);
+        expect(params(usersRequest(1))).toEqual({ orderBy: 'LastName', sortOrder: 'desc' });
+      });
+
       const heads = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLButtonElement>('thead th .data-table__sort'));
       const clickHead = (ctx: { fixture: ComponentFixture<ColleaguesPage>; element: HTMLElement }, index: number) => {
         heads(ctx.element)[index].click();
@@ -927,7 +947,7 @@ describe('ColleaguesPage', () => {
         });
       });
 
-      it('asks with SortOrder=desc by the second click and without any arguments of the sorting by the third', async () => {
+      it('asks with SortOrder=desc by the second click and by the full name again (the default) by the third', async () => {
         const ctx = await loaded();
         clickHead(ctx, 2);
         expect(params(usersRequest(1))).toEqual({ orderBy: 'Email', sortOrder: 'asc' });
@@ -936,12 +956,10 @@ describe('ColleaguesPage', () => {
         expect(params(usersRequest(1))).toEqual({ orderBy: 'Email', sortOrder: 'desc' });
 
         clickHead(ctx, 2);
-        const third = usersRequest(1);
-        expect(third.request.params.has('OrderBy')).toBe(false);
-        expect(third.request.params.has('SortOrder')).toBe(false);
+        expect(params(usersRequest(1))).toEqual({ orderBy: 'LastName', sortOrder: 'asc' });
       });
 
-      it('takes OrderBy from the column: LastName for the name, nothing for the position, Email, PhoneNumber', async () => {
+      it('takes OrderBy from the column: LastName for the name, the default (LastName) for the position, Email, PhoneNumber', async () => {
         const ctx = render();
         usersRequest(1).flush({ items: [], hasNextPage: false });
         await vi.waitFor(() => {
@@ -959,16 +977,14 @@ describe('ColleaguesPage', () => {
             expect(message(ctx.element)?.textContent?.trim()).toBe(uk.colleagues.list.empty);
           });
         }
-        expect(orderBy).toEqual(['LastName', null, 'Email', 'PhoneNumber']);
+        expect(orderBy).toEqual(['LastName', 'LastName', 'Email', 'PhoneNumber']);
       });
 
-      it('asks without OrderBy and SortOrder for the position (its argument is empty), but still clears the table', async () => {
+      it('asks with the default sorting for the position (its argument is empty), but still clears the table', async () => {
         const ctx = await loaded();
         clickHead(ctx, 1);
         expect(rowsCount(ctx.element)).toBe(0);
-        const request = usersRequest(1);
-        expect(request.request.params.has('OrderBy')).toBe(false);
-        expect(request.request.params.has('SortOrder')).toBe(false);
+        expect(params(usersRequest(1))).toEqual({ orderBy: 'LastName', sortOrder: 'asc' });
         expect(ctx.element.querySelectorAll('thead .data-table__head--sorted')).toHaveLength(1);
       });
 
@@ -1018,7 +1034,7 @@ describe('ColleaguesPage', () => {
         await Promise.resolve();
         ctx.fixture.detectChanges();
         expect(rowsCount(ctx.element)).toBe(2);
-        expect(ctx.element.querySelectorAll('.person__name')[0].textContent?.trim()).toBe('Перший11 Колега11');
+        expect(ctx.element.querySelectorAll('.person__name')[0].textContent?.trim()).toBe('Колега11 Перший11');
       });
 
       it('keeps one header selected while the sorting changes from one column to another', async () => {
@@ -1228,7 +1244,13 @@ describe('ColleaguesPage', () => {
           postInvitation().flush(answer);
           await shown(ctx);
 
-          expect(state(ctx.fixture).invitation()).toEqual({ email: 'a@b.org', token: 'tok-1', expiresAt: '2026-11-20T10:00:00Z' });
+          expect(state(ctx.fixture).invitation()).toEqual({
+            email: 'a@b.org',
+            token: 'tok-1',
+            expiresAt: '2026-11-20T10:00:00Z',
+            // Сервер, на якому створено запрошення: на його хост веде посилання.
+            server: TestBed.inject(ConnectionService).serverUrl(),
+          });
           expect(state(ctx.fixture).invitationStatus()).toBe('idle');
           await vi.waitFor(() => expect(sidePanelOf(ctx.fixture).isOpen()).toBe(false));
         });
@@ -1609,7 +1631,7 @@ describe('ColleaguesPage', () => {
         type('role-form-plural', 'Куратори');
         (element.querySelector('app-role-form form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
 
-        expect(spy).toHaveBeenCalledWith({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори', permissions: [] });
+        expect(spy).toHaveBeenCalledWith({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори', permissions: ALWAYS_GRANTED_PERMISSIONS });
         http.expectNone((request) => request.method !== 'GET');
       });
 
@@ -1644,7 +1666,7 @@ describe('ColleaguesPage', () => {
 
           const created = postRole();
           expect(created.request.body).toEqual({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори' });
-          created.flush({ id: 'new1' }, { status: 201, statusText: 'Created' });
+          created.flush('new1', { status: 201, statusText: 'Created' });
 
           (await vi.waitFor(() => claimRequest('new1', 'Permissions.ViewUser'))).flush(null, noContent);
           (await vi.waitFor(() => claimRequest('new1', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
@@ -1666,7 +1688,7 @@ describe('ColleaguesPage', () => {
           const ctx = await openForm();
           type(ctx.element, 'role-form-name', 'Член');
           send(ctx);
-          postRole().flush({ id: 'new2' }, { status: 201, statusText: 'Created' });
+          postRole().flush('new2', { status: 201, statusText: 'Created' });
 
           (await vi.waitFor(() => claimRequest('new2', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
           // CreateNgo є лише в першого користувача, а ViewNgo сервер прибрав: їх не додаємо.
@@ -1681,7 +1703,7 @@ describe('ColleaguesPage', () => {
           expect(submitButton(ctx.element).disabled).toBe(true);
 
           send(ctx);
-          postRole().flush({ id: 'new3' }, { status: 201, statusText: 'Created' });
+          postRole().flush('new3', { status: 201, statusText: 'Created' });
           http.expectNone((request) => request.url === rolesUrl && request.method === 'POST');
         });
 
@@ -1711,7 +1733,7 @@ describe('ColleaguesPage', () => {
           const ctx = await openForm();
           type(ctx.element, 'role-form-name', 'Член');
           send(ctx);
-          postRole().flush({ id: 'new4' }, { status: 201, statusText: 'Created' });
+          postRole().flush('new4', { status: 201, statusText: 'Created' });
           (await vi.waitFor(() => claimRequest('new4', 'Permissions.ViewTableTemplate'))).flush({}, { status: 400, statusText: 'Bad Request' });
 
           await vi.waitFor(() => {
@@ -1823,6 +1845,7 @@ describe('ColleaguesPage', () => {
 
       describe('the switches of the permissions follow the claims of the role', () => {
         const switches = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLInputElement>('app-role-form input[role=switch]'));
+        const indexOf = (id: string) => PERMISSION_GROUPS.findIndex((group) => group.id === id);
 
         async function openEdit(claims: string[]) {
           const ctx = await withRoles();
@@ -1837,13 +1860,13 @@ describe('ColleaguesPage', () => {
 
         it('switches on the groups the role has all the permissions of, and the rest stay off', async () => {
           const { element } = await openEdit(['Permissions.ViewUser', 'Permissions.CreateUser', 'Permissions.UpdateUser', 'Permissions.ViewNgo']);
-          // Групи за порядком: viewUsers, editUsers (обидва права), решта вимкнені; ViewNgo — не в групах.
-          expect(switches(element).map((input) => input.checked)).toEqual([true, true, false, false, false, false, false, false, false, false]);
+          // Увімкнені лише viewUsers і editUsers (обидва права); ViewNgo — не в групах.
+          expect(switches(element).flatMap((input, index) => (input.checked ? [PERMISSION_GROUPS[index].id] : []))).toEqual(['viewUsers', 'editUsers']);
         });
 
         it('keeps a group off when the role has only a part of its permissions', async () => {
           const { element } = await openEdit(['Permissions.CreateUser']);
-          expect(switches(element)[1].checked).toBe(false);
+          expect(switches(element)[indexOf('editUsers')].checked).toBe(false);
         });
 
         it('puts the warning icon on a group the role has only a part of, and on no other', async () => {
@@ -1851,7 +1874,7 @@ describe('ColleaguesPage', () => {
           const warned = Array.from(element.querySelectorAll('app-role-form .role-form__permission')).flatMap((row, index) =>
             row.querySelector('.role-form__partial') ? [index] : [],
           );
-          expect(warned).toEqual([1]);
+          expect(warned).toEqual([indexOf('editUsers')]);
         });
 
         it('has every switch off for a role without claims', async () => {
@@ -1863,7 +1886,7 @@ describe('ColleaguesPage', () => {
           // FULL_RIGHTS не має CreateTableTemplate тощо: група «Редагування організації» заблокована, але ввімкнена в ролі.
           const claims = ['Permissions.UpdateNgo', 'Permissions.ViewLoginPageImages', 'Permissions.CreateLoginPageImages', 'Permissions.DeleteLoginPageImages', 'Permissions.CreateTableTemplate', 'Permissions.UpdateTableTemplate', 'Permissions.DeleteTableTemplate'];
           const { element } = await openEdit(claims);
-          const editNgo = switches(element)[7];
+          const editNgo = switches(element)[indexOf('editNgo')];
           expect(editNgo.disabled).toBe(true);
           expect(editNgo.checked).toBe(true);
           // Група, на яку в користувача є всі права, вільна.
@@ -1944,7 +1967,7 @@ describe('ColleaguesPage', () => {
 
         expect(spy).toHaveBeenCalledTimes(1);
         expect(spy.mock.calls[0][0]).toMatchObject({ id: 'r0', claims: ['Permissions.ViewUser'] });
-        expect(spy.mock.calls[0][1]).toEqual({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори', permissions: ['Permissions.ViewUser'] });
+        expect(spy.mock.calls[0][1]).toEqual({ name: 'Куратор', feminitiveName: null, pluralName: 'Куратори', permissions: ['Permissions.ViewUser', ...ALWAYS_GRANTED_PERMISSIONS] });
         http.expectNone((request) => request.method !== 'GET');
       });
 
@@ -1976,9 +1999,10 @@ describe('ColleaguesPage', () => {
           });
 
         it('saves the names, adds the permissions of the groups switched on, takes away the ones of the groups switched off, and goes back to the updated list', async () => {
-          const ctx = await openEdit(['Permissions.ViewUser']);
-          switches(ctx.element)[0].click();
-          switches(ctx.element)[3].click();
+          const ctx = await openEdit(['Permissions.ViewUser', 'Permissions.ViewCustomFields']);
+          const indexOf = (id: string) => PERMISSION_GROUPS.findIndex((group) => group.id === id);
+          switches(ctx.element)[indexOf('viewCustomFields')].click();
+          switches(ctx.element)[indexOf('resetPasswords')].click();
           field(ctx.element, 'role-form-plural').value = 'Куратори';
           field(ctx.element, 'role-form-plural').dispatchEvent(new Event('input'));
           ctx.fixture.detectChanges();
@@ -1990,7 +2014,7 @@ describe('ColleaguesPage', () => {
           // Спершу додаємо (право групи, потім права без налаштування), потім прибираємо.
           (await vi.waitFor(() => claim('r0', 'Permissions.CanResetPassword'))).flush(null, noContent);
           (await vi.waitFor(() => claim('r0', 'Permissions.ViewTableTemplate'))).flush(null, noContent);
-          const removed = await vi.waitFor(() => claim('r0', 'Permissions.ViewUser'));
+          const removed = await vi.waitFor(() => claim('r0', 'Permissions.ViewCustomFields'));
           expect(removed.request.method).toBe('DELETE');
           removed.flush(null, noContent);
 
@@ -2152,6 +2176,132 @@ describe('ColleaguesPage', () => {
         expect(spy).toHaveBeenCalledTimes(1);
         expect(spy.mock.calls[0][0]).toMatchObject({ id: 'r0', name: 'Куратор' });
         expect(other).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('deleting a role (the trash bin: the question in the modal, then DELETE /roles/{id})', () => {
+      const deleteRequest = (id: string) => http.expectOne((request) => request.url === `${rolesUrl}/${id}` && request.method === 'DELETE');
+      const modals = (fixture: ComponentFixture<ColleaguesPage>) =>
+        fixture.debugElement.queryAll(By.directive(ModalComponent)).map((debug) => debug.componentInstance as ModalComponent);
+      /** Вікно підтвердження — друге `app-modal` сторінки (перше — запрошення). */
+      const confirmModal = (fixture: ComponentFixture<ColleaguesPage>) => modals(fixture)[1];
+      type DeleteState = {
+        roleToDelete(): { id: string; name: string } | null;
+        roleDeleting(): boolean;
+        roleDeleteError(): string | null;
+        confirmRoleDelete(role: { id: string; name: string }): Promise<void>;
+        cancelRoleDelete(): void;
+        onRoleDeleteClosed(): void;
+      };
+      const state = (fixture: ComponentFixture<ColleaguesPage>) => fixture.componentInstance as unknown as DeleteState;
+
+      async function askToDelete(index = 0) {
+        const ctx = render(FULL_RIGHTS);
+        rolesButton(ctx.element).click();
+        rolesRequest().flush(body('Куратор', 'Член'));
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(ctx.element.querySelectorAll('app-roles-panel .roles__item')).toHaveLength(2);
+        });
+        (ctx.element.querySelectorAll('app-roles-panel .roles__action--delete')[index] as HTMLButtonElement).click();
+        ctx.fixture.detectChanges();
+        return ctx;
+      }
+
+      it('asks first in the modal in the middle of the screen, named after the action, and sends nothing yet', async () => {
+        const { fixture } = await askToDelete(1);
+        expect(confirmModal(fixture).isOpen()).toBe(true);
+        expect(confirmModal(fixture).label()).toBe(uk.colleagues.rolesPanel.delete);
+        expect(modals(fixture)[0].isOpen()).toBe(false);
+        expect(state(fixture).roleToDelete()).toMatchObject({ id: 'r1', name: 'Член' });
+        http.expectNone((request) => request.method === 'DELETE');
+      });
+
+      it('shows the question with the name of the role and the answers "Yes" and "Cancel" from the language file', async () => {
+        const { fixture } = await askToDelete(1);
+        const dialog = await vi.waitFor(() => {
+          fixture.detectChanges();
+          const found = document.querySelector('app-confirm-dialog');
+          expect(found).not.toBeNull();
+          return found!;
+        });
+        expect(dialog.querySelector('.confirm__message')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.deleteQuestion.replace('{{role}}', 'Член'));
+        expect(Array.from(dialog.querySelectorAll('button')).map((button) => button.textContent?.trim())).toEqual([uk.common.yes, uk.common.cancel]);
+
+        // Кнопки вікна ведуть до дій сторінки: «Так» — запит видалення цієї ролі, «Скасувати» — закриття.
+        (dialog.querySelector('.confirm__button--confirm') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        expect((dialog.querySelector('.confirm__button--confirm') as HTMLButtonElement).disabled).toBe(true);
+        deleteRequest('r1').flush(null, { status: 400, statusText: 'Bad Request' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(dialog.querySelector('.confirm__error')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.deleteError.invalid);
+        });
+        (dialog.querySelector('.confirm__button--cancel') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        expect(confirmModal(fixture).isOpen()).toBe(false);
+      });
+
+      it('"Cancel" closes the modal and deletes nothing', async () => {
+        const { fixture } = await askToDelete();
+        state(fixture).cancelRoleDelete();
+        fixture.detectChanges();
+        expect(confirmModal(fixture).isOpen()).toBe(false);
+        http.expectNone((request) => request.method === 'DELETE');
+      });
+
+      it('"Yes" deletes the role, closes the modal, takes the role off the list at once and asks for the list again', async () => {
+        const { fixture, element } = await askToDelete();
+        const done = state(fixture).confirmRoleDelete({ id: 'r0', name: 'Куратор' });
+        expect(state(fixture).roleDeleting()).toBe(true);
+        deleteRequest('r0').flush(null, { status: 204, statusText: 'No Content' });
+        await done;
+        fixture.detectChanges();
+
+        expect(confirmModal(fixture).isOpen()).toBe(false);
+        expect(state(fixture).roleDeleting()).toBe(false);
+        expect(pills(element)).toEqual(['Член']);
+        rolesRequest().flush(body('Член'));
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(pills(element)).toEqual(['Член']);
+        });
+      });
+
+      it.each([
+        ['invalid', { status: 400, statusText: 'Bad Request' }],
+        ['forbidden', { status: 403, statusText: 'Forbidden' }],
+        ['error', { status: 500, statusText: 'Server Error' }],
+      ] as const)('keeps the modal open with the reason when the server refuses (%s), and the list as it was', async (failure, status) => {
+        const { fixture, element } = await askToDelete();
+        const done = state(fixture).confirmRoleDelete({ id: 'r0', name: 'Куратор' });
+        deleteRequest('r0').flush(null, status);
+        await done;
+        fixture.detectChanges();
+
+        expect(confirmModal(fixture).isOpen()).toBe(true);
+        expect(state(fixture).roleDeleteError()).toBe(`colleagues.rolesPanel.deleteError.${failure}`);
+        expect(state(fixture).roleDeleting()).toBe(false);
+        expect(pills(element)).toEqual(['Куратор', 'Член']);
+        http.expectNone((request) => request.url === rolesUrl);
+      });
+
+      it('sends one request however many times "Yes" is pressed while it goes', async () => {
+        const { fixture } = await askToDelete();
+        const first = state(fixture).confirmRoleDelete({ id: 'r0', name: 'Куратор' });
+        void state(fixture).confirmRoleDelete({ id: 'r0', name: 'Куратор' });
+        deleteRequest('r0').flush(null, { status: 204, statusText: 'No Content' });
+        await first;
+      });
+
+      it('forgets the role and the error once the modal is closed, so the next question starts clean', async () => {
+        const { fixture } = await askToDelete();
+        const done = state(fixture).confirmRoleDelete({ id: 'r0', name: 'Куратор' });
+        deleteRequest('r0').flush(null, { status: 400, statusText: 'Bad Request' });
+        await done;
+        state(fixture).onRoleDeleteClosed();
+        expect(state(fixture).roleToDelete()).toBeNull();
+        expect(state(fixture).roleDeleteError()).toBeNull();
       });
     });
 

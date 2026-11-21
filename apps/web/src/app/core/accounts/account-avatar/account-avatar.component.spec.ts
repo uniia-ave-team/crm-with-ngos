@@ -11,7 +11,6 @@ describe('AccountAvatarComponent', () => {
   const base: AccountTile = { id: 'a', firstName: 'Перший', lastName: 'Другий', avatarUrl: null };
 
   beforeEach(() => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       // Модуль, а не оголошення компонента напряму: інакше директиви шаблону в тесті не діють.
       imports: [AccountAvatarComponent],

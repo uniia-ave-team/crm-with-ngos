@@ -8,9 +8,10 @@ import { AccountsService, StoredAccount } from '../core/accounts/accounts.servic
 import { AuthService, LOGIN_URL, REDIRECT_URL } from '../core/auth/auth.service';
 import { ConnectionService } from '../core/connection/connection.service';
 import { LanguageService } from '../core/i18n/language.service';
-import { mobileLogoBase } from '../core/i18n/mobile-logo';
+import { mobileLogoBase } from '../core/i18n/logos';
 import { DEFAULT_LOGIN_IMAGE } from '../core/login-page-images/login-page-images.service';
 import { AccountCaption, AccountTile, accountCaption, toAccountTiles } from '../core/accounts/account-avatar/account-tile';
+import { needsSignIn } from '../core/accounts/account-login';
 import { ReloginFormComponent } from './relogin-form/relogin-form.component';
 import { AccountAvatarComponent } from '../core/accounts/account-avatar/account-avatar.component';
 
@@ -100,7 +101,7 @@ export class ReloginPage {
     if (!account || this.switching()) {
       return;
     }
-    if (account.outdated) {
+    if (needsSignIn(account)) {
       this.openForm(account);
       return;
     }

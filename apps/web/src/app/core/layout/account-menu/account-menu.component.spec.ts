@@ -5,15 +5,15 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 
 import uk from '../../../../assets/i18n/uk.json';
-import { AccountMenuComponent, AccountTile } from './account-menu.component';
+import { AccountTile } from '../../accounts/account-avatar/account-tile';
+import { AccountMenuComponent } from './account-menu.component';
 
 function accounts(count: number): AccountTile[] {
-  return Array.from({ length: count }, (_, id) => ({ id, firstName: 'Перший', lastName: 'Другий', avatarUrl: null }));
+  return Array.from({ length: count }, (_, index) => ({ id: String(index), firstName: 'Перший', lastName: 'Другий', avatarUrl: null }));
 }
 
 describe('AccountMenuComponent', () => {
   beforeEach(() => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
     imports: [TranslatePipe, AccountMenuComponent],
     // Компонент тут оголошено напряму в TestBed, і його директиви в області видимості тесту
@@ -74,7 +74,7 @@ describe('AccountMenuComponent', () => {
 
     it('uses the texts from the translations', () => {
       expect(uk.nav.account.outdated).toBe('Сеанс закінчився');
-      expect(uk.nav.account.unavailable).toBe('Відсутнє підключення до серверу');
+      expect(uk.nav.account.unavailable).toBe('Відсутнє підключення до сервера');
     });
 
     it('leaves out what the account does not have: the patronymic, the NGO, or the whole name', () => {

@@ -13,6 +13,9 @@ module.exports = tseslint.config(
     processor: angular.processInlineTemplates,
     rules: {
       "@angular-eslint/prefer-standalone": "off",
+      // У консоль пишуться лише невдачі (console.warn, console.error); сліди
+      // на кшталт «запитую», «отримано» (console.log) у коді не лишаються.
+      "no-console": ["error", { allow: ["warn", "error"] }],
       "@angular-eslint/component-class-suffix": [
         "error",
         { suffixes: ["Page", "Component"] },

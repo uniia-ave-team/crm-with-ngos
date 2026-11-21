@@ -16,27 +16,21 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideIonicAngular(),
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
-    // Усі сторінки довантажуються у фоні після старту; query-параметри (`?token=`, `?error=`)
+    // Усі сторінки довантажуються у фоні після старту; query-параметри (`?token=` запрошення)
     // привʼязуються до входів сторінок.
     provideRouter(routes, withPreloading(PreloadAllModules), withComponentInputBinding()),
     provideHttpClient(withInterceptors([authInterceptor])),
-    // Мова, з якою «стартує» сервіс, тут не має значення — LanguageService
-    // одразу перевизначає її результатом детекції (localStorage/мова
-    // пристрою) у своєму конструкторі.
+    // Мову й запасну мову тут не задано навмисно: їх визначає й виставляє LanguageService
+    // (сховище браузера / мова пристрою). Задана тут мова лише завантажила б зайвий файл.
     provideTranslateService({
-      lang: 'en',
-      fallbackLang: 'uk',
       loader: provideTranslateHttpLoader({ prefix: './assets/i18n/', suffix: '.json' }),
     }),
-    // LanguageService — providedIn: 'root', тобто Angular створює його
-    // лише тоді, коли щось його вперше інжектить. Раніше це ненавмисно
-    // робив лише PrimaryNavComponent (для мобільного лого), тож на
-    // сторінках без бічного меню (/login) сервіс жодного разу не
-    // створювався, і TranslateService лишався на жорсткому 'en' з опцій
-    // вище, ігноруючи збережену мову. Явний ініціалізатор гарантує
-    // створення для кожного маршруту, з оболонкою чи без.
-    // Те саме для ConnectionService: на старті він визначає домен і
-    // виводить його в консоль, але нічого сторінкового його не інжектить.
+    // LanguageService — providedIn: 'root', тобто Angular створює його лише тоді, коли щось
+    // його вперше інжектить. Без явного ініціалізатора на сторінках без бічного меню (/login)
+    // сервіс не створювався б, і мову ніхто б не виставив. Ініціалізатор гарантує створення
+    // для кожного маршруту, з оболонкою чи без.
+    // Те саме для ConnectionService (на старті запускає першу перевірку API) і SessionService
+    // (у фоні підтримує сесію): на якійсь зі сторінок їх може ніхто не інжектити.
     provideAppInitializer(() => {
       inject(LanguageService);
       inject(ConnectionService);

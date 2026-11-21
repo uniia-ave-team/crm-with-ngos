@@ -21,6 +21,15 @@
         </div>
       }
 
+      @case ('check-failed') {
+        <div class="auth-error" role="alert">
+          <p class="auth-error__line join__error-line">{{ 'join.checkFailed' | translate }}</p>
+          <p class="auth-error__line join__error-line">
+            <button type="button" class="join__link join__retry" tabindex="0" (click)="retry()">{{ 'join.retry' | translate }}</button>
+          </p>
+        </div>
+      }
+
       @case ('form') {
         @if (bannerErrors().length) {
           <div class="auth-error" role="alert">
@@ -87,6 +96,7 @@
             (keyup.enter)="submit()"
           ></ion-input>
           <app-password-fields
+            [policy]="passwordPolicy()"
             [password]="password()"
             [repeat]="passwordRepeat()"
             [required]="true"
