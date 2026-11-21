@@ -111,4 +111,42 @@ public class DomainExceptionsTests
         // Assert
         exception.Message.ShouldContain("One or more entities of type 'Role' were not found.");
     }
+
+    /// <summary>
+    /// Verifies that <see cref="ConflictException"/> preserves its message, conflict kind, and inner exception.
+    /// </summary>
+    [Fact]
+    public void ConflictExceptionShouldPreserveMessageKindAndInnerException()
+    {
+        // Arrange
+        var inner = new InvalidOperationException("inner");
+
+        // Act
+        var exception = new ConflictException("Duplicate value.", ConflictKind.UniqueViolation, inner);
+
+        // Assert
+        exception.Message.ShouldBe("Duplicate value.");
+        exception.Kind.ShouldBe(ConflictKind.UniqueViolation);
+        exception.InnerException.ShouldBeSameAs(inner);
+    }
+
+    /// <summary>
+    /// Verifies that <see cref="ConcurrencyConflictException"/> sets <see cref="ConflictKind.Concurrency"/>
+    /// and inherits from <see cref="ConflictException"/>.
+    /// </summary>
+    [Fact]
+    public void ConcurrencyConflictExceptionShouldHaveConcurrencyKindAndInheritConflictException()
+    {
+        // Arrange
+        var inner = new InvalidOperationException("concurrency");
+
+        // Act
+        var exception = new ConcurrencyConflictException("Modified concurrently.", inner);
+
+        // Assert
+        exception.ShouldBeAssignableTo<ConflictException>();
+        exception.Kind.ShouldBe(ConflictKind.Concurrency);
+        exception.Message.ShouldBe("Modified concurrently.");
+        exception.InnerException.ShouldBeSameAs(inner);
+    }
 }

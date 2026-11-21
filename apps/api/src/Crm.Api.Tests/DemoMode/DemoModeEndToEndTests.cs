@@ -206,16 +206,6 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
         /// </summary>
         public const string SandboxHeader = "X-Test-Sandbox";
 
-        private static readonly string[] Variables =
-        [
-            "ConnectionStrings__PostgreSqlConnection",
-            "JwtOptions__Secret",
-            "DemoMode__Enabled",
-            "DemoMode__Sandbox__NewSandboxesPerAddress",
-            "FileStorage__UploadDirectory",
-        ];
-
-        private readonly Dictionary<string, string?> _previousVariables = [];
         private readonly string _uploadDirectory = Path.Combine(Path.GetTempPath(), "crm-demo-e2e-" + Guid.NewGuid().ToString("N"));
         private PostgreSqlContainer? _container;
         private WebApplicationFactory<Program>? _factory;
@@ -250,15 +240,17 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
                 return;
             }
 
-            // Demo mode is wired while services are registered, before a test host could inject settings,
-            // so the configuration goes through environment variables.
-            SetVariable("ConnectionStrings__PostgreSqlConnection", _container.GetConnectionString());
-            SetVariable("JwtOptions__Secret", "demo-e2e-tests-jwt-secret-0123456789-0123456789");
-            SetVariable("DemoMode__Enabled", "true");
-            SetVariable("DemoMode__Sandbox__NewSandboxesPerAddress", "1000");
-            SetVariable("FileStorage__UploadDirectory", _uploadDirectory);
-
-            _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.UseSetting("environment", "Production"));
+            // Demo mode is wired while services are registered, so the settings must be visible to Program
+            // from the start. UseSetting provides that without process-wide environment variables, which
+            // would leak into other API tests running in parallel.
+            string connectionString = _container.GetConnectionString();
+            _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+                .UseSetting("environment", "Production")
+                .UseSetting("ConnectionStrings:PostgreSqlConnection", connectionString)
+                .UseSetting("JwtOptions:Secret", "demo-e2e-tests-jwt-secret-0123456789-0123456789")
+                .UseSetting("DemoMode:Enabled", "true")
+                .UseSetting("DemoMode:Sandbox:NewSandboxesPerAddress", "1000")
+                .UseSetting("FileStorage:UploadDirectory", _uploadDirectory));
 
             // Starts the host: migrations, seeding and the sandbox template.
             _ = _factory.Server;
@@ -272,11 +264,6 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
             if (_factory is not null)
             {
                 await _factory.DisposeAsync();
-            }
-
-            foreach (var (name, value) in _previousVariables)
-            {
-                Environment.SetEnvironmentVariable(name, value);
             }
 
             if (_container is not null)
@@ -326,17 +313,6 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
             command.Parameters.AddWithValue("name", databaseName);
 
             return (long)(await command.ExecuteScalarAsync())! > 0;
-        }
-
-        private void SetVariable(string name, string value)
-        {
-            if (Array.IndexOf(Variables, name) < 0)
-            {
-                throw new ArgumentException($"Unknown variable {name}.", nameof(name));
-            }
-
-            _previousVariables[name] = Environment.GetEnvironmentVariable(name);
-            Environment.SetEnvironmentVariable(name, value);
         }
     }
 }

@@ -52,6 +52,7 @@ CRM складається з трьох контейнерів: база Postgr
 | `RateLimiting__WindowInSeconds`         | Тривалість вікна, секунд                          | `1`              |
 | `SerilogOptions__RetainedFileCountLimit` | Скільки днів зберігати загальний лог             | `5`              |
 | `SerilogOptions__RetainedErrorFileCountLimit` | Скільки днів зберігати лог помилок          | `31`             |
+| `FileStorage__MaxTotalBytes`            | Загальна квота сховища завантажених файлів у байтах | `107374182400` (100 ГБ) |
 
 ## Дані на диску
 

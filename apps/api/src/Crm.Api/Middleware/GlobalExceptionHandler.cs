@@ -1,7 +1,7 @@
 using Crm.Api.Consts;
 using Crm.Api.DemoMode;
-using Crm.Api.Extensions;
 using Crm.Application.Common.Consts;
+using Crm.Application.Extensions;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -22,8 +22,12 @@ public sealed partial class GlobalExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
-        int statusCode = exception.MapToStatusCode();
-        bool isClientError = statusCode < StatusCodes.Status500InternalServerError;
+        // Demo mode errors live in the API layer and carry their own status code.
+        var demoModeException = exception as DemoModeException;
+        int statusCode = demoModeException?.StatusCode ?? exception.MapToStatusCode();
+        bool isClientError = demoModeException is not null
+            ? statusCode < StatusCodes.Status500InternalServerError
+            : exception.IsClientError();
 
         httpContext.Response.StatusCode = statusCode;
 
@@ -44,7 +48,7 @@ public sealed partial class GlobalExceptionHandler(
 
         problemDetails.Instance = httpContext.Request.Path;
 
-        if (exception is DemoModeException demoModeException)
+        if (demoModeException is not null)
         {
             problemDetails.Extensions[ProblemDetailsDefaults.ErrorCodeExtensionKey] = demoModeException.ErrorCode;
         }
@@ -84,10 +88,10 @@ public sealed partial class GlobalExceptionHandler(
     }
 
     /// <summary>
-    /// Determines the safest detail message to expose to the client.
+    /// Determines the safest detail message to expose to the client without leaking internal details.
     /// </summary>
-    private static string GetDetailMessage(Exception exception, bool isClientError, bool isDev) =>
-        isDev || isClientError
+    private static string GetDetailMessage(Exception exception, bool isClientError, bool isDev)
+        => isDev || isClientError
             ? exception.Message
             : ProblemDetailsDefaults.UnexpectedErrorDetail;
 
@@ -96,9 +100,13 @@ public sealed partial class GlobalExceptionHandler(
     /// </summary>
     private static void LogException(ILogger logger, Exception exception, bool isClientError)
     {
-        if (isClientError)
+        if (exception.IsExpectedDomainError() || exception is DemoModeException)
         {
-            LogClientError(logger, exception, exception.GetType().Name, exception.Message);
+            LogClientError(logger, exception.GetType().Name, exception.Message);
+        }
+        else if (isClientError)
+        {
+            LogUnexpectedClientError(logger, exception, exception.GetType().Name, exception.Message);
         }
         else
         {
@@ -107,7 +115,10 @@ public sealed partial class GlobalExceptionHandler(
     }
 
     [LoggerMessage(EventId = LogEventIds.ClientError, Level = LogLevel.Warning, Message = "Client error occurred: {ExceptionType} - {Message}")]
-    private static partial void LogClientError(ILogger logger, Exception exception, string exceptionType, string message);
+    private static partial void LogClientError(ILogger logger, string exceptionType, string message);
+
+    [LoggerMessage(EventId = LogEventIds.UnexpectedClientError, Level = LogLevel.Warning, Message = "Unexpected client error occurred: {ExceptionType} - {Message}")]
+    private static partial void LogUnexpectedClientError(ILogger logger, Exception exception, string exceptionType, string message);
 
     [LoggerMessage(EventId = LogEventIds.ServerError, Level = LogLevel.Error, Message = "Unhandled server exception: {ExceptionType} - {Message}")]
     private static partial void LogServerError(ILogger logger, Exception exception, string exceptionType, string message);

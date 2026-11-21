@@ -59,7 +59,7 @@ public class UsersController(
         Guid id,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(new DeleteUserCommand(id), cancellationToken);
+        await mediator.Send(new DeleteUserCommand(id, currentUserService.GetUserId()), cancellationToken);
 
         return NoContent();
     }
@@ -178,7 +178,8 @@ public class UsersController(
     public async Task<IActionResult> DeleteMe(
         CancellationToken cancellationToken)
     {
-        await mediator.Send(new DeleteUserCommand(currentUserService.GetUserId()), cancellationToken);
+        var currentUserId = currentUserService.GetUserId();
+        await mediator.Send(new DeleteUserCommand(currentUserId, currentUserId), cancellationToken);
 
         return NoContent();
     }
