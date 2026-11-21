@@ -1,10 +1,5 @@
-import { LOGO_IMAGE_TYPES } from '../images/image-types';
-
-/** Які зображення можна обрати логотипом організації (`.png .webp .jpeg .jpg .gif .svg`). */
-export const NGO_LOGO_TYPES: readonly string[] = LOGO_IMAGE_TYPES;
-
-/** Найбільший розмір файлу логотипа, байт (2 МБ). */
-export const NGO_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+// Формати й найбільший розмір логотипа — спільні для всіх зображень: `IMAGE_TYPES` і
+// `IMAGE_MAX_BYTES` у `core/images/image-types.ts`.
 
 /** Найдовша назва організації, символів. */
 export const NGO_NAME_MAX_LENGTH = 200;

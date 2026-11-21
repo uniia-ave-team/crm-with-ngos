@@ -1,8 +1,10 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Signal, computed, inject, signal } from '@angular/core';
-import { Subscription, finalize, firstValueFrom, timeout } from 'rxjs';
+import { Observable, catchError, firstValueFrom, map, of, timeout } from 'rxjs';
 
+import { SystemSetupStatusDto } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
+import { Untrusted } from '../http/api-contract';
 
 const API_PORT = 5065;
 const API_HEALTH_PATH = '/health';
@@ -29,11 +31,19 @@ export type SystemStatusState = 'idle' | 'loading' | 'loaded' | 'failed';
  * `GET /api/v1/system/status` (авторизація не потрібна). За ним фронтенд
  * вирішує, чи показувати майстер початкового налаштування.
  */
-export interface SystemStatus {
-  hasAdmin: boolean;
-  hasNgo: boolean;
-  isSetupComplete: boolean;
+export type SystemStatus = SystemSetupStatusDto;
+
+/** Чим закінчилася перевірка `/health`: стан і, для невдачі, пояснення в консоль. */
+interface HealthResult {
+  readonly status: 'healthy' | 'unhealthy' | 'unreachable';
+  readonly message: string;
 }
+
+/**
+ * Скасовує запит, що ще триває. `next` — запит, який його замінив: той, хто чекав на
+ * скасований, отримає результат нового. Без `next` — `null` (результату не буде).
+ */
+type Supersede<T> = (next: Promise<T> | null) => void;
 
 /**
  * Розбирає адресу сервера, введену користувачем (домен, IP або повне
@@ -63,17 +73,18 @@ export function parseServerAddress(raw: string | null): URL | null {
 }
 
 /**
- * Дані підключення до інсталяції: домен, з якого відкрито сторінку, адреса
- * сервера (надана на кроці 1 сторінки входу) і стан API. Синглтон на весь
- * застосунок: це треба знати будь-якій сторінці, що звертається до API, а
- * не лише самій сторінці входу.
+ * Дані підключення до інсталяції: до якого сервера звертатися і чи працює там API. Сервіс
+ * існує в одному екземплярі на весь застосунок (`providedIn: 'root'`), тож усі сторінки
+ * бачать ту саму адресу й той самий стан: це треба знати кожній, що звертається до API, а не
+ * лише сторінці входу.
  *
- * Алгоритм: визначити ціль — надану адресу сервера, а якщо її нема, то
- * `<протокол>://<домен сторінки>:5065` — і перевірити, чи там існує API та
- * чи воно працює (`GET /health`). Результат — в `apiStatus` і в консолі.
- * Надання нової адреси (`setServerAddress`) запускає алгоритм заново вже
- * з нею. Не відповідає за сам вхід (сесію/токен) і не шукає сервер у
- * мережі — це прийде пізніше.
+ * Ціль (`serverUrl`) визначається за пріоритетом: сервер активного акаунта → адреса, надана
+ * на кроці 1 сторінки входу → `<протокол>://<домен сторінки>:5065`. Перевірка (`checkApi`)
+ * питає в цілі `GET /health`; результат — в `apiStatus` (невдача ще й у консолі). Змінилася
+ * ціль (надано нову адресу, перемкнувся акаунт) — перевірку запускає той, хто її змінив.
+ *
+ * Сервіс не відповідає за вхід (сесію, токени) і сам не стежить за сервером: стан — це
+ * результат останньої перевірки.
  */
 @Injectable({ providedIn: 'root' })
 export class ConnectionService {
@@ -127,129 +138,143 @@ export class ConnectionService {
   /** Стан запиту статусу системи: ще не питали, триває, отримано або не вдалося. */
   readonly systemStatusState: Signal<SystemStatusState> = this.systemStatusStateSignal.asReadonly();
 
-  private checkSubscription: Subscription | null = null;
-  private systemStatusSubscription: Subscription | null = null;
+  /** Скасування перевірки `/health`, що ще триває (`null` — жодна не триває). */
+  private supersedeCheck: Supersede<ApiStatus> | null = null;
+  /** Скасування запиту статусу системи, що ще триває. */
+  private supersedeSystemStatus: Supersede<SystemStatus | null> | null = null;
 
   constructor() {
-    console.log(`[ConnectionService] Домен, з якого відкрито сторінку: ${this.domain}`);
     void this.checkApi();
   }
 
   /**
-   * Перевіряє API за поточною ціллю; результат — в `apiStatus` і в консолі.
-   * Повертає остаточний стан перевірки (якщо її скасовано новою — поточний).
+   * Перевіряє API за поточною ціллю; результат — в `apiStatus` (невдача ще й у консолі). Повертає
+   * остаточний стан. Нова перевірка скасовує попередню, що ще триває (відповідь зі старої
+   * адреси не має перезаписати результат нової), і той, хто чекав на скасовану, отримує
+   * результат нової.
    */
   checkApi(): Promise<ApiStatus> {
-    // Відповідь на попередню, ще не завершену перевірку (стару адресу) не
-    // має перезаписати результат нової.
-    this.checkSubscription?.unsubscribe();
-    // Статус системи належить попередній цілі — після нової перевірки він
-    // застарілий і має бути запитаний заново.
-    this.systemStatusSubscription?.unsubscribe();
+    const supersede = this.supersedeCheck;
+    // Статус системи належить попередній цілі — після нової перевірки він застарілий і має
+    // бути запитаний заново.
+    this.supersedeSystemStatus?.(null);
+    this.supersedeSystemStatus = null;
     this.systemStatusSignal.set(null);
     this.systemStatusStateSignal.set('idle');
 
     const url = this.apiHealthUrl();
-    const source = this.accounts.active()
-      ? 'адреса активного акаунта'
-      : this.serverAddressSignal()
-        ? 'надана адреса сервера'
-        : 'домен сторінки';
     this.apiStatusSignal.set('checking');
-    console.log(`[ConnectionService] Перевіряю API (${source}): ${url}`);
 
-    return new Promise((resolve) => {
-      this.checkSubscription = this.http
-        .get<{ status?: string }>(url)
-        .pipe(
-          timeout(API_CHECK_TIMEOUT_MS),
-          // Перевірку скасовано новою (відписка) — не лишаємо виклик висіти.
-          finalize(() => resolve(this.apiStatusSignal())),
-        )
-        .subscribe({
-        next: (body) => {
-          const reported = body?.status;
-          if (reported === 'Healthy') {
-            this.finishCheck('healthy', `API існує й працює (status: ${reported})`, url);
-          } else {
-            this.finishCheck('unhealthy', `API відповіло, але не «Healthy» (status: ${reported ?? 'немає'})`, url);
-          }
-        },
-        error: (error: unknown) => {
-          if (error instanceof HttpErrorResponse && error.status > 0) {
-            const reported = (error.error as { status?: string } | null)?.status;
-            this.finishCheck(
-              'unhealthy',
-              `Щось відповіло, але не здорове API: HTTP ${error.status}` + (reported ? `, status: ${reported}` : ''),
-              url,
-            );
-          } else {
-            this.finishCheck('unreachable', 'API недоступне: відповіді немає (не існує, закрите порт/мережа або CORS)', url);
-          }
-        },
+    const check = new Promise<ApiStatus>((resolve) => {
+      const subscription = this.requestHealth(url).subscribe(({ status, message }) => {
+        this.supersedeCheck = null;
+        this.apiStatusSignal.set(status);
+        if (status !== 'healthy') {
+          console.warn(`[ConnectionService] ${message} — ${url}`);
+        }
+        resolve(status);
       });
+      this.supersedeCheck = (next) => {
+        subscription.unsubscribe();
+        resolve(next ?? this.apiStatusSignal());
+      };
     });
+    supersede?.(check);
+    return check;
   }
 
   /**
-   * Одноразова перевірка поточного сервера (`GET /health`, відповідь
-   * «Healthy»), що не чіпає стан сервісу (`apiStatus`, статус системи): сторінка
-   * лишається такою, як була, поки триває запит. `server` — origin, який перевіряти
-   * (за замовчуванням поточний сервер).
+   * Одноразова перевірка сервера (`GET /health`, відповідь «Healthy»), що не чіпає стан
+   * сервісу (`apiStatus`, статус системи): сторінка лишається такою, як була, поки триває
+   * запит. `server` — origin, який перевіряти (за замовчуванням поточний сервер).
    */
   async probeApi(server?: string): Promise<boolean> {
     const url = server ? `${server}${API_HEALTH_PATH}` : this.apiHealthUrl();
-    console.log(`[ConnectionService] Одноразова перевірка API: ${url}`);
-    try {
-      const body = await firstValueFrom(this.http.get<{ status?: string }>(url).pipe(timeout(API_CHECK_TIMEOUT_MS)));
-      const healthy = body?.status === 'Healthy';
-      console.log(`[ConnectionService] Одноразова перевірка: ${healthy ? 'сервер здоровий' : 'сервер не здоровий'} — ${url}`);
-      return healthy;
-    } catch {
-      console.warn(`[ConnectionService] Одноразова перевірка: відповіді немає або помилка — ${url}`);
-      return false;
+    const { status, message } = await firstValueFrom(this.requestHealth(url));
+    if (status !== 'healthy') {
+      console.warn(`[ConnectionService] Одноразова перевірка: ${message} — ${url}`);
     }
+    return status === 'healthy';
   }
 
   /**
-   * Запитує стан первинного налаштування системи
-   * (`GET <сервер>/api/v1/system/status`); результат — в `systemStatus` і в
-   * консолі. Викликається, коли підключення вже є. Повертає отриманий статус
-   * (`null` — запит не вдався або його скасовано новим).
+   * `GET <сервер>/health` з таймаутом; не кидає помилок — невдача теж результат:
+   * - `healthy` — API відповіло зі статусом `Healthy`;
+   * - `unhealthy` — щось відповіло, але не так (помилковий HTTP-статус, інший `status` у тілі);
+   * - `unreachable` — відповіді нема (сервера не існує, порт закритий, таймаут, CORS).
+   */
+  private requestHealth(url: string): Observable<HealthResult> {
+    return this.http.get<Untrusted<{ status: string }>>(url).pipe(
+      timeout(API_CHECK_TIMEOUT_MS),
+      map((body): HealthResult => {
+        const reported = typeof body?.status === 'string' ? body.status : 'немає';
+        return reported === 'Healthy'
+          ? { status: 'healthy', message: '' }
+          : { status: 'unhealthy', message: `API відповіло, але не «Healthy» (status: ${reported})` };
+      }),
+      catchError((error: unknown) => {
+        if (error instanceof HttpErrorResponse && error.status > 0) {
+          const reported = (error.error as Untrusted<{ status: string }>)?.status;
+          const details = typeof reported === 'string' ? `, status: ${reported}` : '';
+          return of<HealthResult>({ status: 'unhealthy', message: `Щось відповіло, але не здорове API: HTTP ${error.status}${details}` });
+        }
+        return of<HealthResult>({
+          status: 'unreachable',
+          message: 'API недоступне: відповіді немає (не існує, закрите порт/мережа або CORS)',
+        });
+      }),
+    );
+  }
+
+  /**
+   * Запитує стан первинного налаштування системи (`GET <сервер>/api/v1/system/status`);
+   * результат — в `systemStatus` (невдача ще й у консолі). Викликається, коли підключення вже є.
+   * Повертає статус або `null`, якщо запит не вдався чи відповідь не відповідає контракту
+   * (не всі три поля булеві): за такою відповіддю не можна вирішувати, що показувати.
+   *
+   * Новий запит скасовує попередній, і той, хто чекав на скасований, отримує результат
+   * нового. Запит, скасований новою перевіркою підключення (`checkApi`), дає `null`: ціль
+   * змінилася, і його відповідь уже нічия.
    */
   loadSystemStatus(): Promise<SystemStatus | null> {
-    this.systemStatusSubscription?.unsubscribe();
+    const supersede = this.supersedeSystemStatus;
 
     const url = `${this.serverUrl()}${API_SYSTEM_STATUS_PATH}`;
     this.systemStatusSignal.set(null);
     this.systemStatusStateSignal.set('loading');
-    console.log(`[ConnectionService] Запитую статус системи: ${url}`);
 
-    return new Promise((resolve) => {
-      this.systemStatusSubscription = this.http
-        .get<SystemStatus>(url)
-        .pipe(
-          timeout(API_CHECK_TIMEOUT_MS),
-          // Запит скасовано новим (відписка) — не лишаємо виклик висіти.
-          finalize(() => resolve(null)),
-        )
+    const request = new Promise<SystemStatus | null>((resolve) => {
+      const finish = (status: SystemStatus | null): void => {
+        this.supersedeSystemStatus = null;
+        this.systemStatusSignal.set(status);
+        this.systemStatusStateSignal.set(status ? 'loaded' : 'failed');
+        resolve(status);
+      };
+      const subscription = this.http
+        .get<Untrusted<SystemStatus>>(url)
+        .pipe(timeout(API_CHECK_TIMEOUT_MS))
         .subscribe({
-          next: (status) => {
-            this.systemStatusSignal.set(status);
-            this.systemStatusStateSignal.set('loaded');
-            console.log(`[ConnectionService] Статус системи отримано — ${url}`, status);
-            resolve(status);
+          next: (body) => {
+            const status = toSystemStatus(body);
+            if (!status) {
+              console.warn(`[ConnectionService] Статус системи не відповідає контракту — ${url}`, body);
+            }
+            finish(status);
           },
           error: (error: unknown) => {
-            this.systemStatusSignal.set(null);
-            this.systemStatusStateSignal.set('failed');
             const reason =
               error instanceof HttpErrorResponse && error.status > 0 ? `HTTP ${error.status}` : 'відповіді немає';
             console.warn(`[ConnectionService] Не вдалося отримати статус системи (${reason}) — ${url}`);
-            resolve(null);
+            finish(null);
           },
         });
+      this.supersedeSystemStatus = (next) => {
+        subscription.unsubscribe();
+        resolve(next);
+      };
     });
+    supersede?.(request);
+    return request;
   }
 
   /**
@@ -272,14 +297,12 @@ export class ConnectionService {
     this.serverAddressSignal.set(null);
     void this.checkApi();
   }
+}
 
-  private finishCheck(status: ApiStatus, message: string, url: string): void {
-    this.apiStatusSignal.set(status);
-    const line = `[ConnectionService] ${message} — ${url}`;
-    if (status === 'healthy') {
-      console.log(line);
-    } else {
-      console.warn(line);
-    }
-  }
+/** Статус системи з відповіді сервера; `null` — це не він (хоч одне з трьох полів не булеве). */
+function toSystemStatus(body: Untrusted<SystemStatus>): SystemStatus | null {
+  const { hasAdmin, hasNgo, isSetupComplete } = body ?? {};
+  return typeof hasAdmin === 'boolean' && typeof hasNgo === 'boolean' && typeof isSetupComplete === 'boolean'
+    ? { hasAdmin, hasNgo, isSetupComplete }
+    : null;
 }

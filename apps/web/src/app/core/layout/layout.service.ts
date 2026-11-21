@@ -2,34 +2,23 @@ import { Injectable, Signal, inject, signal } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs/operators';
 
+/** Розділи, які мають другу (контекстну) панель бічного меню. */
+const LAYOUT_SECTIONS = ['knowledge-base', 'planner', 'settings'] as const;
+
 /**
- * Сторінки, які мають другу (контекстну) панель бічного меню.
- * Прив'язується до маршруту через `data: { layoutSection: ... }`
- * у app-routing.module.ts.
+ * Розділ із другою панеллю. Привʼязується до маршруту через
+ * `data: { layoutSection: ... }` у app.routes.ts.
  */
-export type LayoutSection = 'knowledge-base' | 'planner' | 'settings';
+export type LayoutSection = (typeof LAYOUT_SECTIONS)[number];
 
 const COLLAPSE_STORAGE_KEY = 'yavir.secondaryPanelCollapsed';
 
 /**
- * Перші сегменти шляху сторінок без оболонки — дублює `data: { layout:
- * 'none' }` з app-routing.module.ts. Потрібне лише як підстраховка на
- * найперше синхронне читання (див. readHideShell): на ньому Router іноді
- * ще не встиг домапити дочірній маршрут (особливо для lazy-модуля), і
- * ActivatedRoute.snapshot.data порожній — без цієї підстраховки на
- * /login на мить блимнула б оболонка, перш ніж реакція на NavigationEnd
- * прибрала б її.
- */
-// Порожній рядок — корінь '/', який завжди редіректить на 'login' (див.
-// app-routing.module.ts) — на цю ж мить синхронного читання він ще не встиг
-// розгорнутись, тож підстраховка мусить трактувати корінь так само.
-const NO_SHELL_PATHS = new Set(['login', 'join', 'relogin', '']);
-
-/**
  * Стан бічного меню: яку контекстну панель показувати (за поточним
- * маршрутом) і чи згорнута вона на десктопі. Сервіс — синглтон на весь
- * застосунок, тому підписка на router.events у конструкторі жодного разу
- * не відписується — вона живе, поки живе застосунок.
+ * маршрутом) і чи згорнута вона на десктопі. Сервіс існує в одному
+ * екземплярі на весь застосунок (`providedIn: 'root'`), тому підписка на
+ * router.events у конструкторі жодного разу не відписується — вона живе,
+ * поки живе застосунок.
  */
 @Injectable({ providedIn: 'root' })
 export class LayoutService {
@@ -42,8 +31,7 @@ export class LayoutService {
   private readonly collapsedSignal = signal<boolean>(this.readCollapsed());
   readonly collapsed: Signal<boolean> = this.collapsedSignal.asReadonly();
 
-  // Сторінки без бічного меню взагалі (наразі — /login і /join).
-  // Прив'язується через `data: { layout: 'none' }` у app-routing.module.ts.
+  // Сторінки без бічного меню взагалі: маршрути з `data: { layout: 'none' }` у app.routes.ts.
   private readonly hideShellSignal = signal<boolean>(this.readHideShell());
   readonly hideShell: Signal<boolean> = this.hideShellSignal.asReadonly();
 
@@ -73,10 +61,8 @@ export class LayoutService {
     let route: ActivatedRoute | null = this.route.root;
     let section: LayoutSection | null = null;
     while (route) {
-      const value = route.snapshot.data['layoutSection'];
-      if (value === 'knowledge-base' || value === 'planner' || value === 'settings') {
-        section = value;
-      }
+      const value: unknown = route.snapshot.data['layoutSection'];
+      section = LAYOUT_SECTIONS.find((candidate) => candidate === value) ?? section;
       route = route.firstChild;
     }
     return section;
@@ -99,10 +85,23 @@ export class LayoutService {
     if (matchedChild) {
       return hide;
     }
-    // ActivatedRoute ще не домапив жодної дитини (найперше синхронне
-    // читання, до першого NavigationEnd) — читаємо шлях напряму з адреси.
+    // Найперше синхронне читання, до першого NavigationEnd: Router ще не зіставив адресу з
+    // маршрутом (сторінка довантажується), і `snapshot.data` порожній. Без цієї страховки на
+    // /login на мить блимнула б оболонка. Тому беремо шлях з адреси й шукаємо його в
+    // конфігурації маршрутів — тих самих, де стоїть `layout: 'none'`.
     const firstSegment = location.pathname.split('/').filter(Boolean)[0] ?? '';
-    return NO_SHELL_PATHS.has(firstSegment);
+    return this.routeHidesShell(firstSegment);
+  }
+
+  /** Чи маршрут першого рівня з таким шляхом позначено `layout: 'none'` у конфігурації маршрутів. */
+  private routeHidesShell(path: string): boolean {
+    const find = (candidate: string) => this.router.config.find((route) => route.path === candidate);
+    let route = find(path);
+    // Маршрут-переадресація (корінь `/` веде на `login`): дивимось на сторінку, куди він веде.
+    if (typeof route?.redirectTo === 'string') {
+      route = find(route.redirectTo.replace(/^\//, ''));
+    }
+    return route?.data?.['layout'] === 'none';
   }
 
   private readCollapsed(): boolean {

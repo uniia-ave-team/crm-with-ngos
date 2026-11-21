@@ -4,14 +4,14 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent, DataTableSort } from './data-table.component';
-import { DataTableModule } from './data-table.module';
+import { DataTableComponent } from './data-table.component';
 
 @Component({
   template: `
-    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [highlightedRowId]="highlighted()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
+    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [highlightedRowId]="highlighted()" [defaultSortColumnId]="defaultSort()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
     <ng-template #custom let-row let-column="column"><b class="custom">{{ column.id }}:{{ row['title'] }}</b></ng-template>
   `,
-  imports: [DataTableModule],
+  imports: [DataTableComponent],
 })
 class HostComponent {
   readonly columns = signal<readonly DataTableColumn[]>([]);
@@ -20,6 +20,7 @@ class HostComponent {
   readonly rowMenuShown = signal(true);
   readonly addShown = signal(true);
   readonly highlighted = signal<string | null>(null);
+  readonly defaultSort = signal<string | null>(null);
   readonly opened: DataTableRowMenuEvent[] = [];
   columnAdds = 0;
   readonly sorts: (DataTableSort | null)[] = [];
@@ -148,6 +149,45 @@ describe('DataTableComponent', () => {
         click(ctx, 0);
       }
       expect(ctx.host.sorts.map((sort) => sort?.direction ?? null)).toEqual(['asc', 'desc', null, 'asc']);
+    });
+
+    describe('with a column the data is sorted by when nothing is chosen (defaultSortColumnId)', () => {
+      function renderSorted() {
+        const fixture = TestBed.createComponent(HostComponent);
+        fixture.componentInstance.columns.set(sortable);
+        fixture.componentInstance.rows.set(rows);
+        fixture.componentInstance.defaultSort.set('name');
+        fixture.detectChanges();
+        return { fixture, host: fixture.componentInstance, element: fixture.nativeElement as HTMLElement };
+      }
+
+      it('marks that header as sorted from the smallest from the start, without giving anything', () => {
+        const ctx = renderSorted();
+        expect(head(ctx.element, 0).classList).toContain('data-table__head--sorted');
+        expect(head(ctx.element, 0).getAttribute('aria-sort')).toBe('ascending');
+        expect(iconName(ctx.element, 0)).toBe('caret-down-outline');
+        expect(ctx.host.sorts).toEqual([]);
+      });
+
+      it('sorts the other way by the first click on that header, and goes back to it by the next one', () => {
+        const ctx = renderSorted();
+        click(ctx, 0);
+        expect(head(ctx.element, 0).getAttribute('aria-sort')).toBe('descending');
+        click(ctx, 0);
+        expect(head(ctx.element, 0).getAttribute('aria-sort')).toBe('ascending');
+        expect(ctx.host.sorts).toEqual([{ column: sortable[0], direction: 'desc' }, null]);
+      });
+
+      it('goes back to that header when the choice of another one is reset', () => {
+        const ctx = renderSorted();
+        click(ctx, 2);
+        expect(head(ctx.element, 0).classList).not.toContain('data-table__head--sorted');
+        click(ctx, 2);
+        click(ctx, 2);
+        expect(head(ctx.element, 2).classList).not.toContain('data-table__head--sorted');
+        expect(head(ctx.element, 0).getAttribute('aria-sort')).toBe('ascending');
+        expect(ctx.host.sorts.at(-1)).toBeNull();
+      });
     });
 
     it('keeps only one header selected: another click selects it and takes the choice from the first, from the first step', () => {

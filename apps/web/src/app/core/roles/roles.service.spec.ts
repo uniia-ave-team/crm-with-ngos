@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
+import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { Role, RolesService } from './roles.service';
 
@@ -12,7 +13,6 @@ describe('RolesService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
@@ -103,15 +103,6 @@ describe('RolesService', () => {
     expect(await result).toBe('error');
   });
 
-  it('stops after a limit of pages when the server keeps saying that there is one more', async () => {
-    const result = service.all();
-    for (let pageNumber = 1; pageNumber <= 50; pageNumber++) {
-      await vi.waitFor(() => page(pageNumber).flush({ items: [item(`r${pageNumber}`, `Роль ${pageNumber}`)], hasNextPage: true }));
-    }
-    expect(await result).toHaveLength(50);
-    http.expectNone((request) => request.params.get('PageNumber') === '51');
-  });
-
   describe('one role (GET /api/v1/roles/{id})', () => {
     const roleUrl = (id: string) => `${url}/${id}`;
 
@@ -165,9 +156,48 @@ describe('RolesService', () => {
     });
   });
 
+  it('stops after a limit of pages and fails instead of giving a part of the list, when the server keeps saying that there is one more', async () => {
+    const result = service.all();
+    for (let pageNumber = 1; pageNumber <= 50; pageNumber++) {
+      (await vi.waitFor(() => page(pageNumber))).flush({ items: [item(`r${pageNumber}`, `Роль ${pageNumber}`)], hasNextPage: true });
+    }
+    expect(await result).toBe('error');
+    http.expectNone((request) => request.url === url && request.params.get('PageNumber') === '51');
+  });
+
+  describe('delete (DELETE /roles/{id})', () => {
+    it('sends DELETE without a body to the role by its id (escaped) and tells that it is deleted', async () => {
+      const result = service.delete('a/b');
+      const request = http.expectOne(`${url}/a%2Fb`);
+      expect(request.request.method).toBe('DELETE');
+      expect(request.request.body).toBeNull();
+      request.flush(null, { status: 204, statusText: 'No Content' });
+      expect(await result).toBe('deleted');
+    });
+
+    it.each([
+      [400, 'invalid'],
+      [401, 'unauthorized'],
+      [403, 'forbidden'],
+      [404, 'error'],
+      [500, 'error'],
+    ] as const)('gives the reason when the server answers %s', async (status, failure) => {
+      const result = service.delete('r1');
+      http.expectOne(`${url}/r1`).flush(null, { status, statusText: 'Failure' });
+      expect(await result).toBe(failure);
+    });
+
+    it('reports an unreachable server', async () => {
+      const result = service.delete('r1');
+      http.expectOne(`${url}/r1`).error(new ProgressEvent('error'));
+      expect(await result).toBe('unreachable');
+    });
+  });
+
   describe('create (POST /roles, then POST /roles/{id}/claims/{claim} for every permission)', () => {
     const draft = { name: 'Куратор', feminitiveName: null, pluralName: 'Куратори' };
     const claimUrl = (id: string, claim: string) => `${url}/${id}/claims/${claim}`;
+    // Як відповідає сервер насправді: об'єкт `{ id }` (контракт обіцяє голий рядок).
     const created = (id = 'r1') => http.expectOne((request) => request.url === url && request.method === 'POST').flush({ id }, { status: 201, statusText: 'Created' });
     const nextClaim = (id: string, claim: string) => vi.waitFor(() => http.expectOne(claimUrl(id, claim)));
 
@@ -179,10 +209,23 @@ describe('RolesService', () => {
       expect(await result).toEqual({ id: 'r1', failedClaims: [] });
     });
 
-    it('takes the id from the answer given as a bare string too', async () => {
+    it('takes the bare id too, as the contract (openapi.json) describes the answer', async () => {
       const result = service.create(draft, []);
       http.expectOne((candidate) => candidate.url === url && candidate.method === 'POST').flush('r7', { status: 201, statusText: 'Created' });
       expect(await result).toEqual({ id: 'r7', failedClaims: [] });
+    });
+
+    it.each([
+      ['an object without the id', {}],
+      ['an object with an empty id', { id: '' }],
+      ['an object with an id that is not a string', { id: 7 }],
+      ['an empty string', ''],
+      ['nothing', null],
+    ])('fails when the answer is %s, and gives no permissions', async (_name, body) => {
+      const result = service.create(draft, ['Permissions.ViewUser']);
+      http.expectOne((candidate) => candidate.url === url && candidate.method === 'POST').flush(body, { status: 201, statusText: 'Created' });
+      expect(await result).toBe('error');
+      http.expectNone((candidate) => candidate.url.includes('/claims/'));
     });
 
     it('adds every permission by its own request without a body, one after another, and tells that all were added', async () => {
@@ -253,6 +296,23 @@ describe('RolesService', () => {
     const claimUrl = (id: string, claim: string) => `${url}/${id}/claims/${claim}`;
     const noContent = { status: 204, statusText: 'No Content' };
     const next = (urlText: string) => vi.waitFor(() => http.expectOne(urlText));
+
+    it('sends every request of the update to the server where it started, even when another account becomes active meanwhile', async () => {
+      const accounts = TestBed.inject(AccountsService);
+      // Сервер, на який дивиться `url`: беремо до того, як зʼявиться активний акаунт на іншому.
+      const server = TestBed.inject(ConnectionService).serverUrl();
+      const other = accounts.add({ server: 'http://other.example:5065', accessToken: 'a2', refreshToken: 'r2', identity: 'other' });
+      accounts.add({ server, accessToken: 'a', refreshToken: 'r', identity: 'own' });
+
+      const result = service.update('r1', draft, { add: ['Permissions.ViewUser'], remove: ['Permissions.ViewNgo'] });
+      accounts.setActive(other.id);
+      http.expectOne(roleUrl('r1')).flush(null, noContent);
+      (await next(claimUrl('r1', 'Permissions.ViewUser'))).flush(null, noContent);
+      (await next(claimUrl('r1', 'Permissions.ViewNgo'))).flush(null, noContent);
+
+      expect(await result).toEqual({ failedClaims: [] });
+      http.expectNone((request) => request.url.startsWith('http://other.example:5065'));
+    });
 
     it('puts the new names in the body of the request, as newName, feminitiveName and pluralName', async () => {
       const result = service.update('r1', draft, { add: [], remove: [] });

@@ -1,8 +1,8 @@
-/** Роль користувача в його профілі (`roles` відповіді `/users/me`). */
-export interface UserRole {
-  id: string;
-  name: string;
-}
+import { RoleUserDto, UserProfileDto } from '../../api/generated/models';
+import { Untrusted } from '../http/api-contract';
+
+/** Роль користувача в його профілі (`roles` відповіді `/users/me`): тип із контракту. */
+export type UserRole = RoleUserDto;
 
 /** Ролі з відповіді чи зі сховища: лише елементи з рядковими `id` й `name`, не масив — порожньо. */
 export function sanitizeRoles(value: unknown): readonly UserRole[] {
@@ -16,21 +16,47 @@ export function sanitizeRoles(value: unknown): readonly UserRole[] {
 }
 
 /**
- * Профіль поточного користувача (`GET /api/v1/users/me`).
- * Поля, які ще не потрібні, не описано.
+ * Профіль поточного користувача (`GET /api/v1/users/me`): поля контракту (`UserProfileDto`), які
+ * застосунок читає. Імена й типи беруться з контракту, тож якщо сервер перейменує чи прибере
+ * поле, збірка впаде. Обовʼязкові лише `id`, пошта, імена й ролі; решта може бути відсутня
+ * (сервер іншої версії) і тому необовʼязкова. Додаткових полів (`customFields`) тут нема: їх
+ * показує лише таблиця колег.
  */
-export interface UserProfile {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  patronymic?: string | null;
-  phoneNumber?: string | null;
-  country?: string | null;
-  emergencyContact?: string | null;
-  preferredLanguage?: string | null;
-  pronouns?: string | null;
-  avatarUrl?: string | null;
-  roles: UserRole[];
-  customFields: unknown[];
+export type UserProfile = Pick<UserProfileDto, 'id' | 'email' | 'firstName' | 'lastName' | 'roles'> &
+  Partial<
+    Pick<
+      UserProfileDto,
+      'patronymic' | 'phoneNumber' | 'country' | 'emergencyContact' | 'preferredLanguage' | 'pronouns' | 'avatarUrl'
+    >
+  >;
+
+/**
+ * Профіль із відповіді `GET /api/v1/users/me`; `null` — відповідь не за контрактом: `id` не
+ * рядок чи порожній, або пошта чи імена не рядки. Ролі — лише придатні (`sanitizeRoles`).
+ * Необовʼязкові поля, що прийшли не того типу, відкидаються, ніби їх нема.
+ */
+export function toUserProfile(body: Untrusted<UserProfileDto>): UserProfile | null {
+  const { id, email, firstName, lastName } = body ?? {};
+  if (typeof id !== 'string' || !id || typeof email !== 'string' || typeof firstName !== 'string' || typeof lastName !== 'string') {
+    return null;
+  }
+  const profile: UserProfile = { id, email, firstName, lastName, roles: [...sanitizeRoles(body?.roles)] };
+  for (const field of OPTIONAL_TEXT_FIELDS) {
+    const value = body?.[field];
+    if (typeof value === 'string' || value === null) {
+      profile[field] = value;
+    }
+  }
+  return profile;
 }
+
+/** Необовʼязкові поля профілю: кожне — рядок або `null`. */
+const OPTIONAL_TEXT_FIELDS = [
+  'patronymic',
+  'phoneNumber',
+  'country',
+  'emergencyContact',
+  'preferredLanguage',
+  'pronouns',
+  'avatarUrl',
+] as const satisfies readonly (keyof UserProfile)[];

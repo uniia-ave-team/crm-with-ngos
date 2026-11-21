@@ -5,10 +5,12 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
+import { IMAGE_MAX_BYTES } from '../../core/images/image-types';
+import { withImageTypes, withImageSize } from '../../core/images/image-types.testing';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { ConnectionService } from '../../core/connection/connection.service';
-import { AdminPanelPageModule } from '../admin-panel.module';
 import { AdminImagesGalleryComponent } from './images-gallery.component';
+import { addAccountWithSnapshot } from '../../core/accounts/accounts.testing';
 
 // Тексти живуть в uk.json — беремо їх звідти, а не дублюємо.
 const text = uk.admin.images;
@@ -32,11 +34,10 @@ describe('AdminImagesGalleryComponent', () => {
     (URL as unknown as Record<string, unknown>)['createObjectURL'] = createUrl;
     (URL as unknown as Record<string, unknown>)['revokeObjectURL'] = revokeUrl;
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [AdminPanelPageModule],
+      imports: [AdminImagesGalleryComponent],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);
@@ -87,7 +88,7 @@ describe('AdminImagesGalleryComponent', () => {
     permissions: string[] = [VIEW_IMAGES, CREATE_IMAGES, DELETE_IMAGES],
     options: { count?: number; failure?: number } = {},
   ) {
-    TestBed.inject(AccountsService).add({ server, accessToken: 'a', refreshToken: 'r', identity: 'u1', permissions });
+    addAccountWithSnapshot(TestBed.inject(AccountsService), { server, accessToken: 'a', refreshToken: 'r', identity: 'u1' }, { permissions });
     const fixture = TestBed.createComponent(AdminImagesGalleryComponent);
     fixture.detectChanges();
     if (permissions.includes(VIEW_IMAGES)) {
@@ -122,7 +123,7 @@ describe('AdminImagesGalleryComponent', () => {
     });
 
     it('asks for the first page of 20 only', async () => {
-      TestBed.inject(AccountsService).add({ server, accessToken: 'a', refreshToken: 'r', identity: 'u1', permissions: [VIEW_IMAGES] });
+      addAccountWithSnapshot(TestBed.inject(AccountsService), { server, accessToken: 'a', refreshToken: 'r', identity: 'u1' }, { permissions: [VIEW_IMAGES] });
       const fixture = TestBed.createComponent(AdminImagesGalleryComponent);
       fixture.detectChanges();
 
@@ -179,7 +180,7 @@ describe('AdminImagesGalleryComponent', () => {
 
     /** Першу сторінку (20) віддає сервер із ознакою наступної. */
     async function openWithNextPage(permissions = [VIEW_IMAGES, CREATE_IMAGES, DELETE_IMAGES]) {
-      TestBed.inject(AccountsService).add({ server, accessToken: 'a', refreshToken: 'r', identity: 'u1', permissions });
+      addAccountWithSnapshot(TestBed.inject(AccountsService), { server, accessToken: 'a', refreshToken: 'r', identity: 'u1' }, { permissions });
       const fixture = TestBed.createComponent(AdminImagesGalleryComponent);
       fixture.detectChanges();
       (await vi.waitFor(() => pageRequest(1))).flush(page(serverImages(20), true));
@@ -253,7 +254,7 @@ describe('AdminImagesGalleryComponent', () => {
       Object.defineProperty(proto, 'clientWidth', { value: 800, configurable: true });
       Object.defineProperty(proto, 'scrollWidth', { value: 500, configurable: true });
       try {
-        TestBed.inject(AccountsService).add({ server, accessToken: 'a', refreshToken: 'r', identity: 'u1', permissions: [VIEW_IMAGES] });
+        addAccountWithSnapshot(TestBed.inject(AccountsService), { server, accessToken: 'a', refreshToken: 'r', identity: 'u1' }, { permissions: [VIEW_IMAGES] });
         const fixture = TestBed.createComponent(AdminImagesGalleryComponent);
         fixture.detectChanges();
         (await vi.waitFor(() => pageRequest(1))).flush(page(serverImages(3), true));
@@ -402,7 +403,7 @@ describe('AdminImagesGalleryComponent', () => {
     });
 
     it('does not show it before the answer of the server either', async () => {
-      TestBed.inject(AccountsService).add({ server, accessToken: 'a', refreshToken: 'r', identity: 'u1', permissions: [VIEW_IMAGES] });
+      addAccountWithSnapshot(TestBed.inject(AccountsService), { server, accessToken: 'a', refreshToken: 'r', identity: 'u1' }, { permissions: [VIEW_IMAGES] });
       const fixture = TestBed.createComponent(AdminImagesGalleryComponent);
       fixture.detectChanges();
       await vi.waitFor(() => http.expectOne((r) => r.url === listUrl()));
@@ -518,7 +519,7 @@ describe('AdminImagesGalleryComponent', () => {
 
   it('only offers the image types the server accepts', async () => {
     const { element } = await render();
-    expect(fileInput(element).accept).toBe('image/png,image/webp,image/jpeg,image/gif');
+    expect(fileInput(element).accept).toBe('image/png,image/webp,image/jpeg,image/gif,image/bmp,image/svg+xml');
   });
 
   it('appends a chosen image to the end of the images', async () => {
@@ -534,6 +535,16 @@ describe('AdminImagesGalleryComponent', () => {
     expect(Array.from(track.children).filter((c) => c.tagName !== 'INPUT').pop()?.classList.contains('gallery__add')).toBe(true);
   });
 
+  it('rejects a file larger than the server takes, with the size in the error', async () => {
+    const { fixture, element } = await render();
+    choose(element, new File([new Uint8Array(IMAGE_MAX_BYTES + 1)], 'big.png', { type: 'image/png' }));
+    fixture.detectChanges();
+
+    expect(items(element)).toHaveLength(10);
+    expect(createUrl).not.toHaveBeenCalled();
+    expect(element.querySelector('.settings-field__error')?.textContent?.trim()).toBe(withImageSize(text.error.size));
+  });
+
   it('rejects a file that is not an accepted image, with the error from the language file', async () => {
     const { fixture, element } = await render();
     choose(element, new File(['x'], 'doc.pdf', { type: 'application/pdf' }));
@@ -541,7 +552,7 @@ describe('AdminImagesGalleryComponent', () => {
 
     expect(items(element)).toHaveLength(10);
     expect(createUrl).not.toHaveBeenCalled();
-    expect(element.querySelector('.settings-field__error')?.textContent?.trim()).toBe(text.error.type);
+    expect(element.querySelector('.settings-field__error')?.textContent?.trim()).toBe(withImageTypes(text.error.type, 'and'));
 
     choose(element, new File([new Uint8Array(5)], 'ok.png', { type: 'image/png' }));
     fixture.detectChanges();
@@ -628,13 +639,11 @@ describe('AdminImagesGalleryComponent', () => {
     });
 
     it('does not show the deleted images any more, even when more pages are received', async () => {
-      TestBed.inject(AccountsService).add({
-        server,
-        accessToken: 'a',
-        refreshToken: 'r',
-        identity: 'u1',
-        permissions: [VIEW_IMAGES, DELETE_IMAGES],
-      });
+      addAccountWithSnapshot(
+        TestBed.inject(AccountsService),
+        { server, accessToken: 'a', refreshToken: 'r', identity: 'u1' },
+        { permissions: [VIEW_IMAGES, DELETE_IMAGES] },
+      );
       const fixture = TestBed.createComponent(AdminImagesGalleryComponent);
       fixture.detectChanges();
       (await vi.waitFor(() => pageRequest(1))).flush(page(serverImages(2), true));
@@ -660,6 +669,43 @@ describe('AdminImagesGalleryComponent', () => {
     describe('save()', () => {
       const delUrl = (id: string) => `${listUrl()}/${id}`;
       const noContent = { status: 204, statusText: 'No Content' };
+
+      it('resets the list after saving: a page that was still on its way is dropped, and the list starts from the first page', async () => {
+        addAccountWithSnapshot(
+          TestBed.inject(AccountsService),
+          { server, accessToken: 'a', refreshToken: 'r', identity: 'u1' },
+          { permissions: [VIEW_IMAGES, DELETE_IMAGES] },
+        );
+        const fixture = TestBed.createComponent(AdminImagesGalleryComponent);
+        fixture.detectChanges();
+        (await vi.waitFor(() => pageRequest(1))).flush(page(serverImages(2), true));
+        await vi.waitFor(() => expect(state(fixture).loading()).toBe(false));
+        fixture.detectChanges();
+        const element = fixture.nativeElement as HTMLElement;
+
+        // Користувач прокрутив до кінця — пішов запит другої сторінки…
+        const track = element.querySelector('.gallery__track') as HTMLElement;
+        Object.defineProperty(track, 'scrollWidth', { value: 3500, configurable: true });
+        Object.defineProperty(track, 'clientWidth', { value: 800, configurable: true });
+        track.scrollLeft = 2500;
+        track.dispatchEvent(new Event('scroll'));
+        const secondPage = await vi.waitFor(() => pageRequest(2));
+
+        // …а тим часом видалив зображення й зберіг.
+        removeButton(element, 0).click();
+        fixture.detectChanges();
+        const saving = (fixture.componentInstance as unknown as { save(): Promise<unknown> }).save();
+        (await vi.waitFor(() => http.expectOne(delUrl('id-1')))).flush(null, noContent);
+        const firstPageAgain = await vi.waitFor(() => pageRequest(1));
+
+        // Запізніла друга сторінка старого списку — відкидається.
+        secondPage.flush(page([{ id: 'id-7', url: '/files/login/7.jpg' }]));
+        firstPageAgain.flush(page([{ id: 'id-2', url: '/files/login/2.jpg' }]));
+        await saving;
+        await vi.waitFor(() => expect(state(fixture).loading()).toBe(false));
+
+        expect(lists(fixture).system.map((i) => i.id)).toEqual(['id-2']);
+      });
       const save = (fixture: { componentInstance: unknown }) =>
         (fixture.componentInstance as unknown as { save(): Promise<string> }).save();
       /** Відповідає на перезавантаження списку після збереження. */
@@ -736,7 +782,7 @@ describe('AdminImagesGalleryComponent', () => {
         expect(lists(fixture).deleted).toEqual([]);
       });
 
-      it('stops deleting at the first failed deletion, reports it and keeps the unsent ones in the lists', async () => {
+      it('stops deleting at the first failed deletion, reports it, and then resets the gallery: the unsent ones are forgotten', async () => {
         const { fixture, element } = await render([VIEW_IMAGES, DELETE_IMAGES], { count: 3 });
         removeButton(element, 0).click();
         fixture.detectChanges();
@@ -748,12 +794,13 @@ describe('AdminImagesGalleryComponent', () => {
         const done = save(fixture);
         (await vi.waitFor(() => http.expectOne(delUrl('id-1')))).flush(null, noContent);
         (await vi.waitFor(() => http.expectOne(delUrl('id-2')))).flush({}, { status: 403, statusText: 'Forbidden' });
-        // Перший видалився — список отримується заново; другий і третій лишаються.
+        // Після відповіді галерея скидається й отримує список заново — і після невдачі.
         await answerReload(2);
 
         expect(await done).toBe('forbidden');
         http.expectNone(delUrl('id-3'));
-        expect(lists(fixture).deleted.map((i) => i.id)).toEqual(['id-2', 'id-3']);
+        expect(lists(fixture).deleted).toEqual([]);
+        expect(lists(fixture).system.map((i) => i.id)).toEqual(['id-1', 'id-2']);
       });
 
       it('uploads the added files even when a deletion failed: they depend only on CreateLoginPageImages', async () => {
@@ -772,7 +819,7 @@ describe('AdminImagesGalleryComponent', () => {
         // Помилка видалення — перша невдача — і є результатом; завантаження все одно зроблено.
         expect(await done).toBe('error');
         expect(lists(fixture).added).toEqual([]);
-        expect(lists(fixture).deleted.map((i) => i.id)).toEqual(['id-1']);
+        expect(lists(fixture).deleted).toEqual([]);
       });
 
       it('deletes even when an upload failed: deletions depend only on DeleteLoginPageImages', async () => {
@@ -792,7 +839,7 @@ describe('AdminImagesGalleryComponent', () => {
 
         expect(await done).toBe('invalid');
         expect(lists(fixture).deleted).toEqual([]);
-        expect(lists(fixture).added).toHaveLength(1);
+        expect(lists(fixture).added).toEqual([]);
       });
 
       it('sends only the deletions for a user who can delete but not add', async () => {
@@ -822,7 +869,7 @@ describe('AdminImagesGalleryComponent', () => {
         http.expectNone((r) => r.method === 'DELETE');
       });
 
-      it('does not repeat what was done when the user saves again after a failure', async () => {
+      it('has nothing to send again after a failure: the gallery is reset, and the user starts from the fresh list', async () => {
         const { fixture, element } = await render([VIEW_IMAGES, DELETE_IMAGES], { count: 3 });
         removeButton(element, 0).click();
         fixture.detectChanges();
@@ -835,11 +882,8 @@ describe('AdminImagesGalleryComponent', () => {
         await answerReload(2);
         expect(await first).toBe('error');
 
-        const second = save(fixture);
-        http.expectNone(delUrl('id-1'));
-        (await vi.waitFor(() => http.expectOne(delUrl('id-2')))).flush(null, noContent);
-        await answerReload(1);
-        expect(await second).toBe('saved');
+        expect(await save(fixture)).toBe('nothing');
+        http.expectNone((r) => r.method === 'DELETE');
       });
 
       it('reports a failure of an upload', async () => {
@@ -852,10 +896,31 @@ describe('AdminImagesGalleryComponent', () => {
           {},
           { status: 400, statusText: 'Bad Request' },
         );
+        // Навіть коли нічого не вдалося, галерея скидається й отримує список заново.
+        await answerReload(1);
         expect(await done).toBe('invalid');
-        expect(lists(fixture).added).toHaveLength(1);
-        // Нічого не вдалося — список із сервера не перезавантажуємо.
-        http.expectNone((r) => r.method === 'GET');
+        expect(lists(fixture).added).toEqual([]);
+        expect(revokeUrl).toHaveBeenCalledWith('blob:http://localhost/image-1');
+      });
+
+      it('shows a preloader instead of the row while it is saving', async () => {
+        const { fixture, element } = await render([VIEW_IMAGES, DELETE_IMAGES], { count: 2 });
+        removeButton(element, 0).click();
+        fixture.detectChanges();
+
+        const done = save(fixture);
+        fixture.detectChanges();
+        expect(items(element)).toHaveLength(0);
+        const loader = element.querySelector('.gallery__loading');
+        expect(loader?.getAttribute('aria-label')).toBe(text.saving);
+        expect(loader?.querySelector('ion-spinner')).not.toBeNull();
+
+        (await vi.waitFor(() => http.expectOne(delUrl('id-1')))).flush(null, noContent);
+        await answerReload(1);
+        await done;
+        await vi.waitFor(() => expect(state(fixture).loading()).toBe(false));
+        fixture.detectChanges();
+        expect(items(element)).toHaveLength(1);
       });
 
       it('does not send what the user has no right to send', async () => {

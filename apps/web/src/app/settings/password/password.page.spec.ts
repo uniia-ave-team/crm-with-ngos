@@ -6,7 +6,6 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { ConnectionService } from '../../core/connection/connection.service';
-import { SettingsPageModule } from '../settings.module';
 import { PasswordPage } from './password.page';
 
 // Тексти сторінки живуть в uk.json — беремо їх звідти, а не дублюємо.
@@ -29,11 +28,10 @@ describe('PasswordPage', () => {
 
   beforeEach(async () => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await TestBed.configureTestingModule({
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
-      imports: [SettingsPageModule],
+      imports: [PasswordPage],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);
@@ -96,7 +94,7 @@ describe('PasswordPage', () => {
         (s) => s.textContent?.trim(),
       );
       expect(texts).toEqual([
-        requirements.length,
+        requirements.length.replace('{{count}}', '8'),
         requirements.lowercase,
         requirements.uppercase,
         requirements.digit,
@@ -106,8 +104,13 @@ describe('PasswordPage', () => {
     });
 
     it('gives the controls a tabindex (Safari does not tab to the fields without it)', () => {
-      for (const control of Array.from(element.querySelectorAll('input, ion-input, button'))) {
-        expect(control.getAttribute('tabindex')).toBe('0');
+      // ion-input переносить tabindex зі свого елемента на внутрішнє поле, яке малює сам: рахуємо
+      // його один раз, де б tabindex не стояв у цю мить.
+      const controls = Array.from(element.querySelectorAll('input, ion-input, button')).filter((control) => !control.parentElement?.closest('ion-input'));
+      expect(controls.length).toBeGreaterThan(0);
+      for (const control of controls) {
+        const focusable = control.matches('ion-input') ? (control.querySelector('input[tabindex]') ?? control) : control;
+        expect(focusable.getAttribute('tabindex')).toBe('0');
       }
     });
 
@@ -136,6 +139,25 @@ describe('PasswordPage', () => {
       await submit();
       expect(errors()).toEqual([text.error.passwordWeak]);
       http.expectNone(passwordUrl);
+    });
+
+    it('checks the new password by the policy of the server: a longer length there, and no special character needed', async () => {
+      const options = http.expectOne(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/system/identity-options`);
+      options.flush({ requiredLength: 10, requireDigit: true, requireNonAlphanumeric: false, requireUppercase: true, requireLowercase: true, requireUniqueEmail: true });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelector('.password-fields__requirement-icon')?.textContent?.trim()).toBe('10');
+      });
+
+      fill({ current: 'Old1!aaa', password: 'New1!bb', repeat: 'New1!bb' });
+      await submit();
+      expect(errors()).toEqual([text.error.passwordWeak]);
+
+      fill({ current: 'Old1!aaa', password: 'Newpass123', repeat: 'Newpass123' });
+      const done = submit();
+      expect(errors()).toEqual([]);
+      http.expectOne(passwordUrl).flush(null, { status: 204, statusText: 'No Content' });
+      await done;
     });
 
     it('rejects a new password equal to the current one, under the new password field', async () => {

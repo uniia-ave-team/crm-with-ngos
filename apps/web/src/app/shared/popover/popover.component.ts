@@ -1,9 +1,9 @@
-import { Component, DestroyRef, Signal, computed, inject, input, output, signal } from '@angular/core';
+import { Component, DestroyRef, Injector, Signal, afterNextRender, computed, inject, input, output, signal } from '@angular/core';
+import { IonPopover } from '@ionic/angular';
+
+import { ClosingWaiters } from '../overlay/closing-waiters';
 
 let nextAnchorId = 0;
-
-/** Скільки (мс) чекаємо завершення анімації закриття, перш ніж вважати вікно закритим. */
-const CLOSE_TIMEOUT_MS = 1000;
 
 /** Бік відносно елемента, до якого прив'язано вікно (як у `ion-popover`). */
 export type PopoverSide = 'top' | 'bottom' | 'start' | 'end' | 'left' | 'right';
@@ -30,7 +30,7 @@ export type PopoverAlignment = 'start' | 'center' | 'end';
   selector: 'app-popover',
   templateUrl: './popover.component.html',
   styleUrls: ['./popover.component.scss'],
-  standalone: false,
+  imports: [IonPopover],
 })
 export class PopoverComponent {
   /** Бік вікна на широких екранах. */
@@ -58,8 +58,14 @@ export class PopoverComponent {
 
   private readonly openSignal = signal(false);
   /** Ті, хто чекає завершення закриття (`close()`). */
-  private closeWaiters: Array<() => void> = [];
+  private readonly closing = new ClosingWaiters();
   readonly isOpen: Signal<boolean> = this.openSignal.asReadonly();
+
+  private readonly injector = inject(Injector);
+  /** Ionic закриває вікно: між `willDismiss` і `didDismiss`. */
+  private dismissing = false;
+  /** Елемент, біля якого вікно попросили відкрити знову, поки воно ще закривалося. */
+  private reopenAnchor: HTMLElement | null = null;
 
   /** `id` елемента, до якого вікно прив'язано, поки воно відкрите (`ion-popover` прив'язується за `trigger`). */
   protected readonly anchorId = signal<string | undefined>(undefined);
@@ -117,6 +123,12 @@ export class PopoverComponent {
     if (!element.id) {
       element.id = `app-popover-anchor-${++nextAnchorId}`;
     }
+    if (this.dismissing) {
+      // Вікно ще закривається: відкриємо знову, щойно закриється (`onDismissed`). Якщо змінити
+      // стан зараз, Ionic відкрив би вікно, а запізніле завершення закриття одразу його закрило б.
+      this.reopenAnchor = element;
+      return;
+    }
     this.viewportWidth.set(window.innerWidth);
     this.openedViewport = { width: window.innerWidth, height: window.innerHeight };
     this.anchorId.set(element.id);
@@ -125,7 +137,7 @@ export class PopoverComponent {
 
   /**
    * Закриває вікно. Проміс виконується, коли анімацію закриття завершено (або
-   * минув `CLOSE_TIMEOUT_MS`): якщо одразу після закриття прибрати сторінку (наприклад,
+   * минув `CLOSE_TIMEOUT_MS` з `ClosingWaiters`): якщо одразу після закриття прибрати сторінку (наприклад,
    * перейти на /login), вікно, що ще закривається, лишилося б висіти без стилів.
    */
   close(): Promise<void> {
@@ -134,30 +146,45 @@ export class PopoverComponent {
     }
     this.openSignal.set(false);
     this.openedViewport = null;
-    return new Promise((resolve) => {
-      const timer = setTimeout(done, CLOSE_TIMEOUT_MS);
-      const waiters = this.closeWaiters;
-      function done(): void {
-        clearTimeout(timer);
-        resolve();
-      }
-      waiters.push(done);
-    });
+    return this.closing.wait();
   }
 
   protected onPresented(): void {
     this.opened.emit();
   }
 
+  /**
+   * Ionic почав закривати вікно (Esc, клацання поза ним чи `close()`). Прив'язку знімаємо вже
+   * тепер: інакше клацання по елементу під час анімації ion-popover обробив би сам, в обхід
+   * `open()`, і стан компонента розійшовся б із вікном.
+   */
+  protected onWillDismiss(): void {
+    this.dismissing = true;
+    this.anchorId.set(undefined);
+  }
+
   protected onDismissed(): void {
+    // Закрилося саме (Esc, клацання поза вікном): ion-popover досі має `isOpen` = true.
+    const closedByIonic = this.openSignal();
+    this.dismissing = false;
     this.openSignal.set(false);
     this.openedViewport = null;
     // Без прив'язки ion-popover не слухає клацань по елементу: наступне
     // відкриття знову йде через open().
     this.anchorId.set(undefined);
-    const waiters = this.closeWaiters;
-    this.closeWaiters = [];
-    waiters.forEach((done) => done());
+    this.closing.settle();
     this.closed.emit();
+
+    const reopen = this.reopenAnchor;
+    this.reopenAnchor = null;
+    if (reopen) {
+      // Під час закриття вікно попросили відкрити знову. Якщо закрив його сам Ionic, спершу
+      // має дійти `isOpen` = false (після рендеру), інакше нове `true` він не помітить.
+      if (closedByIonic) {
+        afterNextRender(() => this.open(reopen), { injector: this.injector });
+      } else {
+        this.open(reopen);
+      }
+    }
   }
 }

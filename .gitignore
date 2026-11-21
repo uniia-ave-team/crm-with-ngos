@@ -27,3 +27,5 @@ artifacts/
 TestResults/
 
 # --- Angular / Ionic (apps/web): see apps/web/.gitignore ---------------------
+# The Angular CLI also writes its build cache here when it runs from the repo root.
+/.angular/

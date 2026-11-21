@@ -2,27 +2,20 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
+import { CreateUserCommand, PagedResultOfUserDto, UpdatePasswordRequest, UpdateProfileRequest, UserDto } from '../../api/generated/models';
 import { ConnectionService } from '../connection/connection.service';
+import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
+import { REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from '../http/timeouts';
 import { UserRole, sanitizeRoles } from './user-profile';
 
 const API_USERS_PATH = '/api/v1/users';
-const REQUEST_TIMEOUT_MS = 10000;
-/** Завантаження файлу триває довше за звичайний запит. */
-const UPLOAD_TIMEOUT_MS = 60000;
 
-export interface NewUser {
-  firstName: string;
-  lastName: string;
-  /** По батькові; необовʼязкове (`null` — не вказано), але поле в запиті обовʼязкове. */
-  patronymic: string | null;
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
+/** Тіло `POST /api/v1/users`: по батькові необовʼязкове (`null` — не вказано), але поле в запиті обовʼязкове. */
+export type NewUser = CreateUserCommand;
 
 /**
- * Колега зі списку `GET /api/v1/users`. Поля після прізвища (телефон, країна,
+ * Колега зі списку `GET /api/v1/users`. Поля після прізвища (по батькові, телефон, країна,
  * екстрений контакт, займенники з категорією, аватар, ролі) сервер віддає не в усіх
  * версіях: якщо відповідь їх не містить (чи вони не того типу), вони `null` / порожній
  * список (`toUserSummary`), і таблиця показує свої запасні значення.
@@ -32,6 +25,8 @@ export interface UserSummary {
   readonly email: string;
   readonly firstName: string;
   readonly lastName: string;
+  /** По батькові; `null` — нема. */
+  readonly patronymic: string | null;
   readonly phoneNumber: string | null;
   readonly country: string | null;
   readonly emergencyContact: string | null;
@@ -64,21 +59,11 @@ export type UpdateProfileResult = 'updated' | RequestFailure;
 export type UploadAvatarResult = 'uploaded' | RequestFailure;
 
 /**
- * Тіло `PUT /api/v1/users/me`: сервер вимагає всі поля (кожне — рядок або
- * `null`). Категорія займенників — число з `PronounCategory`. Аватара тут
- * нема: він завантажується окремо (`uploadAvatar`).
+ * Тіло `PUT /api/v1/users/me`: сервер вимагає всі поля (імʼя й прізвище — рядки, решта —
+ * рядок або `null`). Категорія займенників — число з `PronounCategory`. Аватара тут нема:
+ * він завантажується окремо (`uploadAvatar`).
  */
-export interface ProfileUpdate {
-  firstName: string | null;
-  lastName: string | null;
-  patronymic: string | null;
-  phoneNumber: string | null;
-  country: string | null;
-  emergencyContact: string | null;
-  preferredLanguage: string | null;
-  pronouns: string | null;
-  pronounCategory: number | null;
-}
+export type ProfileUpdate = UpdateProfileRequest;
 
 @Injectable({ providedIn: 'root' })
 export class UsersService {
@@ -88,11 +73,9 @@ export class UsersService {
   /** `POST <сервер>/api/v1/users` — створення користувача (першого адміна). */
   async create(user: NewUser): Promise<CreateUserResult> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}`;
-    console.log(`[UsersService] Створюю користувача: ${url}`);
 
     try {
       await firstValueFrom(this.http.post(url, user).pipe(timeout(REQUEST_TIMEOUT_MS)));
-      console.log('[UsersService] Користувача створено');
       return 'created';
     } catch (error) {
       const failure = toRequestFailure(error);
@@ -104,30 +87,30 @@ export class UsersService {
   /**
    * `GET <сервер>/api/v1/users?PageNumber=&PageSize=[&OrderBy=&SortOrder=]` — одна
    * сторінка колег (потрібне право `ViewUser`). Сортування (`sort`) передається
-   * лише коли воно є й має непорожній `orderBy`: без нього сервер сортує за
-   * замовчуванням (за імʼям). Елементи без `id` пропускаються; відсутні імена й пошта —
+   * лише коли воно є й має непорожній `orderBy`. Без нього сервер сортує за `id`, тобто
+   * у випадковому для людини порядку, тож сторінка колег завжди передає своє (за
+   * замовчуванням — за ПІБ). Елементи без `id` пропускаються; відсутні імена й пошта —
    * порожні рядки. Повертає сторінку або причину невдачі; відповідь без списку
    * `items` вважається помилкою. Токен додає `authInterceptor`.
    */
   async list(pageNumber: number, pageSize: number, sort: UsersSort | null = null): Promise<UsersPage | RequestFailure> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}`;
-    console.log(`[UsersService] Запитую колег (сторінка ${pageNumber}, по ${pageSize}): ${url}`);
 
     try {
       let params = new HttpParams().set('PageNumber', pageNumber).set('PageSize', pageSize);
       if (sort?.orderBy.trim()) {
         params = params.set('OrderBy', sort.orderBy.trim()).set('SortOrder', sort.sortOrder);
       }
-      const body = await firstValueFrom(this.http.get<Record<string, unknown>>(url, { params }).pipe(timeout(REQUEST_TIMEOUT_MS)));
-      if (!Array.isArray(body?.['items'])) {
+      const body = await firstValueFrom(this.http.get<Untrusted<PagedResultOfUserDto>>(url, { params }).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      if (!Array.isArray(body?.items)) {
         console.warn('[UsersService] Відповідь без списку колег', body);
         return 'error';
       }
-      const items = (body['items'] as (Record<string, unknown> | null)[]).flatMap((item) => {
+      const items = (body.items as Untrusted<UserDto>[]).flatMap((item) => {
         const user = toUserSummary(item);
         return user ? [user] : [];
       });
-      return { items, hasNextPage: body['hasNextPage'] === true };
+      return { items, hasNextPage: body.hasNextPage === true };
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[UsersService] Не вдалося отримати колег (${failure})`, error);
@@ -143,7 +126,6 @@ export class UsersService {
    */
   async getMyPermissions(): Promise<string[] | RequestFailure> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/permissions`;
-    console.log(`[UsersService] Запитую права поточного користувача: ${url}`);
 
     try {
       const body = await firstValueFrom(this.http.get<unknown>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
@@ -166,11 +148,9 @@ export class UsersService {
    */
   async updateProfile(profile: ProfileUpdate): Promise<UpdateProfileResult> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me`;
-    console.log(`[UsersService] Оновлюю профіль користувача: ${url}`);
 
     try {
       await firstValueFrom(this.http.put(url, profile).pipe(timeout(REQUEST_TIMEOUT_MS)));
-      console.log('[UsersService] Профіль оновлено');
       return 'updated';
     } catch (error) {
       const failure = toRequestFailure(error);
@@ -187,13 +167,11 @@ export class UsersService {
    */
   async uploadAvatar(file: File): Promise<UploadAvatarResult> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/avatar`;
-    console.log(`[UsersService] Завантажую аватар: ${url}`);
 
     try {
       const form = new FormData();
       form.append('file', file, file.name);
       await firstValueFrom(this.http.post(url, form).pipe(timeout(UPLOAD_TIMEOUT_MS)));
-      console.log('[UsersService] Аватар завантажено');
       return 'uploaded';
     } catch (error) {
       const failure = toRequestFailure(error);
@@ -209,11 +187,9 @@ export class UsersService {
    */
   async changePassword(currentPassword: string, newPassword: string): Promise<ChangePasswordResult> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/password`;
-    console.log(`[UsersService] Змінюю пароль: ${url}`);
 
     try {
-      await firstValueFrom(this.http.post(url, { currentPassword, newPassword }).pipe(timeout(REQUEST_TIMEOUT_MS)));
-      console.log('[UsersService] Пароль змінено');
+      await firstValueFrom(this.http.post(url, { currentPassword, newPassword } satisfies UpdatePasswordRequest).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return 'changed';
     } catch (error) {
       const failure = toRequestFailure(error);
@@ -224,32 +200,34 @@ export class UsersService {
   }
 }
 
-/**
- * Колега з елемента списку; без `id` — `null`. Поля, яких список поки не віддає,
- * тут сталі (`null` й порожній список): коли сервер почне їх віддавати, їх
- * читають звідси з `item`, а таблиця колег лишається як є.
- */
 /** Рядок із відповіді або `null`, якщо його нема (чи він не рядок, чи порожній). */
 function optionalText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
-function toUserSummary(item: Record<string, unknown> | null): UserSummary | null {
-  if (typeof item?.['id'] !== 'string') {
+/**
+ * Колега з елемента списку; без `id` — `null` (такий елемент пропускається). Сервер іншої
+ * версії може не віддати якесь поле або віддати не того типу: імена й пошта тоді — порожні
+ * рядки, решта — `null`, ролі — порожній список. Таблиця колег на місці `null` показує свої
+ * запасні значення.
+ */
+function toUserSummary(item: Untrusted<UserDto>): UserSummary | null {
+  if (typeof item?.id !== 'string') {
     return null;
   }
   const text = (value: unknown) => (typeof value === 'string' ? value : '');
   return {
-    id: item['id'],
-    email: text(item['email']),
-    firstName: text(item['firstName']),
-    lastName: text(item['lastName']),
-    phoneNumber: optionalText(item['phoneNumber']),
-    country: optionalText(item['country']),
-    emergencyContact: optionalText(item['emergencyContact']),
-    pronouns: optionalText(item['pronouns']),
-    pronounCategory: typeof item['pronounCategory'] === 'number' ? item['pronounCategory'] : null,
-    avatarUrl: optionalText(item['avatarUrl']),
-    roles: sanitizeRoles(item['roles']),
+    id: item.id,
+    email: text(item.email),
+    firstName: text(item.firstName),
+    lastName: text(item.lastName),
+    patronymic: optionalText(item.patronymic),
+    phoneNumber: optionalText(item.phoneNumber),
+    country: optionalText(item.country),
+    emergencyContact: optionalText(item.emergencyContact),
+    pronouns: optionalText(item.pronouns),
+    pronounCategory: typeof item.pronounCategory === 'number' ? item.pronounCategory : null,
+    avatarUrl: optionalText(item.avatarUrl),
+    roles: sanitizeRoles(item.roles),
   };
 }

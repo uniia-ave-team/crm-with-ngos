@@ -8,24 +8,33 @@
       }
 
       @case ('no-server') {
-        <div class="join__error" role="alert">
-          <p class="join__error-line">{{ 'join.noServer' | translate }}</p>
-          <p class="join__error-line"><a class="join__link" routerLink="/login">{{ 'join.home' | translate }}</a></p>
+        <div class="auth-error" role="alert">
+          <p class="auth-error__line join__error-line">{{ 'join.noServer' | translate }}</p>
+          <p class="auth-error__line join__error-line"><a class="join__link" routerLink="/login">{{ 'join.home' | translate }}</a></p>
         </div>
       }
 
       @case ('invalid') {
-        <div class="join__error" role="alert">
-          <p class="join__error-line">{{ 'join.invalid' | translate }}</p>
-          <p class="join__error-line"><a class="join__link" routerLink="/login">{{ 'join.home' | translate }}</a></p>
+        <div class="auth-error" role="alert">
+          <p class="auth-error__line join__error-line">{{ 'join.invalid' | translate }}</p>
+          <p class="auth-error__line join__error-line"><a class="join__link" routerLink="/login">{{ 'join.home' | translate }}</a></p>
+        </div>
+      }
+
+      @case ('check-failed') {
+        <div class="auth-error" role="alert">
+          <p class="auth-error__line join__error-line">{{ 'join.checkFailed' | translate }}</p>
+          <p class="auth-error__line join__error-line">
+            <button type="button" class="join__link join__retry" tabindex="0" (click)="retry()">{{ 'join.retry' | translate }}</button>
+          </p>
         </div>
       }
 
       @case ('form') {
         @if (bannerErrors().length) {
-          <div class="join__error" role="alert">
+          <div class="auth-error" role="alert">
             @for (key of bannerErrors(); track key) {
-              <p class="join__error-line">{{ key | translate }}</p>
+              <p class="auth-error__line join__error-line">{{ key | translate }}</p>
             }
           </div>
         }
@@ -36,7 +45,7 @@
 
           <!-- Пошту дає запрошення: змінити її не можна. -->
           <ion-input
-            class="join__input"
+            class="auth-input"
             fill="outline"
             type="email"
             autocomplete="email"
@@ -46,7 +55,7 @@
           ></ion-input>
           <ion-input
             tabindex="0"
-            class="join__input"
+            class="auth-input"
             fill="outline"
             type="text"
             autocomplete="family-name"
@@ -59,7 +68,7 @@
           ></ion-input>
           <ion-input
             tabindex="0"
-            class="join__input"
+            class="auth-input"
             fill="outline"
             type="text"
             autocomplete="given-name"
@@ -71,12 +80,12 @@
             (keyup.enter)="submit()"
           ></ion-input>
           @if (firstNameError(); as fieldError) {
-            <p class="join__field-error" role="alert">{{ ('join.error.' + fieldError) | translate }}</p>
+            <p class="auth-field-error" role="alert">{{ ('join.error.' + fieldError) | translate }}</p>
           }
           <!-- По батькові необовʼязкове: без зірочки, без перевірки. -->
           <ion-input
             tabindex="0"
-            class="join__input"
+            class="auth-input"
             fill="outline"
             type="text"
             autocomplete="additional-name"
@@ -87,6 +96,7 @@
             (keyup.enter)="submit()"
           ></ion-input>
           <app-password-fields
+            [policy]="passwordPolicy()"
             [password]="password()"
             [repeat]="passwordRepeat()"
             [required]="true"
@@ -99,7 +109,7 @@
             (submitted)="submit()"
           />
 
-          <ion-button tabindex="0" class="join__submit" type="button" expand="block" [disabled]="saving()" (click)="submit()">
+          <ion-button tabindex="0" class="auth-submit" type="button" expand="block" [disabled]="saving()" (click)="submit()">
             {{ (saving() ? 'join.saving' : 'join.submit') | translate }}
           </ion-button>
         </div>

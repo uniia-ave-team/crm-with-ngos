@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { AlphaOutlineDirective } from './alpha-outline.directive';
 
-import { AlphaOutlineModule } from './alpha-outline.module';
 
 @Component({
   template: `<img
@@ -11,7 +11,7 @@ import { AlphaOutlineModule } from './alpha-outline.module';
     [appAlphaOutline]="width()"
     [outlineColor]="color()"
   />`,
-  imports: [AlphaOutlineModule],
+  imports: [AlphaOutlineDirective],
 })
 class HostComponent {
   readonly width = signal<number | string>(2);
@@ -20,7 +20,7 @@ class HostComponent {
 
 @Component({
   template: `<img id="plain" src="logo.png" alt="" appAlphaOutline />`,
-  imports: [AlphaOutlineModule],
+  imports: [AlphaOutlineDirective],
 })
 class PlainHostComponent {}
 

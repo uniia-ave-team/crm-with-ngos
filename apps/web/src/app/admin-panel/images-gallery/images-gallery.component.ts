@@ -11,12 +11,15 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { IonIcon, IonSpinner } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { PERMISSIONS } from '../../core/auth/permissions';
 import { RequestFailure } from '../../core/http/request-failure';
-import { IMAGE_TYPES } from '../../core/images/image-types';
+import { IMAGE_MAX_BYTES, IMAGE_MAX_MEGABYTES, IMAGE_TYPES, IMAGE_TYPE_NAMES } from '../../core/images/image-types';
 import { LoginPageImagesService } from '../../core/login-page-images/login-page-images.service';
 import { CurrentUserService } from '../../core/users/current-user.service';
+import { ListTextPipe } from '../../shared/list-text/list-text.pipe';
 
 /** Зображення, що є в системі: `id` на сервері й посилання на файл. */
 interface SystemImage {
@@ -45,7 +48,6 @@ interface Tile {
  * змін не було (або нема прав їх надсилати), інакше — причина першої невдачі.
  */
 export type GallerySaveResult = 'saved' | 'nothing' | RequestFailure;
-
 
 /** Скільки зображень просимо в сервера за один запит. */
 const PAGE_SIZE = 20;
@@ -81,17 +83,24 @@ const LOAD_AHEAD_PX = 400;
  *    `POST /api/v1/loginpageimages`. Видалення доданого файлу просто прибирає
  *    його з третього списку.
  *
- * Після збереження список із сервера отримується заново (позиції сторінок
- * зсунулися, а нові зображення мають зʼявитися з їхніми посиланнями).
+ * Поки йде збереження, замість рядка крутиться прелоадер. Після відповіді — хоч би якою вона
+ * була — галерея скидається повністю: усі три списки й стан завантаження, а список із сервера
+ * отримується заново з першої сторінки (позиції сторінок зсунулися, нові зображення мають
+ * зʼявитися з їхніми посиланнями). Те, що зберегти не вдалося, теж забувається: форма каже про
+ * невдачу, а зображення можна додати чи видалити знову вже в оновленому списку.
  */
 @Component({
   selector: 'app-admin-images-gallery',
   templateUrl: './images-gallery.component.html',
   styleUrls: ['../../settings/settings-section.scss', './images-gallery.component.scss'],
-  standalone: false,
+  imports: [IonIcon, IonSpinner, ListTextPipe, TranslatePipe],
 })
 export class AdminImagesGalleryComponent {
   protected readonly accept = IMAGE_TYPES.join(',');
+  /** Назви дозволених форматів для повідомлення про непідтримуваний файл. */
+  protected readonly imageTypeNames = IMAGE_TYPE_NAMES;
+  /** Найбільший розмір зображення в мегабайтах для повідомлення про завеликий файл. */
+  protected readonly imageMaxMegabytes = IMAGE_MAX_MEGABYTES;
 
   private readonly permissions = inject(CurrentUserService).permissions;
   private readonly service = inject(LoginPageImagesService);
@@ -118,6 +127,11 @@ export class AdminImagesGalleryComponent {
 
   /** Номер наступної сторінки, яку попросимо в сервера. */
   private nextPage = 1;
+  /**
+   * «Покоління» списку: зростає, коли список скидають після збереження. Відповідь на запит
+   * попереднього покоління (він ішов, поки список скинули) відкидається.
+   */
+  private listGeneration = 0;
   /** Сервер сказав, що за отриманими є ще сторінки (до першої відповіді вважаємо, що є). */
   private readonly hasMore = signal(true);
   /** Іде запит сторінки: в кінці рядка крутиться прелоадер. */
@@ -129,11 +143,14 @@ export class AdminImagesGalleryComponent {
 
   /** Список отримано, зображень нема, а додавати користувач не може: замість плитки — текст. */
   protected readonly showEmpty = computed(
-    () => this.firstLoaded() && !this.loading() && this.tiles().length === 0 && !this.canAdd(),
+    () => this.firstLoaded() && !this.loading() && !this.saving() && this.tiles().length === 0 && !this.canAdd(),
   );
 
-  /** Остання спроба додати файл не вдалася (файл не зображення потрібного типу). */
-  protected readonly typeError = signal(false);
+  /**
+   * Остання спроба додати файл не вдалася: `type` — файл не зображення потрібного типу, `size`
+   * — завеликий для сервера; `null` — помилки нема.
+   */
+  protected readonly fileError = signal<'type' | 'size' | null>(null);
 
   private readonly track = viewChild<ElementRef<HTMLElement>>('track');
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('imageFile');
@@ -143,7 +160,7 @@ export class AdminImagesGalleryComponent {
   protected readonly fadeEnd = signal(false);
   /** Плитки додавання (вона в кінці рядка) не видно: показуємо маленьку кнопку «+». */
   private readonly addTileOutOfView = signal(false);
-  protected readonly showQuickAdd = computed(() => this.canAdd() && this.addTileOutOfView());
+  protected readonly showQuickAdd = computed(() => this.canAdd() && !this.saving() && this.addTileOutOfView());
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -228,8 +245,14 @@ export class AdminImagesGalleryComponent {
     if (!this.canView() || this.loading() || !this.hasMore() || this.loadFailed()) {
       return;
     }
+    const generation = this.listGeneration;
     this.loading.set(true);
     const result = await this.service.page(this.nextPage, PAGE_SIZE);
+    if (generation !== this.listGeneration) {
+      // Поки запит ішов, список скинули: ця сторінка вже не про нього, а стан завантаження
+      // тепер належить новому запиту.
+      return;
+    }
     this.loading.set(false);
     if (typeof result === 'string') {
       this.loadFailed.set(true);
@@ -244,11 +267,22 @@ export class AdminImagesGalleryComponent {
     this.systemImages.set([...this.systemImages(), ...received]);
   }
 
-  /** Починає отримання списку з першої сторінки (після збереження). */
-  private async reload(): Promise<void> {
+  /**
+   * Після збереження скидає галерею повністю й отримує список із першої сторінки: усе
+   * отримане, зміни користувача (зокрема ті, що зберегти не вдалося), стан завантаження й
+   * відповідь на запит, що ще йде (вона відкинеться).
+   */
+  private async reset(): Promise<void> {
+    this.listGeneration++;
+    for (const image of this.addedImages()) {
+      URL.revokeObjectURL(image.url);
+    }
+    this.addedImages.set([]);
+    this.deletedImages.set([]);
     this.systemImages.set([]);
     this.nextPage = 1;
     this.hasMore.set(true);
+    this.loading.set(false);
     this.firstLoaded.set(false);
     this.loadFailed.set(false);
     if (this.canView()) {
@@ -284,13 +318,17 @@ export class AdminImagesGalleryComponent {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0] ?? null;
     input.value = '';
-    this.typeError.set(false);
+    this.fileError.set(null);
     if (!file || this.saving()) {
       return;
     }
-    // Фільтр діалогу можна обійти: тип перевіряємо самі.
+    // Фільтр діалогу можна обійти: тип перевіряємо самі, а розмір — бо сервер більшого не прийме.
     if (!IMAGE_TYPES.includes(file.type)) {
-      this.typeError.set(true);
+      this.fileError.set('type');
+      return;
+    }
+    if (file.size > IMAGE_MAX_BYTES) {
+      this.fileError.set('size');
       return;
     }
     // Додане користувачем — у третій список.
@@ -301,9 +339,8 @@ export class AdminImagesGalleryComponent {
    * Надсилає зміни на сервер: видалення за другим списком (зважає лише на право
    * `DeleteLoginPageImages`) і завантаження за третім (лише `CreateLoginPageImages`).
    * Це незалежні частини: невдача однієї не зупиняє іншу, а в межах частини на
-   * першій невдачі зупиняємось. Кожен успішний запит прибирає свій запис зі
-   * списку, тож повторне збереження не повторює зроблене. Якщо щось змінилося на
-   * сервері — список із нього отримується заново. Повертає першу невдачу.
+   * першій невдачі зупиняємось. Після відповідей галерея скидається повністю й отримує
+   * список із сервера заново (`reset`) — незалежно від результату. Повертає першу невдачу.
    */
   async save(): Promise<GallerySaveResult> {
     if (this.saving()) {
@@ -316,8 +353,7 @@ export class AdminImagesGalleryComponent {
     }
 
     this.saving.set(true);
-    this.typeError.set(false);
-    let changed = false;
+    this.fileError.set(null);
     let failure: RequestFailure | null = null;
 
     // Видалення (другий список): до першої невдачі.
@@ -327,26 +363,21 @@ export class AdminImagesGalleryComponent {
         failure ??= result;
         break;
       }
-      changed = true;
-      this.deletedImages.set(this.deletedImages().filter((current) => current.id !== image.id));
     }
 
     // Завантаження (третій список): не залежить від того, чим скінчились видалення.
     for (const image of toUpload) {
       const result = await this.service.upload(image.file);
-      if (typeof result === 'string') {
+      if (result !== 'uploaded') {
         failure ??= result;
         break;
       }
-      changed = true;
-      URL.revokeObjectURL(image.url);
-      this.addedImages.set(this.addedImages().filter((current) => current.key !== image.key));
     }
 
+    // Скидаємо, поки ще видно прелоадер збереження: далі його змінює прелоадер першої сторінки.
+    const reloading = this.reset();
     this.saving.set(false);
-    if (changed) {
-      await this.reload();
-    }
+    await reloading;
     return failure ?? 'saved';
   }
 }

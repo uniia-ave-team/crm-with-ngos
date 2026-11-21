@@ -1,4 +1,6 @@
 import { Component, input, output } from '@angular/core';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 /** Дія з колегою в меню біля трьох крапок. */
 export type ColleagueAction = 'permissions' | 'edit' | 'resetPassword' | 'disable' | 'enable' | 'delete' | 'profileSettings';
@@ -20,7 +22,7 @@ export interface ColleagueActionItem {
   selector: 'app-colleague-actions',
   templateUrl: './colleague-actions.component.html',
   styleUrls: ['./colleague-actions.component.scss'],
-  standalone: false,
+  imports: [IonIcon, TranslatePipe],
 })
 export class ColleagueActionsComponent {
   readonly items = input.required<readonly ColleagueActionItem[]>();

@@ -23,10 +23,6 @@
       }
 
       @case ('login') {
-        @if (loginBannerError(); as bannerError) {
-          <div class="login__error" role="alert">{{ bannerError | translate }}</div>
-        }
-
         <div class="login-form">
           <div class="login-form__media">
             <img class="login-form__image" [src]="loginImage()" alt="" (error)="onLoginImageError()" />
@@ -39,52 +35,7 @@
 
               <h1 class="login-form__title">{{ 'login.form.title' | translate }}</h1>
 
-              <label class="login-form__label" for="login-email">{{ 'login.form.email' | translate }}</label>
-              <ion-input
-                tabindex="0"
-                id="login-email"
-                class="login__input"
-                fill="outline"
-                type="email"
-                autocomplete="email"
-                [attr.aria-label]="'login.form.email' | translate"
-                [ngModel]="loginEmail()"
-                (ngModelChange)="onFieldChange(loginEmail, $event)"
-                (keyup.enter)="submitLogin()"
-              ></ion-input>
-              @if (loginEmailError(); as fieldError) {
-                <p class="login__field-error login-form__field-error" role="alert">{{ ('login.form.error.' + fieldError) | translate }}</p>
-              }
-
-              <label class="login-form__label" for="login-password">{{ 'login.form.password' | translate }}</label>
-              <ion-input
-                tabindex="0"
-                id="login-password"
-                class="login__input"
-                fill="outline"
-                type="password"
-                autocomplete="current-password"
-                [attr.aria-label]="'login.form.password' | translate"
-                [ngModel]="loginPassword()"
-                (ngModelChange)="onFieldChange(loginPassword, $event)"
-                (keyup.enter)="submitLogin()"
-              ></ion-input>
-              @if (loginPasswordError(); as fieldError) {
-                <p class="login__field-error login-form__field-error" role="alert">{{ ('login.form.error.' + fieldError) | translate }}</p>
-              }
-
-              <div class="login-form__actions">
-                <ion-button
-                  tabindex="0"
-                  class="login__submit login-form__submit"
-                  type="button"
-                  [disabled]="loginSaving()"
-                  (click)="submitLogin()"
-                >
-                  {{ (loginSaving() ? 'login.form.saving' : 'login.form.submit') | translate }}
-                </ion-button>
-                <button tabindex="0" class="login-form__forgot" type="button">{{ 'login.form.forgot' | translate }}</button>
-              </div>
+              <app-sign-in-form [afterSignIn]="afterLogin" [error]="loginError()" (attempt)="loginError.set(null)" />
 
               <hr class="login-form__divider" />
 
@@ -113,9 +64,9 @@
 
       @case ('ngo') {
         @if (ngoBannerErrors().length) {
-          <div class="login__error" role="alert">
+          <div class="auth-error" role="alert">
             @for (key of ngoBannerErrors(); track key) {
-              <p class="login__error-line">{{ key | translate }}</p>
+              <p class="auth-error__line">{{ key | translate }}</p>
             }
           </div>
         }
@@ -125,7 +76,7 @@
           <p class="login__description">{{ 'login.ngo.description' | translate }}</p>
 
           <ion-input tabindex="0"
-            class="login__input"
+            class="auth-input"
             fill="outline"
             type="text"
             maxlength="200"
@@ -138,7 +89,7 @@
             (keyup.enter)="submitNgo()"
           ></ion-input>
           @if (ngoNameError(); as nameError) {
-            <p class="login__field-error" role="alert">
+            <p class="auth-field-error" role="alert">
               {{ (nameError === 'required' ? 'login.ngo.nameRequired' : 'login.ngo.nameTooLong') | translate }}
             </p>
           }
@@ -198,16 +149,19 @@
               [attr.aria-label]="'login.ngo.logoLabel' | translate"
               (change)="onLogoSelected($event)"
             />
-            <p class="login__hint">{{ 'login.ngo.formatHint' | translate }}</p>
+            <p class="login__hint">{{ 'login.ngo.formatHint' | translate: { types: imageTypeNames | listText: 'or', size: imageMaxMegabytes } }}</p>
             @if (ngoLogoError(); as logoError) {
-              <p class="login__field-error" role="alert">
-                {{ (logoError === 'type' ? 'login.ngo.logoTypeError' : 'login.ngo.logoSizeError') | translate }}
+              <p class="auth-field-error" role="alert">
+                {{
+                  (logoError === 'type' ? 'login.ngo.logoTypeError' : 'login.ngo.logoSizeError')
+                    | translate: { types: imageTypeNames | listText: 'and', size: imageMaxMegabytes }
+                }}
               </p>
             }
           </div>
 
 
-          <ion-button tabindex="0" class="login__submit" type="button" expand="block" [disabled]="ngoSaving()" (click)="submitNgo()">
+          <ion-button tabindex="0" class="auth-submit" type="button" expand="block" [disabled]="ngoSaving()" (click)="submitNgo()">
             {{ (ngoSaving() ? 'login.ngo.saving' : 'login.ngo.submit') | translate }}
           </ion-button>
           <ng-container *ngTemplateOutlet="serverButton"></ng-container>
@@ -216,9 +170,9 @@
 
       @case ('admin') {
         @if (adminBannerErrors().length) {
-          <div class="login__error" role="alert">
+          <div class="auth-error" role="alert">
             @for (key of adminBannerErrors(); track key) {
-              <p class="login__error-line">{{ key | translate }}</p>
+              <p class="auth-error__line">{{ key | translate }}</p>
             }
           </div>
         }
@@ -228,7 +182,7 @@
           <p class="login__description">{{ 'login.admin.description' | translate }}</p>
 
           <ion-input tabindex="0"
-            class="login__input"
+            class="auth-input"
             fill="outline"
             type="email"
             autocomplete="email"
@@ -240,10 +194,10 @@
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           @if (adminEmailError(); as fieldError) {
-            <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
+            <p class="auth-field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
           }
           <ion-input tabindex="0"
-            class="login__input"
+            class="auth-input"
             fill="outline"
             type="text"
             autocomplete="family-name"
@@ -255,7 +209,7 @@
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           <ion-input tabindex="0"
-            class="login__input"
+            class="auth-input"
             fill="outline"
             type="text"
             autocomplete="given-name"
@@ -267,11 +221,11 @@
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           @if (adminFirstNameError(); as fieldError) {
-            <p class="login__field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
+            <p class="auth-field-error" role="alert">{{ ('login.admin.error.' + fieldError) | translate }}</p>
           }
           <!-- По батькові необовʼязкове: без зірочки, без перевірки. -->
           <ion-input tabindex="0"
-            class="login__input"
+            class="auth-input"
             fill="outline"
             type="text"
             autocomplete="additional-name"
@@ -282,6 +236,7 @@
             (keyup.enter)="submitAdmin()"
           ></ion-input>
           <app-password-fields
+            [policy]="passwordPolicy()"
             [password]="adminPassword()"
             [repeat]="adminPasswordRepeat()"
             [required]="true"
@@ -296,7 +251,7 @@
 
           <ion-button
             tabindex="0"
-            class="login__submit"
+            class="auth-submit"
             type="button"
             expand="block"
             [disabled]="adminSaving()"
@@ -309,16 +264,13 @@
       }
 
       @case ('setup-error') {
-        <div class="login__error" role="alert">{{ 'login.setupError' | translate }}</div>
+        <div class="auth-error" role="alert">{{ 'login.setupError' | translate }}</div>
       }
 
       @case ('step1') {
         @if (formError(); as currentError) {
-          <div class="login__error" role="alert">
-            {{
-              ('login.step1.error.' + (currentError === 'no-connection' ? 'noConnection' : currentError))
-                | translate: { url: connection.serverUrl() }
-            }}
+          <div class="auth-error" role="alert">
+            {{ 'login.step1.error.' + currentError | translate: { url: shownServerUrl() } }}
           </div>
         }
 
@@ -326,7 +278,7 @@
           <h1 class="login__title">{{ 'login.step1.title' | translate }}</h1>
           <p class="login__description">{{ 'login.step1.description' | translate }}</p>
           <ion-input tabindex="0"
-            class="login__input"
+            class="auth-input"
             fill="outline"
             type="text"
             inputmode="url"
@@ -337,7 +289,7 @@
             (keyup.enter)="submit()"
           ></ion-input>
           <ion-button tabindex="0"
-            class="login__submit"
+            class="auth-submit"
             type="button"
             expand="block"
             [disabled]="connection.apiStatus() === 'checking'"

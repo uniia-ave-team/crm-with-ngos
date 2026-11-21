@@ -47,7 +47,79 @@
   }
 }
 
-// Право, яке користувач сам не має (або має не всі права групи): приглушене, перемикач вимкнений.
+// Пункт і його підпункти — один блок: між ними нема розділювальної лінії.
+.role-form__permission--joined {
+  border-bottom: 0;
+}
+
+// Підпункт: назва з відступом, а в ньому — лінії дерева (`role-form__branch`). Гілка займає
+// всю висоту рядка, тож лінії сусідніх підпунктів змикаються в одну вертикаль.
+.role-form__permission--child {
+  position: relative;
+  padding-inline-start: 28px;
+}
+
+.role-form__branch {
+  --branch-x: 7px;
+  --branch-arm: 13px;
+  --branch-line: 1.5px solid var(--nav-fg-inactive);
+
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: var(--branch-x);
+  width: var(--branch-arm);
+  pointer-events: none;
+
+  // Вертикаль на всю висоту й плече до назви посередині рядка («├»).
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+  }
+
+  &::before {
+    top: 0;
+    bottom: 0;
+    border-inline-start: var(--branch-line);
+  }
+
+  &::after {
+    top: 50%;
+    width: 100%;
+    border-top: var(--branch-line);
+  }
+}
+
+// Останній підпункт: вертикаль доходить до середини рядка й заокругленим кутом переходить у плече.
+.role-form__branch--last {
+  &::before {
+    bottom: 50%;
+    width: 100%;
+    border-bottom: var(--branch-line);
+    border-end-start-radius: 6px;
+  }
+
+  &::after {
+    display: none;
+  }
+}
+
+// Перший підпункт: лінія починається ближче до назви пункту. Для цього межа між рядками
+// зсунута вгору (6px нижнього відступу пункту переходять у верхній відступ підпункту), а не
+// гілка виходить за свій рядок: частину поза приглушеним (`opacity`) рядком браузер при
+// перемальовуванні сусідів іноді малює без приглушення, і кінчик лінії «спалахує».
+.role-form__permission--joined:not(.role-form__permission--child) {
+  padding-bottom: 6px;
+
+  + .role-form__permission--child {
+    padding-top: 18px;
+  }
+}
+
+// Право, яке користувач сам не має (або має не всі права групи), і підпункт, чий пункт вимкнено:
+// приглушене, перемикач вимкнений.
 .role-form__permission--locked {
   cursor: not-allowed;
   opacity: 0.5;

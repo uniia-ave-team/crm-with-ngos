@@ -8,8 +8,8 @@ describe('KnowledgeBasePage', () => {
 
   beforeEach(() => {
     // Шаблон використовує `| translate`, тому TranslateService потрібен
-    // у TestBed явно — поза застосунком немає AppModule, який зазвичай
-    // його надає (там уже є provideTranslateService у app.module.ts).
+    // у TestBed явно — поза застосунком немає конфігурації, яка зазвичай
+    // його надає (там уже є provideTranslateService в app.config.ts).
     TestBed.configureTestingModule({
       providers: [provideTranslateService({ lang: 'en', fallbackLang: 'en' })],
     });
