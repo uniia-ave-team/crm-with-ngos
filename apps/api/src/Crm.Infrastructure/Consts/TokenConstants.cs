@@ -1,7 +1,7 @@
-namespace Crm.Domain.Consts;
+namespace Crm.Infrastructure.Consts;
 
 /// <summary>
-/// Provides constant values related to token generation and security across the application.
+/// Provides constant values related to cryptographic token generation and background token cleanup.
 /// </summary>
 public static class TokenConstants
 {

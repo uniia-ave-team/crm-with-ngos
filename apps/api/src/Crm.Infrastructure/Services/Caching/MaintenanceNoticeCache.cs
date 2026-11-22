@@ -1,18 +1,22 @@
 using System.Diagnostics.CodeAnalysis;
 using Crm.Application.Dtos.System;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
+using Crm.Infrastructure.Consts;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Caching;
 
 /// <summary>
 /// Caches the scheduled maintenance notice in memory for up to
 /// <see cref="CacheConstants.MaintenanceNoticeCacheExpirationSeconds"/> seconds,
 /// while expiring notices immediately once <see cref="MaintenanceNoticeDto.EndsAt"/> has passed.
 /// </summary>
+/// <param name="memoryCache">The in-memory cache backing store.</param>
+/// <param name="scopeFactory">The DI scope factory used to query <see cref="IMaintenanceNoticeRepository"/>.</param>
+/// <param name="timeProvider">The time provider controlling cache freshness and notice expiration.</param>
 public sealed class MaintenanceNoticeCache(
     IMemoryCache memoryCache,
     IServiceScopeFactory scopeFactory,
@@ -81,7 +85,7 @@ public sealed class MaintenanceNoticeCache(
 
     private async Task<MaintenanceNoticeDto?> FetchNoticeAsync(CancellationToken cancellationToken)
     {
-        using var scope = scopeFactory.CreateScope();
+        await using var scope = scopeFactory.CreateAsyncScope();
         var repository = scope.ServiceProvider.GetRequiredService<IMaintenanceNoticeRepository>();
 
         var entity = await repository.GetAsync(cancellationToken);
@@ -90,8 +94,8 @@ public sealed class MaintenanceNoticeCache(
             ? null
             : new MaintenanceNoticeDto(
                 entity.Message,
-                DateTime.SpecifyKind(entity.StartsAt, DateTimeKind.Utc),
-                DateTime.SpecifyKind(entity.EndsAt, DateTimeKind.Utc));
+                entity.StartsAt.ToUtc(),
+                entity.EndsAt.ToUtc());
     }
 
     private static MaintenanceNoticeDto? FilterActive(MaintenanceNoticeDto? notice, DateTime utcNow)

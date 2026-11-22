@@ -1,4 +1,4 @@
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 using Microsoft.AspNetCore.Identity;
 
 namespace Crm.Infrastructure.Entities;

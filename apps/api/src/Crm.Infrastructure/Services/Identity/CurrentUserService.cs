@@ -1,51 +1,39 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
+using Crm.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Http;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Identity;
 
 /// <summary>
 /// Implements <see cref="ICurrentUserService"/> using <see cref="IHttpContextAccessor"/>
 /// to retrieve user identity information from the active HTTP request context.
 /// </summary>
+/// <param name="httpContextAccessor">The HTTP context accessor providing access to the current request principal.</param>
 public sealed class CurrentUserService(IHttpContextAccessor httpContextAccessor) : ICurrentUserService
 {
-    /// <inheritdoc />
-    public bool IsAuthenticated => User?.Identity?.IsAuthenticated ?? false;
-
-    /// <inheritdoc />
-    public ClaimsPrincipal? User => httpContextAccessor.HttpContext?.User;
-
     /// <inheritdoc />
     public Guid GetUserId()
     {
         var httpContext = httpContextAccessor.HttpContext
             ?? throw new InvalidOperationException("CurrentUserService cannot be accessed outside of an HTTP context (e.g., inside a background worker or hosted service).");
 
-        string? userIdClaim = httpContext.User?.FindFirstValue(ClaimTypes.NameIdentifier)
-                       ?? httpContext.User?.FindFirstValue(JwtRegisteredClaimNames.Sub);
-
-        return string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out Guid userId)
-            ? throw new UnauthorizedAccessException("User ID claim is missing or invalid in the current security context.")
-            : userId;
+        return httpContext.User.TryGetUserId(out Guid userId)
+            ? userId
+            : throw new UnauthorizedAccessException("User ID claim is missing or invalid in the current security context.");
     }
 
     /// <inheritdoc />
     public List<Guid> GetRoleIds()
     {
         var user = httpContextAccessor.HttpContext?.User;
-
         if (user is null)
         {
             return [];
         }
 
-        var claims = user.FindAll(CustomClaimTypes.RoleId).ToList();
-        var result = new List<Guid>(claims.Count);
-
-        foreach (var claim in claims)
+        var result = new List<Guid>();
+        foreach (var claim in user.FindAll(CustomClaimTypes.RoleId))
         {
             if (Guid.TryParse(claim.Value, out var roleId))
             {

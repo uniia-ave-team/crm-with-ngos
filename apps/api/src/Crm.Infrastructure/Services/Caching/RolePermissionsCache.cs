@@ -1,22 +1,27 @@
 using System.Collections.Frozen;
+using System.Diagnostics.CodeAnalysis;
 using Crm.Application.Common.Consts;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
+using Crm.Infrastructure.Consts;
 using Crm.Infrastructure.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Caching;
 
 /// <summary>
 /// Provides an in-memory implementation of <see cref="IRolePermissionsCache"/>.
 /// Utilizes <see cref="IMemoryCache"/> for ultra-fast, local authorization checks,
-/// with a built-in fallback mechanism to securely resolve cache misses using transient dependency scopes.
+/// with a built-in fallback mechanism to securely resolve cache misses using isolated async scopes.
 /// </summary>
+/// <param name="memoryCache">The in-memory cache backing store.</param>
+/// <param name="scopeFactory">The DI scope factory used for fallback database lookups.</param>
+/// <param name="jwtOptions">The JWT options supplying negative-cache TTL aligned with access token lifetime.</param>
+/// <param name="logger">The logger instance.</param>
 public sealed partial class RolePermissionsCache(
     IMemoryCache memoryCache,
     IServiceScopeFactory scopeFactory,
@@ -40,8 +45,7 @@ public sealed partial class RolePermissionsCache(
             return cachedRights;
         }
 
-        var lockIndex = (roleId.GetHashCode() & int.MaxValue) % _locks.Length;
-        var myLock = _locks[lockIndex];
+        var myLock = _locks[GetLockIndex(roleId)];
 
         await myLock.WaitAsync(cancellationToken);
 
@@ -62,19 +66,41 @@ public sealed partial class RolePermissionsCache(
     }
 
     /// <inheritdoc />
-    public Task SetRolePermissionsAsync(Guid roleId, HashSet<string> rights, CancellationToken cancellationToken = default)
-        => SetRolePermissionsAsync(roleId, rights, CacheExpiration);
+    public async Task SetRolePermissionsAsync(Guid roleId, HashSet<string> rights, CancellationToken cancellationToken = default)
+    {
+        var myLock = _locks[GetLockIndex(roleId)];
+
+        await myLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            CacheRolePermissions(roleId, rights, CacheExpiration);
+        }
+        finally
+        {
+            myLock.Release();
+        }
+    }
 
     /// <inheritdoc />
-    public Task RemoveRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken = default)
+    public async Task RemoveRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken = default)
     {
-        string cacheKey = GenerateCacheKey(roleId);
+        var myLock = _locks[GetLockIndex(roleId)];
 
-        memoryCache.Remove(cacheKey);
+        await myLock.WaitAsync(cancellationToken);
 
-        LogAccessRightsRemoved(logger, roleId);
+        try
+        {
+            string cacheKey = GenerateCacheKey(roleId);
 
-        return Task.CompletedTask;
+            memoryCache.Remove(cacheKey);
+
+            LogAccessRightsRemoved(logger, roleId);
+        }
+        finally
+        {
+            myLock.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -82,7 +108,7 @@ public sealed partial class RolePermissionsCache(
     {
         LogSeedingCache(logger);
 
-        using var scope = scopeFactory.CreateScope();
+        await using var scope = scopeFactory.CreateAsyncScope();
         var roleRepository = scope.ServiceProvider.GetRequiredService<IAuthRoleRepository>();
 
         var rolesDictionary = await roleRepository.GetAllRolesPermissionsAsync(cancellationToken);
@@ -116,15 +142,11 @@ public sealed partial class RolePermissionsCache(
         }
     }
 
-    /// <summary>
-    /// Attempts to retrieve cached permissions for a given role ID from the in-memory cache.
-    /// </summary>
-    /// <param name="cacheKey">The key used to identify the cached permissions.</param>
-    /// <param name="rights">When the method returns, contains the cached permissions, or null if not found.</param>
-    /// <returns>true if the permissions were found in the cache; otherwise, false.</returns>
-    private bool TryGetCachedPermissions(string cacheKey, out FrozenSet<string>? rights)
+    private int GetLockIndex(Guid roleId) => (roleId.GetHashCode() & int.MaxValue) % _locks.Length;
+
+    private bool TryGetCachedPermissions(string cacheKey, [NotNullWhen(true)] out FrozenSet<string>? rights)
     {
-        if (memoryCache.TryGetValue(cacheKey, out rights) && rights != null)
+        if (memoryCache.TryGetValue(cacheKey, out rights) && rights is not null)
         {
             return true;
         }
@@ -133,52 +155,34 @@ public sealed partial class RolePermissionsCache(
         return false;
     }
 
-    /// <summary>
-    /// Acts as a fallback mechanism to safely retrieve a role's access rights from the database
-    /// if they were evicted from the cache or missed during the initial seeding process.
-    /// </summary>
-    /// <param name="roleId">The identifier of the role to resolve.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A newly cached set of access right claims for the specified role.</returns>
-    private async Task<IReadOnlySet<string>> FetchAndCacheRoleAccessRightsAsync(Guid roleId, CancellationToken cancellationToken)
+    private async Task<FrozenSet<string>> FetchAndCacheRoleAccessRightsAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        using var scope = scopeFactory.CreateScope();
+        await using var scope = scopeFactory.CreateAsyncScope();
         var identityService = scope.ServiceProvider.GetRequiredService<IRoleIdentityService>();
-
-        var rights = new HashSet<string>();
 
         try
         {
-            rights = await identityService.GetRolePermissionsAsync(roleId, cancellationToken);
+            var rights = await identityService.GetRolePermissionsAsync(roleId, cancellationToken);
 
-            await SetRolePermissionsAsync(roleId, rights, cancellationToken);
+            return CacheRolePermissions(roleId, rights, CacheExpiration);
         }
         catch (NotFoundException)
         {
-            await SetRolePermissionsAsync(roleId, rights, _negativeCacheTtl);
+            return CacheRolePermissions(roleId, [], _negativeCacheTtl);
         }
-
-        return rights;
     }
 
-    /// <summary>
-    /// Sets role permissions in the cache with a custom expiration time.
-    /// </summary>
-    /// <param name="roleId">The unique identifier of the role.</param>
-    /// <param name="rights">The set of access rights to cache.</param>
-    /// <param name="cacheExpiration">The custom cache expiration timespan.</param>
-    private Task SetRolePermissionsAsync(Guid roleId, HashSet<string> rights, TimeSpan cacheExpiration)
+    private FrozenSet<string> CacheRolePermissions(Guid roleId, HashSet<string> rights, TimeSpan cacheExpiration)
     {
-        memoryCache.Set(GenerateCacheKey(roleId), rights.ToFrozenSet(), cacheExpiration);
+        var frozenRights = rights.ToFrozenSet(StringComparer.Ordinal);
 
-        LogAccessRightsUpdated(logger, roleId, rights.Count);
+        memoryCache.Set(GenerateCacheKey(roleId), frozenRights, cacheExpiration);
 
-        return Task.CompletedTask;
+        LogAccessRightsUpdated(logger, roleId, frozenRights.Count);
+
+        return frozenRights;
     }
 
-    /// <summary>
-    /// Generates a standardized, collision-resistant key for the underlying caching provider.
-    /// </summary>
     private static string GenerateCacheKey(Guid roleId) => $"{CacheKeyPrefix}{roleId}";
 
     [LoggerMessage(EventId = LogEventIds.CacheMiss, Level = LogLevel.Warning, Message = "Cache miss for role ID '{RoleId}'. Fetching from database as fallback.")]

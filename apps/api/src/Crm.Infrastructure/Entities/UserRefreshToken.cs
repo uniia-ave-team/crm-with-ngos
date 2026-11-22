@@ -28,5 +28,5 @@ public class UserRefreshToken
     /// <summary>
     /// Gets or sets the navigation property for the user associated with this refresh token.
     /// </summary>
-    public virtual AuthUser User { get; set; }
+    public virtual AuthUser User { get; set; } = null!;
 }

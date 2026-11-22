@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.User;
+using Crm.Application.Dtos.Users;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Infrastructure.Entities;
@@ -100,10 +100,32 @@ public class AuthUserMappingRegisterTests
         // Act
         var userDtoSql = context.Set<AuthUser>().ProjectToType<UserDto>(_config).ToQueryString();
         var userProfileSql = context.Set<AuthUser>().ProjectToType<UserProfileResult>(_config).ToQueryString();
+        var userStatusSql = context.Set<AuthUser>().ProjectToType<UserStatusDto>(_config).ToQueryString();
 
         // Assert
         userDtoSql.ShouldContain("\"IsActive\"");
         userProfileSql.ShouldContain("\"IsActive\"");
+        userStatusSql.ShouldContain("\"IsActive\"");
+    }
+
+    [Fact]
+    public void ProjectWhenAuthUserEmailIsNullShouldCoalesceEmailToEmptyString()
+    {
+        // Arrange
+        var authUser = CreateAuthUser(isActive: true);
+        authUser.Email = null;
+
+        // Act
+        var userDto = new[] { authUser }.AsQueryable().ProjectToType<UserDto>(_config).Single();
+        var userProfile = new[] { authUser }.AsQueryable().ProjectToType<UserProfileResult>(_config).Single();
+        var userStatus = new[] { authUser }.AsQueryable().ProjectToType<UserStatusDto>(_config).Single();
+        var userBasic = new[] { authUser }.AsQueryable().ProjectToType<UserBasicDto>(_config).Single();
+
+        // Assert
+        userDto.Email.ShouldBe(string.Empty);
+        userProfile.Email.ShouldBe(string.Empty);
+        userStatus.Email.ShouldBe(string.Empty);
+        userBasic.Email.ShouldBe(string.Empty);
     }
 
     private static AuthUser CreateAuthUser(bool isActive)

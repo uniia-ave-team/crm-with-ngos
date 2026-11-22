@@ -4,17 +4,17 @@ using Crm.Infrastructure.Options;
 using Mapster;
 using Microsoft.Extensions.Options;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Identity;
 
 /// <summary>
 /// Implements <see cref="IOptionService"/> to expose configured custom identity options
 /// and security policies to the application layer.
 /// </summary>
 /// <param name="identityOptions">The accessor for configured custom identity options containing user and password requirements.</param>
-public class OptionService(IOptions<CustomIdentityOptions> identityOptions) : IOptionService
+public sealed class OptionService(IOptions<CustomIdentityOptions> identityOptions) : IOptionService
 {
-    private readonly CustomIdentityOptions _options = identityOptions.Value;
+    private readonly IdentityOptionsDto _identityOptions = identityOptions.Value.Adapt<IdentityOptionsDto>();
 
     /// <inheritdoc />
-    public IdentityOptionsDto GetIdentityOptions() => _options.Adapt<IdentityOptionsDto>();
+    public IdentityOptionsDto GetIdentityOptions() => _identityOptions;
 }

@@ -1,40 +1,42 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
 using Crm.Infrastructure.Entities;
+using Crm.Infrastructure.Persistence.Consts;
 using Crm.Infrastructure.Persistence.ValueGenerators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace Crm.Infrastructure.Persistence.Configurations;
+namespace Crm.Infrastructure.Persistence.Configurations.Identity;
 
 /// <summary>
 /// Configures the database mapping for the <see cref="UserRefreshToken"/> entity.
 /// </summary>
-public class UserRefreshTokenConfiguration : IEntityTypeConfiguration<UserRefreshToken>
+public sealed class UserRefreshTokenConfiguration : IEntityTypeConfiguration<UserRefreshToken>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<UserRefreshToken> builder)
     {
-        builder.ToTable("UserRefreshTokens");
+        builder.ToTable(TableNames.UserRefreshTokens);
 
-        builder.HasKey(x => x.Id);
+        builder.HasKey(rt => rt.Id);
 
-        builder.Property(u => u.Id)
+        builder.Property(rt => rt.Id)
             .HasValueGenerator<GuidV7ValueGenerator>();
 
-        builder.Property(x => x.Token)
+        builder.Property(rt => rt.Token)
             .IsRequired()
             .HasMaxLength(UserRefreshTokenValidationConstants.MaxTokenLength);
 
-        builder.Property(x => x.ExpiresAt)
+        builder.Property(rt => rt.ExpiresAt)
             .IsRequired();
 
-        builder.HasIndex(x => x.Token)
+        builder.HasIndex(rt => rt.Token)
             .IsUnique();
 
-        builder.HasIndex(x => x.UserId);
+        builder.HasIndex(rt => rt.UserId);
+        builder.HasIndex(rt => rt.ExpiresAt);
 
-        builder.HasOne(x => x.User)
+        builder.HasOne(rt => rt.User)
             .WithMany()
-            .HasForeignKey(x => x.UserId)
+            .HasForeignKey(rt => rt.UserId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -1,6 +1,7 @@
 using Crm.Domain.Entities;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using Crm.Infrastructure.Services;
+using Crm.Infrastructure.Services.Caching;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
@@ -20,20 +21,16 @@ public class MaintenanceNoticeCacheTests
         var clock = new TestTimeProvider(new DateTimeOffset(2026, 11, 20, 21, 0, 0, TimeSpan.Zero));
         var repository = Substitute.For<IMaintenanceNoticeRepository>();
 
-        var firstNotice = new MaintenanceNotice
-        {
-            Id = MaintenanceNotice.SingletonId,
-            Message = "First notice",
-            StartsAt = new DateTime(2026, 11, 20, 22, 0, 0, DateTimeKind.Utc),
-            EndsAt = new DateTime(2026, 11, 20, 23, 0, 0, DateTimeKind.Utc),
-        };
-        var updatedNotice = new MaintenanceNotice
-        {
-            Id = MaintenanceNotice.SingletonId,
-            Message = "Updated notice",
-            StartsAt = new DateTime(2026, 11, 20, 22, 0, 0, DateTimeKind.Utc),
-            EndsAt = new DateTime(2026, 11, 20, 23, 30, 0, DateTimeKind.Utc),
-        };
+        var firstNotice = new MaintenanceNotice().Update(
+            "First notice",
+            new DateTime(2026, 11, 20, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 11, 20, 23, 0, 0, DateTimeKind.Utc),
+            clock.GetUtcNow().UtcDateTime);
+        var updatedNotice = new MaintenanceNotice().Update(
+            "Updated notice",
+            new DateTime(2026, 11, 20, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 11, 20, 23, 30, 0, DateTimeKind.Utc),
+            clock.GetUtcNow().UtcDateTime);
 
         repository.GetAsync(ct).Returns(firstNotice, updatedNotice);
 
@@ -68,13 +65,11 @@ public class MaintenanceNoticeCacheTests
         var clock = new TestTimeProvider(new DateTimeOffset(2026, 11, 20, 22, 59, 50, TimeSpan.Zero));
         var repository = Substitute.For<IMaintenanceNoticeRepository>();
 
-        repository.GetAsync(ct).Returns(new MaintenanceNotice
-        {
-            Id = MaintenanceNotice.SingletonId,
-            Message = "Ending soon",
-            StartsAt = new DateTime(2026, 11, 20, 22, 0, 0, DateTimeKind.Utc),
-            EndsAt = new DateTime(2026, 11, 20, 23, 0, 0, DateTimeKind.Utc),
-        });
+        repository.GetAsync(ct).Returns(new MaintenanceNotice().Update(
+            "Ending soon",
+            new DateTime(2026, 11, 20, 22, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 11, 20, 23, 0, 0, DateTimeKind.Utc),
+            clock.GetUtcNow().UtcDateTime));
 
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         using var serviceProvider = BuildServiceProvider(repository);
@@ -105,13 +100,11 @@ public class MaintenanceNoticeCacheTests
 
         repository.GetAsync(ct).Returns(
             null,
-            new MaintenanceNotice
-            {
-                Id = MaintenanceNotice.SingletonId,
-                Message = "New notice",
-                StartsAt = new DateTime(2026, 11, 20, 22, 0, 0, DateTimeKind.Utc),
-                EndsAt = new DateTime(2026, 11, 20, 23, 0, 0, DateTimeKind.Utc),
-            });
+            new MaintenanceNotice().Update(
+                "New notice",
+                new DateTime(2026, 11, 20, 22, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 11, 20, 23, 0, 0, DateTimeKind.Utc),
+                clock.GetUtcNow().UtcDateTime));
 
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         using var serviceProvider = BuildServiceProvider(repository);

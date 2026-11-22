@@ -11,5 +11,5 @@ public class AuthRoleClaim : IdentityRoleClaim<Guid>
     /// <summary>
     /// Gets or sets the associated application role navigation property.
     /// </summary>
-    public virtual AuthRole Role { get; set; }
+    public virtual AuthRole Role { get; set; } = null!;
 }

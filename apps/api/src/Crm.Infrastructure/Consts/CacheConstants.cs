@@ -1,7 +1,7 @@
-namespace Crm.Domain.Consts;
+namespace Crm.Infrastructure.Consts;
 
 /// <summary>
-/// Provides constant values related to caching mechanisms across the application.
+/// Provides constant values related to caching expiration policies in the infrastructure layer.
 /// </summary>
 public static class CacheConstants
 {

@@ -2,26 +2,27 @@ using System.Security.Claims;
 using Crm.Application.Enums;
 using Crm.Application.Exceptions;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Exceptions;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Extensions;
 using Microsoft.AspNetCore.Identity;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Identity;
 
 /// <summary>
 /// Provides the infrastructure-level implementation of <see cref="IRoleIdentityService"/> using ASP.NET Core Identity.
 /// </summary>
 /// <param name="roleManager">The ASP.NET Core Identity API for managing roles.</param>
-public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdentityService
+public sealed class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdentityService
 {
     /// <inheritdoc />
     public async Task<Guid> CreateRoleAsync(string roleName, string? feminitiveName = null, string? pluralName = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var role = new AuthRole
         {
-            Id = Guid.NewGuid(),
             Name = roleName,
             FeminitiveName = feminitiveName,
             PluralName = pluralName,
@@ -35,6 +36,8 @@ public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdent
     /// <inheritdoc />
     public async Task UpdateRoleAsync(Guid roleId, string roleName, string? feminitiveName = null, string? pluralName = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var role = await roleManager.FindByIdAsync(roleId.ToString())
             ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
@@ -53,6 +56,8 @@ public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdent
     /// <inheritdoc />
     public async Task DeleteRoleAsync(Guid roleId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var role = await roleManager.FindByIdAsync(roleId.ToString())
             ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
@@ -66,23 +71,50 @@ public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdent
 
     /// <inheritdoc />
     public async Task AddPermissionToRoleAsync(Guid roleId, string permissionValue, CancellationToken cancellationToken = default)
+        => await AddPermissionsToRoleAsync(roleId, [permissionValue], cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<int> AddPermissionsToRoleAsync(Guid roleId, IEnumerable<string> permissionValues, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var role = await roleManager.FindByIdAsync(roleId.ToString())
             ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
-        var claim = new Claim(CustomClaimTypes.Permission, permissionValue);
+        var existingClaims = await roleManager.GetClaimsAsync(role);
+        var existingPermissionSet = existingClaims
+            .Where(c => c.Type == CustomClaimTypes.Permission)
+            .Select(c => c.Value)
+            .ToHashSet(StringComparer.Ordinal);
 
-        var result = await roleManager.AddClaimAsync(role, claim);
+        int addedCount = 0;
 
-        if (!result.Succeeded)
+        foreach (string permissionValue in permissionValues.Distinct(StringComparer.Ordinal))
         {
-            throw new UserOperationException(UserOperation.Update, result.FormatErrors());
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!existingPermissionSet.Add(permissionValue))
+            {
+                continue;
+            }
+
+            var result = await roleManager.AddClaimAsync(role, new Claim(CustomClaimTypes.Permission, permissionValue));
+            if (!result.Succeeded)
+            {
+                throw new UserOperationException(UserOperation.Update, result.FormatErrors());
+            }
+
+            addedCount++;
         }
+
+        return addedCount;
     }
 
     /// <inheritdoc />
     public async Task RemovePermissionFromRoleAsync(Guid roleId, string permissionValue, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var role = await roleManager.FindByIdAsync(roleId.ToString())
             ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
@@ -99,13 +131,16 @@ public class RoleIdentityService(RoleManager<AuthRole> roleManager) : IRoleIdent
     /// <inheritdoc />
     public async Task<HashSet<string>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var role = await roleManager.FindByIdAsync(roleId.ToString())
             ?? throw new EntityNotFoundException<AuthRole>(roleId);
 
         var claims = await roleManager.GetClaimsAsync(role);
 
-        return [.. claims
+        return claims
             .Where(c => c.Type == CustomClaimTypes.Permission)
-            .Select(c => c.Value)];
+            .Select(c => c.Value)
+            .ToHashSet(StringComparer.Ordinal);
     }
 }

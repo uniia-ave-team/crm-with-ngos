@@ -2,20 +2,18 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Identity;
 
 /// <summary>
-/// Implements the <see cref="IPermissionService"/> to evaluate access rights
-/// by aggregating permissions from multiple roles using the high-performance role permissions cache.
+/// Implements <see cref="IPermissionService"/> to evaluate access rights
+/// by aggregating permissions from one or more roles using <see cref="IRolePermissionsCache"/>.
 /// </summary>
 /// <param name="permissionsCache">The cache service used to retrieve permissions for specific roles.</param>
-public class PermissionService(IRolePermissionsCache permissionsCache) : IPermissionService
+public sealed class PermissionService(IRolePermissionsCache permissionsCache) : IPermissionService
 {
     /// <inheritdoc />
     public Task<bool> HasAccessAsync(List<Guid> roleIds, AccessRight requiredRight, CancellationToken cancellationToken = default)
-    {
-        return HasAccessAsync(roleIds, [requiredRight], cancellationToken);
-    }
+        => HasAccessAsync(roleIds, [requiredRight], cancellationToken);
 
     /// <inheritdoc />
     public async Task<bool> HasAccessAsync(List<Guid> roleIds, IEnumerable<AccessRight> requiredRights, CancellationToken cancellationToken = default)
@@ -28,24 +26,27 @@ public class PermissionService(IRolePermissionsCache permissionsCache) : IPermis
         if (roleIds.Count == 1)
         {
             var permissions = await permissionsCache.GetRolePermissionsAsync(roleIds[0], cancellationToken);
-
             return requiredRights.All(right => permissions.Contains(right.ToClaimValue()));
         }
 
         var tasks = roleIds.Select(id => permissionsCache.GetRolePermissionsAsync(id, cancellationToken));
         var rolePermissionsCollection = await Task.WhenAll(tasks);
 
-        var allPermissions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var rolePermissions in rolePermissionsCollection)
-        {
-            allPermissions.UnionWith(rolePermissions);
-        }
-
         foreach (var right in requiredRights)
         {
-            string requiredRightString = right.ToClaimValue();
+            string requiredClaim = right.ToClaimValue();
+            bool granted = false;
 
-            if (!allPermissions.Contains(requiredRightString))
+            for (int i = 0; i < rolePermissionsCollection.Length; i++)
+            {
+                if (rolePermissionsCollection[i].Contains(requiredClaim))
+                {
+                    granted = true;
+                    break;
+                }
+            }
+
+            if (!granted)
             {
                 return false;
             }
