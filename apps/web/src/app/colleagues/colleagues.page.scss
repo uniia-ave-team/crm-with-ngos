@@ -133,9 +133,29 @@ ion-title {
 }
 
 .person__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-secondary-title);
   font-size: 16px;
   font-weight: 500;
+}
+
+// Вимкнений акаунт: сірий аватар, приглушене імʼя й іконка `person-remove` перед ним.
+.person--disabled {
+  .person__avatar {
+    filter: grayscale(1);
+    opacity: 0.6;
+  }
+
+  .person__name {
+    color: var(--nav-fg-inactive);
+  }
+}
+
+.person__disabled-icon {
+  flex: none;
+  font-size: 18px;
 }
 
 .person__pronouns {
