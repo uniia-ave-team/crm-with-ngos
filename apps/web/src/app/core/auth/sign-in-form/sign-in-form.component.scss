@@ -1,0 +1,39 @@
+:host {
+  display: block;
+}
+
+// Лише розкладка: вигляд полів, кнопки й повідомлень — спільні `auth-*` (src/theme/auth-form.scss).
+.sign-in-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.sign-in-form__error {
+  margin-bottom: 16px;
+}
+
+.sign-in-form__label {
+  margin-bottom: 8px;
+}
+
+.sign-in-form__input {
+  margin-bottom: 16px;
+  // У вікні (тло меню) текст поля не успадковує колір сторінки — задаємо явно.
+  color: var(--ion-text-color);
+}
+
+// Помилка під полем тулиться до нього, а відступ до наступного підпису забирає margin поля.
+.sign-in-form__field-error {
+  margin: -8px 0 12px;
+}
+
+.sign-in-form__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sign-in-form__submit {
+  min-width: 112px;
+}

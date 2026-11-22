@@ -12,6 +12,7 @@
   [style.--offset-x]="offsetX() + 'px'"
   [style.--offset-y]="offsetY() + 'px'"
   (didPresent)="onPresented()"
+  (willDismiss)="onWillDismiss()"
   (didDismiss)="onDismissed()"
 >
   <!-- Angular-обгортка ion-popover показує лише зміст з ng-template. Зміст

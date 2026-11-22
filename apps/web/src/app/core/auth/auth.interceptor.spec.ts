@@ -3,10 +3,12 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 
+import { AccountRestoreService } from '../accounts/account-restore.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { authInterceptor } from './auth.interceptor';
 import { AuthService } from './auth.service';
+import { SessionService } from './session.service';
 
 /** JWT без підпису: тут важливий лише `exp`. */
 function jwt(expiresInSeconds: number): string {
@@ -27,7 +29,6 @@ describe('authInterceptor', () => {
 
   beforeEach(async () => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [provideHttpClient(withInterceptors([authInterceptor])), provideHttpClientTesting()],
@@ -67,6 +68,8 @@ describe('authInterceptor', () => {
     ['POST', '/api/v1/auth/refresh-token'],
     ['POST', '/api/v1/auth/logout'],
     ['POST', '/api/v1/users'],
+    ['GET', '/api/v1/invitations/validate'],
+    ['POST', '/api/v1/invitations/accept'],
   ])('leaves %s %s anonymous', async (method, path) => {
     storeTokens(jwt(600), 'refresh');
     client.request(method, `${server}${path}`, { body: {} }).subscribe();
@@ -137,7 +140,7 @@ describe('authInterceptor', () => {
     http.expectNone(`${server}/api/v1/auth/refresh-token`);
   });
 
-  it('keeps the account, marks it outdated, leaves no active one and goes to /relogin when the server rejects the refresh', async () => {
+  it('keeps the account, marks it outdated and leaves no active one when the server rejects the refresh; it goes nowhere itself', async () => {
     storeTokens(jwt(600), 'refresh');
     const accounts = TestBed.inject(AccountsService);
     const id = accounts.activeId()!;
@@ -147,10 +150,11 @@ describe('authInterceptor', () => {
     const refresh = await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`));
     refresh.flush({}, { status: 401, statusText: 'Unauthorized' });
 
-    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
-    expect(status).toBe(401);
+    await vi.waitFor(() => expect(status).toBe(401));
     expect(auth.hasTokens()).toBe(false);
-    expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
+    // Куди вести користувача, вирішує `SessionService`, а не перехоплювач.
+    expect(navigate).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('yavir.activeAccount')).toBe('');
     // Акаунт не забуто: його можна відновити повторним входом.
     expect(accounts.accounts().map((a) => [a.id, a.outdated, a.unavailable])).toEqual([[id, true, false]]);
   });
@@ -166,8 +170,7 @@ describe('authInterceptor', () => {
     (await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`))).flush({}, { status: 401, statusText: 'Unauthorized' });
     (await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`))).flush({}, { status: 401, statusText: 'Unauthorized' });
 
-    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
-    expect(status).toBe(401);
+    await vi.waitFor(() => expect(status).toBe(401));
     expect(accounts.activeId()).toBeNull();
     expect(accounts.accounts().find((a) => a.id === failed)).toMatchObject({ outdated: true });
     // Інший акаунт не зачеплено і не обрано.
@@ -181,9 +184,66 @@ describe('authInterceptor', () => {
     const refresh = await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`));
     refresh.error(new ProgressEvent('error'));
 
-    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
-    expect(auth.hasTokens()).toBe(false);
+    await vi.waitFor(() => expect(auth.hasTokens()).toBe(false));
     expect(TestBed.inject(AccountsService).accounts()[0]).toMatchObject({ outdated: false, unavailable: true });
+  });
+
+  it.each([
+    ['rejects the tokens', (refresh: { flush(b: unknown, o: { status: number; statusText: string }): void }) => refresh.flush({}, { status: 401, statusText: 'Unauthorized' }), 401],
+    ['does not answer', (refresh: { error(e: ProgressEvent): void }) => refresh.error(new ProgressEvent('error')), 0],
+  ])('does not send the request at all when the expired token cannot be refreshed (the server %s): the caller gets the same error', async (_name, fail, expected) => {
+    storeTokens(jwt(-60), 'refresh');
+    let status = -1;
+    client.get(`${server}/api/v1/ngo`).subscribe({ error: (e) => (status = e.status) });
+    (fail as (r: unknown) => void)(await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`)));
+
+    await vi.waitFor(() => expect(status).toBe(expected));
+    http.expectNone(`${server}/api/v1/ngo`);
+    expect(auth.hasTokens()).toBe(false);
+  });
+
+  it('sends the request with the token of its own account when another account became active while the tokens were being refreshed', async () => {
+    storeTokens(jwt(-60), 'refresh');
+    client.get(`${server}/api/v1/ngo`).subscribe();
+    const refresh = await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`));
+    // Поки триває оновлення, користувач увійшов в інший акаунт.
+    const other = jwt(900);
+    TestBed.inject(AccountsService).add({ server, accessToken: other, refreshToken: 'refresh-other', identity: 'user-2' });
+    const own = jwt(600);
+    refresh.flush({ accessToken: own, refreshToken: 'refresh-2' });
+
+    const request = await vi.waitFor(() => http.expectOne(`${server}/api/v1/ngo`));
+    expect(request.request.headers.get('Authorization')).toBe(`Bearer ${own}`);
+    expect(auth.accessToken()).toBe(other);
+  });
+
+  it('goes nowhere when the session of an account fails while a valid account is being searched for: the search takes the next one', async () => {
+    TestBed.inject(SessionService);
+    const accounts = TestBed.inject(AccountsService);
+    const good = accounts.add({ server, accessToken: jwt(600), refreshToken: 'refresh-good', identity: 'user-2' });
+    // Останній доданий активний: з нього пошук і почне. Його токени сервер уже відкликав.
+    storeTokens(jwt(900), 'refresh');
+    TestBed.tick();
+
+    const health = async () => {
+      const request = await vi.waitFor(() => {
+        const open = http.match({ url: `${server}/health` }).filter((r) => !r.cancelled);
+        expect(open).toHaveLength(1);
+        return open[0];
+      });
+      request.flush({ status: 'Healthy' });
+    };
+    const result = TestBed.inject(AccountRestoreService).restore();
+    await health();
+    (await vi.waitFor(() => http.expectOne(`${server}/api/v1/users/me`))).flush({}, { status: 401, statusText: 'Unauthorized' });
+    (await vi.waitFor(() => http.expectOne(`${server}/api/v1/auth/refresh-token`))).flush({}, { status: 401, statusText: 'Unauthorized' });
+    await health();
+    (await vi.waitFor(() => http.expectOne(`${server}/api/v1/users/me`))).flush({ id: 'user-2', email: 'a@b.org', firstName: ' ', lastName: ' ', roles: [] });
+
+    expect(await result).toBe('restored');
+    TestBed.tick();
+    expect(accounts.activeId()).toBe(good.id);
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('shares one refresh between simultaneous requests', async () => {

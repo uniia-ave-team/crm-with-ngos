@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 
 import { AccountsService } from './accounts.service';
+import { addAccountWithSnapshot } from './accounts.testing';
 
 describe('AccountsService', () => {
   const server = 'http://localhost:5065';
@@ -28,11 +29,11 @@ describe('AccountsService', () => {
   const record = (id: string) => JSON.parse(localStorage.getItem(`yavir.account.${id}`)!);
 
   describe('storing', () => {
-    it('keeps an account as its own record plus an index and an active pointer', () => {
-      const account = service.add({ server, ...tokens, identity: 'user-1', userId: 'user-1', firstName: 'Перший', lastName: 'Другий', ngoName: 'Організація', ngoLogoUrl: '/files/logo.png' });
+    it('keeps an account as its own record plus an index, and the active pointer in the storage of the tab', () => {
+      const account = addAccountWithSnapshot(service, { server, ...tokens, identity: 'user-1', userId: 'user-1' }, { firstName: 'Перший', lastName: 'Другий', ngoName: 'Організація', ngoLogoUrl: '/files/logo.png' });
 
       expect(JSON.parse(localStorage.getItem('yavir.accounts')!)).toEqual([account.id]);
-      expect(localStorage.getItem('yavir.activeAccount')).toBe(account.id);
+      expect(sessionStorage.getItem('yavir.activeAccount')).toBe(account.id);
       expect(record(account.id)).toMatchObject({
         server,
         userId: 'user-1',
@@ -67,13 +68,19 @@ describe('AccountsService', () => {
       expect(ids.size).toBe(3);
     });
 
-    it('puts the server domain, reduced to Latin letters, into the id', () => {
+    it('puts the server domain, reduced to its letters, into the id', () => {
       expect(AccountsService.accountId(server, 'u1')).toMatch(/^localhost-[0-9a-f]+$/);
       expect(AccountsService.accountId(other, 'u1')).toMatch(/^crmexampleorg-[0-9a-f]+$/);
       expect(AccountsService.accountId('https://My-Server2.test:8443', 'u1')).toMatch(/^myservertest-[0-9a-f]+$/);
     });
 
-    it('falls back to "server" when the domain has no Latin letters, e.g. an IP address', () => {
+    it('keeps the Ukrainian letters of a Cyrillic domain (the .укр zone), however the address is written', () => {
+      expect(AccountsService.accountId('https://приклад.укр:5065', 'u1')).toMatch(/^прикладукр-[0-9a-f]+$/);
+      expect(AccountsService.accountId('https://xn--80aikifvh.xn--j1amh:5065', 'u1')).toMatch(/^прикладукр-[0-9a-f]+$/);
+      expect(AccountsService.accountId('https://crm.Їжак-Ґанок.укр', 'u1')).toMatch(/^crmїжакґанокукр-[0-9a-f]+$/);
+    });
+
+    it('falls back to "server" when the domain has no letters, e.g. an IP address', () => {
       expect(AccountsService.accountId('http://192.168.0.7:5065', 'u1')).toMatch(/^server-[0-9a-f]+$/);
     });
 
@@ -98,7 +105,7 @@ describe('AccountsService', () => {
     });
 
     it('updates an existing account instead of duplicating it, keeping its snapshot', () => {
-      const first = service.add({ server, ...tokens, identity: 'a', firstName: 'Перший', ngoName: 'Організація' });
+      const first = addAccountWithSnapshot(service, { server, ...tokens, identity: 'a' }, { firstName: 'Перший', ngoName: 'Організація' });
       const again = service.add({ server, accessToken: 'new', refreshToken: 'new-r', identity: 'a' });
       expect(again.id).toBe(first.id);
       expect(service.accounts()).toHaveLength(1);
@@ -127,14 +134,14 @@ describe('AccountsService', () => {
       });
 
       it('keeps the snapshot of the profile for the same user on the same server', () => {
-        const account = service.add({ server, ...tokens, identity: 'user-1', firstName: 'Перший', permissions: ['A'] });
+        const account = addAccountWithSnapshot(service, { server, ...tokens, identity: 'user-1' }, { firstName: 'Перший', permissions: ['A'] });
         const replaced = service.add({ server, accessToken: 'new', refreshToken: 'new-refresh', identity: 'user-1' }, account.id);
 
         expect(replaced).toMatchObject({ firstName: 'Перший', permissions: ['A'] });
       });
 
       it('drops the snapshot of another user, it was not his', () => {
-        const account = service.add({ server, ...tokens, identity: 'user-1', firstName: 'Перший', ngoName: 'Організація', permissions: ['A'] });
+        const account = addAccountWithSnapshot(service, { server, ...tokens, identity: 'user-1' }, { firstName: 'Перший', ngoName: 'Організація', permissions: ['A'] });
         const replaced = service.add({ server, ...tokens, identity: 'user-2' }, account.id);
 
         expect(replaced).toMatchObject({ id: account.id, firstName: '', ngoName: null, permissions: [] });
@@ -168,7 +175,7 @@ describe('AccountsService', () => {
     });
 
     it('keeps the NGO logo when the account is added again, and updates it with the record', () => {
-      const first = service.add({ server, ...tokens, identity: 'a', ngoName: 'Організація', ngoLogoUrl: 'https://x/logo.png' });
+      const first = addAccountWithSnapshot(service, { server, ...tokens, identity: 'a' }, { ngoName: 'Організація', ngoLogoUrl: 'https://x/logo.png' });
       service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'a' });
       expect(service.active()).toMatchObject({ id: first.id, ngoLogoUrl: 'https://x/logo.png' });
 
@@ -262,7 +269,7 @@ describe('AccountsService', () => {
       expect(record(second.id).refreshToken).toBe('refresh');
       expect(record(first.id).outdated).toBe(false);
       expect(service.activeId()).toBeNull();
-      expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
+      expect(sessionStorage.getItem('yavir.activeAccount')).toBe('');
     });
 
     it('marks a rejected session as outdated, and an account whose server did not answer as unavailable: independent flags', () => {
@@ -330,7 +337,7 @@ describe('AccountsService', () => {
 
       expect(service.accounts().map((a) => a.id)).toEqual([first.id, second.id]);
       expect(service.activeId()).toBeNull();
-      expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
+      expect(sessionStorage.getItem('yavir.activeAccount')).toBe('');
       expect(localStorage.getItem('yavir.language')).toBe('uk');
       expect(record(first.id).refreshToken).toBe('refresh');
     });
@@ -358,7 +365,7 @@ describe('AccountsService', () => {
       localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r' }));
       expect(reopen().accounts()[0].patronymic).toBe('');
 
-      const account = service.add({ server, ...tokens, identity: 'a', patronymic: 'Третій' });
+      const account = addAccountWithSnapshot(service, { server, ...tokens, identity: 'a' }, { patronymic: 'Третій' });
       service.add({ server, accessToken: 'new', refreshToken: 'r2', identity: 'a' });
       expect(record(account.id).patronymic).toBe('Третій');
     });
@@ -380,7 +387,7 @@ describe('AccountsService', () => {
       expect(localStorage.getItem(`yavir.account.${second.id}`)).toBeNull();
       expect(JSON.parse(localStorage.getItem('yavir.accounts')!)).toEqual([first.id]);
       expect(service.activeId()).toBeNull();
-      expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
+      expect(sessionStorage.getItem('yavir.activeAccount')).toBe('');
     });
 
     it('keeps the others, with no active account, when the last available one is removed', () => {
@@ -417,29 +424,30 @@ describe('AccountsService', () => {
 
       service.setActive(first.id);
       expect(service.activeId()).toBe(first.id);
-      expect(localStorage.getItem('yavir.activeAccount')).toBe(first.id);
+      expect(sessionStorage.getItem('yavir.activeAccount')).toBe(first.id);
 
       service.setActive('unknown');
       expect(service.activeId()).toBe(first.id);
 
       service.setActive(null);
       expect(service.active()).toBeNull();
-      expect(localStorage.getItem('yavir.activeAccount')).toBeNull();
+      expect(sessionStorage.getItem('yavir.activeAccount')).toBe('');
     });
 
-    it('wipes the whole localStorage and forgets every account', () => {
+    it('wipes the whole storage, the shared one and the one of the tab, and forgets every account', () => {
       service.add({ server, ...tokens, identity: 'a' });
       localStorage.setItem('yavir.language', 'uk');
       service.wipe();
       expect(localStorage.length).toBe(0);
+      expect(sessionStorage.length).toBe(0);
       expect(service.accounts()).toHaveLength(0);
       expect(service.activeId()).toBeNull();
     });
   });
 
   describe('reading', () => {
-    it('restores the accounts and the active one in a new tab', () => {
-      service.add({ server, ...tokens, identity: 'a', firstName: 'Перший' });
+    it('restores the accounts and the active one when the page is opened again', () => {
+      addAccountWithSnapshot(service, { server, ...tokens, identity: 'a' }, { firstName: 'Перший' });
       const second = service.add({ server: other, ...tokens, identity: 'b' });
       service.setActive(second.id);
 
@@ -449,7 +457,7 @@ describe('AccountsService', () => {
       expect(reopened.accounts()[0].firstName).toBe('Перший');
     });
 
-    it('drops index entries without a record and ignores broken records', () => {
+    it('drops index entries without a record, and removes broken records from the storage too (they may hold tokens)', () => {
       const good = service.add({ server, ...tokens, identity: 'a' });
       const broken = service.add({ server, ...tokens, identity: 'b' });
       localStorage.setItem(`yavir.account.${broken.id}`, '{not json');
@@ -458,18 +466,83 @@ describe('AccountsService', () => {
       const reopened = reopen();
       expect(reopened.accounts().map((a) => a.id)).toEqual([good.id]);
       expect(JSON.parse(localStorage.getItem('yavir.accounts')!)).toEqual([good.id]);
+      expect(localStorage.getItem(`yavir.account.${broken.id}`)).toBeNull();
+    });
+
+    it.each([
+      ['has no tokens', { id: 'x', server }],
+      ['has the id of another account', { id: 'y', server, accessToken: 'a', refreshToken: 'r' }],
+      ['is not an object', 'x'],
+    ])('removes a record that %s', (_name, damaged) => {
+      localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
+      localStorage.setItem('yavir.account.x', JSON.stringify(damaged));
+      expect(reopen().accounts()).toEqual([]);
+      expect(localStorage.getItem('yavir.account.x')).toBeNull();
+      expect(JSON.parse(localStorage.getItem('yavir.accounts')!)).toEqual([]);
+    });
+
+    it('replaces the fields of a wrong type with defaults instead of trusting them', () => {
+      localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
+      localStorage.setItem(
+        'yavir.account.x',
+        JSON.stringify({
+          id: 'x',
+          server,
+          accessToken: 'a',
+          refreshToken: 'r',
+          identity: 1,
+          userId: {},
+          email: ['a'],
+          outdated: 'yes',
+          unavailable: 1,
+          firstName: 5,
+          lastName: null,
+          patronymic: false,
+          avatarUrl: 7,
+          ngoName: {},
+          ngoLogoUrl: [],
+          tokensIssuedAt: 'now',
+          addedAt: null,
+          lastUsedAt: {},
+          extra: 'ignored',
+        }),
+      );
+      expect(reopen().accounts()[0]).toEqual({
+        id: 'x',
+        server,
+        accessToken: 'a',
+        refreshToken: 'r',
+        identity: '',
+        userId: '',
+        email: '',
+        outdated: false,
+        unavailable: false,
+        firstName: '',
+        lastName: '',
+        patronymic: '',
+        avatarUrl: null,
+        ngoName: null,
+        ngoLogoUrl: null,
+        avatarThumb: null,
+        ngoLogoThumb: null,
+        permissions: [],
+        roles: [],
+        tokensIssuedAt: 0,
+        addedAt: 0,
+        lastUsedAt: 0,
+      });
     });
 
     it('forgets an active pointer to a missing account', () => {
       service.add({ server, ...tokens, identity: 'a' });
-      localStorage.setItem('yavir.activeAccount', 'ghost');
+      sessionStorage.setItem('yavir.activeAccount', 'ghost');
       expect(reopen().activeId()).toBeNull();
     });
 
     it('fills fields missing in an older or partial record with defaults', () => {
       localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
       localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r' }));
-      localStorage.setItem('yavir.activeAccount', 'x');
+      sessionStorage.setItem('yavir.activeAccount', 'x');
       expect(reopen().active()).toMatchObject({
         firstName: '',
         lastName: '',
@@ -502,7 +575,7 @@ describe('AccountsService', () => {
         'yavir.account.x',
         JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r', permissions: ['ViewUser', 7, null] }),
       );
-      localStorage.setItem('yavir.activeAccount', 'x');
+      sessionStorage.setItem('yavir.activeAccount', 'x');
       expect(reopen().active()?.permissions).toEqual(['ViewUser']);
 
       localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r', permissions: 'ViewUser' }));
@@ -524,7 +597,7 @@ describe('AccountsService', () => {
       const damaged = [{ id: 'r1', name: 'Перша' }, { id: 'r2' }, { name: 'Друга' }, { id: 3, name: 'Третя' }, null, 'r4'];
       localStorage.setItem('yavir.accounts', JSON.stringify(['x']));
       localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r', roles: damaged }));
-      localStorage.setItem('yavir.activeAccount', 'x');
+      sessionStorage.setItem('yavir.activeAccount', 'x');
       expect(reopen().active()?.roles).toEqual([{ id: 'r1', name: 'Перша' }]);
 
       localStorage.setItem('yavir.account.x', JSON.stringify({ id: 'x', server, accessToken: 'a', refreshToken: 'r', roles: 'r1' }));
@@ -536,21 +609,214 @@ describe('AccountsService', () => {
       expect(reopen().accounts()).toEqual([]);
     });
 
-    it('works in memory when localStorage is unavailable', () => {
-      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-        throw new Error('denied');
+    describe('when the browser gives no storage (the data of sites is blocked)', () => {
+      /** Сервіс, створений уже без сховища: читання й запис кидають помилку. */
+      function withoutStorage(): AccountsService {
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+          throw new Error('denied');
+        });
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+          throw new Error('denied');
+        });
+        return reopen();
+      }
+
+      it('keeps the accounts in memory: adds, updates and switches them', () => {
+        const blocked = withoutStorage();
+        const first = blocked.add({ server, ...tokens, identity: 'a' });
+        const second = blocked.add({ server, ...tokens, identity: 'b' });
+        expect(blocked.activeId()).toBe(second.id);
+
+        blocked.update(first.id, { ngoName: 'Організація' });
+        blocked.setActive(first.id);
+        expect(blocked.active()).toMatchObject({ id: first.id, accessToken: 'access', ngoName: 'Організація' });
       });
-      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-        throw new Error('denied');
+
+      it('does not forget them when the storage is read again (the guards do it on every page change, another tab sends an event)', () => {
+        const blocked = withoutStorage();
+        const account = blocked.add({ server, ...tokens, identity: 'a' });
+
+        blocked.reload();
+        window.dispatchEvent(new StorageEvent('storage', { key: 'yavir.accounts' }));
+
+        expect(blocked.accounts().map((a) => a.id)).toEqual([account.id]);
+        expect(blocked.activeId()).toBe(account.id);
       });
-      const account = service.add({ server, ...tokens, identity: 'a' });
-      expect(service.activeId()).toBe(account.id);
-      expect(service.active()?.accessToken).toBe('access');
+
+      it('does not warn that the storage is full: there is no storage at all', () => {
+        const blocked = withoutStorage();
+        blocked.add({ server, ...tokens, identity: 'a' });
+        expect(blocked.storageFull()).toBe(false);
+      });
+    });
+
+    describe('when the storage is full (it is read, but the browser does not let write)', () => {
+      const fillStorage = () =>
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+          throw new DOMException('full', 'QuotaExceededError');
+        });
+
+      it('is not full while the writes go through', () => {
+        service.add({ server, ...tokens, identity: 'a' });
+        expect(service.storageFull()).toBe(false);
+      });
+
+      it('says that it is full once a write fails during the work (new tokens of an account)', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        fillStorage();
+        service.update(account.id, { accessToken: 'new', refreshToken: 'new-r' });
+        expect(service.storageFull()).toBe(true);
+        // У памʼяті зміна є, у сховищі — ні.
+        expect(service.active()?.accessToken).toBe('new');
+        expect(record(account.id).accessToken).toBe('access');
+      });
+
+      it('stops saying so when the warning is closed, and says it again on the next failed write', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        fillStorage();
+        service.update(account.id, { ngoName: 'Організація' });
+        service.dismissStorageFull();
+        expect(service.storageFull()).toBe(false);
+        service.update(account.id, { ngoName: 'Друга' });
+        expect(service.storageFull()).toBe(true);
+      });
+    });
+  });
+
+  describe('the active account of a tab (every tab has its own)', () => {
+    const hint = () => localStorage.getItem('yavir.lastActiveAccount');
+    const visibility = (state: 'visible' | 'hidden') => vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(state);
+
+    /** Зовсім нова вкладка: свого вибору в неї ще нема, а спільне сховище те саме. */
+    function newTab(): AccountsService {
+      sessionStorage.clear();
+      return reopen();
+    }
+
+    it('starts a new tab with the account of the tab the user saw last, and keeps it as its own', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      service.add({ server, ...tokens, identity: 'b' });
+      service.setActive(first.id);
+
+      const tab = newTab();
+      expect(tab.activeId()).toBe(first.id);
+      expect(sessionStorage.getItem('yavir.activeAccount')).toBe(first.id);
+    });
+
+    it('keeps its own account after the page is reloaded, whatever the other tabs have chosen since', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      const second = service.add({ server, ...tokens, identity: 'b' });
+      service.setActive(first.id);
+      // Інша вкладка перемкнулась на другий акаунт.
+      localStorage.setItem('yavir.lastActiveAccount', second.id);
+      window.dispatchEvent(new StorageEvent('storage', { key: 'yavir.lastActiveAccount' }));
+
+      expect(service.activeId()).toBe(first.id);
+      expect(reopen().activeId()).toBe(first.id);
+    });
+
+    it('stays without an active account when the tab has none on purpose, instead of taking the one of another tab', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      service.setActive(null);
+      localStorage.setItem('yavir.lastActiveAccount', first.id);
+
+      service.reload();
+      expect(service.activeId()).toBeNull();
+      expect(reopen().activeId()).toBeNull();
+    });
+
+    it('starts a new tab with no active account when the remembered one is gone or outdated', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      service.markOutdated(first.id);
+      localStorage.setItem('yavir.lastActiveAccount', first.id);
+      expect(newTab().activeId()).toBeNull();
+
+      localStorage.setItem('yavir.lastActiveAccount', 'ghost');
+      expect(newTab().activeId()).toBeNull();
+    });
+
+    it('remembers the account for new tabs only while the tab is seen, and again when the user comes back to it', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      const second = service.add({ server, ...tokens, identity: 'b' });
+      expect(hint()).toBe(second.id);
+
+      const state = visibility('hidden');
+      service.setActive(first.id);
+      expect(hint()).toBe(second.id);
+
+      state.mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(hint()).toBe(first.id);
+    });
+
+    it('does not remember the accounts that are active only while one is being searched for, but the one that is left after it', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      const second = service.add({ server, ...tokens, identity: 'b' });
+      service.setActive(first.id);
+
+      service.setSwitching(true);
+      service.setActive(second.id);
+      expect(hint()).toBe(first.id);
+
+      service.setSwitching(false);
+      expect(hint()).toBe(second.id);
+    });
+
+    it('keeps the remembered account when the tab is left without an active one', () => {
+      const first = service.add({ server, ...tokens, identity: 'a' });
+      service.setActive(null);
+      expect(hint()).toBe(first.id);
+    });
+
+    describe('when another tab changes the account that is active here', () => {
+      /** Те, що робить інша вкладка: пише запис акаунта, і сюди приходить подія `storage`. */
+      function otherTabWrites(id: string, patch: Record<string, unknown>): void {
+        localStorage.setItem(`yavir.account.${id}`, JSON.stringify({ ...record(id), ...patch }));
+        window.dispatchEvent(new StorageEvent('storage', { key: `yavir.account.${id}` }));
+      }
+
+      it('leaves this tab without an active account once the other tab has marked it outdated', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        otherTabWrites(account.id, { outdated: true });
+        expect(service.activeId()).toBeNull();
+        expect(service.accounts()[0].outdated).toBe(true);
+        expect(sessionStorage.getItem('yavir.activeAccount')).toBe('');
+      });
+
+      it('keeps it active when the other tab has only found its server silent: every tab finds that out itself', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        otherTabWrites(account.id, { unavailable: true });
+        expect(service.activeId()).toBe(account.id);
+      });
+
+      it('keeps an outdated account active while it is being checked here (a switch to it)', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        service.setSwitching(true);
+        otherTabWrites(account.id, { outdated: true });
+        expect(service.activeId()).toBe(account.id);
+      });
+
+      it('does not take the account back when the other tab signed out of it and then signed in again', () => {
+        const account = service.add({ server, ...tokens, identity: 'a' });
+        const saved = record(account.id);
+        // Вихід в іншій вкладці.
+        localStorage.removeItem(`yavir.account.${account.id}`);
+        localStorage.setItem('yavir.accounts', '[]');
+        window.dispatchEvent(new StorageEvent('storage', { key: 'yavir.accounts' }));
+        expect(service.activeId()).toBeNull();
+        // Вхід у той самий акаунт там само: запис із тим самим `id` зʼявився знову.
+        localStorage.setItem(`yavir.account.${account.id}`, JSON.stringify(saved));
+        localStorage.setItem('yavir.accounts', JSON.stringify([account.id]));
+        window.dispatchEvent(new StorageEvent('storage', { key: 'yavir.accounts' }));
+
+        expect(service.accounts()).toHaveLength(1);
+        expect(service.activeId()).toBeNull();
+      });
     });
   });
 
   describe('other tabs', () => {
-    it('follows the storage events of the records, the index and the active pointer', () => {
+    it('follows the storage events of the records and the index', () => {
       const account = service.add({ server, ...tokens, identity: 'a' });
       localStorage.setItem(`yavir.account.${account.id}`, JSON.stringify({ ...record(account.id), refreshToken: 'from-other-tab' }));
       window.dispatchEvent(new StorageEvent('storage', { key: `yavir.account.${account.id}` }));
@@ -578,6 +844,26 @@ describe('AccountsService', () => {
       expect(synced?.refreshToken).toBe('newer');
       expect(service.active()?.accessToken).toBe('newer-a');
       expect(service.syncFromStorage(account.id)).toBeNull();
+    });
+
+    it('does not write the old tokens back over the ones another tab has just refreshed, when it updates the record', () => {
+      const account = service.add({ server, ...tokens, identity: 'a' });
+      // Інша вкладка оновила токени, а подія `storage` до цієї ще не дійшла.
+      localStorage.setItem(`yavir.account.${account.id}`, JSON.stringify({ ...record(account.id), refreshToken: 'newer', accessToken: 'newer-a' }));
+
+      service.update(account.id, { ngoName: 'Організація' });
+
+      expect(record(account.id)).toMatchObject({ refreshToken: 'newer', accessToken: 'newer-a', ngoName: 'Організація' });
+      expect(service.active()).toMatchObject({ refreshToken: 'newer', accessToken: 'newer-a', ngoName: 'Організація' });
+    });
+
+    it('still writes the tokens that the update itself brings', () => {
+      const account = service.add({ server, ...tokens, identity: 'a' });
+      localStorage.setItem(`yavir.account.${account.id}`, JSON.stringify({ ...record(account.id), refreshToken: 'newer' }));
+
+      service.update(account.id, { refreshToken: 'newest', accessToken: 'newest-a' });
+
+      expect(record(account.id)).toMatchObject({ refreshToken: 'newest', accessToken: 'newest-a' });
     });
   });
 });

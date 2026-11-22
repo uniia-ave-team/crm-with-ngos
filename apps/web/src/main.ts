@@ -1,6 +1,9 @@
-import { platformBrowser } from '@angular/platform-browser';
+import { bootstrapApplication } from '@angular/platform-browser';
 
-import { AppModule } from './app/app.module';
+import { AppComponent } from './app/app.component';
+import { appConfig } from './app/app.config';
+import { registerIcons } from './app/core/icons';
 
-platformBrowser().bootstrapModule(AppModule)
-  .catch(err => console.log(err));
+registerIcons();
+
+bootstrapApplication(AppComponent, appConfig).catch((error: unknown) => console.error(error));

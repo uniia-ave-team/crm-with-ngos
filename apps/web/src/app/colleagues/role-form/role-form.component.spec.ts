@@ -8,14 +8,14 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 import uk from '../../../assets/i18n/uk.json';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { ConnectionService } from '../../core/connection/connection.service';
-import { ColleaguesPageModule } from '../colleagues.module';
-import { PERMISSION_GROUPS } from '../../core/roles/role-permissions';
+import { ALWAYS_GRANTED_PERMISSIONS, PERMISSION_GROUPS } from '../../core/roles/role-permissions';
 import { Role } from '../../core/roles/roles.service';
 import { NewRole } from './role-form.component';
+import { RoleFormComponent } from './role-form.component';
 
 @Component({
   template: `<app-role-form [role]="role" [saving]="saving()" [error]="error()" (save)="saved.push($event)" />`,
-  imports: [ColleaguesPageModule],
+  imports: [RoleFormComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {
@@ -27,6 +27,14 @@ class HostComponent {
 
 /** Усі права, які пропонує форма: користувач із ними може надати будь-який тумблер. */
 const ALL_RIGHTS = PERMISSION_GROUPS.flatMap((group) => group.permissions);
+
+/** Перемикач групи прав з цим `id` (за порядком груп у формі). */
+function switchOf(element: HTMLElement, id: string): HTMLInputElement {
+  return element.querySelectorAll<HTMLInputElement>('input[role=switch]')[PERMISSION_GROUPS.findIndex((group) => group.id === id)];
+}
+
+/** Права «Редагування організації» — групи без пункту над нею (вмикається сама по собі). */
+const NGO = PERMISSION_GROUPS.find((group) => group.id === 'editNgo')!.permissions;
 
 describe('RoleFormComponent', () => {
   beforeEach(() => {
@@ -116,8 +124,8 @@ describe('RoleFormComponent', () => {
       type('role-form-plural', 'Куратори');
       submit();
       expect(host.saved).toEqual([
-        { name: 'Куратор', feminitiveName: 'Кураторка', pluralName: null, permissions: [] },
-        { name: 'Куратор', feminitiveName: 'Кураторка', pluralName: 'Куратори', permissions: [] },
+        { name: 'Куратор', feminitiveName: 'Кураторка', pluralName: null, permissions: ALWAYS_GRANTED_PERMISSIONS },
+        { name: 'Куратор', feminitiveName: 'Кураторка', pluralName: 'Куратори', permissions: ALWAYS_GRANTED_PERMISSIONS },
       ]);
     });
 
@@ -163,7 +171,7 @@ describe('RoleFormComponent', () => {
 
     it('turns on and off, each one on its own, and gives the permissions of the groups that are on', () => {
       const { fixture, host, element, type, submit } = render();
-      const [first, second] = switches(element);
+      const [first, second] = [switchOf(element, 'viewUsers'), switchOf(element, 'editNgo')];
       first.click();
       fixture.detectChanges();
       expect(first.checked).toBe(true);
@@ -177,7 +185,7 @@ describe('RoleFormComponent', () => {
       type('role-form-name', 'Член');
       submit();
       expect(host.saved).toEqual([
-        { name: 'Член', feminitiveName: null, pluralName: null, permissions: PERMISSION_GROUPS[1].permissions },
+        { name: 'Член', feminitiveName: null, pluralName: null, permissions: [...NGO, ...ALWAYS_GRANTED_PERMISSIONS] },
       ]);
     });
   });
@@ -187,8 +195,15 @@ describe('RoleFormComponent', () => {
     const idsOfLocked = (element: HTMLElement) =>
       switches(element).flatMap((input, index) => (input.disabled ? [PERMISSION_GROUPS[index].id] : []));
 
-    it('lets switch on every group when the user has all the permissions', () => {
-      const { element } = render();
+    it('lets switch on every group when the user has all the permissions (the sub-items wait only for their item)', () => {
+      const { fixture, element } = render();
+      const childrenOf = (parent: string) => PERMISSION_GROUPS.filter((group) => group.parent === parent).map((group) => group.id);
+      expect(idsOfLocked(element)).toEqual([...childrenOf('viewUsers'), ...childrenOf('viewTables')]);
+      switchOf(element, 'viewUsers').click();
+      fixture.detectChanges();
+      expect(idsOfLocked(element)).toEqual(childrenOf('viewTables'));
+      switchOf(element, 'viewTables').click();
+      fixture.detectChanges();
       expect(idsOfLocked(element)).toEqual([]);
     });
 
@@ -201,7 +216,10 @@ describe('RoleFormComponent', () => {
     });
 
     it('locks only the groups whose permission the user does not have, the rest stay free and without the hint', () => {
-      const { element } = render(null, ['Permissions.ViewUser', 'Permissions.CanResetPassword']);
+      const { fixture, element } = render(null, ['Permissions.ViewUser', 'Permissions.CanResetPassword']);
+      // «Скидання паролів» — підпункт: вільний, щойно ввімкнено «Перегляд колег».
+      switchOf(element, 'viewUsers').click();
+      fixture.detectChanges();
       expect(idsOfLocked(element)).toEqual(PERMISSION_GROUPS.map((group) => group.id).filter((id) => id !== 'viewUsers' && id !== 'resetPasswords'));
       const rows = Array.from(element.querySelectorAll<HTMLElement>('.role-form__permission'));
       expect(rows[0].hasAttribute('title')).toBe(false);
@@ -269,8 +287,8 @@ describe('RoleFormComponent', () => {
     });
 
     it('switches on a merged group when the role has all of its permissions', () => {
-      const { element } = render(withClaims('Permissions.CreateUser', 'Permissions.UpdateUser'));
-      expect(idsOn(element)).toEqual(['editUsers']);
+      const { element } = render(withClaims('Permissions.ViewUser', 'Permissions.CreateUser', 'Permissions.UpdateUser'));
+      expect(idsOn(element)).toEqual(['viewUsers', 'editUsers']);
     });
 
     it('does not care about the claims that are not in the groups (the permissions without settings)', () => {
@@ -285,15 +303,15 @@ describe('RoleFormComponent', () => {
 
     it('lets the user turn off a group of the role that he has the rights for, and turn on another one', () => {
       const { fixture, element } = render(withClaims('Permissions.ViewUser'));
-      switches(element)[0].click();
-      switches(element)[3].click();
+      switchOf(element, 'viewUsers').click();
+      switchOf(element, 'editNgo').click();
       fixture.detectChanges();
-      expect(idsOn(element)).toEqual(['resetPasswords']);
+      expect(idsOn(element)).toEqual(['editNgo']);
     });
 
     it('locks by the rights of the user, but a locked group keeps the state of the role (on or off)', () => {
       const { element } = render(withClaims('Permissions.ViewUser', 'Permissions.CanResetPassword'), ['Permissions.CanResetPassword']);
-      const [viewUsers, , , resetPasswords] = switches(element);
+      const [viewUsers, resetPasswords] = [switchOf(element, 'viewUsers'), switchOf(element, 'resetPasswords')];
       expect(viewUsers.disabled).toBe(true);
       expect(viewUsers.checked).toBe(true);
       expect(resetPasswords.disabled).toBe(false);
@@ -314,10 +332,10 @@ describe('RoleFormComponent', () => {
 
     it('gives the permissions of the groups that are on when it is saved, the locked ones included', () => {
       const { fixture, host, element, submit } = render(withClaims('Permissions.ViewUser'), ['Permissions.CanResetPassword']);
-      switches(element)[3].click();
+      switchOf(element, 'resetPasswords').click();
       fixture.detectChanges();
       submit();
-      expect(host.saved[0].permissions).toEqual(['Permissions.ViewUser', 'Permissions.CanResetPassword']);
+      expect(host.saved[0].permissions).toEqual(['Permissions.ViewUser', 'Permissions.CanResetPassword', ...ALWAYS_GRANTED_PERMISSIONS]);
     });
   });
 
@@ -401,21 +419,21 @@ describe('RoleFormComponent', () => {
     it('gives no permission of the group on save while its switch is off', () => {
       const { host, submit } = render(withClaims('Permissions.CreateUser'));
       submit();
-      expect(host.saved[0].permissions).toEqual([]);
+      expect(host.saved[0].permissions).toEqual(ALWAYS_GRANTED_PERMISSIONS);
     });
   });
 
-  describe('what the form gives with the permissions', () => {
+  describe('what the form gives with the permissions (the ones of the groups, then the ones without settings)', () => {
     const switches = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLInputElement>('input[role=switch]'));
 
     it('gives the permissions of every switched on group in the order of the groups, whatever the order of the clicks', () => {
       const { fixture, host, element, type, submit } = render();
-      switches(element)[1].click();
-      switches(element)[0].click();
+      switchOf(element, 'editNgo').click();
+      switchOf(element, 'viewUsers').click();
       fixture.detectChanges();
       type('role-form-name', 'Член');
       submit();
-      expect(host.saved[0].permissions).toEqual(['Permissions.ViewUser', 'Permissions.CreateUser', 'Permissions.UpdateUser']);
+      expect(host.saved[0].permissions).toEqual(['Permissions.ViewUser', ...NGO, ...ALWAYS_GRANTED_PERMISSIONS]);
     });
 
     it('gives every permission of a merged group', () => {
@@ -425,17 +443,17 @@ describe('RoleFormComponent', () => {
       fixture.detectChanges();
       type('role-form-name', 'Член');
       submit();
-      expect(host.saved[0].permissions).toEqual(PERMISSION_GROUPS[index].permissions);
+      expect(host.saved[0].permissions).toEqual([...PERMISSION_GROUPS[index].permissions, ...ALWAYS_GRANTED_PERMISSIONS]);
     });
 
-    it('gives no permissions when no switch is on, and none of a switch that was turned off again', () => {
+    it('gives only the permissions without settings when no switch is on, and none of a switch that was turned off again', () => {
       const { fixture, host, element, type, submit } = render();
       type('role-form-name', 'Член');
       switches(element)[0].click();
       switches(element)[0].click();
       fixture.detectChanges();
       submit();
-      expect(host.saved[0].permissions).toEqual([]);
+      expect(host.saved[0].permissions).toEqual(ALWAYS_GRANTED_PERMISSIONS);
     });
   });
 
@@ -487,7 +505,7 @@ describe('RoleFormComponent', () => {
       type('role-form-feminitive', ' Кураторка');
       type('role-form-plural', 'Куратори  ');
       submit();
-      expect(host.saved).toEqual([{ name: 'Куратор', feminitiveName: 'Кураторка', pluralName: 'Куратори', permissions: [] }]);
+      expect(host.saved).toEqual([{ name: 'Куратор', feminitiveName: 'Кураторка', pluralName: 'Куратори', permissions: ALWAYS_GRANTED_PERMISSIONS }]);
     });
 
     it('gives null for the optional fields that are empty or only spaces', () => {
@@ -495,7 +513,7 @@ describe('RoleFormComponent', () => {
       type('role-form-name', 'Член');
       type('role-form-plural', '   ');
       submit();
-      expect(host.saved).toEqual([{ name: 'Член', feminitiveName: null, pluralName: null, permissions: [] }]);
+      expect(host.saved).toEqual([{ name: 'Член', feminitiveName: null, pluralName: null, permissions: ALWAYS_GRANTED_PERMISSIONS }]);
     });
 
     it('does not give anything, and says so under the name, when the name is empty or only spaces', () => {
@@ -527,7 +545,127 @@ describe('RoleFormComponent', () => {
       submit();
       type('role-form-name', 'Член');
       submit();
-      expect(host.saved).toEqual([{ name: 'Член', feminitiveName: null, pluralName: null, permissions: [] }]);
+      expect(host.saved).toEqual([{ name: 'Член', feminitiveName: null, pluralName: null, permissions: ALWAYS_GRANTED_PERMISSIONS }]);
+    });
+  });
+
+  describe('the sub-items (they depend on their item: "Viewing colleagues" or "Viewing tables")', () => {
+    const base: Role = { id: 'r1', name: 'Куратор', feminitiveName: null, pluralName: null };
+    const rowOf = (element: HTMLElement, id: string) =>
+      element.querySelectorAll<HTMLElement>('.role-form__permission')[PERMISSION_GROUPS.findIndex((group) => group.id === id)];
+    /** Пункт і його підпункти в порядку форми. */
+    const COLLEAGUES_BLOCK = ['viewUsers', 'viewEmergencyContacts', 'viewCustomFields', 'editUsers', 'resetPasswords', 'disableUsers', 'manageRoles'];
+    const TABLES_BLOCK = ['viewTables', 'manageTables'];
+
+    it('come right after their item, with the lines of the tree before the name: the last one ends with the corner', () => {
+      const { element } = render();
+      const ids = PERMISSION_GROUPS.map((group) => group.id);
+      for (const block of [COLLEAGUES_BLOCK, TABLES_BLOCK]) {
+        expect(ids.slice(ids.indexOf(block[0]), ids.indexOf(block[0]) + block.length)).toEqual(block);
+      }
+      const children = [...COLLEAGUES_BLOCK.slice(1), ...TABLES_BLOCK.slice(1)];
+      for (const id of children) {
+        const last = id === COLLEAGUES_BLOCK.at(-1) || id === TABLES_BLOCK.at(-1);
+        const row = rowOf(element, id);
+        expect(row.classList).toContain('role-form__permission--child');
+        const branch = row.querySelector('.role-form__branch') as HTMLElement;
+        // Лише графіка: без символів, прихована від читачів екрана.
+        expect(branch.textContent).toBe('');
+        expect(branch.getAttribute('aria-hidden')).toBe('true');
+        expect(branch.classList.contains('role-form__branch--last')).toBe(last);
+        expect(branch.nextElementSibling).toBe(row.querySelector('.role-form__permission-name'));
+      }
+      expect(element.querySelectorAll('.role-form__branch')).toHaveLength(children.length);
+    });
+
+    it('make one block with their item: no line between the item and its sub-items, the lines stay around the block', () => {
+      const { element } = render();
+      const joined = PERMISSION_GROUPS.filter((group) => rowOf(element, group.id).classList.contains('role-form__permission--joined')).map(
+        (group) => group.id,
+      );
+      // Без лінії знизу — усі рядки блоку, крім останнього підпункту.
+      expect(joined).toEqual([...COLLEAGUES_BLOCK.slice(0, -1), ...TABLES_BLOCK.slice(0, -1)]);
+    });
+
+    it('turn off together with their item', () => {
+      const { fixture, element } = render();
+      switchOf(element, 'viewUsers').click();
+      fixture.detectChanges();
+      switchOf(element, 'editUsers').click();
+      switchOf(element, 'manageRoles').click();
+      fixture.detectChanges();
+      switchOf(element, 'viewUsers').click();
+      fixture.detectChanges();
+      expect([switchOf(element, 'editUsers'), switchOf(element, 'manageRoles')].map((input) => [input.checked, input.disabled])).toEqual([
+        [false, true],
+        [false, true],
+      ]);
+    });
+
+    it('is off, locked and dimmed with the hint while its item is off', () => {
+      const { element } = render();
+      const row = rowOf(element, 'manageRoles');
+      expect(switchOf(element, 'manageRoles').disabled).toBe(true);
+      expect(switchOf(element, 'manageRoles').checked).toBe(false);
+      expect(row.classList).toContain('role-form__permission--locked');
+      expect(row.getAttribute('title')).toBe(
+        uk.colleagues.roleForm.permissionNeedsParent.replace('{{parent}}', uk.colleagues.roleForm.permissions.viewUsers),
+      );
+    });
+
+    it('can be turned on once its item is on, and gives its permissions with the ones of the item', () => {
+      const { fixture, host, element, type, submit } = render();
+      switchOf(element, 'viewUsers').click();
+      fixture.detectChanges();
+      const row = rowOf(element, 'manageRoles');
+      expect(switchOf(element, 'manageRoles').disabled).toBe(false);
+      expect(row.classList).not.toContain('role-form__permission--locked');
+      expect(row.getAttribute('title')).toBeNull();
+      switchOf(element, 'manageRoles').click();
+      type('role-form-name', 'Член');
+      submit();
+      expect(host.saved[0].permissions).toEqual([
+        'Permissions.ViewUser',
+        'Permissions.ManageRole',
+        'Permissions.AssignRoleToUser',
+        ...ALWAYS_GRANTED_PERMISSIONS,
+      ]);
+    });
+
+    it('is turned off with its item, and stays off when the item is turned on again', () => {
+      const { fixture, host, element, type, submit } = render();
+      switchOf(element, 'viewUsers').click();
+      fixture.detectChanges();
+      switchOf(element, 'manageRoles').click();
+      fixture.detectChanges();
+      switchOf(element, 'viewUsers').click();
+      fixture.detectChanges();
+      expect(switchOf(element, 'manageRoles').checked).toBe(false);
+      expect(switchOf(element, 'manageRoles').disabled).toBe(true);
+      switchOf(element, 'viewUsers').click();
+      fixture.detectChanges();
+      expect(switchOf(element, 'manageRoles').checked).toBe(false);
+      type('role-form-name', 'Член');
+      submit();
+      expect(host.saved[0].permissions).toEqual(['Permissions.ViewUser', ...ALWAYS_GRANTED_PERMISSIONS]);
+    });
+
+    it('keeps its switch off when a change comes anyway while its item is off', () => {
+      const { fixture, element } = render();
+      const child = switchOf(element, 'manageRoles');
+      child.checked = true;
+      child.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      expect(child.checked).toBe(false);
+    });
+
+    it('is shown off for a role that has its permissions without the item, and they are not given on save', () => {
+      const role = { ...base, claims: ['Permissions.ManageRole', 'Permissions.AssignRoleToUser'] } as Role;
+      const { host, element, submit } = render(role);
+      expect(switchOf(element, 'manageRoles').checked).toBe(false);
+      expect(switchOf(element, 'manageRoles').disabled).toBe(true);
+      submit();
+      expect(host.saved[0].permissions).toEqual(ALWAYS_GRANTED_PERMISSIONS);
     });
   });
 });

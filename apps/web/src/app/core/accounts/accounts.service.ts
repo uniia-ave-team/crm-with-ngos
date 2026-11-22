@@ -1,15 +1,22 @@
-import { Injectable, Signal, computed, signal } from '@angular/core';
+import { DestroyRef, Injectable, Signal, computed, inject, signal } from '@angular/core';
 
+import { hostnameToUnicode } from '../connection/idn';
 import { UserRole, sanitizeRoles } from '../users/user-profile';
 
 /** Індекс: впорядкований список `id` акаунтів (JSON-масив рядків). */
 const INDEX_KEY = 'yavir.accounts';
 /** Запис акаунта: `yavir.account.<id>`. */
 const ACCOUNT_KEY_PREFIX = 'yavir.account.';
-/** `id` активного акаунта. */
+/**
+ * `id` активного акаунта **цієї вкладки** (у `sessionStorage`). Порожній рядок — у вкладці свідомо
+ * нема активного акаунта; ключа нема взагалі — вкладка нова й ще нічого не вибирала.
+ */
 const ACTIVE_KEY = 'yavir.activeAccount';
-
-export const ACCOUNT_SCHEMA_VERSION = 1;
+/**
+ * Підказка для нової вкладки (у `localStorage`): `id` акаунта, активного у вкладці, яку
+ * користувач бачив останньою.
+ */
+const LAST_ACTIVE_KEY = 'yavir.lastActiveAccount';
 
 /**
  * Акаунт на цьому пристрої = пара «сервер + користувач». Запис містить усе, що
@@ -17,7 +24,6 @@ export const ACCOUNT_SCHEMA_VERSION = 1;
  * адресу підключення, токени та знімок даних (імʼя, прізвище, аватар, назва ГО).
  */
 export interface StoredAccount {
-  readonly version: number;
   readonly id: string;
   /** Адреса підключення цього акаунта (origin сервера), напр. `http://localhost:5065`. */
   readonly server: string;
@@ -88,7 +94,11 @@ export interface StoredAccount {
   readonly lastUsedAt: number;
 }
 
-/** Що потрібно для додавання акаунта: сервер, токени й те, за чим його впізнати. */
+/**
+ * Що потрібно для додавання акаунта: сервер, токени й те, за чим його впізнати. Це все, що
+ * відомо одразу після входу; знімок профілю (імʼя, аватар, ГО, права, ролі) приходить пізніше
+ * окремими запитами й записується через `update`.
+ */
 export interface NewAccount {
   readonly server: string;
   readonly accessToken: string;
@@ -100,13 +110,6 @@ export interface NewAccount {
   readonly identity: string;
   readonly userId?: string;
   readonly email?: string;
-  readonly firstName?: string;
-  readonly lastName?: string;
-  readonly patronymic?: string;
-  readonly avatarUrl?: string | null;
-  readonly ngoName?: string | null;
-  readonly ngoLogoUrl?: string | null;
-  readonly permissions?: readonly string[];
 }
 
 /**
@@ -145,17 +148,33 @@ export type AccountPatch = Partial<
 >;
 
 /**
- * Акаунти цього пристрою в `localStorage`: «запис на акаунт + індекс».
+ * Акаунти цього пристрою. Самі акаунти спільні для всіх вкладок і лежать у `localStorage`
+ * («запис на акаунт + індекс»), а активний акаунт у кожної вкладки свій (`sessionStorage`):
  *
  * - `yavir.accounts` — індекс (масив `id` за порядком додавання);
  * - `yavir.account.<id>` — запис акаунта (див. `StoredAccount`);
- * - `yavir.activeAccount` — `id` активного акаунта.
+ * - `yavir.activeAccount` (`sessionStorage`) — `id` активного акаунта цієї вкладки. Він
+ *   переживає перезавантаження сторінки й не залежить від того, що вибрано в інших вкладках;
+ * - `yavir.lastActiveAccount` — підказка для нової вкладки: акаунт вкладки, яку користувач
+ *   бачив останньою. Нова вкладка починає з нього й далі живе своїм вибором.
  *
- * Кожен запис пише лише той, хто оновлює саме цей акаунт (оновлення токенів
- * іде під Web Lock в `AuthService`), тож вкладки не затирають чужі зміни; для
- * інших вкладок зміни приходять подією `storage`. Сирітські записи й
- * непридатні дані прибираються під час читання. Сховище може бути недоступне
- * (приватний режим) — тоді акаунти живуть лише в памʼяті.
+ * Чужі зміни самих акаунтів вкладка бачить: акаунт, з якого вийшли в іншій вкладці, зникає й
+ * тут, а якщо інша вкладка позначила активний тут акаунт застарілим (сервер відхилив його
+ * токени), він перестає бути активним і тут. «Сервер не відповів» кожна вкладка зʼясовує сама.
+ *
+ * Вкладки не затирають зміни одна одної: токени оновлюються під Web Lock в `AuthService`, а
+ * будь-яка інша зміна запису (`update`) спершу підхоплює зі сховища пару токенів, якщо її
+ * встигла оновити інша вкладка. Решту чужих змін вкладка отримує подією `storage`.
+ *
+ * Під час читання запис перевіряється по полях: поле не того типу стає значенням за
+ * замовчуванням, а запис без `id`, сервера чи токенів (або з чужим `id`) вважається нечитним —
+ * він зникає і з індексу, і зі сховища. Записи, яких в індексі нема, не шукаються: інша
+ * вкладка пише спершу запис, а потім індекс, тож таке прибирання могло б видалити щойно
+ * доданий акаунт.
+ *
+ * Сховище може бути недоступне (браузер блокує дані сайтів, ізольований фрейм). Це
+ * перевіряється один раз на старті, і тоді акаунти живуть лише в памʼяті: `reload` їх не
+ * чіпає, тож працювати можна, доки вкладку не закрили й не перезавантажили.
  */
 @Injectable({ providedIn: 'root' })
 export class AccountsService {
@@ -172,24 +191,52 @@ export class AccountsService {
     () => this.accountsSignal().find((account) => account.id === this.activeIdSignal()) ?? null,
   );
 
+  private readonly switchingSignal = signal(false);
+  /**
+   * Іде пошук чинного акаунта чи перемикання на інший (`AccountRestoreService`): активними на мить
+   * стають акаунти, які лише перевіряються, тож «активного нема» чи «активний інший» у цей час
+   * не означає ні виходу, ні справжньої зміни акаунта. Прапорець живе тут, у сховищі, бо на нього
+   * зважають сервіси, нижчі за пошук: профіль, сесія, меню.
+   */
+  readonly switching: Signal<boolean> = this.switchingSignal.asReadonly();
+
+  /** Чи читається сховище браузера; ні — акаунти й активний живуть лише в памʼяті. */
+  private readonly storageAvailable = canReadStorage();
+
+  private readonly storageFullSignal = signal(false);
+  /**
+   * Сховище читається, але браузер не дав у нього записати (переповнене): зміни акаунтів (нові
+   * токени, мініатюри, вихід) живуть лише в памʼяті до перезавантаження сторінки. Застосунок
+   * показує про це спливаюче попередження; скидає його `dismissStorageFull`. Коли сховища нема
+   * зовсім (дані сайтів заблоковано), це не помилка запису, і прапорець не вмикається.
+   */
+  readonly storageFull: Signal<boolean> = this.storageFullSignal.asReadonly();
+
   constructor() {
     this.reload();
-    // Інша вкладка змінила акаунти (додала, оновила токени, вийшла) — підхоплюємо.
-    window.addEventListener('storage', (event) => {
-      if (
-        event.key === null ||
-        event.key === INDEX_KEY ||
-        event.key === ACTIVE_KEY ||
-        event.key.startsWith(ACCOUNT_KEY_PREFIX)
-      ) {
+    this.rememberLastActive();
+    // Інша вкладка змінила акаунти (додала, оновила токени, вийшла) — підхоплюємо. Який акаунт
+    // активний в іншій вкладці, нас не стосується: підказка `LAST_ACTIVE_KEY` сюди не входить.
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key === null || event.key === INDEX_KEY || event.key.startsWith(ACCOUNT_KEY_PREFIX)) {
         this.reload();
       }
+    };
+    // Користувач повернувся до цієї вкладки — нова вкладка тепер має починати з її акаунта.
+    const onVisibilityChange = (): void => this.rememberLastActive();
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    // У застосунку сервіс живе, доки відкрита вкладка. Слухачів знімаємо для тестів, де сервіс
+    // створюється заново: інакше попередній екземпляр і далі писав би у сховище.
+    inject(DestroyRef).onDestroy(() => {
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     });
   }
 
   /**
-   * `id` акаунта: домен сервера (лише латинські літери) і короткий відбиток
-   * сервера та ознаки користувача, напр. `localhost-a3f9c01b`. Домен у `id`
+   * `id` акаунта: домен сервера (лише літери, латинські й українські) і короткий відбиток
+   * сервера та ознаки користувача, напр. `localhost-a3f9c01b` чи `прикладукр-5d0c7e21`. Домен у `id`
    * напряму показує, чий це акаунт, а відбиток розрізняє порти, протоколи й
    * користувачів. Це лише основа: справжню унікальність гарантує `add()`,
    * що розводить колізії числовим суфіксом.
@@ -198,24 +245,45 @@ export class AccountsService {
     return `${domainLetters(server)}-${hash(`${server}|${identity}`)}`;
   }
 
-
-  /** Читає все зі сховища заново. */
+  /**
+   * Читає все зі сховища заново: акаунти — зі спільного, активний — зі свого (нова вкладка —
+   * з підказки). Активним не стає акаунт, якого вже нема чи який застарів (поза перемиканням:
+   * під час нього застарілий акаунт якраз перевіряється); тоді вкладка лишається без активного.
+   *
+   * Без сховища читати нічого: те, що є в памʼяті, лишається як було. Інакше порожнє
+   * «прочитане» стерло б акаунт одразу після входу (стражі викликають це при кожному переході).
+   */
   reload(): void {
+    if (!this.storageAvailable) {
+      return;
+    }
     const ids = this.readIndex();
     const accounts: StoredAccount[] = [];
     for (const id of ids) {
       const account = this.readRecord(id);
       if (account) {
         accounts.push(account);
+      } else {
+        // Нечитний запис не лишаємо у сховищі: у ньому можуть бути токени.
+        this.removeKey(`${ACCOUNT_KEY_PREFIX}${id}`);
       }
     }
-    // Записи, яких нема (або вони зіпсовані), з індексу прибираємо.
+    // Записи, яких нема (або вони нечитні), з індексу прибираємо.
     if (accounts.length !== ids.length) {
       this.writeIndex(accounts.map((account) => account.id));
     }
-    const storedActive = this.read(ACTIVE_KEY);
+    const own = this.readActive();
+    // `null` — вкладка ще нічого не вибирала (нова): починає з акаунта останньої видимої.
+    const wanted = own ?? this.read(LAST_ACTIVE_KEY);
+    const account = accounts.find((candidate) => candidate.id === wanted);
+    const activeId = account && (this.switchingSignal() || !account.outdated) ? account.id : null;
+    // Закріплюємо вибір за вкладкою: інакше вона й далі йшла б за підказкою або знову
+    // підхопила б акаунт, який зник, а потім зʼявився з тим самим `id`.
+    if (own !== (activeId ?? '')) {
+      this.writeActive(activeId);
+    }
     this.accountsSignal.set(accounts);
-    this.activeIdSignal.set(accounts.some((account) => account.id === storedActive) ? storedActive : null);
+    this.activeIdSignal.set(activeId);
   }
 
   /**
@@ -241,7 +309,6 @@ export class AccountsService {
     const snapshot = existing && existing.server === input.server && existing.identity === input.identity ? existing : undefined;
     const id = existing?.id ?? this.freeId(AccountsService.accountId(input.server, input.identity));
     const account: StoredAccount = {
-      version: ACCOUNT_SCHEMA_VERSION,
       id,
       server: input.server,
       identity: input.identity,
@@ -250,15 +317,15 @@ export class AccountsService {
       // Вхід (нові токени) повертає акаунт у чинні.
       outdated: false,
       unavailable: false,
-      firstName: input.firstName ?? snapshot?.firstName ?? '',
-      lastName: input.lastName ?? snapshot?.lastName ?? '',
-      patronymic: input.patronymic ?? snapshot?.patronymic ?? '',
-      avatarUrl: input.avatarUrl !== undefined ? input.avatarUrl : (snapshot?.avatarUrl ?? null),
-      ngoName: input.ngoName !== undefined ? input.ngoName : (snapshot?.ngoName ?? null),
-      ngoLogoUrl: input.ngoLogoUrl !== undefined ? input.ngoLogoUrl : (snapshot?.ngoLogoUrl ?? null),
+      firstName: snapshot?.firstName ?? '',
+      lastName: snapshot?.lastName ?? '',
+      patronymic: snapshot?.patronymic ?? '',
+      avatarUrl: snapshot?.avatarUrl ?? null,
+      ngoName: snapshot?.ngoName ?? null,
+      ngoLogoUrl: snapshot?.ngoLogoUrl ?? null,
       avatarThumb: snapshot?.avatarThumb ?? null,
       ngoLogoThumb: snapshot?.ngoLogoThumb ?? null,
-      permissions: input.permissions ?? snapshot?.permissions ?? [],
+      permissions: snapshot?.permissions ?? [],
       roles: snapshot?.roles ?? [],
       accessToken: input.accessToken,
       refreshToken: input.refreshToken,
@@ -292,8 +359,15 @@ export class AccountsService {
     return id;
   }
 
-  /** Змінює поля запису акаунта (`id` якого вже є); не існує — нічого не робить. */
+  /**
+   * Змінює поля запису акаунта (`id` якого вже є); не існує — нічого не робить.
+   *
+   * У сховище пишеться запис цілком, разом із токенами. Тому спершу підхоплюється пара
+   * токенів, яку могла оновити інша вкладка (`syncFromStorage`): подія `storage` про це
+   * приходить не одразу, і без цього запис із памʼяті повернув би у сховище стару пару.
+   */
   update(id: string, patch: AccountPatch): void {
+    this.syncFromStorage(id);
     const current = this.accountsSignal().find((account) => account.id === id);
     if (!current) {
       return;
@@ -306,31 +380,25 @@ export class AccountsService {
   /**
    * Позначає акаунт застарілим (`outdated: true`): сервер відповів, але відхилив його токени.
    * Сервер при цьому відповів, тож `unavailable` скидається. Акаунт не видаляємо. Якщо він
-   * був активним, активного акаунта більше нема (`keepActiveAccount`).
+   * був активним, активного акаунта більше нема (`clearActiveIf`). Невідомий `id` ігнорується.
    */
   markOutdated(id: string): void {
-    if (!this.accountsSignal().some((account) => account.id === id)) {
-      return;
-    }
     this.update(id, { outdated: true, unavailable: false });
-    this.keepActiveAccount(id);
+    this.clearActiveIf(id);
   }
 
   /**
    * Позначає акаунт недоступним (`unavailable: true`): його сервер не відповів (мережа,
    * 5xx). `outdated` лишається як був: токени тут ні до чого. Якщо акаунт був активним,
-   * активного більше нема, як у `markOutdated`.
+   * активного більше нема, як у `markOutdated`. Невідомий `id` ігнорується.
    */
   markUnavailable(id: string): void {
-    if (!this.accountsSignal().some((account) => account.id === id)) {
-      return;
-    }
     this.update(id, { unavailable: true });
-    this.keepActiveAccount(id);
+    this.clearActiveIf(id);
   }
 
   /**
-   * Видаляє акаунт. Якщо він був активним, активного акаунта більше нема (`keepActiveAccount`).
+   * Видаляє акаунт. Якщо він був активним, активного акаунта більше нема (`clearActiveIf`).
    */
   remove(id: string): void {
     const accounts = this.accountsSignal().filter((account) => account.id !== id);
@@ -340,39 +408,80 @@ export class AccountsService {
     this.removeKey(`${ACCOUNT_KEY_PREFIX}${id}`);
     this.writeIndex(accounts.map((account) => account.id));
     this.accountsSignal.set(accounts);
-    this.keepActiveAccount(id);
+    this.clearActiveIf(id);
   }
 
   /**
-   * Після того як акаунт `changedId` застарів, став недоступним чи був видалений: якщо він був
-   * активним, активного акаунта більше нема (`null`). Інший акаунт саме не підхоплюється:
+   * Знімає вибір активного акаунта, якщо активним був `changedId`. Викликається після того,
+   * як цей акаунт застарів, став недоступним чи був видалений. Інший акаунт саме не підхоплюється:
    * користувач обирає його сам (сторінка повторного входу, меню акаунтів), а пошук чинного
    * (`AccountRestoreService`) вибирає його явно. Самі акаунти лишаються в памʼяті, її не
    * очищає нічого, крім виходу.
    */
-  private keepActiveAccount(changedId: string): void {
+  private clearActiveIf(changedId: string): void {
     if (this.activeIdSignal() === changedId) {
       this.setActive(null);
     }
   }
 
-  /** Робить акаунт активним (`null` — зняти вибір). Неіснуючий `id` ігнорується. */
+  /** Вмикає й вимикає `switching`; це робить лише той, хто тимчасово перемикає активний акаунт. */
+  setSwitching(switching: boolean): void {
+    this.switchingSignal.set(switching);
+    this.rememberLastActive();
+  }
+
+  /**
+   * Чи лежить акаунт у сховищі браузера таким, як у памʼяті: запис із тими самими токенами є і
+   * значиться в індексі. Ні — запис не вдалося записати (сховище переповнене), і після
+   * перезавантаження сторінки акаунта не буде. Коли сховища нема зовсім (акаунти свідомо живуть
+   * у памʼяті, див. опис класу) — так.
+   */
+  isStored(id: string): boolean {
+    if (!this.storageAvailable) {
+      return true;
+    }
+    const current = this.accountsSignal().find((account) => account.id === id);
+    const stored = this.readRecord(id);
+    return !!current && !!stored && stored.refreshToken === current.refreshToken && this.readIndex().includes(id);
+  }
+
+  /**
+   * Робить акаунт активним у цій вкладці (`null` — зняти вибір). Неіснуючий `id` ігнорується.
+   * Інших вкладок це не зачіпає.
+   */
   setActive(id: string | null): void {
     if (id !== null && !this.accountsSignal().some((account) => account.id === id)) {
       return;
     }
-    if (id === null) {
-      this.removeKey(ACTIVE_KEY);
-    } else {
-      this.write(ACTIVE_KEY, id);
-    }
+    this.writeActive(id);
     this.activeIdSignal.set(id);
+    this.rememberLastActive();
   }
 
   /**
-   * Підхоплює з `localStorage` запис акаунта, який міг оновити інша вкладка.
-   * Повертає його, якщо він відрізняється від того, що в памʼяті (і
-   * застосовує), інакше `null`.
+   * Записує активний акаунт цієї вкладки як підказку для нової. Лише коли вкладку видно (нова
+   * вкладка має починати з акаунта тієї, де користувач щойно був, а не фонової) і не під час
+   * перемикання (там активними на мить стають акаунти, які лише перевіряються). Вкладка без
+   * активного акаунта підказку не чіпає. Акаунт, чийого запису в сховищі нема (вхід при
+   * переповненому сховищі, який потім скасовується), підказкою не стає: інакше вона вказувала б
+   * на акаунт, якого нема, а підказка до нього була б уже затерта.
+   */
+  private rememberLastActive(): void {
+    const id = this.activeIdSignal();
+    if (id !== null && !this.switchingSignal() && document.visibilityState === 'visible' && this.hasRecord(id)) {
+      this.write(LAST_ACTIVE_KEY, id);
+    }
+  }
+
+  /** Чи лежить запис акаунта в сховищі (без доступу до сховища — так, бо писати однаково нікуди). */
+  private hasRecord(id: string): boolean {
+    return !this.storageAvailable || this.readRecord(id) !== null;
+  }
+
+  /**
+   * Підхоплює з `localStorage` запис акаунта, токени якого могла оновити інша вкладка.
+   * Якщо refresh-токен у сховищі не той, що в памʼяті, бере в памʼять увесь запис зі сховища
+   * й повертає його; інакше (той самий токен, запису чи акаунта нема) — `null`.
    */
   syncFromStorage(id: string): StoredAccount | null {
     const stored = this.readRecord(id);
@@ -384,10 +493,14 @@ export class AccountsService {
     return stored;
   }
 
-  /** Стирає все сховище браузера для цього застосунку й забуває акаунти. */
+  /**
+   * Стирає все сховище браузера для цього застосунку (спільне й цієї вкладки) і забуває
+   * акаунти. Інші вкладки дізнаються про це подією `storage` й теж лишаються без акаунтів.
+   */
   wipe(): void {
     try {
       localStorage.clear();
+      sessionStorage.clear();
     } catch {
       // Сховище недоступне — нічого очищати.
     }
@@ -420,8 +533,8 @@ export class AccountsService {
       return null;
     }
     try {
-      const value: unknown = JSON.parse(raw);
-      return isStoredAccount(value) && value.id === id ? normalize(value) : null;
+      const account = toStoredAccount(JSON.parse(raw));
+      return account?.id === id ? account : null;
     } catch {
       return null;
     }
@@ -429,6 +542,23 @@ export class AccountsService {
 
   private writeRecord(account: StoredAccount): void {
     this.write(`${ACCOUNT_KEY_PREFIX}${account.id}`, JSON.stringify(account));
+  }
+
+  /** Активний акаунт цієї вкладки: `id`, порожній рядок («нема») або `null` (ще не вибирали). */
+  private readActive(): string | null {
+    try {
+      return sessionStorage.getItem(ACTIVE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  private writeActive(id: string | null): void {
+    try {
+      sessionStorage.setItem(ACTIVE_KEY, id ?? '');
+    } catch {
+      // Сховище недоступне — вибір живе лише в памʼяті.
+    }
   }
 
   private read(key: string): string | null {
@@ -439,11 +569,19 @@ export class AccountsService {
     }
   }
 
+  /** Попередження про переповнене сховище показано (закрито) або вже не потрібне. */
+  dismissStorageFull(): void {
+    this.storageFullSignal.set(false);
+  }
+
   private write(key: string, value: string): void {
     try {
       localStorage.setItem(key, value);
     } catch {
       // Сховище недоступне або переповнене — лишаємося лише в памʼяті.
+      if (this.storageAvailable) {
+        this.storageFullSignal.set(true);
+      }
     }
   }
 
@@ -456,32 +594,76 @@ export class AccountsService {
   }
 }
 
-/** Доповнює запис полями за замовчуванням (на випадок запису неповної версії). */
-function normalize(account: StoredAccount): StoredAccount {
+/** Чи дає браузер читати сховище: коли дані сайтів заблоковано, вже саме звернення кидає помилку. */
+function canReadStorage(): boolean {
+  try {
+    localStorage.getItem(INDEX_KEY);
+    sessionStorage.getItem(ACTIVE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Запис акаунта з того, що лежить у сховищі. Сховищу не довіряємо: його могла записати інша
+ * версія застосунку чи хтось вручну. Без `id`, сервера чи токенів це не акаунт (`null`); решта
+ * полів не того типу (або відсутні) стають значеннями за замовчуванням.
+ */
+function toStoredAccount(value: unknown): StoredAccount | null {
+  if (value === null || typeof value !== 'object') {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const { id, server, accessToken, refreshToken } = record;
+  if (
+    typeof id !== 'string' ||
+    typeof server !== 'string' ||
+    typeof accessToken !== 'string' ||
+    typeof refreshToken !== 'string'
+  ) {
+    return null;
+  }
+  const permissions = record['permissions'];
   return {
-    ...account,
-    version: account.version ?? ACCOUNT_SCHEMA_VERSION,
-    userId: account.userId ?? '',
-    identity: account.identity ?? '',
-    email: account.email ?? '',
-    outdated: account.outdated === true,
-    unavailable: account.unavailable === true,
-    firstName: account.firstName ?? '',
-    lastName: account.lastName ?? '',
-    patronymic: typeof account.patronymic === 'string' ? account.patronymic : '',
-    avatarUrl: account.avatarUrl ?? null,
-    ngoName: account.ngoName ?? null,
-    ngoLogoUrl: account.ngoLogoUrl ?? null,
-    avatarThumb: thumbnailOrNull(account.avatarThumb),
-    ngoLogoThumb: thumbnailOrNull(account.ngoLogoThumb),
-    permissions: Array.isArray(account.permissions)
-      ? account.permissions.filter((permission): permission is string => typeof permission === 'string')
+    id,
+    server,
+    identity: textOrEmpty(record['identity']),
+    userId: textOrEmpty(record['userId']),
+    email: textOrEmpty(record['email']),
+    outdated: record['outdated'] === true,
+    unavailable: record['unavailable'] === true,
+    firstName: textOrEmpty(record['firstName']),
+    lastName: textOrEmpty(record['lastName']),
+    patronymic: textOrEmpty(record['patronymic']),
+    avatarUrl: textOrNull(record['avatarUrl']),
+    ngoName: textOrNull(record['ngoName']),
+    ngoLogoUrl: textOrNull(record['ngoLogoUrl']),
+    avatarThumb: thumbnailOrNull(record['avatarThumb']),
+    ngoLogoThumb: thumbnailOrNull(record['ngoLogoThumb']),
+    permissions: Array.isArray(permissions)
+      ? permissions.filter((permission): permission is string => typeof permission === 'string')
       : [],
-    roles: sanitizeRoles(account.roles),
-    tokensIssuedAt: account.tokensIssuedAt ?? 0,
-    addedAt: account.addedAt ?? 0,
-    lastUsedAt: account.lastUsedAt ?? 0,
+    roles: sanitizeRoles(record['roles']),
+    accessToken,
+    refreshToken,
+    tokensIssuedAt: timeOrZero(record['tokensIssuedAt']),
+    addedAt: timeOrZero(record['addedAt']),
+    lastUsedAt: timeOrZero(record['lastUsedAt']),
   };
+}
+
+function textOrEmpty(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+/** Момент часу в мс; не число (чи не скінченне) — `0`, тобто «невідомо». */
+function timeOrZero(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 /** Мініатюра з сховища: лише коректна пара рядків (адреса й `data:`-посилання), інакше `null`. */
@@ -493,23 +675,13 @@ function thumbnailOrNull(value: unknown): AccountThumbnail | null {
   return typeof url === 'string' && typeof data === 'string' && data.startsWith('data:image/') ? { url, data } : null;
 }
 
-function isStoredAccount(value: unknown): value is StoredAccount {
-  if (value === null || typeof value !== 'object') {
-    return false;
-  }
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record['id'] === 'string' &&
-    typeof record['server'] === 'string' &&
-    typeof record['accessToken'] === 'string' &&
-    typeof record['refreshToken'] === 'string'
-  );
-}
-
 /**
- * Домен сервера лише з латинських літер (нижній регістр): `crm.example.org` →
- * `crmexampleorg`; цифри, крапки, дефіси й решту символів викинуто. Порожній
- * результат (наприклад, IP-адреса) — `server`; довжину обмежено.
+ * Домен сервера лише з літер, латинських та українських (нижній регістр): `crm.example.org` →
+ * `crmexampleorg`, `приклад.укр` → `прикладукр`; цифри, крапки, дефіси й решту символів
+ * викинуто. Порожній результат (наприклад, IP-адреса) — `server`; довжину обмежено.
+ *
+ * Кириличний домен (зона `.укр`) у посиланні записано латиницею (`xn--…`), тому спершу його
+ * треба розкодувати (`hostnameToUnicode`): інакше в `id` потрапили б літери цього запису.
  */
 function domainLetters(server: string): string {
   let host = server;
@@ -518,7 +690,8 @@ function domainLetters(server: string): string {
   } catch {
     // Не посилання — беремо як є.
   }
-  return host.toLowerCase().replace(/[^a-z]/g, '').slice(0, 40) || 'server';
+  // Українська абетка: «а»–«щ», «ь», «ю», «я» та «ґ», «є», «і», «ї» (без «ъ», «ы», «э»).
+  return hostnameToUnicode(host).toLowerCase().replace(/[^a-zа-щьюяґєії]/g, '').slice(0, 40) || 'server';
 }
 
 /** Короткий безпечний для ключа відбиток рядка (FNV-1a). */

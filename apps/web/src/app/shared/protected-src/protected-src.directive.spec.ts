@@ -5,11 +5,11 @@ import { TestBed } from '@angular/core/testing';
 
 import { ConnectionService } from '../../core/connection/connection.service';
 import { ProtectedImageService } from '../../core/http/protected-image.service';
-import { ProtectedSrcModule } from './protected-src.module';
+import { ProtectedSrcDirective } from './protected-src.directive';
 
 @Component({
   template: `<img [appProtectedSrc]="url()" alt="" (error)="errors = errors + 1" />`,
-  imports: [ProtectedSrcModule],
+  imports: [ProtectedSrcDirective],
 })
 class HostComponent {
   readonly url = signal<string | null>(null);
@@ -28,7 +28,6 @@ describe('ProtectedSrcDirective', () => {
     (URL as unknown as Record<string, unknown>)['createObjectURL'] = vi.fn(() => `blob:http://localhost/${++counter}`);
     (URL as unknown as Record<string, unknown>)['revokeObjectURL'] = vi.fn();
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);

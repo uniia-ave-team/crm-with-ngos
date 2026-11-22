@@ -5,6 +5,7 @@
   [attr.aria-label]="label()"
   [style.--app-modal-width]="effectiveWidth()"
   (didPresent)="onPresented()"
+  (willDismiss)="onWillDismiss()"
   (didDismiss)="onDismissed()"
 >
   <!-- Angular-обгортка ion-modal показує лише зміст з ng-template: його монтують при

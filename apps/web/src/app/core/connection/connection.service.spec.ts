@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { AccountsService } from '../accounts/accounts.service';
-import { ConnectionService } from './connection.service';
+import { ConnectionService, parseServerAddress } from './connection.service';
 
 
 describe('ConnectionService', () => {
@@ -11,7 +11,6 @@ describe('ConnectionService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
@@ -51,7 +50,6 @@ describe('ConnectionService', () => {
       request.flush({ status: 'Healthy' });
       expect(service.apiStatus()).toBe('healthy');
       expect(service.connected()).toBe(true);
-      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('API існує й працює'));
     });
 
     it('reports "unhealthy" when /health answers 200 but not Healthy', () => {
@@ -209,6 +207,20 @@ describe('ConnectionService', () => {
       http.expectOne(`${location.protocol}//crm.example.org:5065/health`);
     });
 
+    it('gives the one who waited for a cancelled check the result of the check that replaced it, not "checking"', async () => {
+      const { service, request } = create();
+      request.flush({ status: 'Healthy' });
+
+      const first = service.checkApi();
+      const second = service.checkApi();
+      const requests = http.match(service.apiHealthUrl());
+      expect(requests.map((r) => r.cancelled)).toEqual([true, false]);
+      requests[1].flush({ status: 'Healthy' });
+
+      expect(await second).toBe('healthy');
+      expect(await first).toBe('healthy');
+    });
+
     it('goes back to the page domain when the address is cleared', () => {
       const { service, request } = create();
       request.error(new ProgressEvent('error'));
@@ -224,7 +236,7 @@ describe('ConnectionService', () => {
   describe('system status', () => {
     const statusUrl = (base: string) => `${base}/api/v1/system/status`;
 
-    it('requests /api/v1/system/status on the connected server and logs the result', () => {
+    it('requests /api/v1/system/status on the connected server', () => {
       const { service, request } = create();
       request.flush({ status: 'Healthy' });
 
@@ -234,10 +246,6 @@ describe('ConnectionService', () => {
       status.flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
 
       expect(service.systemStatus()).toEqual({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('Статус системи отримано'),
-        { hasAdmin: true, hasNgo: true, isSetupComplete: true },
-      );
     });
 
     it('uses the provided server address for the request', () => {
@@ -266,6 +274,49 @@ describe('ConnectionService', () => {
       expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('HTTP 500'));
     });
 
+    it.each([
+      ['has no fields', {}],
+      ['misses a field', { hasAdmin: true, hasNgo: true }],
+      ['has a field of another type', { hasAdmin: 'yes', hasNgo: true, isSetupComplete: true }],
+      ['is not an object', null],
+    ])('fails when the answer %s: it is not the status of the contract, and nothing may be decided by it', async (_name, body) => {
+      const { service, request } = create();
+      request.flush({ status: 'Healthy' });
+
+      const result = service.loadSystemStatus();
+      http.expectOne(statusUrl(service.serverUrl())).flush(body);
+
+      expect(await result).toBeNull();
+      expect(service.systemStatus()).toBeNull();
+      expect(service.systemStatusState()).toBe('failed');
+    });
+
+    it('gives the one who waited for a cancelled request the answer of the request that replaced it', async () => {
+      const { service, request } = create();
+      request.flush({ status: 'Healthy' });
+
+      const first = service.loadSystemStatus();
+      const second = service.loadSystemStatus();
+      const requests = http.match(statusUrl(service.serverUrl()));
+      expect(requests.map((r) => r.cancelled)).toEqual([true, false]);
+      requests[1].flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+
+      expect(await first).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      expect(await second).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+    });
+
+    it('gives null for a request that a new check of the connection has cancelled: the target has changed', async () => {
+      const { service, request } = create();
+      request.flush({ status: 'Healthy' });
+
+      const result = service.loadSystemStatus();
+      service.checkApi();
+
+      expect(await result).toBeNull();
+      expect(http.match(statusUrl(service.serverUrl())).map((r) => r.cancelled)).toEqual([true]);
+      http.expectOne(service.apiHealthUrl());
+    });
+
     it('forgets a stale status when the connection is checked again', () => {
       const { service, request } = create();
       request.flush({ status: 'Healthy' });
@@ -277,5 +328,14 @@ describe('ConnectionService', () => {
       expect(service.systemStatus()).toBeNull();
       http.expectOne(service.apiHealthUrl());
     });
+  });
+});
+
+describe('parseServerAddress', () => {
+  it('takes a Cyrillic domain (the .укр zone): the requests go to its Latin record, with the default port', () => {
+    const url = parseServerAddress('приклад.укр');
+    expect(url?.hostname).toBe('xn--80aikifvh.xn--j1amh');
+    expect(url?.port).toBe('5065');
+    expect(parseServerAddress('https://Приклад.укр:8443/path?x=1')?.origin).toBe('https://xn--80aikifvh.xn--j1amh:8443');
   });
 });

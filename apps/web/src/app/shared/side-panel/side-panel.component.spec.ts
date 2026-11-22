@@ -5,7 +5,6 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { SidePanelComponent } from './side-panel.component';
-import { SidePanelModule } from './side-panel.module';
 
 @Component({
   template: `
@@ -15,7 +14,7 @@ import { SidePanelModule } from './side-panel.module';
       <p class="content">зміст</p>
     </app-side-panel>
   `,
-  imports: [SidePanelModule],
+  imports: [SidePanelComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {

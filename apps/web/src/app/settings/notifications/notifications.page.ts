@@ -1,4 +1,7 @@
 import { Component } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe } from '@ngx-translate/core';
 
 interface NotificationField {
   readonly id: string;
@@ -21,7 +24,7 @@ interface NotificationOption {
   selector: 'app-settings-notifications',
   templateUrl: './notifications.page.html',
   styleUrls: ['../settings-section.scss'],
-  standalone: false,
+  imports: [FormsModule, IonIcon, TranslatePipe],
 })
 export class NotificationsPage {
   protected readonly fields: readonly NotificationField[] = [

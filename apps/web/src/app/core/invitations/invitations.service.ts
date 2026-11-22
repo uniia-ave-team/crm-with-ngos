@@ -2,12 +2,20 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { AuthTokens } from '../auth/auth.service';
+import {
+  AuthTokensDto,
+  CompleteRegistrationCommand,
+  InvitationDetailsDto,
+  InviteUserCommand,
+  TokenResultDto,
+} from '../../api/generated/models';
+import { AuthTokens, toAuthTokens } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
+import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
+import { REQUEST_TIMEOUT_MS } from '../http/timeouts';
 
 const API_INVITATIONS_PATH = '/api/v1/invitations';
-const REQUEST_TIMEOUT_MS = 10000;
 
 /** Що сервер знає про запрошення (відповідь `GET /api/v1/invitations/validate`). */
 export interface InvitationDetails {
@@ -47,15 +55,14 @@ export class InvitationsService {
    */
   async invite(email: string, roleIds: readonly string[]): Promise<Invitation | RequestFailure> {
     const url = `${this.connection.serverUrl()}${API_INVITATIONS_PATH}`;
-    console.log(`[InvitationsService] Створюю запрошення: ${url}`);
     try {
-      const body = await firstValueFrom(this.http.post<Record<string, unknown>>(url, { email, roleIds }).pipe(timeout(REQUEST_TIMEOUT_MS)));
-      const token = body?.['token'];
+      const body = await firstValueFrom(this.http.post<Untrusted<TokenResultDto>>(url, { email, roleIds: [...roleIds] } satisfies InviteUserCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      const token = body?.token;
       if (typeof token !== 'string' || !token) {
         console.warn('[InvitationsService] Відповідь без токена запрошення', body);
         return 'error';
       }
-      const expiresAt = body['expiresAt'];
+      const expiresAt = body?.expiresAt;
       return { token, expiresAt: typeof expiresAt === 'string' ? expiresAt : '' };
     } catch (error) {
       const failure = toRequestFailure(error);
@@ -72,12 +79,11 @@ export class InvitationsService {
    */
   async validate(server: string, token: string): Promise<InvitationDetails | RequestFailure> {
     const url = `${server}${API_INVITATIONS_PATH}/validate`;
-    console.log(`[InvitationsService] Перевіряю запрошення: ${url}`);
     try {
       const body = await firstValueFrom(
-        this.http.get<Record<string, unknown>>(url, { params: new HttpParams().set('token', token) }).pipe(timeout(REQUEST_TIMEOUT_MS)),
+        this.http.get<Untrusted<InvitationDetailsDto>>(url, { params: new HttpParams().set('token', token) }).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      const email = body?.['email'];
+      const email = body?.email;
       if (typeof email !== 'string' || !email) {
         console.warn('[InvitationsService] Відповідь без пошти запрошення', body);
         return 'error';
@@ -97,18 +103,18 @@ export class InvitationsService {
    */
   async accept(server: string, token: string, registration: InvitationRegistration): Promise<AuthTokens | RequestFailure> {
     const url = `${server}${API_INVITATIONS_PATH}/accept`;
-    console.log(`[InvitationsService] Завершую реєстрацію за запрошенням: ${url}`);
     try {
       const body = await firstValueFrom(
-        this.http.post<Record<string, unknown>>(url, { token, ...registration }).pipe(timeout(REQUEST_TIMEOUT_MS)),
+        this.http
+          .post<Untrusted<AuthTokensDto>>(url, { token, ...registration } satisfies CompleteRegistrationCommand)
+          .pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
-      const accessToken = body?.['accessToken'];
-      const refreshToken = body?.['refreshToken'];
-      if (typeof accessToken !== 'string' || !accessToken || typeof refreshToken !== 'string' || !refreshToken) {
+      const tokens = toAuthTokens(body);
+      if (!tokens) {
         console.warn('[InvitationsService] Відповідь без токенів доступу', body);
         return 'error';
       }
-      return { accessToken, refreshToken };
+      return tokens;
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[InvitationsService] Не вдалося завершити реєстрацію (${failure})`, error);

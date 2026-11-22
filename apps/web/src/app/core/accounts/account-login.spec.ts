@@ -1,5 +1,5 @@
 import { RequestFailure } from '../http/request-failure';
-import { accountToReplace, loginErrorKey, sameEmail } from './account-login';
+import { accountToReplace, loginErrorKey, needsSignIn, sameEmail } from './account-login';
 import { StoredAccount } from './accounts.service';
 
 describe('account login helpers', () => {
@@ -19,6 +19,17 @@ describe('account login helpers', () => {
     it('ignores the case and the spaces around', () => {
       expect(sameEmail(' A@Organization.org ', 'a@organization.org')).toBe(true);
       expect(sameEmail('a@organization.org', 'b@organization.org')).toBe(false);
+    });
+  });
+
+  describe('needsSignIn (a sign-in form instead of a switch)', () => {
+    it.each([
+      [{ outdated: true, unavailable: false }, true],
+      [{ outdated: true, unavailable: true }, true],
+      [{ outdated: false, unavailable: true }, false],
+      [{ outdated: false, unavailable: false }, false],
+    ])('is %s → %s: only the rejected tokens matter', (flags, expected) => {
+      expect(needsSignIn(flags as never)).toBe(expected);
     });
   });
 
