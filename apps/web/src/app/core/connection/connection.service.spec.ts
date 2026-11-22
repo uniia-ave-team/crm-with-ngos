@@ -243,9 +243,15 @@ describe('ConnectionService', () => {
       service.loadSystemStatus();
       const status = http.expectOne(statusUrl(service.serverUrl()));
       expect(status.request.method).toBe('GET');
-      status.flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+      status.flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: null });
 
-      expect(service.systemStatus()).toEqual({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+      expect(service.systemStatus()).toEqual({
+        hasAdmin: true,
+        hasNgo: true,
+        isSetupComplete: true,
+        version: '1.0.0',
+        notice: null,
+      });
     });
 
     it('uses the provided server address for the request', () => {
@@ -259,6 +265,8 @@ describe('ConnectionService', () => {
         hasAdmin: false,
         hasNgo: false,
         isSetupComplete: false,
+        version: 'dev',
+        notice: null,
       });
       expect(service.systemStatus()?.isSetupComplete).toBe(false);
     });
@@ -276,8 +284,10 @@ describe('ConnectionService', () => {
 
     it.each([
       ['has no fields', {}],
-      ['misses a field', { hasAdmin: true, hasNgo: true }],
-      ['has a field of another type', { hasAdmin: 'yes', hasNgo: true, isSetupComplete: true }],
+      ['misses a field', { hasAdmin: true, hasNgo: true, version: '1.0.0', notice: null }],
+      ['has a field of another type', { hasAdmin: 'yes', hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: null }],
+      ['misses version', { hasAdmin: true, hasNgo: true, isSetupComplete: true, notice: null }],
+      ['has invalid notice', { hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: { message: 'x' } }],
       ['is not an object', null],
     ])('fails when the answer %s: it is not the status of the contract, and nothing may be decided by it', async (_name, body) => {
       const { service, request } = create();
@@ -299,10 +309,10 @@ describe('ConnectionService', () => {
       const second = service.loadSystemStatus();
       const requests = http.match(statusUrl(service.serverUrl()));
       expect(requests.map((r) => r.cancelled)).toEqual([true, false]);
-      requests[1].flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      requests[1].flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false, version: '1.0.0', notice: null });
 
-      expect(await first).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
-      expect(await second).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      expect(await first).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false, version: '1.0.0', notice: null });
+      expect(await second).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false, version: '1.0.0', notice: null });
     });
 
     it('gives null for a request that a new check of the connection has cancelled: the target has changed', async () => {
@@ -321,7 +331,13 @@ describe('ConnectionService', () => {
       const { service, request } = create();
       request.flush({ status: 'Healthy' });
       service.loadSystemStatus();
-      http.expectOne(statusUrl(service.serverUrl())).flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+      http.expectOne(statusUrl(service.serverUrl())).flush({
+        hasAdmin: true,
+        hasNgo: true,
+        isSetupComplete: true,
+        version: '1.0.0',
+        notice: null,
+      });
       expect(service.systemStatus()).not.toBeNull();
 
       service.checkApi();

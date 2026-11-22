@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { CreateRoleCommand, PagedResultOfRoleDto, RoleDetailsDto, RoleDto, UpdateRoleRequest } from '../../api/generated/models';
+import { CreateRoleCommand, PagedResultOfRoleDto, RoleDetailsDto, RoleDto, UpdateRoleCommand } from '../../api/generated/models';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
@@ -145,7 +145,7 @@ export class RolesService {
     const server = this.connection.serverUrl();
     const url = `${server}${API_ROLES_PATH}/${encodeURIComponent(id)}`;
     try {
-      const body = { newName: draft.name, feminitiveName: draft.feminitiveName, pluralName: draft.pluralName } satisfies UpdateRoleRequest;
+      const body = { newName: draft.name, feminitiveName: draft.feminitiveName, pluralName: draft.pluralName } satisfies UpdateRoleCommand;
       await firstValueFrom(this.http.put(url, body).pipe(timeout(REQUEST_TIMEOUT_MS)));
     } catch (error) {
       const failure = toRequestFailure(error);

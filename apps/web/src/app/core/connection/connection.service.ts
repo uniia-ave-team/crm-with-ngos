@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Signal, computed, inject, signal } from '@angular/core';
 import { Observable, catchError, firstValueFrom, map, of, timeout } from 'rxjs';
 
-import { SystemSetupStatusDto } from '../../api/generated/models';
+import { MaintenanceNoticeDto, SystemStatusDto } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
 import { Untrusted } from '../http/api-contract';
 
@@ -31,7 +31,7 @@ export type SystemStatusState = 'idle' | 'loading' | 'loaded' | 'failed';
  * `GET /api/v1/system/status` (авторизація не потрібна). За ним фронтенд
  * вирішує, чи показувати майстер початкового налаштування.
  */
-export type SystemStatus = SystemSetupStatusDto;
+export type SystemStatus = SystemStatusDto;
 
 /** Чим закінчилася перевірка `/health`: стан і, для невдачі, пояснення в консоль. */
 interface HealthResult {
@@ -230,7 +230,7 @@ export class ConnectionService {
    * Запитує стан первинного налаштування системи (`GET <сервер>/api/v1/system/status`);
    * результат — в `systemStatus` (невдача ще й у консолі). Викликається, коли підключення вже є.
    * Повертає статус або `null`, якщо запит не вдався чи відповідь не відповідає контракту
-   * (не всі три поля булеві): за такою відповіддю не можна вирішувати, що показувати.
+   * `SystemStatusDto`: за такою відповіддю не можна вирішувати, що показувати.
    *
    * Новий запит скасовує попередній, і той, хто чекав на скасований, отримує результат
    * нового. Запит, скасований новою перевіркою підключення (`checkApi`), дає `null`: ціль
@@ -299,10 +299,34 @@ export class ConnectionService {
   }
 }
 
-/** Статус системи з відповіді сервера; `null` — це не він (хоч одне з трьох полів не булеве). */
-function toSystemStatus(body: Untrusted<SystemStatus>): SystemStatus | null {
-  const { hasAdmin, hasNgo, isSetupComplete } = body ?? {};
-  return typeof hasAdmin === 'boolean' && typeof hasNgo === 'boolean' && typeof isSetupComplete === 'boolean'
-    ? { hasAdmin, hasNgo, isSetupComplete }
+/** Повідомлення про планові роботи з відповіді сервера; `null` — не обʼєкт контракту. */
+function toMaintenanceNotice(raw: Untrusted<MaintenanceNoticeDto>): MaintenanceNoticeDto | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const { message, startsAt, endsAt } = raw;
+  return typeof message === 'string' && typeof startsAt === 'string' && typeof endsAt === 'string'
+    ? { message, startsAt, endsAt }
     : null;
+}
+
+/** Статус системи з відповіді сервера; `null` — відповідь не відповідає контракту `SystemStatusDto`. */
+function toSystemStatus(body: Untrusted<SystemStatus>): SystemStatus | null {
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+  const { hasAdmin, hasNgo, isSetupComplete, version, notice } = body;
+  if (
+    typeof hasAdmin !== 'boolean' ||
+    typeof hasNgo !== 'boolean' ||
+    typeof isSetupComplete !== 'boolean' ||
+    typeof version !== 'string'
+  ) {
+    return null;
+  }
+  if (notice === null) {
+    return { hasAdmin, hasNgo, isSetupComplete, version, notice: null };
+  }
+  const parsedNotice = toMaintenanceNotice(notice);
+  return parsedNotice ? { hasAdmin, hasNgo, isSetupComplete, version, notice: parsedNotice } : null;
 }

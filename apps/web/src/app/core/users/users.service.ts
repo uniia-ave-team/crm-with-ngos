@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { CreateUserCommand, PagedResultOfUserDto, UpdatePasswordRequest, UpdateProfileRequest, UserDto } from '../../api/generated/models';
+import { CreateUserCommand, PagedResultOfUserDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto } from '../../api/generated/models';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
@@ -63,7 +63,7 @@ export type UploadAvatarResult = 'uploaded' | RequestFailure;
  * рядок або `null`). Категорія займенників — число з `PronounCategory`. Аватара тут нема:
  * він завантажується окремо (`uploadAvatar`).
  */
-export type ProfileUpdate = UpdateProfileRequest;
+export type ProfileUpdate = UpdateUserProfileCommand;
 
 @Injectable({ providedIn: 'root' })
 export class UsersService {
@@ -189,7 +189,7 @@ export class UsersService {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/password`;
 
     try {
-      await firstValueFrom(this.http.post(url, { currentPassword, newPassword } satisfies UpdatePasswordRequest).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      await firstValueFrom(this.http.post(url, { currentPassword, newPassword } satisfies UpdatePasswordCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return 'changed';
     } catch (error) {
       const failure = toRequestFailure(error);

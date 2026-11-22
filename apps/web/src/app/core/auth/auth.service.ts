@@ -2,7 +2,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, Signal, computed, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { AuthTokensDto, AuthenticateUserCommand, LogoutRequest, RefreshTokensCommand } from '../../api/generated/models';
+import { AuthTokensDto, AuthenticateUserCommand, LogoutCommand, RefreshTokensCommand } from '../../api/generated/models';
 import { AccountsService, StoredAccount } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
@@ -221,7 +221,7 @@ export class AuthService {
         this.http
           .post(
             url,
-            { refreshToken: account.refreshToken } satisfies LogoutRequest,
+            { refreshToken: account.refreshToken } satisfies LogoutCommand,
             { headers: new HttpHeaders({ Authorization: `Bearer ${account.accessToken}` }) },
           )
           .pipe(timeout(REQUEST_TIMEOUT_MS)),

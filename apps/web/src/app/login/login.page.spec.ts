@@ -11,7 +11,7 @@ import { withImageSize, withImageTypes } from '../core/images/image-types.testin
 import { AccountsService } from '../core/accounts/accounts.service';
 import { AuthService } from '../core/auth/auth.service';
 import { SignInFormComponent } from '../core/auth/sign-in-form/sign-in-form.component';
-import { ConnectionService } from '../core/connection/connection.service';
+import { ConnectionService, SystemStatus } from '../core/connection/connection.service';
 import { LanguageService } from '../core/i18n/language.service';
 import { LoginPage } from './login.page';
 
@@ -74,14 +74,22 @@ describe('LoginPage', () => {
     return { fixture, connection, element, page, request };
   }
 
+  type SetupFlags = Pick<SystemStatus, 'hasAdmin' | 'hasNgo' | 'isSetupComplete'>;
+
+  const fullSystemStatus = (flags: SetupFlags): SystemStatus => ({
+    ...flags,
+    version: '1.0.0',
+    notice: null,
+  });
+
   /** Підключення є — відповідаємо на запит статусу системи. */
   function answerStatus(
     connection: ConnectionService,
     fixture: { detectChanges(): void },
-    status = { hasAdmin: true, hasNgo: true, isSetupComplete: true },
+    status: SetupFlags = { hasAdmin: true, hasNgo: true, isSetupComplete: true },
   ): void {
     fixture.detectChanges();
-    http.expectOne(`${connection.serverUrl()}/api/v1/system/status`).flush(status);
+    http.expectOne(`${connection.serverUrl()}/api/v1/system/status`).flush(fullSystemStatus(status));
     fixture.detectChanges();
   }
 
@@ -204,8 +212,9 @@ describe('LoginPage', () => {
     fixture.detectChanges();
 
     const status = http.expectOne(`${connection.serverUrl()}/api/v1/system/status`);
-    status.flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
-    expect(connection.systemStatus()).toEqual({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+    const expected = fullSystemStatus({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+    status.flush(expected);
+    expect(connection.systemStatus()).toEqual(expected);
   });
 
   it('does not request the system status while step 1 is shown', () => {
@@ -535,11 +544,13 @@ describe('LoginPage', () => {
       page.submit();
       http.expectOne(`${location.protocol}//192.168.0.9:5065/health`).flush({ status: 'Healthy' });
       ctx.fixture.detectChanges();
-      http.expectOne(`${location.protocol}//192.168.0.9:5065/api/v1/system/status`).flush({
-        hasAdmin: true,
-        hasNgo: true,
-        isSetupComplete: true,
-      });
+      http.expectOne(`${location.protocol}//192.168.0.9:5065/api/v1/system/status`).flush(
+        fullSystemStatus({
+          hasAdmin: true,
+          hasNgo: true,
+          isSetupComplete: true,
+        }),
+      );
       ctx.fixture.detectChanges();
       expect(ctx.element.querySelector('.login-form')).not.toBeNull();
     });
@@ -594,7 +605,7 @@ describe('LoginPage', () => {
       expect(login.request.body).toEqual({ email: 'a@b.org', password: 'Abcde1!x' });
       login.flush(tokens);
       await vi.waitFor(() =>
-        http.expectOne(statusUrl(connection)).flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true }),
+        http.expectOne(statusUrl(connection)).flush(fullSystemStatus({ hasAdmin: true, hasNgo: true, isSetupComplete: true })),
       );
       await done;
 
@@ -611,7 +622,7 @@ describe('LoginPage', () => {
       const done = form.submit();
       http.expectOne(loginUrl(connection)).flush(tokens);
       await vi.waitFor(() =>
-        http.expectOne(statusUrl(connection)).flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false }),
+        http.expectOne(statusUrl(connection)).flush(fullSystemStatus({ hasAdmin: true, hasNgo: false, isSetupComplete: false })),
       );
       await done;
       fixture.detectChanges();
@@ -1114,7 +1125,7 @@ describe('LoginPage', () => {
       login.flush({ accessToken: 'access', refreshToken: 'refresh' });
 
       await vi.waitFor(() => http.expectOne(`${connection.serverUrl()}/api/v1/system/status`)).then((status) =>
-        status.flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false }),
+        status.flush(fullSystemStatus({ hasAdmin: true, hasNgo: false, isSetupComplete: false })),
       );
       fixture.detectChanges();
       expect(element.textContent).toContain(uk.login.ngo.title);

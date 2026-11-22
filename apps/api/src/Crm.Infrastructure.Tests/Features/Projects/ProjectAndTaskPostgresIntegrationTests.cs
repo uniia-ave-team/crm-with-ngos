@@ -589,7 +589,7 @@ public class ProjectAndTaskPostgresIntegrationTests(
 
         public DbContextOptions<ApplicationDbContext>? DbContextOptions { get; private set; }
 
-        public ApplicationDbContext CreateDbContext() => new(DbContextOptions);
+        public ApplicationDbContext CreateDbContext() => new(DbContextOptions!);
 
         public async ValueTask InitializeAsync()
         {
