@@ -4,7 +4,14 @@ using Crm.Cli.Parsing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-var parsedArgs = CommandLineParser.Parse(args);
+HashSet<string> knownBooleanFlags = new(StringComparer.OrdinalIgnoreCase)
+{
+    "help",
+    "h",
+    "password-stdin",
+};
+
+var parsedArgs = CommandLineParser.Parse(args, knownBooleanFlags);
 
 var configuration = new ConfigurationBuilder()
     .AddCliConfiguration()

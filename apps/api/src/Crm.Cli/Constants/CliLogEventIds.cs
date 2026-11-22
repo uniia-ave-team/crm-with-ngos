@@ -18,4 +18,12 @@ public static class CliLogEventIds
     public const int PasswordResetFailed = 5106;
     public const int PasswordResetSuccess = 5107;
     public const int UserNotAdmin = 5108;
+
+    // 5200s: First Admin Creation (create-admin)
+    public const int CreateAdminMissingArguments = 5201;
+    public const int CreateAdminValidationFailed = 5202;
+    public const int CreateAdminUsersAlreadyExist = 5203;
+    public const int CreateAdminOperationFailed = 5204;
+    public const int CreateAdminUnexpectedError = 5205;
+    public const int CreateAdminSuccess = 5206;
 }
