@@ -1,6 +1,8 @@
+using Crm.Application.Interfaces;
 using Mediator;
 
 namespace Crm.Application.Dtos.User.Commands;
+
 /// <summary>
 /// Represents a command to assign a specific role to a user.
 /// </summary>
@@ -8,4 +10,4 @@ namespace Crm.Application.Dtos.User.Commands;
 /// <param name="RoleId">The unique identifier of the role to assign.</param>
 public record AssignUserRoleCommand(
     Guid UserId,
-    Guid RoleId) : IRequest;
+    Guid RoleId) : IRequest, ITransactionalCommand;

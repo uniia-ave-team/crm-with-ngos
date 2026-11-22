@@ -1,6 +1,8 @@
+using Crm.Application.Interfaces;
 using Mediator;
 
 namespace Crm.Application.Dtos.User.Commands;
+
 /// <summary>
 /// Represents a command to remove a specific role from a user.
 /// </summary>
@@ -8,4 +10,4 @@ namespace Crm.Application.Dtos.User.Commands;
 /// <param name="RoleId">The unique identifier of the role to remove.</param>
 public record RemoveUserRoleCommand(
     Guid UserId,
-    Guid RoleId) : IRequest;
+    Guid RoleId) : IRequest, ITransactionalCommand;

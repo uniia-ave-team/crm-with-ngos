@@ -1,3 +1,4 @@
+using Crm.Application.Interfaces;
 using Mediator;
 
 namespace Crm.Application.Dtos.User.Commands;
@@ -6,4 +7,4 @@ namespace Crm.Application.Dtos.User.Commands;
 /// Command to generate a secure password restore token for a specified user.
 /// </summary>
 public record GenerateRestorePasswordTokenCommand(
-    Guid UserId) : IRequest<TokenResultDto>;
+    Guid UserId) : IRequest<TokenResultDto>, ITransactionalCommand;

@@ -1,3 +1,4 @@
+using Crm.Application.Interfaces;
 using Mediator;
 
 namespace Crm.Application.Dtos.User.Commands;
@@ -6,4 +7,4 @@ namespace Crm.Application.Dtos.User.Commands;
 /// </summary>
 /// <param name="UserId">The unique identifier of the user to log out.</param>
 /// <param name="RefreshToken">The refresh token to invalidate.</param>
-public record LogoutCommand(Guid UserId, string RefreshToken) : IRequest;
+public record LogoutCommand(Guid UserId, string RefreshToken) : IRequest, ITransactionalCommand;
