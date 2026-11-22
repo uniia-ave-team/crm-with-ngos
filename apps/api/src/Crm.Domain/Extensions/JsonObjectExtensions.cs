@@ -1,5 +1,8 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Crm.Domain.Entities;
+using Crm.Domain.Enums;
+using Crm.Domain.Exceptions;
 
 namespace Crm.Domain.Extensions;
 
@@ -15,7 +18,7 @@ public static class JsonObjectExtensions
     /// <param name="incomingData">The source JSON payload object.</param>
     /// <param name="customFields">The list of custom field definitions.</param>
     /// <returns>A validated and normalized <see cref="JsonObject"/> payload containing schema-only keys.</returns>
-    /// <exception cref="ArgumentException">Thrown when any field value fails data type or required validation, or when unknown fields are present.</exception>
+    /// <exception cref="InvalidCustomRecordPayloadException">Thrown when any field value fails data type or required validation, or when unknown fields are present.</exception>
     public static JsonObject ValidateAndBackfillPayload(this JsonObject incomingData, IReadOnlyList<CustomField> customFields)
     {
         ArgumentNullException.ThrowIfNull(incomingData);
@@ -39,7 +42,7 @@ public static class JsonObjectExtensions
 
         if (unknownKeys is not null && unknownKeys.Count > 0)
         {
-            throw new ArgumentException($"Payload contains unknown field(s): '{string.Join("', '", unknownKeys)}'.");
+            throw new InvalidCustomRecordPayloadException($"Payload contains unknown field(s): '{string.Join("', '", unknownKeys)}'.");
         }
 
         var alignedData = new JsonObject();
@@ -51,11 +54,11 @@ public static class JsonObjectExtensions
             if (incomingData.TryGetPropertyValue(field.Key, out var valueNode))
             {
                 field.DataType.ValidateJsonValue(field.Key, valueNode, field.IsRequired);
-                alignedData.Add(field.Key, valueNode?.DeepClone());
+                alignedData.Add(field.Key, NormalizeValidatedValue(field.DataType, valueNode));
             }
             else if (field.IsRequired)
             {
-                throw new ArgumentException($"Field '{field.Key}' is required.");
+                throw new InvalidCustomRecordPayloadException($"Field '{field.Key}' is required.");
             }
             else
             {
@@ -69,9 +72,9 @@ public static class JsonObjectExtensions
     /// <summary>
     /// Constructs a new <see cref="JsonObject"/> with keys strictly ordered according to the provided sequence of schema keys.
     /// Moves nodes directly from <paramref name="payload"/> without performing DeepClone and explicitly populates missing schema keys with <see langword="null"/>.
-    /// Intended for read operations (GET endpoints) before sending payloads to the client API.
+    /// Intended for read operations before sending payloads to callers.
     /// </summary>
-    /// <param name="payload">The source JSON payload object retrieved from the database.</param>
+    /// <param name="payload">The source JSON payload object retrieved from storage.</param>
     /// <param name="orderedKeys">The pre-ordered list or array of schema keys.</param>
     /// <returns>A new <see cref="JsonObject"/> with properties ordered according to <paramref name="orderedKeys"/>, with missing keys explicitly set to <see langword="null"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="payload"/> or <paramref name="orderedKeys"/> is <see langword="null"/>.</exception>
@@ -93,4 +96,20 @@ public static class JsonObjectExtensions
 
         return reorderedData;
     }
+
+    private static JsonNode? NormalizeValidatedValue(FieldDataType dataType, JsonNode? valueNode)
+        => valueNode switch
+        {
+            null => null,
+            JsonValue jsonValue when dataType == FieldDataType.DateTime
+                && jsonValue.TryGetValue<string>(out var rawDateTime)
+                && DateTimeOffset.TryParseExact(
+                    rawDateTime,
+                    "O",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out var parsedOffset)
+                => JsonValue.Create(parsedOffset.ToUtc().ToString("O", CultureInfo.InvariantCulture)),
+            _ => valueNode.DeepClone(),
+        };
 }

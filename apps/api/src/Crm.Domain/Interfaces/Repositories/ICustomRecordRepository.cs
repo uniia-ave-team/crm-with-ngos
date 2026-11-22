@@ -1,5 +1,5 @@
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories.Generic;
@@ -21,7 +21,7 @@ public interface ICustomRecordRepository : IGenericRepository<CustomRecord>
 
     /// <summary>
     /// Asynchronously retrieves a paginated, filtered, and sorted list of projected custom records.
-    /// Performs a full-text search across all JSON keys and values in the Data payload.
+    /// Performs a full-text search across string and numeric JSON values in the Data payload.
     /// </summary>
     /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
     /// <param name="customTableId">Filter to retrieve records belonging to a specific custom table.</param>

@@ -4,5 +4,5 @@ namespace Crm.Domain.Exceptions;
 /// Exception thrown when a task reaches its maximum allowed number of file attachments.
 /// </summary>
 /// <param name="maxAttachments">The maximum permitted number of attachments per task.</param>
-public class TaskAttachmentLimitExceededException(int maxAttachments)
+public sealed class TaskAttachmentLimitExceededException(int maxAttachments)
     : DomainValidationException($"Task cannot have more than {maxAttachments} attachments.");

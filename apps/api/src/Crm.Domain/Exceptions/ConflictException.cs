@@ -1,3 +1,5 @@
+using Crm.Domain.Enums;
+
 namespace Crm.Domain.Exceptions;
 
 /// <summary>

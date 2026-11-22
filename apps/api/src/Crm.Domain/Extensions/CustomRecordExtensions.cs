@@ -10,7 +10,14 @@ namespace Crm.Domain.Extensions;
 /// </summary>
 public static class CustomRecordExtensions
 {
+    /// <summary>
+    /// Case-insensitive set of reserved property names belonging to <see cref="CustomRecord"/> that cannot be used as dynamic field keys.
+    /// </summary>
     public static readonly FrozenSet<string> ReservedKeys;
+
+    /// <summary>
+    /// Case-insensitive map of scalar <see cref="CustomRecord"/> property names that support direct SQL sorting.
+    /// </summary>
     public static readonly FrozenDictionary<string, string> SortablePropertiesMap;
 
     static CustomRecordExtensions()

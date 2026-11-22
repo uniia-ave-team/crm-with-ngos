@@ -1,5 +1,5 @@
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
@@ -9,7 +9,7 @@ namespace Crm.Domain.Interfaces.Repositories;
 /// <summary>
 /// Defines repository operations for managing <see cref="CustomTable"/> entities and their field definitions.
 /// </summary>
-public interface ICustomTableRepository : IGenericRepository<CustomTable>
+public interface ICustomTableRepository : IGenericRepository<CustomTable>, IRowLockRepository
 {
     /// <summary>
     /// Asynchronously retrieves a paginated, filtered, and sorted list of projected custom tables.

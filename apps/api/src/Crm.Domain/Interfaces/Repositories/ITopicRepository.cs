@@ -1,5 +1,5 @@
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
@@ -41,6 +41,30 @@ public interface ITopicRepository : IGenericRepository<Topic>
     /// <returns>The tracked <see cref="Topic"/> entity.</returns>
     /// <exception cref="EntityNotFoundException{Topic}">Thrown if the topic is not found in the project.</exception>
     Task<Topic> GetByProjectAndIdForUpdateAsync(Guid projectId, Guid topicId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously retrieves all board topics belonging to a project with change tracking enabled, ordered by <see cref="Topic.Order"/>.
+    /// </summary>
+    /// <param name="projectId">The unique identifier of the parent project.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A tracked list of all topics in the project ordered by display position.</returns>
+    Task<List<Topic>> GetByProjectIdForUpdateAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously retrieves the existing display order values of all topics in the specified project.
+    /// </summary>
+    /// <param name="projectId">The unique identifier of the parent project.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The list of existing 0-based topic order values.</returns>
+    Task<List<byte>> GetOrdersByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resolves temporary unique index collisions on <c>(ProjectId, Order)</c> before saving reordered or compacted topics.
+    /// </summary>
+    /// <param name="projectId">The unique identifier of the parent project.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task representing the asynchronous collision resolution.</returns>
+    Task ResolveOrderCollisionsAsync(Guid projectId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Asynchronously ensures that a topic exists within the specified project.

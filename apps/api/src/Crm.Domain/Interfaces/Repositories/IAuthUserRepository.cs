@@ -1,5 +1,5 @@
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
 
@@ -21,12 +21,12 @@ public interface IAuthUserRepository :
     Task<int> GetCountByRoleIdAsync(Guid roleId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Asynchronously retrieves and projects an entity by its email address using Mapster.
+    /// Asynchronously retrieves and projects an entity by its email address.
     /// </summary>
-    /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
+    /// <typeparam name="TResult">The target projection type.</typeparam>
     /// <param name="email">The email address of the entity to retrieve.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The projected entity DTO associated with the specified email address.</returns>
+    /// <returns>The projected result associated with the specified email address.</returns>
     /// <exception cref="NotFoundException">Thrown if the entity with the specified email address is not found.</exception>
     Task<TResult> GetAsync<TResult>(string email, CancellationToken cancellationToken = default);
 
@@ -59,5 +59,5 @@ public interface IAuthUserRepository :
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous validation operation.</returns>
     /// <exception cref="EntityAlreadyExistsException">Thrown if an entity with the specified email already exists.</exception>
-    Task EnsureNotExistsAsync(string email, CancellationToken cancellationToken = default);
+    Task EnsureDoesNotExistAsync(string email, CancellationToken cancellationToken = default);
 }

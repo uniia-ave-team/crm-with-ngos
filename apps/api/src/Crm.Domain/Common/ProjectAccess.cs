@@ -1,4 +1,3 @@
-using Crm.Domain.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
@@ -34,70 +33,29 @@ public sealed record ProjectAccess(
     public bool CanManage => Claim >= ProjectClaim.Manage;
 
     /// <summary>
-    /// Ensures the user has view access to the project, throwing <see cref="EntityNotFoundException{Project}"/>
-    /// when a private project is not visible to avoid disclosing its existence.
+    /// Ensures the user satisfies the required <see cref="ProjectClaim"/> level for the project.
+    /// Throws <see cref="EntityNotFoundException{Project}"/> if the user cannot view a private project
+    /// (to avoid disclosing its existence), or <see cref="UnauthorizedAccessException"/> if view access exists
+    /// but the required permission level is not met.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>
+    /// <param name="requiredClaim">The required permission level.</param>
     /// <exception cref="EntityNotFoundException{Project}">Thrown when the user cannot view the project.</exception>
-    public void EnsureCanView(Guid projectId)
+    /// <exception cref="UnauthorizedAccessException">Thrown when the user lacks the required permission level.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="requiredClaim"/> is not a supported <see cref="ProjectClaim"/>.</exception>
+    public void EnsureHasClaim(Guid projectId, ProjectClaim requiredClaim)
     {
         if (!CanView)
         {
             throw new EntityNotFoundException<Project>(projectId);
         }
-    }
-
-    /// <summary>
-    /// Ensures the user has edit access to the project.
-    /// Throws <see cref="EntityNotFoundException{Project}"/> if the user cannot even view a private project,
-    /// or <see cref="UnauthorizedAccessException"/> if the user can view the project but lacks edit permission.
-    /// </summary>
-    /// <param name="projectId">The unique identifier of the project.</param>
-    /// <exception cref="EntityNotFoundException{Project}">Thrown when the user cannot view the project.</exception>
-    /// <exception cref="UnauthorizedAccessException">Thrown when the user lacks edit permission.</exception>
-    public void EnsureCanEdit(Guid projectId)
-    {
-        EnsureCanView(projectId);
-
-        if (!CanEdit)
-        {
-            throw new UnauthorizedAccessException($"User '{UserId}' does not have permission to edit project '{projectId}'.");
-        }
-    }
-
-    /// <summary>
-    /// Ensures the user has management access to the project.
-    /// Throws <see cref="EntityNotFoundException{Project}"/> if the user cannot even view a private project,
-    /// or <see cref="UnauthorizedAccessException"/> if the user can view the project but lacks manage permission.
-    /// </summary>
-    /// <param name="projectId">The unique identifier of the project.</param>
-    /// <exception cref="EntityNotFoundException{Project}">Thrown when the user cannot view the project.</exception>
-    /// <exception cref="UnauthorizedAccessException">Thrown when the user lacks management permission.</exception>
-    public void EnsureCanManage(Guid projectId)
-    {
-        EnsureCanView(projectId);
-
-        if (!CanManage)
-        {
-            throw new UnauthorizedAccessException($"User '{UserId}' does not have permission to manage project '{projectId}'.");
-        }
-    }
-
-    /// <summary>
-    /// Ensures the user satisfies the required <see cref="ProjectClaim"/> level for the project.
-    /// </summary>
-    /// <param name="projectId">The unique identifier of the project.</param>
-    /// <param name="requiredClaim">The required permission level.</param>
-    public void EnsureHasClaim(Guid projectId, ProjectClaim requiredClaim)
-    {
-        EnsureCanView(projectId);
 
         bool allowed = requiredClaim switch
         {
             ProjectClaim.View => true,
             ProjectClaim.Edit => CanEdit,
             ProjectClaim.Manage => CanManage,
-            _ => throw new ArgumentOutOfRangeException(nameof(requiredClaim), requiredClaim, DomainErrorMessages.UnsupportedProjectClaim),
+            _ => throw new ArgumentOutOfRangeException(nameof(requiredClaim), requiredClaim, "Unsupported project claim."),
         };
 
         if (!allowed)

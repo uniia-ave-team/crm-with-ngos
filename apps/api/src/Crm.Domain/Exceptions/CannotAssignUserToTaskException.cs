@@ -5,5 +5,5 @@ namespace Crm.Domain.Exceptions;
 /// </summary>
 /// <param name="userId">The unique identifier of the user who cannot be assigned.</param>
 /// <param name="reason">The reason why the user cannot be assigned to the task.</param>
-public class CannotAssignUserToTaskException(Guid userId, string reason)
+public sealed class CannotAssignUserToTaskException(Guid userId, string reason)
     : DomainValidationException($"User with ID '{userId}' cannot be assigned to the task: {reason}");

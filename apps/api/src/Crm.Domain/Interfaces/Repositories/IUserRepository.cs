@@ -33,8 +33,9 @@ public interface IUserRepository : IGenericRepository<User>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task that represents the asynchronous operation.
-    /// The task result contains <c>true</c> if the user exists and is active; otherwise, <c>false</c>.
+    /// The task result contains <c>true</c> if the user is active, or <c>false</c> if the user is deactivated.
     /// </returns>
+    /// <exception cref="EntityNotFoundException{User}">Thrown if no user with the specified identifier exists.</exception>
     Task<bool> IsActiveAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -61,4 +62,13 @@ public interface IUserRepository : IGenericRepository<User>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A dictionary mapping each existing user identifier to its activation status.</returns>
     Task<Dictionary<Guid, bool>> GetActiveStatusesAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously updates the <see cref="User.LastLoginAt"/> UTC timestamp for the specified user using a direct database update.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the authenticated user.</param>
+    /// <param name="lastLoginAt">The UTC timestamp of the successful authentication.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task representing the asynchronous update operation.</returns>
+    Task UpdateLastLoginAtAsync(Guid userId, DateTime lastLoginAt, CancellationToken cancellationToken = default);
 }

@@ -1,3 +1,7 @@
+using Crm.Domain.Attributes;
+using Crm.Domain.Entities.Base;
+using Crm.Domain.Interfaces.Entities;
+
 namespace Crm.Domain.Entities;
 
 /// <summary>
@@ -5,7 +9,8 @@ namespace Crm.Domain.Entities;
 /// enforcing the single-instance constraint where the application serves a single primary organization.
 /// Inherits from <see cref="BaseEntity"/> and manages organizational details and associated system users.
 /// </summary>
-public class Ngo : BaseEntity
+[Auditable]
+public class Ngo : BaseEntity, IAuditableEntity
 {
     /// <summary>
     /// Gets or sets the official name of the NGO.
@@ -18,17 +23,22 @@ public class Ngo : BaseEntity
     public string? Logo { get; set; }
 
     /// <summary>
-    /// Gets or sets the UTC timestamp indicating when the NGO instance was initially created.
+    /// Gets or sets the UTC+0 timestamp indicating when the NGO instance was initially created.
     /// </summary>
     public DateTime CreatedAt { get; set; }
 
     /// <summary>
-    /// Gets or sets the collection of business user profiles belonging to this NGO instance.
+    /// Gets or sets the UTC+0 timestamp indicating when the NGO instance was last updated.
     /// </summary>
-    public ICollection<User> Users { get; set; } = [];
+    public DateTime UpdatedAt { get; set; }
 
     /// <summary>
-    /// Gets or sets the collection of actual custom tables (instances) created by this NGO.
+    /// Gets the collection of business user profiles belonging to this NGO instance.
     /// </summary>
-    public ICollection<CustomTable> CustomTables { get; set; } = [];
+    public ICollection<User> Users { get; init; } = [];
+
+    /// <summary>
+    /// Gets the collection of actual custom tables (instances) created by this NGO.
+    /// </summary>
+    public ICollection<CustomTable> CustomTables { get; init; } = [];
 }

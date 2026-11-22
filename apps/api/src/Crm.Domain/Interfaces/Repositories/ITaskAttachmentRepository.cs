@@ -20,22 +20,6 @@ public interface ITaskAttachmentRepository : IGenericRepository<TaskAttachment>
     Task<List<TResult>> GetByTaskIdAsync<TResult>(Guid taskId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Asynchronously retrieves stored attachment file names across all tasks in a project for storage cleanup.
-    /// </summary>
-    /// <param name="projectId">The unique identifier of the project.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A list of stored file names belonging to tasks in the project.</returns>
-    Task<List<string>> GetStoredFileNamesByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Asynchronously retrieves stored attachment file names for a specific task for storage cleanup.
-    /// </summary>
-    /// <param name="taskId">The unique identifier of the task.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A list of stored file names belonging to the task.</returns>
-    Task<List<string>> GetStoredFileNamesByTaskIdAsync(Guid taskId, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Asynchronously retrieves a specific task attachment by task ID and attachment ID.
     /// </summary>
     /// <param name="taskId">The unique identifier of the parent task.</param>

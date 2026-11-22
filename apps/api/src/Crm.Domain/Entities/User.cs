@@ -1,4 +1,7 @@
+using Crm.Domain.Attributes;
+using Crm.Domain.Entities.Base;
 using Crm.Domain.Enums;
+using Crm.Domain.Interfaces.Entities;
 
 namespace Crm.Domain.Entities;
 
@@ -6,7 +9,8 @@ namespace Crm.Domain.Entities;
 /// Represents the extended business profile of a system member within the NGO.
 /// Inherits from <see cref="BaseEntity"/> and maintains personal details, contact information and operational status.
 /// </summary>
-public class User : BaseEntity
+[Auditable]
+public class User : BaseEntity, IAuditableEntity
 {
     /// <summary>
     /// Gets or sets the first name of the user.
@@ -65,9 +69,19 @@ public class User : BaseEntity
     public bool IsActive { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the UTC timestamp when the user profile was initially created.
+    /// Gets or sets the UTC+0 timestamp when the user profile was initially created.
     /// </summary>
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the UTC+0 timestamp when the user profile was last updated.
+    /// </summary>
+    public DateTime UpdatedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optional UTC+0 timestamp of the user's most recent successful authentication.
+    /// </summary>
+    public DateTime? LastLoginAt { get; set; }
 
     /// <summary>
     /// Gets or sets the unique foreign key identifier of the associated <see cref="Ngo"/> instance.
@@ -80,7 +94,7 @@ public class User : BaseEntity
     public Ngo? Ngo { get; set; }
 
     /// <summary>
-    /// Gets or sets the collection of custom key-value fields associated with this user.
+    /// Gets the collection of custom key-value fields associated with this user.
     /// </summary>
-    public ICollection<UserCustomField> CustomFields { get; set; } = [];
+    public ICollection<UserCustomField> CustomFields { get; init; } = [];
 }

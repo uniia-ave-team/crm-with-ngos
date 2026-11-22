@@ -1,5 +1,5 @@
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
@@ -10,7 +10,7 @@ namespace Crm.Domain.Interfaces.Repositories;
 /// <summary>
 /// Defines repository operations for managing <see cref="Project"/> entities and <see cref="ProjectMember"/> assignments.
 /// </summary>
-public interface IProjectRepository : IGenericRepository<Project>
+public interface IProjectRepository : IGenericRepository<Project>, IRowLockRepository
 {
     /// <summary>
     /// Asynchronously retrieves a paginated, filtered, and sorted list of projects visible to <paramref name="userId"/>.

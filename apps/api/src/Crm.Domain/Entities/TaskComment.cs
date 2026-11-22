@@ -1,9 +1,14 @@
+using Crm.Domain.Attributes;
+using Crm.Domain.Entities.Base;
+using Crm.Domain.Interfaces.Entities;
+
 namespace Crm.Domain.Entities;
 
 /// <summary>
 /// Represents a user comment posted on a <see cref="ProjectTask"/>.
 /// </summary>
-public class TaskComment : BaseEntity
+[Auditable]
+public class TaskComment : BaseEntity, IAuditableEntity
 {
     /// <summary>
     /// Gets or sets the foreign key identifier of the <see cref="ProjectTask"/>.
@@ -13,7 +18,7 @@ public class TaskComment : BaseEntity
     /// <summary>
     /// Gets or sets the navigation property pointing to the parent <see cref="ProjectTask"/>.
     /// </summary>
-    public ProjectTask Task { get; set; }
+    public ProjectTask Task { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the optional foreign key identifier of the author <see cref="User"/>.
@@ -42,7 +47,7 @@ public class TaskComment : BaseEntity
     public DateTime UpdatedAt { get; set; }
 
     /// <summary>
-    /// Gets or sets the per-user unread markers for this comment; rows are removed once read.
+    /// Gets the per-user unread markers for this comment; rows are removed once read.
     /// </summary>
-    public ICollection<TaskReadState> ReadStates { get; set; } = [];
+    public ICollection<TaskReadState> ReadStates { get; init; } = [];
 }

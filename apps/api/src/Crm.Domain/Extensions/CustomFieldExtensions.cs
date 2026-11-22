@@ -1,6 +1,6 @@
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 
 namespace Crm.Domain.Extensions;
 

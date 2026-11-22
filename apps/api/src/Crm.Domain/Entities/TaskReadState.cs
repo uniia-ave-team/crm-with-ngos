@@ -14,7 +14,7 @@ public class TaskReadState
     /// <summary>
     /// Gets or sets the navigation property pointing to the unread <see cref="TaskComment"/>.
     /// </summary>
-    public TaskComment Comment { get; set; }
+    public TaskComment Comment { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the foreign key identifier of the <see cref="Entities.User"/>.
@@ -24,5 +24,5 @@ public class TaskReadState
     /// <summary>
     /// Gets or sets the navigation property pointing to the <see cref="Entities.User"/>.
     /// </summary>
-    public User User { get; set; }
+    public User User { get; set; } = null!;
 }

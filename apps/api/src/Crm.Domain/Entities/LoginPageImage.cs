@@ -1,3 +1,7 @@
+using Crm.Domain.Attributes;
+using Crm.Domain.Entities.Base;
+using Crm.Domain.Interfaces.Entities;
+
 namespace Crm.Domain.Entities;
 
 /// <summary>
@@ -5,7 +9,8 @@ namespace Crm.Domain.Entities;
 /// associated with the primary Non-Governmental Organization (NGO).
 /// Inherits from <see cref="BaseEntity"/>.
 /// </summary>
-public class LoginPageImage : BaseEntity
+[Auditable]
+public class LoginPageImage : BaseEntity, ICreatableEntity
 {
     /// <summary>
     /// Gets or sets the URL or storage path pointing to the login page background or banner image.
@@ -20,5 +25,10 @@ public class LoginPageImage : BaseEntity
     /// <summary>
     /// Gets or sets the navigation property to the associated NGO instance.
     /// </summary>
-    public Ngo? Ngo { get; set; }
+    public Ngo Ngo { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the UTC+0 timestamp indicating when the login page image was uploaded.
+    /// </summary>
+    public DateTime CreatedAt { get; set; }
 }
