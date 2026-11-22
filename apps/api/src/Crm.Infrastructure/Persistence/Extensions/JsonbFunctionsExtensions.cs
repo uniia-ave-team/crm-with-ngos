@@ -3,9 +3,13 @@ using System.Reflection;
 using System.Text.Json.Nodes;
 using Crm.Domain.Common;
 using Crm.Domain.Extensions;
+using Crm.Infrastructure.Persistence.Models;
 
-namespace Crm.Infrastructure.Persistence.Extensions.FunctionExtensions;
+namespace Crm.Infrastructure.Persistence.Extensions;
 
+/// <summary>
+/// Declares EF Core database-function stubs and schema-patch expression builders for PostgreSQL <c>jsonb</c> operations.
+/// </summary>
 public static class JsonbFunctionsExtensions
 {
     private const string ExceptionMessage = "This method is for EF Core LINQ queries only.";
@@ -17,6 +21,12 @@ public static class JsonbFunctionsExtensions
     /// <summary>
     /// Applies a flat JSONB schema patch operation in a single linear SQL translation step.
     /// </summary>
+    /// <param name="json">The target JSONB document column.</param>
+    /// <param name="dropKeys">Keys to remove from the JSONB document.</param>
+    /// <param name="targetKeys">Destination keys to write or backfill.</param>
+    /// <param name="sourceKeys">Source keys to copy values from (empty string for new defaults).</param>
+    /// <param name="fallbackJson">JSON literal fallbacks when the source value is missing or null.</param>
+    /// <returns>The patched JSONB document (SQL translation only).</returns>
     public static JsonObject JsonbApplyPatch(
         JsonObject json,
         string[] dropKeys,
@@ -28,37 +38,56 @@ public static class JsonbFunctionsExtensions
     /// <summary>
     /// Extracts a scalar text value from a JSONB document at the specified property key.
     /// </summary>
+    /// <param name="json">The target JSONB document column.</param>
+    /// <param name="key">The top-level JSON property key.</param>
+    /// <returns>The extracted text value (SQL translation only).</returns>
     public static string? JsonbExtractPathText(JsonObject json, string key)
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
-    /// Extracts a numeric value from a JSONB document and casts it to numeric in SQL queries.
+    /// Extracts a numeric value from a JSONB document and casts it to <c>numeric</c> in SQL queries.
     /// </summary>
+    /// <param name="json">The target JSONB document column.</param>
+    /// <param name="key">The top-level JSON property key.</param>
+    /// <returns>The extracted numeric value (SQL translation only).</returns>
     public static decimal? JsonbExtractPathNumber(JsonObject json, string key)
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
-    /// Extracts a boolean value from a JSONB document and casts it to boolean in SQL queries.
+    /// Extracts a boolean value from a JSONB document and casts it to <c>boolean</c> in SQL queries.
     /// </summary>
+    /// <param name="json">The target JSONB document column.</param>
+    /// <param name="key">The top-level JSON property key.</param>
+    /// <returns>The extracted boolean value (SQL translation only).</returns>
     public static bool? JsonbExtractPathBoolean(JsonObject json, string key)
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
-    /// Extracts a date value (YYYY-MM-DD) from a JSONB document and casts it to date in SQL queries.
+    /// Extracts a date value (<c>YYYY-MM-DD</c>) from a JSONB document and casts it to <c>date</c> in SQL queries.
     /// </summary>
+    /// <param name="json">The target JSONB document column.</param>
+    /// <param name="key">The top-level JSON property key.</param>
+    /// <returns>The extracted date value (SQL translation only).</returns>
     public static DateOnly? JsonbExtractPathDate(JsonObject json, string key)
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
-    /// Extracts a date/time value from a JSONB document and casts it to timestamp with time zone in SQL queries.
+    /// Extracts a date/time value from a JSONB document and casts it to <c>timestamp with time zone</c> in SQL queries.
     /// </summary>
+    /// <param name="json">The target JSONB document column.</param>
+    /// <param name="key">The top-level JSON property key.</param>
+    /// <returns>The extracted UTC timestamp value (SQL translation only).</returns>
     public static DateTime? JsonbExtractPathDateTime(JsonObject json, string key)
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
-    /// Builds an EF Core compatible update expression from SchemaDiffResult.
-    /// Returns null if no schema changes are present in diff.
+    /// Builds an EF Core compatible update expression from <see cref="SchemaDiffResult"/>.
+    /// Returns <see langword="null"/> if no schema changes are present in <paramref name="diff"/>.
     /// </summary>
+    /// <typeparam name="TEntity">The entity type owning the JSONB property.</typeparam>
+    /// <param name="propertySelector">An expression selecting the JSONB <see cref="JsonObject"/> property.</param>
+    /// <param name="diff">The calculated schema diff.</param>
+    /// <returns>An EF Core update expression, or <see langword="null"/> when no patch is required.</returns>
     public static Expression<Func<TEntity, JsonObject>>? ToSchemaUpdateLambda<TEntity>(
         this Expression<Func<TEntity, JsonObject>> propertySelector,
         SchemaDiffResult diff)
@@ -86,6 +115,11 @@ public static class JsonbFunctionsExtensions
         return Expression.Lambda<Func<TEntity, JsonObject>>(patchCall, propertySelector.Parameters);
     }
 
+    /// <summary>
+    /// Flattens a <see cref="SchemaDiffResult"/> into parallel SQL patch arrays suitable for <see cref="JsonbApplyPatch"/>.
+    /// </summary>
+    /// <param name="diff">The calculated schema diff.</param>
+    /// <returns>A <see cref="SchemaPatch"/> describing all drops, renames, and required backfills.</returns>
     public static SchemaPatch BuildSchemaPatch(SchemaDiffResult diff)
     {
         var drop = new HashSet<string>(StringComparer.Ordinal);

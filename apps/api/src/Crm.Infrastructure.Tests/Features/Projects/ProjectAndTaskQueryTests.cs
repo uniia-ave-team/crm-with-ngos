@@ -1,15 +1,16 @@
 using System.Linq.Expressions;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Common.Consts;
+using Crm.Application.Dtos.Projects;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Tasks.Mappings;
+using Crm.Application.Features.Tasks.Queries;
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
-using Crm.Domain.Consts.Entities.GeneralConstants;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
-using Crm.Infrastructure.Helpers;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Expressions;
+using Crm.Infrastructure.Persistence.Sorting;
 using Crm.Infrastructure.Repositories;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
@@ -161,7 +162,7 @@ public class ProjectAndTaskQueryTests
 
         // Global cross-project My Tasks query (ProjectId == null) composes ProjectVisibilityExpressions in SQL
         string globalMineSql = repository.BuildTaskSummaryQuery(
-            new GetProjectTasksQuery(Filter: TaskConstants.MineFilterValue) { ProjectId = null },
+            new GetProjectTasksQuery(Filter: TaskFilterConstants.MineFilterValue) { ProjectId = null },
             userId).ToQueryString();
         globalMineSql.ShouldContain("ProjectMember", Case.Insensitive);
         globalMineSql.ShouldContain("Visibility");
@@ -312,7 +313,7 @@ public class ProjectAndTaskQueryTests
         var wrongPriority = CreateTask(visibleProjectId, "Refactor", [userId], start, null, ProjectTaskStatus.InProgress, TaskPriority.Low, [backendTagId], project: visibleProject);
 
         var globalMineQuery = new GetProjectTasksQuery(
-            Filter: TaskConstants.MineFilterValue,
+            Filter: TaskFilterConstants.MineFilterValue,
             Status: ProjectTaskStatus.InProgress,
             Priority: TaskPriority.Critical,
             TagIds: [backendTagId])

@@ -1,15 +1,13 @@
 using System.Text.Json.Nodes;
 using Crm.Application.Dtos.CustomRecords;
 using Crm.Application.Dtos.CustomTables;
-using Crm.Application.Dtos.CustomTables.Commands;
-using Crm.Application.Dtos.CustomTemplates;
-using Crm.Application.Dtos.CustomTemplates.Commands;
+using Crm.Application.Dtos.TableTemplates;
 using Crm.Application.Features.CustomRecords.Mappings;
 using Crm.Application.Features.CustomTables.Commands;
 using Crm.Application.Features.CustomTables.Mappings;
-using Crm.Application.Features.CustomTemplates.Commands;
-using Crm.Application.Features.CustomTemplates.Mappings;
-using Crm.Domain.Consts;
+using Crm.Application.Features.TableTemplates.Commands;
+using Crm.Application.Features.TableTemplates.Mappings;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Infrastructure.Persistence;
@@ -95,13 +93,15 @@ public class CustomTableAndRecordPostgresIntegrationTests(
         var handler = new UpdateCustomTableCommandHandler(tableRepo, recordRepo, NullLogger<UpdateCustomTableCommandHandler>.Instance);
 
         var command = new UpdateCustomTableCommand(
-            table.Id,
             "Beneficiaries Updated",
             "Updated description",
             [
                 new UpdateCustomFieldDto(null, "City (Mandatory)", "city", FieldDataType.Text, true, 0),
                 new UpdateCustomFieldDto(null, "Notes", "notes", FieldDataType.Text, false, 1),
-            ]);
+            ])
+        {
+            Id = table.Id,
+        };
 
         await unitOfWork.BeginTransactionAsync(ct);
         await handler.Handle(command, ct);
@@ -181,12 +181,14 @@ public class CustomTableAndRecordPostgresIntegrationTests(
         var handler = new UpdateCustomTableCommandHandler(tableRepo, recordRepo, NullLogger<UpdateCustomTableCommandHandler>.Instance);
 
         var command = new UpdateCustomTableCommand(
-            table.Id,
             "Locations",
             null,
             [
                 new UpdateCustomFieldDto(null, "City Code", "city", FieldDataType.Number, true, 0),
-            ]);
+            ])
+        {
+            Id = table.Id,
+        };
 
         await unitOfWork.BeginTransactionAsync(ct);
         await handler.Handle(command, ct);
@@ -272,13 +274,15 @@ public class CustomTableAndRecordPostgresIntegrationTests(
         var handler = new UpdateCustomTableCommandHandler(tableRepo, recordRepo, NullLogger<UpdateCustomTableCommandHandler>.Instance);
 
         var command = new UpdateCustomTableCommand(
-            table.Id,
             "Inventory",
             null,
             [
                 new UpdateCustomFieldDto(fieldAId, "Primary Code", "secondary_code", FieldDataType.Text, true, 0),
                 new UpdateCustomFieldDto(fieldBId, "Secondary Code", "primary_code", FieldDataType.Text, true, 1),
-            ]);
+            ])
+        {
+            Id = table.Id,
+        };
 
         await unitOfWork.BeginTransactionAsync(ct);
         await handler.Handle(command, ct);
@@ -353,13 +357,15 @@ public class CustomTableAndRecordPostgresIntegrationTests(
             var handler1 = new UpdateTableTemplateCommandHandler(repo1, NullLogger<UpdateTableTemplateCommandHandler>.Instance);
 
             var updateWithNullIdCommand = new UpdateTableTemplateCommand(
-                template.Id,
                 template.Name,
                 "Updated",
                 [
                     new UpdateTemplateFieldDto(null, "First Updated", "first_key", FieldDataType.Text, true, 0),
                     new UpdateTemplateFieldDto(fieldTwoId, "Second", "second_key", FieldDataType.Number, true, 1),
-                ]);
+                ])
+            {
+                Id = template.Id,
+            };
 
             await uow1.BeginTransactionAsync(ct);
             await handler1.Handle(updateWithNullIdCommand, ct);
@@ -374,13 +380,15 @@ public class CustomTableAndRecordPostgresIntegrationTests(
             var handler2 = new UpdateTableTemplateCommandHandler(repo2, NullLogger<UpdateTableTemplateCommandHandler>.Instance);
 
             var swapKeysCommand = new UpdateTableTemplateCommand(
-                template.Id,
                 template.Name,
                 "Swapped",
                 [
                     new UpdateTemplateFieldDto(fieldOneId, "First Updated", "second_key", FieldDataType.Text, true, 0),
                     new UpdateTemplateFieldDto(fieldTwoId, "Second", "first_key", FieldDataType.Number, true, 1),
-                ]);
+                ])
+            {
+                Id = template.Id,
+            };
 
             await uow2.BeginTransactionAsync(ct);
             await handler2.Handle(swapKeysCommand, ct);
@@ -566,7 +574,7 @@ public class CustomTableAndRecordPostgresIntegrationTests(
 
         public bool IsDockerAvailable { get; private set; }
 
-        public DbContextOptions<ApplicationDbContext> DbContextOptions { get; private set; }
+        public DbContextOptions<ApplicationDbContext>? DbContextOptions { get; private set; }
 
         public ApplicationDbContext CreateDbContext() => new(DbContextOptions);
 

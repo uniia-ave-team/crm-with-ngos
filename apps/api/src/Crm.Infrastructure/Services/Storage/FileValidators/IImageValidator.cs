@@ -1,6 +1,4 @@
-using Crm.Application.Dtos.Common;
-
-namespace Crm.Application.Interfaces;
+namespace Crm.Infrastructure.Services.Storage.FileValidators;
 
 /// <summary>
 /// Provides validation mechanisms to check file content integrity and security for image uploads.
@@ -12,6 +10,6 @@ public interface IImageValidator
     /// </summary>
     /// <param name="stream">The content stream of the file.</param>
     /// <param name="fileName">The original file name containing the extension.</param>
-    /// <returns><c>true</c> if the image stream is valid; otherwise, <c>false</c>.</returns>
+    /// <returns>A <see cref="FileValidationResult"/> describing whether the image is valid.</returns>
     FileValidationResult Validate(Stream stream, string fileName);
 }

@@ -1,5 +1,7 @@
 using Crm.Domain.Entities;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
+using Crm.Infrastructure.Auditing;
 using Crm.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,8 +9,10 @@ namespace Crm.Infrastructure.Repositories;
 
 /// <summary>
 /// Provides Entity Framework persistence for the singleton <see cref="MaintenanceNotice"/> record.
+/// Staged changes are persisted by the caller via <see cref="Application.Interfaces.IUnitOfWork.SaveChangesAsync"/>.
 /// </summary>
-public class MaintenanceNoticeRepository(ApplicationDbContext context) : IMaintenanceNoticeRepository
+/// <param name="context">The application database context.</param>
+public sealed class MaintenanceNoticeRepository(ApplicationDbContext context) : IMaintenanceNoticeRepository
 {
     private DbSet<MaintenanceNotice> DbSet { get; } = context.Set<MaintenanceNotice>();
 
@@ -33,25 +37,13 @@ public class MaintenanceNoticeRepository(ApplicationDbContext context) : IMainte
         if (existing is null)
         {
             await DbSet.AddAsync(
-                new MaintenanceNotice
-                {
-                    Id = MaintenanceNotice.SingletonId,
-                    Message = message,
-                    StartsAt = startsAt,
-                    EndsAt = endsAt,
-                    UpdatedAt = updatedAt,
-                },
+                new MaintenanceNotice().Update(message, startsAt, endsAt, updatedAt),
                 cancellationToken);
         }
         else
         {
-            existing.Message = message;
-            existing.StartsAt = startsAt;
-            existing.EndsAt = endsAt;
-            existing.UpdatedAt = updatedAt;
+            existing.Update(message, startsAt, endsAt, updatedAt);
         }
-
-        await context.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -60,6 +52,11 @@ public class MaintenanceNoticeRepository(ApplicationDbContext context) : IMainte
         int rowsAffected = await DbSet
             .Where(n => n.Id == MaintenanceNotice.SingletonId)
             .ExecuteDeleteAsync(cancellationToken);
+
+        if (rowsAffected > 0)
+        {
+            context.TryEnqueueBulkDeleteAudit<MaintenanceNotice>(MaintenanceNotice.SingletonId.ToString());
+        }
 
         return rowsAffected > 0;
     }

@@ -2,7 +2,7 @@ using System.Linq.Expressions;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 
-namespace Crm.Domain.Expressions;
+namespace Crm.Infrastructure.Persistence.Expressions;
 
 /// <summary>
 /// Provides reusable SQL-translatable LINQ expressions for evaluating <see cref="Project"/> visibility.

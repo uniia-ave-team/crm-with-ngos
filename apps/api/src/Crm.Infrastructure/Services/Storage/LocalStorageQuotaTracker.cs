@@ -1,80 +1,70 @@
 using System.Collections.Concurrent;
-using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
+using Crm.Infrastructure.Consts;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Storage;
 
 /// <summary>
-/// Tracks cached disk usage and in-flight upload reservations per storage root directory
-/// to enforce installation-wide storage quotas in O(1) time and clean up stale temporary upload files.
+/// Thread-safe, DI-managed implementation of <see cref="ILocalStorageQuotaTracker"/> that tracks cached disk usage
+/// and in-flight upload reservations per storage root directory without holding locks across disk scans.
 /// </summary>
-internal sealed class LocalStorageQuotaTracker
+/// <param name="timeProvider">The time provider supplying current UTC timestamps for stale-file expiration checks.</param>
+public sealed class LocalStorageQuotaTracker(TimeProvider timeProvider) : ILocalStorageQuotaTracker
 {
-    private static readonly TimeSpan StaleTempFileMaxAge = TimeSpan.FromHours(FileStorageConstants.StaleTempFileMaxAgeHours);
+    private static readonly TimeSpan StaleTempFileMaxAge = TimeSpan.FromHours(LocalFileStorageConstants.StaleTempFileMaxAgeHours);
 
-    private static readonly ConcurrentDictionary<string, DirectoryQuotaState> States =
+    private readonly ConcurrentDictionary<string, DirectoryQuotaState> _states =
         new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
-    /// <summary>
-    /// Reserves <paramref name="incomingBytes"/> against the installation quota for <paramref name="rootDirectory"/>,
-    /// throwing <see cref="StorageQuotaExceededException"/> if the quota would be exceeded.
-    /// </summary>
-    public static void Reserve(string rootDirectory, long incomingBytes, long maxTotalBytes)
+    /// <inheritdoc />
+    public void Reserve(string rootDirectory, long incomingBytes, long maxTotalBytes)
     {
-        DirectoryQuotaState state = States.GetOrAdd(rootDirectory, _ => new DirectoryQuotaState());
-        state.Reserve(rootDirectory, incomingBytes, maxTotalBytes);
+        DirectoryQuotaState state = _states.GetOrAdd(rootDirectory, _ => new DirectoryQuotaState());
+        state.Reserve(rootDirectory, incomingBytes, maxTotalBytes, timeProvider);
     }
 
-    /// <summary>
-    /// Finalizes a previously reserved upload, transitioning <paramref name="reservedBytes"/> out of in-flight
-    /// accounting and recording the actual <paramref name="writtenBytes"/> committed to disk.
-    /// </summary>
-    public static void Commit(string rootDirectory, long reservedBytes, long writtenBytes)
+    /// <inheritdoc />
+    public void Commit(string rootDirectory, long reservedBytes, long writtenBytes)
     {
-        if (States.TryGetValue(rootDirectory, out var state))
+        if (_states.TryGetValue(rootDirectory, out var state))
         {
             state.Commit(reservedBytes, writtenBytes);
         }
     }
 
-    /// <summary>
-    /// Releases a previously reserved upload when writing fails or is cancelled before commit.
-    /// </summary>
-    public static void Release(string rootDirectory, long reservedBytes)
+    /// <inheritdoc />
+    public void Release(string rootDirectory, long reservedBytes)
     {
-        if (States.TryGetValue(rootDirectory, out var state))
+        if (_states.TryGetValue(rootDirectory, out var state))
         {
             state.Release(reservedBytes);
         }
     }
 
-    /// <summary>
-    /// Deducts <paramref name="deletedBytes"/> from the cached disk usage of <paramref name="rootDirectory"/>.
-    /// </summary>
-    public static void OnFileDeleted(string rootDirectory, long deletedBytes)
+    /// <inheritdoc />
+    public void OnFileDeleted(string rootDirectory, long deletedBytes)
     {
-        if (deletedBytes > 0 && States.TryGetValue(rootDirectory, out var state))
+        if (deletedBytes > 0 && _states.TryGetValue(rootDirectory, out var state))
         {
             state.OnFileDeleted(deletedBytes);
         }
     }
 
-    /// <summary>
-    /// Removes orphaned temporary upload files (<c>*.tmp</c>) older than <paramref name="maxAge"/>
-    /// from the specified storage root directory.
-    /// </summary>
-    public static int CleanupStaleTempFiles(string rootDirectory, TimeSpan maxAge, DateTime? utcNow = null)
+    /// <inheritdoc />
+    public int CleanupStaleTempFiles(string rootDirectory, TimeSpan maxAge, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(rootDirectory))
         {
             return 0;
         }
 
-        DateTime cutoffUtc = (utcNow ?? DateTime.UtcNow) - maxAge;
+        DateTime cutoffUtc = timeProvider.GetUtcNow().UtcDateTime - maxAge;
         int deletedCount = 0;
 
-        foreach (string filePath in Directory.EnumerateFiles(rootDirectory, $"*{FileStorageConstants.TempFileExtension}", SearchOption.AllDirectories))
+        foreach (string filePath in Directory.EnumerateFiles(rootDirectory, $"*{LocalFileStorageConstants.TempFileExtension}", SearchOption.AllDirectories))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (TryDeleteIfStale(filePath, cutoffUtc))
             {
                 deletedCount++;
@@ -84,19 +74,19 @@ internal sealed class LocalStorageQuotaTracker
         return deletedCount;
     }
 
-    private static long CalculateDirectorySize(string rootDirectory)
+    private static long CalculateDirectorySize(string rootDirectory, TimeProvider timeProvider)
     {
         if (!Directory.Exists(rootDirectory))
         {
             return 0;
         }
 
-        DateTime staleCutoffUtc = DateTime.UtcNow - StaleTempFileMaxAge;
+        DateTime staleCutoffUtc = timeProvider.GetUtcNow().UtcDateTime - StaleTempFileMaxAge;
         long totalBytes = 0;
 
         foreach (string filePath in Directory.EnumerateFiles(rootDirectory, "*", SearchOption.AllDirectories))
         {
-            if (filePath.EndsWith(FileStorageConstants.TempFileExtension, StringComparison.OrdinalIgnoreCase))
+            if (filePath.EndsWith(LocalFileStorageConstants.TempFileExtension, StringComparison.OrdinalIgnoreCase))
             {
                 TryDeleteIfStale(filePath, staleCutoffUtc);
                 continue;
@@ -152,33 +142,60 @@ internal sealed class LocalStorageQuotaTracker
         private long _usedBytes;
         private long _inFlightBytes;
 
-        public void Reserve(string rootDirectory, long incomingBytes, long maxTotalBytes)
+        public void Reserve(string rootDirectory, long incomingBytes, long maxTotalBytes, TimeProvider timeProvider)
         {
             if (incomingBytes > maxTotalBytes)
             {
                 throw CreateQuotaExceededException(maxTotalBytes);
             }
 
+            bool needsInitialScan;
             lock (_syncRoot)
             {
-                if (!_initialized)
+                needsInitialScan = !_initialized;
+            }
+
+            if (needsInitialScan)
+            {
+                long scannedBytes = CalculateDirectorySize(rootDirectory, timeProvider);
+                lock (_syncRoot)
                 {
-                    _usedBytes = CalculateDirectorySize(rootDirectory);
-                    _initialized = true;
+                    if (!_initialized)
+                    {
+                        _usedBytes = scannedBytes;
+                        _initialized = true;
+                    }
+                }
+            }
+
+            bool needsRescan;
+            lock (_syncRoot)
+            {
+                if (_usedBytes + _inFlightBytes <= maxTotalBytes - incomingBytes)
+                {
+                    _inFlightBytes += incomingBytes;
+                    return;
                 }
 
-                if (_usedBytes + _inFlightBytes > maxTotalBytes - incomingBytes)
+                needsRescan = true;
+            }
+
+            if (needsRescan)
+            {
+                // Re-scan disk outside the accounting lock so concurrent commits/releases are never stalled by I/O.
+                long refreshedBytes = CalculateDirectorySize(rootDirectory, timeProvider);
+
+                lock (_syncRoot)
                 {
-                    // Re-scan disk only when cached usage appears full, picking up any out-of-band deletions.
-                    _usedBytes = CalculateDirectorySize(rootDirectory);
+                    _usedBytes = refreshedBytes;
 
                     if (_usedBytes + _inFlightBytes > maxTotalBytes - incomingBytes)
                     {
                         throw CreateQuotaExceededException(maxTotalBytes);
                     }
-                }
 
-                _inFlightBytes += incomingBytes;
+                    _inFlightBytes += incomingBytes;
+                }
             }
         }
 

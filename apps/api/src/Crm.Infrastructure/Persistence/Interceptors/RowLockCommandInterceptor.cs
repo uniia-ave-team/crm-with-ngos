@@ -41,7 +41,7 @@ public sealed class RowLockCommandInterceptor : DbCommandInterceptor
     private static void ApplyRowLockIfTagged(DbCommand command)
     {
         if (string.IsNullOrEmpty(command.CommandText)
-            || !command.CommandText.Contains(TagComment, StringComparison.Ordinal))
+            || !HasLeadingTagComment(command.CommandText))
         {
             return;
         }
@@ -58,5 +58,46 @@ public sealed class RowLockCommandInterceptor : DbCommandInterceptor
         command.CommandText = hasTrailingSemicolon
             ? $"{sqlWithoutSemicolon}\n{ForNoKeyUpdateClause};"
             : $"{sqlWithoutSemicolon}\n{ForNoKeyUpdateClause}";
+    }
+
+    private static bool HasLeadingTagComment(string sql)
+    {
+        ReadOnlySpan<char> remaining = sql.AsSpan();
+
+        while (!remaining.IsEmpty)
+        {
+            int newlineIndex = remaining.IndexOf('\n');
+            ReadOnlySpan<char> line = (newlineIndex >= 0 ? remaining[..newlineIndex] : remaining).Trim();
+
+            if (line.IsEmpty)
+            {
+                if (newlineIndex < 0)
+                {
+                    break;
+                }
+
+                remaining = remaining[(newlineIndex + 1)..];
+                continue;
+            }
+
+            if (!line.StartsWith("--", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (line.Equals(TagComment, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (newlineIndex < 0)
+            {
+                break;
+            }
+
+            remaining = remaining[(newlineIndex + 1)..];
+        }
+
+        return false;
     }
 }

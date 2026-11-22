@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
-using Crm.Domain.Consts;
+using Crm.Infrastructure.Consts;
 using Crm.Infrastructure.Options;
-using Crm.Infrastructure.Services;
+using Crm.Infrastructure.Services.Storage;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -12,30 +12,36 @@ namespace Crm.Infrastructure.BackgroundServices;
 /// Background service that periodically removes orphaned <c>*.tmp</c> upload files left on disk
 /// after unexpected process crashes or interrupted disk operations.
 /// </summary>
-public partial class OrphanedTempFilesCleanupService(
+/// <param name="fileStorageOptions">The file storage configuration options.</param>
+/// <param name="quotaTracker">The local storage quota tracker performing stale temporary file cleanup.</param>
+/// <param name="timeProvider">The time provider controlling periodic execution ticks.</param>
+/// <param name="logger">The logger instance.</param>
+public sealed partial class OrphanedTempFilesCleanupService(
     IOptions<FileStorageOptions> fileStorageOptions,
+    ILocalStorageQuotaTracker quotaTracker,
+    TimeProvider timeProvider,
     ILogger<OrphanedTempFilesCleanupService> logger) : BackgroundService
 {
-    private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(FileStorageConstants.TempFileCleanupIntervalHours);
-    private static readonly TimeSpan StaleTempFileMaxAge = TimeSpan.FromHours(FileStorageConstants.StaleTempFileMaxAgeHours);
+    private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(LocalFileStorageConstants.TempFileCleanupIntervalHours);
+    private static readonly TimeSpan StaleTempFileMaxAge = TimeSpan.FromHours(LocalFileStorageConstants.StaleTempFileMaxAgeHours);
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         LogServiceStarting(logger);
 
-        using var timer = new PeriodicTimer(CleanupInterval);
+        using var timer = new PeriodicTimer(CleanupInterval, timeProvider);
 
         try
         {
-            CleanupStaleTempFiles();
+            await CleanupStaleTempFilesAsync(stoppingToken);
 
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                CleanupStaleTempFiles();
+                await CleanupStaleTempFilesAsync(stoppingToken);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             LogServiceStopping(logger);
         }
@@ -45,17 +51,23 @@ public partial class OrphanedTempFilesCleanupService(
         }
     }
 
-    private void CleanupStaleTempFiles()
+    private async Task CleanupStaleTempFilesAsync(CancellationToken cancellationToken)
     {
         try
         {
             string rootDirectory = LocalFileStorageService.NormalizeUploadDirectory(fileStorageOptions.Value.UploadDirectory);
-            int removedCount = LocalStorageQuotaTracker.CleanupStaleTempFiles(rootDirectory, StaleTempFileMaxAge);
+            int removedCount = await Task.Run(
+                () => quotaTracker.CleanupStaleTempFiles(rootDirectory, StaleTempFileMaxAge, cancellationToken),
+                cancellationToken);
 
             if (removedCount > 0)
             {
                 LogCleanupCompleted(logger, removedCount);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

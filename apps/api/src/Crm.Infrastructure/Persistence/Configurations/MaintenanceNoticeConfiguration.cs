@@ -1,20 +1,22 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
+using Crm.Infrastructure.Persistence.Consts;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Crm.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// Configures the Entity Framework mapping for the singleton <see cref="MaintenanceNotice"/> entity.
+/// Configures the Entity Framework Core mapping for the singleton <see cref="MaintenanceNotice"/> entity.
 /// </summary>
-public class MaintenanceNoticeConfiguration : IEntityTypeConfiguration<MaintenanceNotice>
+public sealed class MaintenanceNoticeConfiguration : IEntityTypeConfiguration<MaintenanceNotice>
 {
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<MaintenanceNotice> builder)
     {
         builder.ToTable(
-            nameof(MaintenanceNotice),
+            TableNames.MaintenanceNotice,
             table =>
             {
                 table.HasCheckConstraint(
@@ -40,7 +42,12 @@ public class MaintenanceNoticeConfiguration : IEntityTypeConfiguration<Maintenan
         builder.Property(n => n.EndsAt)
             .IsRequired();
 
+        builder.Property(n => n.CreatedAt)
+            .IsRequired();
+
         builder.Property(n => n.UpdatedAt)
             .IsRequired();
+
+        builder.ConfigureAuthorTracking(n => n.Creator, n => n.Updater);
     }
 }

@@ -1,14 +1,17 @@
 using System.Text.Json.Nodes;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Task;
+using Crm.Application.Dtos.Projects;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Projects.Mappings;
 using Crm.Application.Features.Tasks.Mappings;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
+using Crm.Domain.Extensions;
+using Crm.Domain.ValueObjects;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Interceptors;
 using Crm.Infrastructure.Repositories;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
@@ -66,7 +69,7 @@ public class ProjectAndTaskPostgresIntegrationTests(
             RoleTitle = "Admin",
             Claim = ProjectClaim.Manage,
         });
-        ctx1.Add(new Tag { ProjectId = project.Id, Title = "Urgent" });
+        ctx1.Add(new Tag { ProjectId = project.Id }.SetTitle("Urgent"));
         await ctx1.SaveChangesAsync(ct);
 
         await using var ctx2 = fixture.CreateDbContext();
@@ -85,20 +88,20 @@ public class ProjectAndTaskPostgresIntegrationTests(
         var tagRepo = new TagRepository(ctx3);
         (await tagRepo.ExistsWithTitleAsync(project.Id, "  URGENT  ", cancellationToken: ct)).ShouldBeTrue();
 
-        ctx3.Add(new Tag { ProjectId = project.Id, Title = "urgent" });
+        ctx3.Add(new Tag { ProjectId = project.Id }.SetTitle("urgent"));
         var tagDupEx = await Should.ThrowAsync<DbUpdateException>(async () => await ctx3.SaveChangesAsync(ct));
         tagDupEx.InnerException.ShouldBeOfType<PostgresException>().SqlState.ShouldBe(PostgresErrorCodes.UniqueViolation);
 
         // Topic order uniqueness enforced at DB level via (ProjectId, Order) unique index
         await using var ctx4 = fixture.CreateDbContext();
-        ctx4.Add(new Topic { ProjectId = project.Id, Title = "Topic One", Order = 0 });
+        ctx4.Add(new Topic { ProjectId = project.Id, Order = 0 }.SetTitle("Topic One"));
         await ctx4.SaveChangesAsync(ct);
 
         await using var ctx5 = fixture.CreateDbContext();
         var topicRepo = new TopicRepository(ctx5);
         (await topicRepo.ExistsWithOrderAsync(project.Id, 0, cancellationToken: ct)).ShouldBeTrue();
 
-        ctx5.Add(new Topic { ProjectId = project.Id, Title = "Topic Two", Order = 0 });
+        ctx5.Add(new Topic { ProjectId = project.Id, Order = 0 }.SetTitle("Topic Two"));
         var topicOrderDupEx = await Should.ThrowAsync<DbUpdateException>(async () => await ctx5.SaveChangesAsync(ct));
         topicOrderDupEx.InnerException.ShouldBeOfType<PostgresException>().SqlState.ShouldBe(PostgresErrorCodes.UniqueViolation);
     }
@@ -138,12 +141,12 @@ public class ProjectAndTaskPostgresIntegrationTests(
             ],
             Topics =
             [
-                new Topic { Title = "Розробка", Order = 0 },
-                new Topic { Title = "SMM", Order = 1 },
+                new Topic { Order = 0 }.SetTitle("Розробка"),
+                new Topic { Order = 1 }.SetTitle("SMM"),
             ],
             Tags =
             [
-                new Tag { Title = "API" },
+                new Tag().SetTitle("API"),
             ],
         };
 
@@ -166,7 +169,7 @@ public class ProjectAndTaskPostgresIntegrationTests(
             EndDate = null,
             ExternalLinks =
             [
-                new TaskExternalLink { Title = "Spec", Url = "https://example.org/spec" },
+                new TaskExternalLink("https://example.org/spec", "Spec"),
             ],
             Metadata = new JsonObject { ["grantId"] = "GR-42", ["hours"] = 12 },
             CreatedAt = t1,
@@ -308,7 +311,7 @@ public class ProjectAndTaskPostgresIntegrationTests(
         var ct = TestContext.Current.CancellationToken;
         var (authUser, user) = CreateTestUser("Deleted", "Creator");
         var (authSurvivingManager, survivingManager) = CreateTestUser("Surviving", "Manager");
-        var topic = new Topic { Id = Guid.NewGuid(), Title = "Розробка", Order = 0 };
+        var topic = new Topic { Id = Guid.NewGuid(), Order = 0 }.SetTitle("Розробка");
         var project = new Project
         {
             Id = Guid.NewGuid(),
@@ -394,15 +397,22 @@ public class ProjectAndTaskPostgresIntegrationTests(
             .ToListAsync(ct);
         remainingMembers.ShouldHaveSingleItem().UserId.ShouldBe(survivingManager.Id);
 
-        // Deleting the whole project must succeed in PostgreSQL even with Restrict FK between Topic and Task
+        // Soft-deleting the whole project must succeed in PostgreSQL and hide project, tasks, and topics via query filters
         await using var deleteProjectContext = fixture.CreateDbContext();
         var projectRepo = new ProjectRepository(deleteProjectContext);
         await projectRepo.DeleteAsync(project.Id, ct);
+        await deleteProjectContext.SaveChangesAsync(ct);
 
         await using var afterProjectDeleteContext = fixture.CreateDbContext();
         (await afterProjectDeleteContext.Set<Project>().AnyAsync(p => p.Id == project.Id, ct)).ShouldBeFalse();
         (await afterProjectDeleteContext.Set<ProjectTask>().AnyAsync(t => t.Id == task.Id, ct)).ShouldBeFalse();
         (await afterProjectDeleteContext.Set<Topic>().AnyAsync(t => t.Id == topic.Id, ct)).ShouldBeFalse();
+
+        var softDeletedProject = await afterProjectDeleteContext.Set<Project>()
+            .IgnoreQueryFilters()
+            .SingleAsync(p => p.Id == project.Id, ct);
+        softDeletedProject.IsDeleted.ShouldBeTrue();
+        softDeletedProject.DeletedAt.ShouldNotBeNull();
     }
 
     [Fact]
@@ -421,9 +431,9 @@ public class ProjectAndTaskPostgresIntegrationTests(
         var (authInactive, inactive) = CreateTestUser("Inactive", "Member");
         inactive.IsActive = false;
 
-        var topic = new Topic { Id = Guid.NewGuid(), Title = "Board", Order = 0 };
-        var existingTag = new Tag { Id = Guid.NewGuid(), Title = "Existing" };
-        var extraTag = new Tag { Id = Guid.NewGuid(), Title = "Extra" };
+        var topic = new Topic { Id = Guid.NewGuid(), Order = 0 }.SetTitle("Board");
+        var existingTag = new Tag { Id = Guid.NewGuid() }.SetTitle("Existing");
+        var extraTag = new Tag { Id = Guid.NewGuid() }.SetTitle("Extra");
         var project = new Project
         {
             Id = Guid.NewGuid(),
@@ -577,7 +587,7 @@ public class ProjectAndTaskPostgresIntegrationTests(
 
         public bool IsDockerAvailable { get; private set; }
 
-        public DbContextOptions<ApplicationDbContext> DbContextOptions { get; private set; }
+        public DbContextOptions<ApplicationDbContext>? DbContextOptions { get; private set; }
 
         public ApplicationDbContext CreateDbContext() => new(DbContextOptions);
 
@@ -590,6 +600,7 @@ public class ProjectAndTaskPostgresIntegrationTests(
 
                 DbContextOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
                     .UseNpgsql(_container.GetConnectionString())
+                    .AddInterceptors(new EntityAuditMetadataSaveChangesInterceptor(TimeProvider.System))
                     .Options;
 
                 await using var context = CreateDbContext();

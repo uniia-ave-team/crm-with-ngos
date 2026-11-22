@@ -2,16 +2,16 @@ using Crm.Application.Common.Consts;
 using Crm.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Storage;
 
 /// <summary>
-/// Implementation of the <see cref="IFileTransactionTracker"/> that coordinates
+/// Implementation of <see cref="IFileTransactionTracker"/> that coordinates
 /// with <see cref="IFileStorageService"/> to manage physical file state during CQRS commands.
 /// Ensures that physical file operations are synchronized with database transaction boundaries.
 /// </summary>
 /// <param name="fileStorageService">The service responsible for physical file I/O operations.</param>
 /// <param name="logger">The logger used to record the tracking and execution of file operations.</param>
-public partial class FileTransactionTracker(
+public sealed partial class FileTransactionTracker(
     IFileStorageService fileStorageService,
     ILogger<FileTransactionTracker> logger) : IFileTransactionTracker
 {
@@ -41,6 +41,8 @@ public partial class FileTransactionTracker(
     /// <inheritdoc />
     public async Task CommitPendingDeletionsAsync(CancellationToken cancellationToken = default)
     {
+        _createdFiles.Clear();
+
         if (_filesToDelete.Count == 0)
         {
             return;
@@ -66,6 +68,8 @@ public partial class FileTransactionTracker(
     /// <inheritdoc />
     public async Task RollbackCreatedFilesAsync(CancellationToken cancellationToken = default)
     {
+        _filesToDelete.Clear();
+
         if (_createdFiles.Count == 0)
         {
             return;

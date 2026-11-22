@@ -1,22 +1,28 @@
+using System.Buffers;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
 using Crm.Domain.Exceptions;
+using Crm.Infrastructure.Consts;
 using Crm.Infrastructure.Options;
+using Crm.Infrastructure.Services.Storage.FileValidators;
 using Microsoft.Extensions.Options;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Storage;
 
 /// <summary>
 /// Implements <see cref="IFileStorageService"/> to manage physical files locally on the disk,
-/// enforcing installation-wide storage quotas via <see cref="LocalStorageQuotaTracker"/> and atomic writes.
+/// enforcing installation-wide storage quotas via <see cref="ILocalStorageQuotaTracker"/> and atomic writes.
 /// </summary>
 /// <param name="options">The configuration options containing the UploadDirectory and storage quota.</param>
 /// <param name="imageValidator">The validator verifying uploaded image content.</param>
-public class LocalFileStorageService(
+/// <param name="quotaTracker">The quota tracker coordinating storage reservations across uploads.</param>
+public sealed class LocalFileStorageService(
     IOptions<FileStorageOptions> options,
-    IImageValidator imageValidator) : IFileStorageService
+    IImageValidator imageValidator,
+    ILocalStorageQuotaTracker quotaTracker) : IFileStorageService
 {
     private const int DefaultBufferSize = 4096;
+    private static readonly StringComparison PathComparison =
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     /// <inheritdoc />
     public Task<string> SaveFileAsync(Stream contentStream, string originalFileName, string folderName, CancellationToken cancellationToken = default)
@@ -36,7 +42,7 @@ public class LocalFileStorageService(
         using var validationResult = imageValidator.Validate(contentStream, originalFileName);
 
         return !validationResult.IsValid
-            ? throw new ArgumentException("The file content does not match a supported image format.", nameof(originalFileName))
+            ? throw new DomainValidationException("The file content does not match a supported image format.")
             : await SaveValidatedAsync(validationResult.ResultStream ?? contentStream, originalFileName, folderName, cancellationToken);
     }
 
@@ -45,14 +51,14 @@ public class LocalFileStorageService(
     {
         if (ShouldIgnoreFile(fileName))
         {
-            throw new ArgumentException("The specified file identifier is an external URL or invalid, not a local stored file.", nameof(fileName));
+            throw new DomainValidationException("The specified file identifier is an external URL or invalid, not a local stored file.");
         }
 
         string filePath = GetSecureFilePath(folderName, fileName);
 
         if (!File.Exists(filePath))
         {
-            throw new FileNotFoundException($"The file '{fileName}' was not found in storage folder '{folderName}'.", filePath);
+            throw new StorageFileNotFoundException(fileName, folderName);
         }
 
         Stream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, useAsync: true);
@@ -71,12 +77,29 @@ public class LocalFileStorageService(
         string rootDirectory = NormalizeUploadDirectory(options.Value.UploadDirectory);
         string filePath = GetSecureFilePath(folderName, fileName);
 
-        if (File.Exists(filePath))
+        if (!File.Exists(filePath))
         {
-            long deletedBytes = TryGetFileLength(filePath);
-            File.Delete(filePath);
-            LocalStorageQuotaTracker.OnFileDeleted(rootDirectory, deletedBytes);
+            return Task.CompletedTask;
         }
+
+        // Atomically claim the file via rename so concurrent delete calls never double-subtract the same file's bytes.
+        string deletingPath = $"{filePath}.{Guid.NewGuid():N}{LocalFileStorageConstants.TempFileExtension}";
+        try
+        {
+            File.Move(filePath, deletingPath);
+        }
+        catch (FileNotFoundException)
+        {
+            return Task.CompletedTask;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return Task.CompletedTask;
+        }
+
+        long deletedBytes = TryGetFileLength(deletingPath);
+        File.Delete(deletingPath);
+        quotaTracker.OnFileDeleted(rootDirectory, deletedBytes);
 
         return Task.CompletedTask;
     }
@@ -112,7 +135,7 @@ public class LocalFileStorageService(
 
         try
         {
-            LocalStorageQuotaTracker.Reserve(rootDirectory, incomingBytes, maxTotalBytes);
+            quotaTracker.Reserve(rootDirectory, incomingBytes, maxTotalBytes);
             reserved = true;
 
             Directory.CreateDirectory(directoryPath);
@@ -120,7 +143,7 @@ public class LocalFileStorageService(
             string filePath = Path.Combine(directoryPath, uniqueName);
             long writtenBytes = await SaveAtomicallyToDiskAsync(stream, filePath, incomingBytes, maxTotalBytes, cancellationToken);
 
-            LocalStorageQuotaTracker.Commit(rootDirectory, incomingBytes, writtenBytes);
+            quotaTracker.Commit(rootDirectory, incomingBytes, writtenBytes);
             committed = true;
 
             return uniqueName;
@@ -129,7 +152,7 @@ public class LocalFileStorageService(
         {
             if (reserved && !committed)
             {
-                LocalStorageQuotaTracker.Release(rootDirectory, incomingBytes);
+                quotaTracker.Release(rootDirectory, incomingBytes);
             }
         }
     }
@@ -146,7 +169,7 @@ public class LocalFileStorageService(
 
         string fullFilePath = Path.GetFullPath(Path.Combine(fullBaseDirectory, fileName));
 
-        return !fullFilePath.StartsWith(fullBaseDirectory, StringComparison.OrdinalIgnoreCase)
+        return !fullFilePath.StartsWith(fullBaseDirectory, PathComparison)
             ? throw new UnauthorizedAccessException("Path traversal attempt detected in file name.")
             : fullFilePath;
     }
@@ -155,7 +178,7 @@ public class LocalFileStorageService(
     {
         string targetDir = Path.GetFullPath(Path.Combine(normalizedUploadDir, folderName));
 
-        return !targetDir.StartsWith(normalizedUploadDir, StringComparison.OrdinalIgnoreCase)
+        return !targetDir.StartsWith(normalizedUploadDir, PathComparison)
             ? throw new UnauthorizedAccessException("Path traversal attempt detected in folder name.")
             : targetDir;
     }
@@ -166,12 +189,12 @@ public class LocalFileStorageService(
 
         if (!contentStream.CanSeek)
         {
-            throw new ArgumentException("The stream must be seekable to validate its signature.", nameof(contentStream));
+            throw new ArgumentException("The stream must be seekable to determine its size and validate its contents.", nameof(contentStream));
         }
 
         if (contentStream.Length == 0)
         {
-            throw new ArgumentException("The file stream cannot be empty.", nameof(contentStream));
+            throw new DomainValidationException("The file stream cannot be empty.");
         }
 
         contentStream.Position = 0;
@@ -181,7 +204,7 @@ public class LocalFileStorageService(
     {
         if (string.IsNullOrWhiteSpace(originalFileName))
         {
-            throw new ArgumentException("The original file name must be provided.", nameof(originalFileName));
+            throw new DomainValidationException("The original file name must be provided.");
         }
     }
 
@@ -192,8 +215,8 @@ public class LocalFileStorageService(
         long maxTotalBytes,
         CancellationToken cancellationToken)
     {
-        string tempFilePath = $"{filePath}.{Guid.NewGuid():N}{FileStorageConstants.TempFileExtension}";
-        byte[] buffer = new byte[DefaultBufferSize];
+        string tempFilePath = $"{filePath}.{Guid.NewGuid():N}{LocalFileStorageConstants.TempFileExtension}";
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
         long totalWritten = 0;
 
         try
@@ -207,7 +230,7 @@ public class LocalFileStorageService(
                 useAsync: true))
             {
                 int bytesRead;
-                while ((bytesRead = await sourceStream.ReadAsync(buffer, cancellationToken)) > 0)
+                while ((bytesRead = await sourceStream.ReadAsync(buffer.AsMemory(0, DefaultBufferSize), cancellationToken)) > 0)
                 {
                     totalWritten += bytesRead;
                     if (totalWritten > expectedMaxBytes)
@@ -229,6 +252,10 @@ public class LocalFileStorageService(
         {
             TryDeleteFile(tempFilePath);
             throw;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

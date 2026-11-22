@@ -1,4 +1,4 @@
-namespace Crm.Domain.Common;
+namespace Crm.Infrastructure.Persistence.Models;
 
 /// <summary>
 /// Represents a flat schema patch payload for atomic PostgreSQL JSONB updates in a single SQL pass.

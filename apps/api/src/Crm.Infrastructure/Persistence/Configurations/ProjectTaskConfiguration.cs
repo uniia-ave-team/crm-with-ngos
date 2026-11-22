@@ -1,27 +1,23 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
 using Crm.Infrastructure.Persistence.Consts;
-using Crm.Infrastructure.Persistence.ValueGenerators;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using NpgsqlTypes;
 
 namespace Crm.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// Configures the Entity Framework mapping for the <see cref="ProjectTask"/> entity.
+/// Configures the Entity Framework Core mapping for the <see cref="ProjectTask"/> entity.
 /// </summary>
-public class ProjectTaskConfiguration : IEntityTypeConfiguration<ProjectTask>
+public sealed class ProjectTaskConfiguration : IEntityTypeConfiguration<ProjectTask>
 {
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<ProjectTask> builder)
     {
         builder.ToTable(TableNames.ProjectTask);
 
-        builder.HasKey(t => t.Id);
-
-        builder.Property(t => t.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+        builder.ConfigureGuidV7Key();
 
         builder.Property(t => t.Title)
             .IsRequired()
@@ -45,14 +41,17 @@ public class ProjectTaskConfiguration : IEntityTypeConfiguration<ProjectTask>
         builder.OwnsMany(t => t.ExternalLinks, nav => nav.ToJson());
 
         builder.Property(t => t.Metadata)
-            .HasColumnType(nameof(NpgsqlDbType.Jsonb).ToLowerInvariant())
-            .IsRequired();
+            .ConfigureJsonbColumn();
 
         builder.Property(t => t.CreatedAt)
             .IsRequired();
 
         builder.Property(t => t.UpdatedAt)
             .IsRequired();
+
+        builder.ConfigureAuthorTracking(t => t.Creator, t => t.Updater);
+        builder.ConfigureSoftDelete();
+        builder.HasQueryFilter(t => !t.IsDeleted && !t.Project.IsDeleted);
 
         builder.HasOne(t => t.Topic)
             .WithMany(topic => topic.Tasks)

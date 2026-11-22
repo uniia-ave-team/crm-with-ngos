@@ -1,14 +1,15 @@
-using Crm.Application.Dtos.Common;
-using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
+using Crm.Infrastructure.Services.Storage.FileValidators;
 
-namespace Crm.Infrastructure.Services;
+namespace Crm.Infrastructure.Services.Storage;
 
 /// <summary>
 /// Implements <see cref="IImageValidator"/> using SkiaSharp for raster formats and Costasdev.SafeSvg for SVG files.
 /// </summary>
-public class ImageValidator(IEnumerable<IFormatValidator> validators) : IImageValidator
+/// <param name="validators">The registered format-specific image validators.</param>
+public sealed class ImageValidator(IEnumerable<IFormatValidator> validators) : IImageValidator
 {
+    /// <inheritdoc />
     public FileValidationResult Validate(Stream stream, string fileName)
     {
         if (stream is null || !stream.CanRead)

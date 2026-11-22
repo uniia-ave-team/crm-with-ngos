@@ -8,7 +8,7 @@ namespace Crm.Infrastructure.Persistence.Configurations;
 /// <summary>
 /// Configures the Entity Framework mapping for the <see cref="TaskReadState"/> entity.
 /// </summary>
-public class TaskReadStateConfiguration : IEntityTypeConfiguration<TaskReadState>
+public sealed class TaskReadStateConfiguration : IEntityTypeConfiguration<TaskReadState>
 {
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<TaskReadState> builder)
@@ -28,5 +28,7 @@ public class TaskReadStateConfiguration : IEntityTypeConfiguration<TaskReadState
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(rs => rs.UserId);
+
+        builder.HasQueryFilter(rs => !rs.Comment.Task.IsDeleted && !rs.Comment.Task.Project.IsDeleted);
     }
 }

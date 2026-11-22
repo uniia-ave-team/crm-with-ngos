@@ -13,12 +13,13 @@ namespace Crm.Infrastructure.Persistence.Seeders;
 /// <param name="unitOfWork">The unit of work for managing database transactions.</param>
 /// <param name="tableTemplateRepository">The repository used for accessing and persisting table templates.</param>
 /// <param name="logger">The logger instance for tracking seeding execution.</param>
-public partial class TableTemplateSeeder(
+public sealed partial class TableTemplateSeeder(
     IEnumerable<ISystemTableTemplate> systemTableTemplates,
     IUnitOfWork unitOfWork,
     ITableTemplateRepository tableTemplateRepository,
     ILogger<TableTemplateSeeder> logger) : IDatabaseSeeder
 {
+    /// <inheritdoc />
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         LogCheckingTableTemplates(logger);

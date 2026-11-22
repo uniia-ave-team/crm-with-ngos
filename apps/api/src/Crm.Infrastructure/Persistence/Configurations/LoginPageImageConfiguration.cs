@@ -1,21 +1,23 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
-using Crm.Infrastructure.Persistence.ValueGenerators;
+using Crm.Infrastructure.Persistence.Consts;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Crm.Infrastructure.Persistence.Configurations;
 
-public class LoginPageImageConfiguration : IEntityTypeConfiguration<LoginPageImage>
+/// <summary>
+/// Configures the Entity Framework Core mapping for the <see cref="LoginPageImage"/> entity.
+/// </summary>
+public sealed class LoginPageImageConfiguration : IEntityTypeConfiguration<LoginPageImage>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<LoginPageImage> builder)
     {
-        builder.ToTable("LoginPageImages");
+        builder.ToTable(TableNames.LoginPageImages);
 
-        builder.HasKey(lpi => lpi.Id);
-
-        builder.Property(lpi => lpi.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+        builder.ConfigureGuidV7Key();
 
         builder.Property(lpi => lpi.Url)
             .IsRequired()

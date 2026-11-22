@@ -1,4 +1,4 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -8,7 +8,7 @@ namespace Crm.Infrastructure.Persistence.Configurations;
 /// <summary>
 /// Configures the Entity Framework mapping for the <see cref="ProjectMember"/> cross-table entity.
 /// </summary>
-public class ProjectMemberConfiguration : IEntityTypeConfiguration<ProjectMember>
+public sealed class ProjectMemberConfiguration : IEntityTypeConfiguration<ProjectMember>
 {
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<ProjectMember> builder)
@@ -26,5 +26,7 @@ public class ProjectMemberConfiguration : IEntityTypeConfiguration<ProjectMember
             .WithMany()
             .HasForeignKey(m => m.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasQueryFilter(m => !m.Project.IsDeleted);
     }
 }

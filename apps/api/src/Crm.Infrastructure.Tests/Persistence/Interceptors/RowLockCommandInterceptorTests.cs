@@ -1,9 +1,9 @@
 using System.Data.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
-using Crm.Infrastructure.Extensions;
-using Crm.Infrastructure.Helpers;
+using Crm.Infrastructure.DependencyInjection;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Extensions;
 using Crm.Infrastructure.Persistence.Interceptors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;

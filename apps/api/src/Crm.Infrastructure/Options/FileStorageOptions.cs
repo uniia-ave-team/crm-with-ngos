@@ -1,9 +1,12 @@
 using System.ComponentModel.DataAnnotations;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 
 namespace Crm.Infrastructure.Options;
 
-public class FileStorageOptions
+/// <summary>
+/// Configuration options controlling local disk file storage location, public base URL, and installation quota.
+/// </summary>
+public sealed class FileStorageOptions
 {
     /// <summary>
     /// The configuration section name used to bind these options from the settings file.

@@ -1,6 +1,4 @@
-using Crm.Application.Dtos.Common;
-
-namespace Crm.Application.Interfaces;
+namespace Crm.Infrastructure.Services.Storage.FileValidators;
 
 /// <summary>
 /// Defines a contract for validating and sanitizing files of specific formats.
@@ -10,12 +8,8 @@ public interface IFormatValidator
     /// <summary>
     /// Determines whether the current validator can handle the specified file extension.
     /// </summary>
-    /// <param name="extension">
-    /// The file extension to check (e.g., <c>".png"</c>).
-    /// </param>
-    /// <returns>
-    /// <see langword="true"/> if the validator supports the given extension; otherwise, <see langword="false"/>.
-    /// </returns>
+    /// <param name="extension">The file extension to check (e.g., <c>".png"</c>).</param>
+    /// <returns><see langword="true"/> if the validator supports the given extension; otherwise, <see langword="false"/>.</returns>
     bool CanHandle(string extension);
 
     /// <summary>

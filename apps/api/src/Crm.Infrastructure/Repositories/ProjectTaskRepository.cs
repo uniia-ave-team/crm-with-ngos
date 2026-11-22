@@ -1,13 +1,12 @@
 using System.Linq.Expressions;
-using Crm.Application.Dtos.Task;
+using Crm.Application.Dtos.Tasks;
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
-using Crm.Domain.Expressions;
 using Crm.Domain.Interfaces.Repositories;
-using Crm.Infrastructure.Helpers;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Expressions;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +14,7 @@ namespace Crm.Infrastructure.Repositories;
 
 /// <summary>
 /// Provides SQL-projected repository operations for managing <see cref="ProjectTask"/> entities
-/// and native dynamic sorting.
+/// and strongly-typed dynamic sorting.
 /// </summary>
 /// <param name="appDbContext">The application database context.</param>
 public class ProjectTaskRepository(ApplicationDbContext appDbContext)
@@ -27,7 +26,6 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
     {
         return await DbSet
             .AsNoTracking()
-            .AsSplitQuery()
             .Where(t => t.ProjectId == projectId && t.Id == taskId)
             .ProjectToType<TResult>()
             .FirstOrDefaultAsync(cancellationToken)
@@ -46,7 +44,7 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
-        IQueryable<ProjectTask> query = ApplyTaskFilters(DbSet.AsNoTracking().AsSplitQuery(), filter, currentUserId);
+        IQueryable<ProjectTask> query = ApplyTaskFilters(DbSet.AsNoTracking(), filter, currentUserId);
         query = ApplyTaskOrdering<TResult>(query, currentUserId, filter.IsMine, orderBy, sortOrder);
 
         return ToPagedResultAsync<TResult>(query, pageNumber, pageSize, cancellationToken);
@@ -194,9 +192,9 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
             query = query.Where(QueryFilterExpressions.ContainsIgnoreCase<ProjectTask>(
+                filter.SearchTerm,
                 t => t.Title,
-                t => t.Description,
-                filter.SearchTerm));
+                t => t.Description));
         }
 
         return query;
@@ -204,7 +202,7 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
 
     /// <summary>
     /// Applies task ordering with null-safe <see cref="TaskSummaryDto.EndDate"/> sorting
-    /// and native <see cref="GenericRepository{T}.ApplyOrdering{TResult}"/> fallback via <c>MapsterSortResolver</c>.
+    /// and native <see cref="GenericRepository{T}.ApplyOrdering{TResult}"/> fallback.
     /// </summary>
     /// <typeparam name="TResult">The target DTO or projection type.</typeparam>
     /// <param name="query">The source task queryable.</param>
@@ -226,8 +224,8 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
     }
 
     /// <summary>
-    /// Applies default personal (<c>filter=mine</c>) or board ordering, <see cref="TaskSummaryDto.UnreadCommentsCount"/> sorting,
-    /// or delegates DTO property sorting to <see cref="ApplyOrdering{TResult}"/>.
+    /// Applies default personal (<c>filter=mine</c>) or board ordering, <see cref="TaskSummaryDto.UnreadCommentsCount"/>
+    /// and <see cref="TaskSummaryDto.AttachmentsCount"/> sorting, or delegates DTO property sorting to <see cref="ApplyOrdering{TResult}"/>.
     /// </summary>
     /// <typeparam name="TResult">The target DTO or projection type.</typeparam>
     /// <param name="query">The source task queryable.</param>
@@ -258,12 +256,20 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
         }
 
         string normalized = orderBy.Trim();
-        return string.Equals(normalized, nameof(TaskSummaryDto.UnreadCommentsCount), StringComparison.OrdinalIgnoreCase)
-            ? (IsDescending(sortOrder)
-                    ? query.OrderByDescending(UnreadCountExpression(currentUserId))
-                    : query.OrderBy(UnreadCountExpression(currentUserId)))
-                .ThenBy(t => t.Id)
-            : ApplyOrdering<TResult>(query, normalized, sortOrder);
+        bool descending = IsDescending(sortOrder);
+
+        return normalized switch
+        {
+            var f when f.Equals(nameof(TaskSummaryDto.UnreadCommentsCount), StringComparison.OrdinalIgnoreCase) => descending
+                ? query.OrderByDescending(UnreadCountExpression(currentUserId)).ThenBy(t => t.Id)
+                : query.OrderBy(UnreadCountExpression(currentUserId)).ThenBy(t => t.Id),
+
+            var f when f.Equals(nameof(TaskSummaryDto.AttachmentsCount), StringComparison.OrdinalIgnoreCase) => descending
+                ? query.OrderByDescending(t => t.Attachments.Count).ThenBy(t => t.Id)
+                : query.OrderBy(t => t.Attachments.Count).ThenBy(t => t.Id),
+
+            _ => ApplyOrdering<TResult>(query, normalized, sortOrder),
+        };
     }
 
     private static bool IsDescending(string? sortOrder)

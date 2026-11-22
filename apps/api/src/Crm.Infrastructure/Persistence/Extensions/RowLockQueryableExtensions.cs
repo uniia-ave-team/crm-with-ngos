@@ -1,7 +1,7 @@
 using Crm.Infrastructure.Persistence.Interceptors;
 using Microsoft.EntityFrameworkCore;
 
-namespace Crm.Infrastructure.Helpers;
+namespace Crm.Infrastructure.Persistence.Extensions;
 
 /// <summary>
 /// Provides LINQ queryable extensions for requesting database row-level write locks (<c>FOR NO KEY UPDATE</c>)

@@ -8,7 +8,7 @@ namespace Crm.Infrastructure.Persistence.Configurations;
 /// <summary>
 /// Configures the Entity Framework mapping for the <see cref="TaskUser"/> join entity.
 /// </summary>
-public class TaskUserConfiguration : IEntityTypeConfiguration<TaskUser>
+public sealed class TaskUserConfiguration : IEntityTypeConfiguration<TaskUser>
 {
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<TaskUser> builder)
@@ -18,5 +18,7 @@ public class TaskUserConfiguration : IEntityTypeConfiguration<TaskUser>
         builder.HasKey(tu => new { tu.TaskId, tu.UserId });
 
         builder.HasIndex(tu => tu.UserId);
+
+        builder.HasQueryFilter(tu => !tu.Task.IsDeleted && !tu.Task.Project.IsDeleted);
     }
 }
