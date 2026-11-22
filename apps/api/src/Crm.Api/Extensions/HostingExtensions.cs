@@ -6,7 +6,6 @@ using Crm.Application.Extensions;
 using Crm.Infrastructure.Extensions;
 using Crm.Infrastructure.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.HttpOverrides;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
@@ -50,12 +49,7 @@ public static class HostingExtensions
         builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
         builder.Services.AddProblemDetails();
 
-        builder.Services.Configure<ForwardedHeadersOptions>(options =>
-        {
-            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-            options.KnownIPNetworks.Clear();
-            options.KnownProxies.Clear();
-        });
+        builder.Services.AddCustomForwardedHeaders(builder.Configuration);
 
         builder.Services.AddCustomRateLimiting(builder.Configuration);
 
