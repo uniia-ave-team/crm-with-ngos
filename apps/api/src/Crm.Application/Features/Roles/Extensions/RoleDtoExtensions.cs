@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.Role;
+using Crm.Application.Dtos.Roles;
 using Crm.Domain.Enums;
 
 namespace Crm.Application.Features.Roles.Extensions;
@@ -22,7 +22,7 @@ public static class RoleDtoExtensions
             PronounCategory.Feminine when !string.IsNullOrWhiteSpace(role.FeminitiveName) => role.FeminitiveName,
             PronounCategory.Neutral when !string.IsNullOrWhiteSpace(role.PluralName) => role.PluralName,
             PronounCategory.Masculine when !string.IsNullOrWhiteSpace(role.Name) => role.Name,
-            null or _ => role.Name ?? string.Empty,
+            PronounCategory.None or null or _ => role.Name ?? string.Empty,
         };
 
         return new RoleUserDto(role.Id, resolvedName);

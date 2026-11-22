@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Tasks.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
@@ -16,39 +15,36 @@ namespace Crm.Application.Features.Tasks.Queries;
 /// either for a specific project or globally across all visible projects.
 /// </summary>
 /// <param name="taskRepository">The repository for querying project tasks and unread comment counts.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="fileUrlProvider">The file URL provider for resolving assignee avatars.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class GetProjectTasksQueryHandler(
+public sealed partial class GetProjectTasksQueryHandler(
     IProjectTaskRepository taskRepository,
-    ICurrentUserService currentUserService,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetProjectTasksQueryHandler> logger) : IRequestHandler<GetProjectTasksQuery, PagedResult<TaskSummaryDto>>
+    ILogger<GetProjectTasksQueryHandler> logger) : IQueryHandler<GetProjectTasksQuery, PagedResult<TaskSummaryDto>>
 {
     /// <inheritdoc />
-    public async ValueTask<PagedResult<TaskSummaryDto>> Handle(GetProjectTasksQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<TaskSummaryDto>> Handle(GetProjectTasksQuery query, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
-        LogFetchingProjectTasks(logger, request.ProjectId, request.Filter, request.PageNumber, request.PageSize);
+        LogFetchingProjectTasks(logger, query.ProjectId, query.Filter, query.PageNumber, query.PageSize);
 
-        var filter = request.Adapt<ProjectTaskFilter>();
+        var filter = query.Adapt<ProjectTaskFilter>();
         var pagedTasks = await taskRepository.GetPagedAsync<TaskSummaryDto>(
             filter: filter,
-            currentUserId: currentUserId,
-            orderBy: request.OrderBy,
-            sortOrder: request.SortOrder,
-            pageNumber: request.PageNumber,
-            pageSize: request.PageSize,
+            currentUserId: query.CurrentUserId,
+            orderBy: query.OrderBy,
+            sortOrder: query.SortOrder,
+            pageNumber: query.PageNumber,
+            pageSize: query.PageSize,
             cancellationToken: cancellationToken);
 
         var unreadCounts = await taskRepository.GetUnreadCommentCountsAsync(
             pagedTasks.Items.Select(t => t.Id),
-            currentUserId,
+            query.CurrentUserId,
             cancellationToken);
 
-        var enriched = pagedTasks.Items.Enrich(fileUrlProvider, currentUserId, unreadCounts);
+        var enriched = pagedTasks.Items.Enrich(fileUrlProvider, query.CurrentUserId, unreadCounts);
 
-        LogProjectTasksFetched(logger, enriched.Count, pagedTasks.TotalCount, request.ProjectId);
+        LogProjectTasksFetched(logger, enriched.Count, pagedTasks.TotalCount, query.ProjectId);
 
         return new PagedResult<TaskSummaryDto>(
             enriched,

@@ -1,5 +1,4 @@
 using Crm.Application.Dtos.System;
-using Crm.Application.Dtos.System.Queries;
 using Crm.Application.Features.System.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;

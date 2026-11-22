@@ -1,7 +1,8 @@
+using Crm.Application.Common.Consts;
 using Crm.Application.Common.Validators;
 using Crm.Application.Dtos.CustomTables;
-using Crm.Application.Dtos.CustomTables.Commands;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Application.Features.CustomTables.Commands;
+using Crm.Domain.Constants.Validation;
 using FluentValidation;
 
 namespace Crm.Application.Features.CustomTables.Validators;
@@ -9,7 +10,7 @@ namespace Crm.Application.Features.CustomTables.Validators;
 /// <summary>
 /// Provides validation rules for the <see cref="CreateCustomTableCommand"/>.
 /// </summary>
-public class CreateCustomTableCommandValidator : AbstractValidator<CreateCustomTableCommand>
+public sealed class CreateCustomTableCommandValidator : AbstractValidator<CreateCustomTableCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="CreateCustomTableCommandValidator"/> class.
@@ -19,11 +20,15 @@ public class CreateCustomTableCommandValidator : AbstractValidator<CreateCustomT
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Table name is required.")
             .MaximumLength(CustomTableValidationConstants.MaxNameLength)
-            .WithMessage($"Table name must not exceed {CustomTableValidationConstants.MaxNameLength} characters.");
+            .WithMessage($"Table name must not exceed {CustomTableValidationConstants.MaxNameLength} characters.")
+            .Must(name => name is null || !name.Contains('\0', StringComparison.Ordinal))
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
 
         RuleFor(x => x.Description)
             .MaximumLength(CustomTableValidationConstants.MaxDescriptionLength)
             .WithMessage($"Description must not exceed {CustomTableValidationConstants.MaxDescriptionLength} characters.")
+            .Must(description => description is null || !description.Contains('\0', StringComparison.Ordinal))
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
             .When(x => !string.IsNullOrEmpty(x.Description));
 
         RuleFor(x => x.Fields)

@@ -2,10 +2,9 @@ using System.Security.Authentication;
 using System.Security.Claims;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Auth;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -15,22 +14,22 @@ namespace Crm.Application.Features.Users.Commands;
 /// <summary>
 /// Handles the <see cref="RefreshTokensCommand"/> to issue a new pair of access and refresh tokens.
 /// </summary>
-public partial class RefreshTokensCommandHandler(
-    IUserRepository userRepository,
+public sealed partial class RefreshTokensCommandHandler(
     IAuthUserRepository authUserRepository,
     IAuthRoleRepository roleRepository,
     ITokenService tokenService,
     IUserRefreshTokenRepository userRefreshTokenRepository,
-    ILogger<RefreshTokensCommandHandler> logger) : IRequestHandler<RefreshTokensCommand, AuthTokensDto>
+    ILogger<RefreshTokensCommandHandler> logger) : ICommandHandler<RefreshTokensCommand, AuthTokensDto>
 {
-    public async ValueTask<AuthTokensDto> Handle(RefreshTokensCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<AuthTokensDto> Handle(RefreshTokensCommand command, CancellationToken cancellationToken)
     {
         LogInitiatingTokenRefresh(logger);
 
-        var principal = ExtractPrincipalFromToken(request.AccessToken);
+        var principal = ExtractPrincipalFromToken(command.AccessToken);
         var userId = ExtractUserId(principal);
 
-        if (!await userRefreshTokenRepository.IsValidTokenAsync(userId, request.RefreshToken, cancellationToken))
+        if (!await userRefreshTokenRepository.TryConsumeValidTokenAsync(userId, command.RefreshToken, cancellationToken))
         {
             LogInvalidOrExpiredRefreshToken(logger, userId);
             throw new InvalidCredentialException("Invalid or expired refresh token.");
@@ -38,7 +37,7 @@ public partial class RefreshTokensCommandHandler(
 
         var user = await GetAndValidateUserAsync(userId, cancellationToken);
 
-        var tokens = await GenerateAndPersistNewTokensAsync(user, request.RefreshToken, cancellationToken);
+        var tokens = await GenerateAndPersistNewTokensAsync(user, cancellationToken);
 
         LogTokenRefreshSuccessful(logger, userId);
 
@@ -60,7 +59,8 @@ public partial class RefreshTokensCommandHandler(
 
     private Guid ExtractUserId(ClaimsPrincipal principal)
     {
-        string? userIdString = principal.FindFirst(CustomClaimTypes.Sub)?.Value;
+        string? userIdString = principal.FindFirst(CustomClaimTypes.Sub)?.Value
+            ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
         if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out Guid userId))
         {
@@ -73,18 +73,18 @@ public partial class RefreshTokensCommandHandler(
 
     private async Task<UserBasicDto> GetAndValidateUserAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var user = await authUserRepository.GetAsync<UserBasicDto>(userId, cancellationToken);
+        var userStatus = await authUserRepository.GetAsync<UserStatusDto>(userId, cancellationToken);
 
-        if (!await userRepository.IsActiveAsync(user.Id, cancellationToken))
+        if (!userStatus.IsActive)
         {
             LogUserDeactivated(logger, userId);
             throw new InvalidCredentialException("This user account is deactivated.");
         }
 
-        return user;
+        return new UserBasicDto(userStatus.Id, userStatus.Email);
     }
 
-    private async Task<AuthTokensDto> GenerateAndPersistNewTokensAsync(UserBasicDto user, string oldRefreshToken, CancellationToken cancellationToken)
+    private async Task<AuthTokensDto> GenerateAndPersistNewTokensAsync(UserBasicDto user, CancellationToken cancellationToken)
     {
         var roleIds = await roleRepository.GetRoleIdsByUserAsync(user.Id, cancellationToken);
 
@@ -92,8 +92,6 @@ public partial class RefreshTokensCommandHandler(
         var newRefreshToken = tokenService.GenerateRefreshToken();
 
         await userRefreshTokenRepository.CreateAsync(user.Id, newRefreshToken.Token, newRefreshToken.ExpiresAt, cancellationToken);
-
-        await userRefreshTokenRepository.RemoveTokenAsync(oldRefreshToken, cancellationToken);
 
         return new AuthTokensDto(newAccessToken.Token, newRefreshToken.Token);
     }

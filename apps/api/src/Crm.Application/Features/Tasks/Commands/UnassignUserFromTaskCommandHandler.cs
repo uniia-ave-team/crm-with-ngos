@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -12,24 +11,24 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// <param name="taskRepository">The repository for removing task user assignments and updating task timestamps.</param>
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class UnassignUserFromTaskCommandHandler(
+public sealed partial class UnassignUserFromTaskCommandHandler(
     IProjectTaskRepository taskRepository,
     TimeProvider timeProvider,
-    ILogger<UnassignUserFromTaskCommandHandler> logger) : IRequestHandler<UnassignUserFromTaskCommand>
+    ILogger<UnassignUserFromTaskCommandHandler> logger) : ICommandHandler<UnassignUserFromTaskCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(UnassignUserFromTaskCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UnassignUserFromTaskCommand command, CancellationToken cancellationToken)
     {
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        LogUnassigningUserFromTask(logger, request.TaskId, request.ProjectId);
+        LogUnassigningUserFromTask(logger, command.TaskId, command.ProjectId);
 
-        if (await taskRepository.UnassignFromTaskAsync(request.TaskId, request.UserId, cancellationToken))
+        if (await taskRepository.UnassignFromTaskAsync(command.TaskId, command.UserId, cancellationToken))
         {
-            await taskRepository.UpdateUpdatedAtAsync(request.TaskId, utcNow, cancellationToken);
+            await taskRepository.UpdateUpdatedAtAsync(command.TaskId, utcNow, cancellationToken);
         }
 
-        LogUserUnassignedFromTask(logger, request.TaskId, request.ProjectId);
+        LogUserUnassignedFromTask(logger, command.TaskId, command.ProjectId);
 
         return Unit.Value;
     }

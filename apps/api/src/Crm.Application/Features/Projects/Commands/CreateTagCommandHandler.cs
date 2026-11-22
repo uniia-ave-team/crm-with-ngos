@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -14,25 +13,25 @@ namespace Crm.Application.Features.Projects.Commands;
 /// </summary>
 /// <param name="tagRepository">The repository for persisting project-scoped tag entities.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class CreateTagCommandHandler(
+public sealed partial class CreateTagCommandHandler(
     ITagRepository tagRepository,
-    ILogger<CreateTagCommandHandler> logger) : IRequestHandler<CreateTagCommand, Guid>
+    ILogger<CreateTagCommandHandler> logger) : ICommandHandler<CreateTagCommand, Guid>
 {
     /// <inheritdoc />
-    public async ValueTask<Guid> Handle(CreateTagCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateTagCommand command, CancellationToken cancellationToken)
     {
-        LogCreatingTag(logger, request.ProjectId);
+        LogCreatingTag(logger, command.ProjectId);
 
-        string trimmedTitle = request.Title.Trim();
-        if (await tagRepository.ExistsWithTitleAsync(request.ProjectId, trimmedTitle, cancellationToken: cancellationToken))
+        string trimmedTitle = command.Title.Trim();
+        if (await tagRepository.ExistsWithTitleAsync(command.ProjectId, trimmedTitle, cancellationToken: cancellationToken))
         {
             throw new EntityAlreadyExistsException(nameof(Tag), trimmedTitle);
         }
 
-        var tag = request.Adapt<Tag>();
+        var tag = command.Adapt<Tag>();
         await tagRepository.CreateAsync(tag, cancellationToken);
 
-        LogTagCreatedSuccessfully(logger, tag.Id, request.ProjectId);
+        LogTagCreatedSuccessfully(logger, tag.Id, command.ProjectId);
 
         return tag.Id;
     }

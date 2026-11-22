@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -14,30 +13,30 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// <param name="taskRepository">The repository for retrieving and updating project task entities.</param>
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class UpdateTaskStatusCommandHandler(
+public sealed partial class UpdateTaskStatusCommandHandler(
     ITopicRepository topicRepository,
     IProjectTaskRepository taskRepository,
     TimeProvider timeProvider,
-    ILogger<UpdateTaskStatusCommandHandler> logger) : IRequestHandler<UpdateTaskStatusCommand>
+    ILogger<UpdateTaskStatusCommandHandler> logger) : ICommandHandler<UpdateTaskStatusCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(UpdateTaskStatusCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateTaskStatusCommand command, CancellationToken cancellationToken)
     {
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        LogUpdatingTaskStatus(logger, request.TaskId, request.ProjectId);
+        LogUpdatingTaskStatus(logger, command.TaskId, command.ProjectId);
 
-        var task = await taskRepository.GetByProjectAndIdForUpdateAsync(request.ProjectId, request.TaskId, cancellationToken: cancellationToken);
+        var task = await taskRepository.GetByProjectAndIdForUpdateAsync(command.ProjectId, command.TaskId, cancellationToken: cancellationToken);
 
-        if (request.TopicId.HasValue)
+        if (command.TopicId.HasValue)
         {
-            await topicRepository.EnsureExistsInProjectAsync(request.ProjectId, request.TopicId.Value, cancellationToken);
-            task.TopicId = request.TopicId.Value;
+            await topicRepository.EnsureExistsInProjectAsync(command.ProjectId, command.TopicId.Value, cancellationToken);
+            task.TopicId = command.TopicId.Value;
         }
 
-        task.ChangeStatus(request.Status, request.EndDate, utcNow, updateEndDateWhenNull: false);
+        task.TransitionStatus(command.Status, command.EndDate, utcNow);
 
-        LogTaskStatusUpdated(logger, task.Id, request.ProjectId);
+        LogTaskStatusUpdated(logger, task.Id, command.ProjectId);
 
         return Unit.Value;
     }

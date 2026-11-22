@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.LoginPageImage.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -15,28 +14,29 @@ namespace Crm.Application.Features.LoginPageImages.Commands;
 /// <param name="repository">The repository used to manage data access operations for login page images.</param>
 /// <param name="fileTransactionTracker">The service responsible for tracking and managing file deletion transactions to ensure consistency between storage and database records.</param>
 /// <param name="logger">The logger used to record the lifecycle and outcome of the login page image deletion process.</param>
-public partial class DeleteLoginPageImageCommandHandler(
+public sealed partial class DeleteLoginPageImageCommandHandler(
     ILoginPageImageRepository repository,
     IFileTransactionTracker fileTransactionTracker,
-    ILogger<DeleteLoginPageImageCommandHandler> logger) : IRequestHandler<DeleteLoginPageImageCommand>
+    ILogger<DeleteLoginPageImageCommandHandler> logger) : ICommandHandler<DeleteLoginPageImageCommand>
 {
-    public async ValueTask<Unit> Handle(DeleteLoginPageImageCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteLoginPageImageCommand command, CancellationToken cancellationToken)
     {
-        LogDeletingImage(logger, request.Id);
+        LogDeletingImage(logger, command.Id);
 
-        await TryDeleteLoginPageImageFileAsync(request.Id, cancellationToken);
+        await TryDeleteLoginPageImageFileAsync(command.Id, cancellationToken);
 
-        await repository.DeleteAsync(request.Id, cancellationToken);
+        await repository.DeleteAsync(command.Id, cancellationToken);
 
-        LogImageDeletedSuccessfully(logger, request.Id);
+        LogImageDeletedSuccessfully(logger, command.Id);
 
         return Unit.Value;
     }
 
     /// <summary>
-    /// Safely attempts to retrieve and delete a login page image file from storage.
-    /// Encapsulates exception handling for missing image files or records.
+    /// Retrieves the stored file name of the login page image and registers it for deletion upon transaction commit.
     /// </summary>
+    /// <param name="imageId">The unique identifier of the login page image.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     private async Task TryDeleteLoginPageImageFileAsync(Guid imageId, CancellationToken cancellationToken)
     {
         var fileName = await repository.GetUrlAsync(imageId, cancellationToken);

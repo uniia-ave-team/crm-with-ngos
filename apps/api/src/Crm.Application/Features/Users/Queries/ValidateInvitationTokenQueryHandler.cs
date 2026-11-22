@@ -1,9 +1,10 @@
 using System.Security.Claims;
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Queries;
+using Crm.Application.Dtos.Users;
+using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -16,32 +17,58 @@ namespace Crm.Application.Features.Users.Queries;
 /// <param name="tokenService">The service responsible for validating JWT signatures and expiration dates.</param>
 /// <param name="authUserRepository">The repository used to verify the existence of the user associated with the invitation token.</param>
 /// <param name="logger">The logger used to record the validation process.</param>
-public partial class ValidateInvitationTokenQueryHandler(
+public sealed partial class ValidateInvitationTokenQueryHandler(
     ITokenService tokenService,
     IAuthUserRepository authUserRepository,
-    ILogger<ValidateInvitationTokenQueryHandler> logger) : IRequestHandler<ValidateInvitationTokenQuery, InvitationDetailsDto>
+    ILogger<ValidateInvitationTokenQueryHandler> logger) : IQueryHandler<ValidateInvitationTokenQuery, InvitationDetailsDto>
 {
-    public async ValueTask<InvitationDetailsDto> Handle(ValidateInvitationTokenQuery request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<InvitationDetailsDto> Handle(ValidateInvitationTokenQuery query, CancellationToken cancellationToken)
     {
         LogValidatingToken(logger);
 
-        var principal = await tokenService.ValidateInvitationTokenAsync(request.Token)
-            ?? throw new InvalidOperationException("Invalid or expired invitation token.");
+        var principal = await tokenService.ValidateInvitationTokenAsync(query.Token, cancellationToken)
+            ?? throw new DomainValidationException("Invalid or expired invitation token.");
 
-        string email = principal.FindFirst(ClaimTypes.Email).Value;
+        string? email = principal.FindFirst(ClaimTypes.Email)?.Value;
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            throw new DomainValidationException("Invitation token is missing the email claim.");
+        }
 
-        await authUserRepository.EnsureNotExistsAsync(email, cancellationToken);
+        await authUserRepository.EnsureDoesNotExistAsync(email, cancellationToken);
 
-        string ngoIdString = principal.FindFirst(CustomClaimTypes.NgoId).Value;
+        string? ngoIdString = principal.FindFirst(CustomClaimTypes.NgoId)?.Value;
+        if (string.IsNullOrWhiteSpace(ngoIdString) || !Guid.TryParse(ngoIdString, out Guid ngoId) || ngoId == Guid.Empty)
+        {
+            throw new DomainValidationException("Invitation token is missing the NGO identifier claim.");
+        }
 
-        string roleIdString = principal.FindFirst(CustomClaimTypes.RoleId).Value;
+        var roleClaims = principal.FindAll(CustomClaimTypes.RoleId).ToList();
+        if (roleClaims.Count == 0)
+        {
+            throw new DomainValidationException("Invitation token is missing the role identifier claim.");
+        }
 
-        LogTokenValidatedSuccessfully(logger, email);
+        var roleIds = new List<Guid>(roleClaims.Count);
+        foreach (var claim in roleClaims)
+        {
+            if (!Guid.TryParse(claim.Value, out Guid roleId) || roleId == Guid.Empty)
+            {
+                throw new DomainValidationException($"Invalid role claim value: '{claim.Value}'.");
+            }
+
+            roleIds.Add(roleId);
+        }
+
+        string maskedEmailForLog = email.MaskEmail();
+
+        LogTokenValidatedSuccessfully(logger, maskedEmailForLog);
 
         return new InvitationDetailsDto(
             email,
-            Guid.Parse(ngoIdString),
-            Guid.Parse(roleIdString));
+            ngoId,
+            roleIds);
     }
 
     [LoggerMessage(EventId = LogEventIds.ValidatingToken, Level = LogLevel.Information, Message = "Validating incoming invitation token.")]

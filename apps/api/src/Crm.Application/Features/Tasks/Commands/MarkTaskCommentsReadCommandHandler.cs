@@ -1,6 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -11,23 +9,19 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// Handles the <see cref="MarkTaskCommentsReadCommand"/> to clear the authenticated user's unread comment state for the task.
 /// </summary>
 /// <param name="commentRepository">The repository for deleting task comment read-state markers.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class MarkTaskCommentsReadCommandHandler(
+public sealed partial class MarkTaskCommentsReadCommandHandler(
     ITaskCommentRepository commentRepository,
-    ICurrentUserService currentUserService,
-    ILogger<MarkTaskCommentsReadCommandHandler> logger) : IRequestHandler<MarkTaskCommentsReadCommand>
+    ILogger<MarkTaskCommentsReadCommandHandler> logger) : ICommandHandler<MarkTaskCommentsReadCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(MarkTaskCommentsReadCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(MarkTaskCommentsReadCommand command, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
+        LogMarkingTaskCommentsRead(logger, command.TaskId, command.CurrentUserId);
 
-        LogMarkingTaskCommentsRead(logger, request.TaskId, currentUserId);
+        await commentRepository.MarkAsReadAsync(command.TaskId, command.CurrentUserId, cancellationToken);
 
-        await commentRepository.MarkAsReadAsync(request.TaskId, currentUserId, cancellationToken);
-
-        LogTaskCommentsMarkedRead(logger, request.TaskId, currentUserId);
+        LogTaskCommentsMarkedRead(logger, command.TaskId, command.CurrentUserId);
 
         return Unit.Value;
     }

@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.CustomTables.Queries;
+using Crm.Application.Features.CustomTables.Queries;
 using FluentValidation;
 
 namespace Crm.Application.Features.CustomTables.Validators;
@@ -6,7 +6,7 @@ namespace Crm.Application.Features.CustomTables.Validators;
 /// <summary>
 /// Provides validation rules for the <see cref="GetCustomTableByIdQuery"/>.
 /// </summary>
-public class GetCustomTableByIdQueryValidator : AbstractValidator<GetCustomTableByIdQuery>
+public sealed class GetCustomTableByIdQueryValidator : AbstractValidator<GetCustomTableByIdQuery>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="GetCustomTableByIdQueryValidator"/> class.

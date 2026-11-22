@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.Role.Queries;
+using Crm.Application.Dtos.Roles;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -11,20 +10,23 @@ namespace Crm.Application.Features.Roles.Queries;
 /// <summary>
 /// Handles the <see cref="GetAllRolesQuery"/> to retrieve a paginated list of identity roles.
 /// </summary>
-public partial class GetAllRolesQueryHandler(
+/// <param name="authRoleRepository">The repository used to retrieve paginated role data.</param>
+/// <param name="logger">The logger used to record the execution of the role retrieval query.</param>
+public sealed partial class GetAllRolesQueryHandler(
     IAuthRoleRepository authRoleRepository,
-    ILogger<GetAllRolesQueryHandler> logger) : IRequestHandler<GetAllRolesQuery, PagedResult<RoleDto>>
+    ILogger<GetAllRolesQueryHandler> logger) : IQueryHandler<GetAllRolesQuery, PagedResult<RoleDto>>
 {
-    public async ValueTask<PagedResult<RoleDto>> Handle(GetAllRolesQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<RoleDto>> Handle(GetAllRolesQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingRoles(logger, request.PageNumber, request.PageSize, request.SearchTerm != null);
+        bool hasSearchFilter = !string.IsNullOrWhiteSpace(query.SearchTerm);
+        LogFetchingRoles(logger, query.PageNumber, query.PageSize, hasSearchFilter);
 
         var pagedResult = await authRoleRepository.GetPagedAsync<RoleDto>(
-            searchTerm: request.SearchTerm,
-            orderBy: request.OrderBy,
-            sortOrder: request.SortOrder,
-            pageNumber: request.PageNumber,
-            pageSize: request.PageSize,
+            searchTerm: query.SearchTerm,
+            orderBy: query.OrderBy,
+            sortOrder: query.SortOrder,
+            pageNumber: query.PageNumber,
+            pageSize: query.PageSize,
             cancellationToken: cancellationToken);
 
         LogRolesFetched(logger, pagedResult.Items.Count, pagedResult.TotalCount);

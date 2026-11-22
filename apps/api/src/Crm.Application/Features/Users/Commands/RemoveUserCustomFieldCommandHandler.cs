@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -10,25 +9,25 @@ namespace Crm.Application.Features.Users.Commands;
 /// Handles the <see cref="RemoveUserCustomFieldCommand"/> to permanently delete a specific custom field from a user profile.
 /// Ensures that users can only remove their own custom fields.
 /// </summary>
-public partial class RemoveUserCustomFieldCommandHandler(
+public sealed partial class RemoveUserCustomFieldCommandHandler(
     IUserCustomFieldRepository customFieldRepository,
-    ILogger<RemoveUserCustomFieldCommandHandler> logger) : IRequestHandler<RemoveUserCustomFieldCommand>
+    ILogger<RemoveUserCustomFieldCommandHandler> logger) : ICommandHandler<RemoveUserCustomFieldCommand>
 {
-    public async ValueTask<Unit> Handle(RemoveUserCustomFieldCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(RemoveUserCustomFieldCommand command, CancellationToken cancellationToken)
     {
-        LogRemovingCustomField(logger, request.CustomFieldId, request.UserId);
+        LogRemovingCustomField(logger, command.CustomFieldId, command.UserId);
 
-        var customField = await customFieldRepository.GetAsync(request.CustomFieldId, cancellationToken);
+        var customField = await customFieldRepository.GetAsync(command.CustomFieldId, cancellationToken);
 
-        if (customField.UserId != request.UserId)
+        if (customField.UserId != command.UserId)
         {
-            LogUnauthorizedCustomFieldRemoval(logger, request.CustomFieldId, request.UserId);
-            throw new InvalidOperationException("Cannot remove a custom field that belongs to another user.");
+            LogUnauthorizedCustomFieldRemoval(logger, command.CustomFieldId, command.UserId);
+            throw new UnauthorizedAccessException("Cannot remove a custom field that belongs to another user.");
         }
 
-        await customFieldRepository.DeleteAsync(request.CustomFieldId, cancellationToken);
+        await customFieldRepository.DeleteAsync(command.CustomFieldId, cancellationToken);
 
-        LogCustomFieldRemovedSuccessfully(logger, request.CustomFieldId, request.UserId);
+        LogCustomFieldRemovedSuccessfully(logger, command.CustomFieldId, command.UserId);
 
         return Unit.Value;
     }

@@ -1,5 +1,4 @@
-using Crm.Application.Dtos.CustomRecords.Commands;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Application.Features.CustomRecords.Commands;
 using FluentValidation;
 
 namespace Crm.Application.Features.CustomRecords.Validators;
@@ -7,7 +6,7 @@ namespace Crm.Application.Features.CustomRecords.Validators;
 /// <summary>
 /// Provides validation rules for the <see cref="UpdateCustomRecordCommand"/>.
 /// </summary>
-public class UpdateCustomRecordCommandValidator : AbstractValidator<UpdateCustomRecordCommand>
+public sealed class UpdateCustomRecordCommandValidator : AbstractValidator<UpdateCustomRecordCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UpdateCustomRecordCommandValidator"/> class.
@@ -18,8 +17,6 @@ public class UpdateCustomRecordCommandValidator : AbstractValidator<UpdateCustom
             .NotEmpty().WithMessage("Custom record ID is required.");
 
         RuleFor(x => x.Data)
-            .NotNull().WithMessage("Record data payload is required.")
-            .Must(data => data == null || data.Count <= CustomRecordValidationConstants.MaxFields)
-            .WithMessage($"Record data payload cannot contain more than {CustomRecordValidationConstants.MaxFields} fields.");
+            .ApplyCustomRecordDataRules();
     }
 }

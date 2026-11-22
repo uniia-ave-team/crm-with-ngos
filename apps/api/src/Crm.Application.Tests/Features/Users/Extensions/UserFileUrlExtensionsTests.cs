@@ -21,7 +21,7 @@ public class UserFileUrlExtensionsTests
 
         // Assert
         result.ShouldBeNull();
-        _fileUrlProvider.DidNotReceiveWithAnyArgs().GetFileUrl(default, default);
+        _fileUrlProvider.DidNotReceiveWithAnyArgs().GetFileUrl(default!, default!);
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public class UserFileUrlExtensionsTests
         // Arrange
         var userId = Guid.NewGuid();
         const string avatarKey = "avatar-123.jpg";
-        _fileUrlProvider.GetFileUrl(avatarKey, ApiRouteLogoConstants.UserSelfAvatar)
+        _fileUrlProvider.GetFileUrl(avatarKey, FileRouteConstants.UserSelfAvatar)
             .Returns("https://api.crm.org/api/v1/users/me/avatar");
 
         // Act
@@ -38,7 +38,7 @@ public class UserFileUrlExtensionsTests
 
         // Assert
         result.ShouldBe("https://api.crm.org/api/v1/users/me/avatar");
-        _fileUrlProvider.Received(1).GetFileUrl(avatarKey, ApiRouteLogoConstants.UserSelfAvatar);
+        _fileUrlProvider.Received(1).GetFileUrl(avatarKey, FileRouteConstants.UserSelfAvatar);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class UserFileUrlExtensionsTests
         // Arrange
         var userId = Guid.NewGuid();
         const string avatarKey = "avatar-456.jpg";
-        var expectedRoute = ApiRouteLogoConstants.UserAvatar(userId);
+        var expectedRoute = FileRouteConstants.UserAvatar(userId);
         _fileUrlProvider.GetFileUrl(avatarKey, expectedRoute)
             .Returns($"https://api.crm.org/{expectedRoute}");
 

@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -15,29 +14,29 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// <param name="assigneeValidator">The validator verifying task assignee eligibility.</param>
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class AssignUserToTaskCommandHandler(
+public sealed partial class AssignUserToTaskCommandHandler(
     IProjectTaskRepository taskRepository,
     IProjectAccessService projectAccessService,
     ITaskAssigneeValidator assigneeValidator,
     TimeProvider timeProvider,
-    ILogger<AssignUserToTaskCommandHandler> logger) : IRequestHandler<AssignUserToTaskCommand>
+    ILogger<AssignUserToTaskCommandHandler> logger) : ICommandHandler<AssignUserToTaskCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(AssignUserToTaskCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(AssignUserToTaskCommand command, CancellationToken cancellationToken)
     {
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        LogAssigningUserToTask(logger, request.TaskId, request.ProjectId);
+        LogAssigningUserToTask(logger, command.TaskId, command.ProjectId);
 
-        var projectAccess = await projectAccessService.GetRequiredAsync(request.ProjectId, cancellationToken);
-        await assigneeValidator.ValidateAsync([request.UserId], request.ProjectId, projectAccess, cancellationToken);
+        var projectAccess = await projectAccessService.GetRequiredAsync(command.ProjectId, cancellationToken);
+        await assigneeValidator.ValidateAsync([command.UserId], command.ProjectId, projectAccess, cancellationToken);
 
-        if (await taskRepository.AssignToTaskAsync(request.TaskId, request.UserId, cancellationToken))
+        if (await taskRepository.AssignToTaskAsync(command.TaskId, command.UserId, cancellationToken))
         {
-            await taskRepository.UpdateUpdatedAtAsync(request.TaskId, utcNow, cancellationToken);
+            await taskRepository.UpdateUpdatedAtAsync(command.TaskId, utcNow, cancellationToken);
         }
 
-        LogUserAssignedToTask(logger, request.TaskId, request.ProjectId);
+        LogUserAssignedToTask(logger, command.TaskId, command.ProjectId);
 
         return Unit.Value;
     }

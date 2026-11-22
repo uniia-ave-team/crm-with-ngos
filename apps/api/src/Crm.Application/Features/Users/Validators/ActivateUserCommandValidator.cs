@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Features.Users.Commands;
 using FluentValidation;
 
 namespace Crm.Application.Features.Users.Validators;
@@ -6,7 +6,7 @@ namespace Crm.Application.Features.Users.Validators;
 /// <summary>
 /// Provides validation rules for <see cref="ActivateUserCommand"/>.
 /// </summary>
-public class ActivateUserCommandValidator : AbstractValidator<ActivateUserCommand>
+public sealed class ActivateUserCommandValidator : AbstractValidator<ActivateUserCommand>
 {
     public ActivateUserCommandValidator()
     {

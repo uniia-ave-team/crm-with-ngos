@@ -1,10 +1,9 @@
 using System.Security.Authentication;
 using System.Security.Claims;
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Exceptions;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Exceptions;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -17,25 +16,25 @@ namespace Crm.Application.Features.Users.Commands;
 /// <param name="tokenService">The service responsible for validating JWT tokens.</param>
 /// <param name="identityService">The service used to manage user identities and reset passwords.</param>
 /// <param name="logger">The logger used to record the password reset process.</param>
-public partial class ResetPasswordCommandHandler(
+public sealed partial class ResetPasswordCommandHandler(
     ITokenService tokenService,
     IIdentityService identityService,
-    ILogger<ResetPasswordCommandHandler> logger) : IRequestHandler<ResetPasswordCommand>
+    ILogger<ResetPasswordCommandHandler> logger) : ICommandHandler<ResetPasswordCommand>
 {
     /// <summary>
     /// Executes the password reset process asynchronously.
     /// </summary>
-    /// <param name="request">The command containing the JWT reset token and the new password.</param>
+    /// <param name="command">The command containing the JWT reset token and the new password.</param>
     /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     /// <exception cref="InvalidCredentialException">Thrown when the token is invalid, expired, or missing required claims.</exception>
     /// <exception cref="NotFoundException">Thrown when the user referenced in the token does not exist.</exception>
     /// <exception cref="UserOperationException">Thrown when the underlying identity provider fails to reset the password.</exception>
-    public async ValueTask<Unit> Handle(ResetPasswordCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(ResetPasswordCommand command, CancellationToken cancellationToken)
     {
         LogResettingPassword(logger);
 
-        var principal = await tokenService.ValidateRestorePasswordTokenAsync(request.Token);
+        var principal = await tokenService.ValidateRestorePasswordTokenAsync(command.Token, cancellationToken);
         if (principal is null)
         {
             LogInvalidPasswordResetToken(logger);
@@ -53,7 +52,7 @@ public partial class ResetPasswordCommandHandler(
             throw new InvalidCredentialException("The token does not contain valid user information or reset token.");
         }
 
-        await identityService.ResetPasswordAsync(userId, rawResetToken, request.NewPassword, cancellationToken);
+        await identityService.ResetPasswordAsync(userId, rawResetToken, command.NewPassword, cancellationToken);
 
         LogPasswordResetSuccessfully(logger, userId);
 

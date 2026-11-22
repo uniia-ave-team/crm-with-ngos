@@ -1,7 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
-using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -9,35 +6,24 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Projects.Commands;
 
 /// <summary>
-/// Handles the <see cref="DeleteProjectCommand"/> to delete a project and schedule its task attachments for cleanup.
+/// Handles the <see cref="DeleteProjectCommand"/> to soft-delete a project while preserving
+/// attachment files on disk so soft-deleted data remains recoverable.
 /// </summary>
 /// <param name="projectRepository">The repository for deleting projects.</param>
-/// <param name="attachmentRepository">The repository for retrieving stored attachment file names across the project.</param>
-/// <param name="fileTracker">The transaction file tracker used to schedule physical files for deletion upon commit.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class DeleteProjectCommandHandler(
+public sealed partial class DeleteProjectCommandHandler(
     IProjectRepository projectRepository,
-    ITaskAttachmentRepository attachmentRepository,
-    IFileTransactionTracker fileTracker,
-    ICurrentUserService currentUserService,
-    ILogger<DeleteProjectCommandHandler> logger) : IRequestHandler<DeleteProjectCommand>
+    ILogger<DeleteProjectCommandHandler> logger) : ICommandHandler<DeleteProjectCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(DeleteProjectCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteProjectCommand command, CancellationToken cancellationToken)
     {
-        var userId = currentUserService.GetUserId();
-        LogDeletingProject(logger, request.Id, userId);
+        LogDeletingProject(logger, command.Id, command.CurrentUserId);
 
-        var storedFileNames = await attachmentRepository.GetStoredFileNamesByProjectIdAsync(request.Id, cancellationToken);
-        foreach (var storedFileName in storedFileNames)
-        {
-            fileTracker.RegisterFileForDeletion(storedFileName, FileStorageConstants.TaskAttachmentsFolder);
-        }
+        await projectRepository.LockForUpdateAsync(command.Id, cancellationToken);
+        await projectRepository.DeleteAsync(command.Id, cancellationToken);
 
-        await projectRepository.DeleteAsync(request.Id, cancellationToken);
-
-        LogProjectDeletedSuccessfully(logger, request.Id);
+        LogProjectDeletedSuccessfully(logger, command.Id);
 
         return Unit.Value;
     }

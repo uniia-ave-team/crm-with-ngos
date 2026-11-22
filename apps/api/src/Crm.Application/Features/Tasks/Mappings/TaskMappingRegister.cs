@@ -1,9 +1,9 @@
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Common.Consts;
+using Crm.Application.Dtos.Projects;
+using Crm.Application.Dtos.Tasks;
+using Crm.Application.Features.Tasks.Commands;
+using Crm.Application.Features.Tasks.Queries;
 using Crm.Domain.Common;
-using Crm.Domain.Consts.Entities.GeneralConstants;
 using Crm.Domain.Entities;
 using Mapster;
 
@@ -27,20 +27,7 @@ public sealed class TaskMappingRegister : IRegister
         config.NewConfig<GetProjectTasksQuery, ProjectTaskFilter>()
             .Map(
                 dest => dest.IsMine,
-                src => src.Filter != null && string.Equals(src.Filter.Trim(), TaskConstants.MineFilterValue, StringComparison.OrdinalIgnoreCase));
-
-        config.NewConfig<TaskExternalLink, TaskExternalLinkDto>()
-            .MapWith(src => new TaskExternalLinkDto(
-                src.Title,
-                src.Url));
-
-        config.NewConfig<User, TaskAssigneeDto>()
-            .MapWith(src => new TaskAssigneeDto(
-                src.Id,
-                src.FirstName,
-                src.LastName,
-                src.Patronymic,
-                src.Avatar));
+                src => src.Filter != null && string.Equals(src.Filter.Trim(), TaskFilterConstants.MineFilterValue, StringComparison.OrdinalIgnoreCase));
 
         config.NewConfig<TaskComment, TaskCommentDto>()
             .MapWith(src => new TaskCommentDto(
@@ -63,9 +50,8 @@ public sealed class TaskMappingRegister : IRegister
                 src.OriginalFileName,
                 src.ContentType,
                 src.FileSize,
-                null,
-                src.CreatedAt,
-                src.StoredFileName));
+                src.StoredFileName,
+                src.CreatedAt));
 
         config.NewConfig<ProjectTask, TaskSummaryDto>()
             .MapWith(src => new TaskSummaryDto(
@@ -95,6 +81,7 @@ public sealed class TaskMappingRegister : IRegister
                     .ToList(),
                 src.Tags
                     .OrderBy(t => t.Title)
+                    .ThenBy(t => t.Id)
                     .Select(t => new TagDto(
                         t.Id,
                         t.ProjectId,
@@ -130,6 +117,7 @@ public sealed class TaskMappingRegister : IRegister
                     .ToList(),
                 src.Tags
                     .OrderBy(t => t.Title)
+                    .ThenBy(t => t.Id)
                     .Select(t => new TagDto(
                         t.Id,
                         t.ProjectId,
@@ -137,6 +125,7 @@ public sealed class TaskMappingRegister : IRegister
                     .ToList(),
                 src.Attachments
                     .OrderByDescending(a => a.CreatedAt)
+                    .ThenBy(a => a.Id)
                     .Select(a => new TaskAttachmentDto(
                         a.Id,
                         a.TaskId,
@@ -144,9 +133,8 @@ public sealed class TaskMappingRegister : IRegister
                         a.OriginalFileName,
                         a.ContentType,
                         a.FileSize,
-                        null,
-                        a.CreatedAt,
-                        a.StoredFileName))
+                        a.StoredFileName,
+                        a.CreatedAt))
                     .ToList(),
                 src.ExternalLinks
                     .Select(l => new TaskExternalLinkDto(

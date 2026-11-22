@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.CustomTables.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
@@ -15,18 +14,19 @@ namespace Crm.Application.Features.CustomTables.Commands;
 /// <param name="ngoRepository">The repository used for accessing NGO data.</param>
 /// <param name="customTableRepository">The repository used for accessing and persisting custom table data.</param>
 /// <param name="logger">The logger instance for tracking command execution.</param>
-public partial class CreateCustomTableCommandHandler(
+public sealed partial class CreateCustomTableCommandHandler(
     INgoRepository ngoRepository,
     ICustomTableRepository customTableRepository,
-    ILogger<CreateCustomTableCommandHandler> logger) : IRequestHandler<CreateCustomTableCommand, Guid>
+    ILogger<CreateCustomTableCommandHandler> logger) : ICommandHandler<CreateCustomTableCommand, Guid>
 {
-    public async ValueTask<Guid> Handle(CreateCustomTableCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<Guid> Handle(CreateCustomTableCommand command, CancellationToken cancellationToken)
     {
         var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
 
-        LogCreatingCustomTable(logger, request.Name, ngoId);
+        LogCreatingCustomTable(logger, command.Name, ngoId);
 
-        var table = request.Adapt<CustomTable>();
+        var table = command.Adapt<CustomTable>();
 
         table.NgoId = ngoId;
 

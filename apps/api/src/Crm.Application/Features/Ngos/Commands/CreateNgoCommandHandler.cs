@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Ngo.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
@@ -15,24 +14,20 @@ namespace Crm.Application.Features.Ngos.Commands;
 /// <param name="ngoRepository">The repository used for accessing and persisting NGO data.</param>
 /// <param name="userRepository">The repository used for accessing and updating user domain profiles.</param>
 /// <param name="unitOfWork">The unit of work for managing database transactions.</param>
-/// <param name="timeProvider">The time provider for obtaining the current UTC time.</param>
 /// <param name="logger">The logger instance for tracking command execution.</param>
-public partial class CreateNgoCommandHandler(
+public sealed partial class CreateNgoCommandHandler(
     INgoRepository ngoRepository,
     IUserRepository userRepository,
     IUnitOfWork unitOfWork,
-    TimeProvider timeProvider,
-    ILogger<CreateNgoCommandHandler> logger) : IRequestHandler<CreateNgoCommand, Guid>
+    ILogger<CreateNgoCommandHandler> logger) : ICommandHandler<CreateNgoCommand, Guid>
 {
-    public async ValueTask<Guid> Handle(CreateNgoCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateNgoCommand command, CancellationToken cancellationToken)
     {
-        LogCreatingNgo(logger, request.Name);
+        LogCreatingNgo(logger, command.Name);
 
         await ngoRepository.EnsureDoesNotExistAsync(cancellationToken);
 
-        var ngo = request.Adapt<Ngo>();
-
-        ngo.CreatedAt = timeProvider.GetUtcNow().UtcDateTime;
+        var ngo = command.Adapt<Ngo>();
 
         await ngoRepository.CreateAsync(ngo, cancellationToken);
 

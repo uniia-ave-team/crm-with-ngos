@@ -1,4 +1,5 @@
 using FluentValidation;
+using FluentValidation.Results;
 using Mediator;
 
 namespace Crm.Application.Common.Behaviors;
@@ -10,16 +11,13 @@ namespace Crm.Application.Common.Behaviors;
 /// </summary>
 /// <typeparam name="TRequest">The type of the request being handled.</typeparam>
 /// <typeparam name="TResponse">The type of the response returned by the handler.</typeparam>
-/// <remarks>
-/// Initializes a new instance of the <see cref="ValidationBehavior{TRequest, TResponse}"/> class.
-/// </remarks>
 /// <param name="validators">The collection of validators registered for the request type.</param>
 public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators)
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IMessage
 {
     /// <summary>
-    /// Handles the incoming request by executing all associated validators asynchronously in parallel.
+    /// Handles the incoming request by executing all associated validators asynchronously.
     /// If any validation rules fail, a <see cref="ValidationException"/> containing all error details is thrown.
     /// Otherwise, the execution proceeds to the next handler in the pipeline.
     /// </summary>
@@ -33,21 +31,38 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
         MessageHandlerDelegate<TRequest, TResponse> next,
         CancellationToken cancellationToken)
     {
-        if (!validators.Any())
+        if (validators is ICollection<IValidator<TRequest>> { Count: 0 })
+        {
+            return await next(message, cancellationToken);
+        }
+
+        IReadOnlyList<IValidator<TRequest>> validatorList = validators as IReadOnlyList<IValidator<TRequest>> ?? [.. validators];
+        if (validatorList.Count == 0)
         {
             return await next(message, cancellationToken);
         }
 
         var context = new ValidationContext<TRequest>(message);
 
-        var validationResults = await Task.WhenAll(
-            validators.Select(v => v.ValidateAsync(context, cancellationToken)));
+        if (validatorList.Count == 1)
+        {
+            ValidationResult singleResult = await validatorList[0].ValidateAsync(context, cancellationToken);
+            return !singleResult.IsValid
+                ? throw new ValidationException(singleResult.Errors)
+                : await next(message, cancellationToken);
+        }
 
-        var failures = validationResults
-            .SelectMany(r => r.Errors)
-            .Where(f => f != null)
-            .ToList();
+        ValidationResult[] validationResults = await Task.WhenAll(
+            validatorList.Select(v => v.ValidateAsync(context, cancellationToken)));
 
-        return failures.Count != 0 ? throw new ValidationException(failures) : await next(message, cancellationToken);
+        List<ValidationFailure> failures = [
+            .. validationResults
+                .SelectMany(r => r.Errors)
+                .Where(f => f is not null),
+        ];
+
+        return failures.Count != 0
+            ? throw new ValidationException(failures)
+            : await next(message, cancellationToken);
     }
 }

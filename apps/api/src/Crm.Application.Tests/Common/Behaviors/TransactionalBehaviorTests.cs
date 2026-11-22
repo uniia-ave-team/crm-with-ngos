@@ -1,4 +1,5 @@
 using Crm.Application.Common.Behaviors;
+using Crm.Application.Common.Interfaces;
 using Crm.Application.Interfaces;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -35,7 +36,7 @@ public class TransactionalBehaviorTests
         result.ShouldBe(expectedId);
         await _unitOfWork.Received(1).BeginTransactionAsync(ct);
         await _unitOfWork.Received(1).CommitTransactionAsync(ct);
-        await _fileTracker.Received(1).CommitPendingDeletionsAsync(ct);
+        await _fileTracker.Received(1).CommitPendingDeletionsAsync(CancellationToken.None);
         await _unitOfWork.DidNotReceive().RollbackTransactionAsync(Arg.Any<CancellationToken>());
         await _fileTracker.DidNotReceive().RollbackCreatedFilesAsync(Arg.Any<CancellationToken>());
     }
@@ -81,5 +82,5 @@ public class TransactionalBehaviorTests
         }
     }
 
-    public sealed record RegularCommand : IRequest<Guid>, ITransactionalCommand;
+    public sealed record RegularCommand : ICommand<Guid>, ITransactionalCommand;
 }

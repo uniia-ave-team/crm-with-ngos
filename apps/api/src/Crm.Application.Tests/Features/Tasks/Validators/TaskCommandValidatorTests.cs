@@ -1,9 +1,9 @@
 using System.Text.Json.Nodes;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Dtos.Tasks;
+using Crm.Application.Features.Tasks.Commands;
+using Crm.Application.Features.Tasks.Queries;
 using Crm.Application.Features.Tasks.Validators;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Enums;
 using Shouldly;
 
@@ -170,7 +170,8 @@ public class TaskCommandValidatorTests
             stream,
             fileName,
             contentType,
-            stream.Length);
+            stream.Length,
+            Guid.NewGuid());
 
         var result = _uploadAttachmentValidator.Validate(command);
         result.IsValid.ShouldBeFalse();
@@ -187,7 +188,8 @@ public class TaskCommandValidatorTests
             stream,
             "report.pdf",
             "application/pdf",
-            stream.Length);
+            stream.Length,
+            Guid.NewGuid());
         _uploadAttachmentValidator.Validate(validCommand).IsValid.ShouldBeTrue();
 
         var fallbackCommand = validCommand with { ContentType = "application/octet-stream" };
@@ -234,7 +236,8 @@ public class TaskCommandValidatorTests
             stream,
             fileName,
             contentType,
-            stream.Length);
+            stream.Length,
+            Guid.NewGuid());
 
         _uploadAttachmentValidator.Validate(command).IsValid.ShouldBeTrue();
     }
@@ -284,7 +287,8 @@ public class TaskCommandValidatorTests
             stream,
             "bad\0.pdf",
             "application/pdf",
-            3)).IsValid.ShouldBeFalse();
+            3,
+            Guid.NewGuid())).IsValid.ShouldBeFalse();
     }
 
     [Fact]

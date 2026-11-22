@@ -1,9 +1,8 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -17,18 +16,18 @@ namespace Crm.Application.Features.Users.Commands;
 /// Handles the <see cref="CreateUserCommand"/> to create a new Identity user along with their domain profile.
 /// Restricted to only work for the first user initialization.
 /// </summary>
-public partial class CreateUserCommandHandler(
+public sealed partial class CreateUserCommandHandler(
     IIdentityService identityService,
     IAuthRoleRepository authRoleRepository,
     IUserRepository userRepository,
     TimeProvider timeProvider,
-    ILogger<CreateUserCommandHandler> logger) : IRequestHandler<CreateUserCommand, Guid>
+    ILogger<CreateUserCommandHandler> logger) : ICommandHandler<CreateUserCommand, Guid>
 {
     private static readonly SemaphoreSlim _lock = new(1, 1);
 
-    public async ValueTask<Guid> Handle(CreateUserCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateUserCommand command, CancellationToken cancellationToken)
     {
-        var maskedEmail = request.Email.MaskEmail();
+        var maskedEmail = command.Email.MaskEmail();
 
         LogCreatingUser(logger, maskedEmail);
 
@@ -37,7 +36,7 @@ public partial class CreateUserCommandHandler(
         {
             await GuardAgainstExistingUsersAsync(cancellationToken);
 
-            var user = await CreateUserAsync(request, cancellationToken);
+            var user = await CreateUserAsync(command, cancellationToken);
             await AssignAdminRoleAsync(user.Id, cancellationToken);
 
             LogUserCreatedSuccessfully(logger, maskedEmail, user.Id);
@@ -58,33 +57,33 @@ public partial class CreateUserCommandHandler(
         }
     }
 
-    private async Task<UserBasicDto> CreateUserAsync(CreateUserCommand request, CancellationToken cancellationToken = default)
+    private async Task<UserBasicDto> CreateUserAsync(CreateUserCommand command, CancellationToken cancellationToken = default)
     {
-        var user = request.Adapt<User>();
+        var user = command.Adapt<User>();
 
         user.IsActive = true;
         user.CreatedAt = timeProvider.GetUtcNow().UtcDateTime;
 
-        return await identityService.CreateUserAsync(request.Email, request.Password, user, cancellationToken);
+        return await identityService.CreateUserAsync(command.Email, command.Password, user, cancellationToken);
     }
 
     private async Task AssignAdminRoleAsync(Guid userId, CancellationToken cancellationToken)
     {
         await EnsureAdminRoleExistsAsync(cancellationToken);
 
-        await identityService.AddToRoleAsync(userId, RoleConsts.Admin, cancellationToken);
+        await identityService.AddToRoleAsync(userId, RoleConstants.Admin, cancellationToken);
     }
 
     private async Task EnsureAdminRoleExistsAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await authRoleRepository.EnsureExistsAsync(RoleConsts.Admin, cancellationToken);
+            await authRoleRepository.EnsureExistsAsync(RoleConstants.Admin, cancellationToken);
         }
         catch (NotFoundException)
         {
-            LogAdminRoleNotFound(logger, RoleConsts.Admin);
-            throw new InvalidOperationException($"Critical initialization error: Role '{RoleConsts.Admin}' does not exist.");
+            LogAdminRoleNotFound(logger, RoleConstants.Admin);
+            throw new InvalidOperationException($"Critical initialization error: Role '{RoleConstants.Admin}' does not exist.");
         }
     }
 

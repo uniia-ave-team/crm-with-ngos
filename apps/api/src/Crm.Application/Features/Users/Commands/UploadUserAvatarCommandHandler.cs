@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -16,21 +15,21 @@ namespace Crm.Application.Features.Users.Commands;
 /// <param name="fileStorageService">The service responsible for physical file I/O operations.</param>
 /// <param name="fileTransactionTracker">The service responsible for tracking file transactions to ensure consistency and rollback in case of failures.</param>
 /// <param name="logger">The logger instance for tracking command execution.</param>
-public partial class UploadUserAvatarCommandHandler(
+public sealed partial class UploadUserAvatarCommandHandler(
     IUserRepository userRepository,
     IFileStorageService fileStorageService,
     IFileTransactionTracker fileTransactionTracker,
-    ILogger<UploadUserAvatarCommandHandler> logger) : IRequestHandler<UploadUserAvatarCommand>
+    ILogger<UploadUserAvatarCommandHandler> logger) : ICommandHandler<UploadUserAvatarCommand>
 {
-    public async ValueTask<Unit> Handle(UploadUserAvatarCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UploadUserAvatarCommand command, CancellationToken cancellationToken)
     {
-        LogUploadingUserAvatar(logger, request.UserId, request.OriginalFileName);
+        LogUploadingUserAvatar(logger, command.UserId, command.OriginalFileName);
 
-        var user = await userRepository.GetForUpdateAsync(request.UserId, cancellationToken);
+        var user = await userRepository.GetForUpdateAsync(command.UserId, cancellationToken);
 
         string newFileName = await fileStorageService.SaveImageAsync(
-            request.ContentStream,
-            request.OriginalFileName,
+            command.ContentStream,
+            command.OriginalFileName,
             FileStorageConstants.UsersFolder,
             cancellationToken);
 
@@ -43,7 +42,7 @@ public partial class UploadUserAvatarCommandHandler(
 
         user.Avatar = newFileName;
 
-        LogUserAvatarUploadedSuccessfully(logger, request.UserId, newFileName);
+        LogUserAvatarUploadedSuccessfully(logger, command.UserId, newFileName);
 
         return Unit.Value;
     }

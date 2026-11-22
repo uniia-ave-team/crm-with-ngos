@@ -1,8 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Common;
-using Crm.Application.Dtos.LoginPageImage.Queries;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -15,20 +14,20 @@ namespace Crm.Application.Features.LoginPageImages.Queries;
 /// <param name="repository">The repository used for accessing the login page image record and filename.</param>
 /// <param name="fileStorageService">The service responsible for physical file I/O operations.</param>
 /// <param name="logger">The logger instance for tracking query execution.</param>
-public partial class GetLoginPageImageFileQueryHandler(
+public sealed partial class GetLoginPageImageFileQueryHandler(
     ILoginPageImageRepository repository,
     IFileStorageService fileStorageService,
-    ILogger<GetLoginPageImageFileQueryHandler> logger) : IRequestHandler<GetLoginPageImageFileQuery, FileDto>
+    ILogger<GetLoginPageImageFileQueryHandler> logger) : IQueryHandler<GetLoginPageImageFileQuery, FileDto>
 {
-    public async ValueTask<FileDto> Handle(GetLoginPageImageFileQuery request, CancellationToken cancellationToken)
+    public async ValueTask<FileDto> Handle(GetLoginPageImageFileQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingLoginPageImageFile(logger, request.Id);
+        LogFetchingLoginPageImageFile(logger, query.Id);
 
-        var fileName = await repository.GetUrlAsync(request.Id, cancellationToken);
+        var fileName = await repository.GetUrlAsync(query.Id, cancellationToken);
 
         var stream = await fileStorageService.GetFileAsync(fileName, FileStorageConstants.LoginPageImagesFolder, cancellationToken);
 
-        LogLoginPageImageFileFetched(logger, request.Id);
+        LogLoginPageImageFileFetched(logger, query.Id);
 
         return new(stream, fileName);
     }
@@ -36,6 +35,6 @@ public partial class GetLoginPageImageFileQueryHandler(
     [LoggerMessage(EventId = LogEventIds.FetchingLoginPageImageFile, Level = LogLevel.Debug, Message = "Fetching file for login page image ID: {Id}")]
     private static partial void LogFetchingLoginPageImageFile(ILogger logger, Guid id);
 
-    [LoggerMessage(EventId = LogEventIds.LogLoginPageImageFileFetched, Level = LogLevel.Debug, Message = "Login page image file query completed successfully for ID: {Id}")]
+    [LoggerMessage(EventId = LogEventIds.LoginPageImageFileFetched, Level = LogLevel.Debug, Message = "Login page image file query completed successfully for ID: {Id}")]
     private static partial void LogLoginPageImageFileFetched(ILogger logger, Guid id);
 }

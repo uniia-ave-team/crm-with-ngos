@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Features.Users.Commands;
 using FluentValidation;
 
 namespace Crm.Application.Features.Users.Validators;
@@ -6,7 +6,7 @@ namespace Crm.Application.Features.Users.Validators;
 /// <summary>
 /// Provides validation rules for the <see cref="AssignUserRoleCommand"/>.
 /// </summary>
-public class AssignUserRoleCommandValidator : AbstractValidator<AssignUserRoleCommand>
+public sealed class AssignUserRoleCommandValidator : AbstractValidator<AssignUserRoleCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AssignUserRoleCommandValidator"/> class.

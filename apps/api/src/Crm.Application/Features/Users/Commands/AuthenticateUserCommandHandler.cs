@@ -1,8 +1,7 @@
 using System.Security.Authentication;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Auth;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
@@ -15,22 +14,25 @@ namespace Crm.Application.Features.Users.Commands;
 /// <summary>
 /// Handles the <see cref="AuthenticateUserCommand"/> to verify user credentials and issue a JWT access token.
 /// </summary>
-public partial class AuthenticateUserCommandHandler(
+public sealed partial class AuthenticateUserCommandHandler(
     IIdentityService identityService,
     IAuthRoleRepository roleRepository,
     ITokenService tokenService,
     IAuthUserRepository authUserRepository,
-    ILogger<AuthenticateUserCommandHandler> logger) : IRequestHandler<AuthenticateUserCommand, AuthTokensDto>
+    IUserRepository userRepository,
+    TimeProvider timeProvider,
+    ILogger<AuthenticateUserCommandHandler> logger) : ICommandHandler<AuthenticateUserCommand, AuthTokensDto>
 {
-    public async ValueTask<AuthTokensDto> Handle(AuthenticateUserCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<AuthTokensDto> Handle(AuthenticateUserCommand command, CancellationToken cancellationToken)
     {
-        var maskedEmail = request.Email.MaskEmail();
+        var maskedEmail = command.Email.MaskEmail();
 
         LogAuthenticatingUser(logger, maskedEmail);
 
-        var isPasswordValid = await identityService.CheckPasswordAsync(request.Email, request.Password, cancellationToken);
+        var isPasswordValid = await identityService.CheckPasswordAsync(command.Email, command.Password, cancellationToken);
 
-        var user = await authUserRepository.GetAsync<UserStatusDto>(request.Email, cancellationToken);
+        var user = await authUserRepository.GetAsync<UserStatusDto>(command.Email, cancellationToken);
 
         if (!isPasswordValid || !user.IsActive)
         {
@@ -45,6 +47,7 @@ public partial class AuthenticateUserCommandHandler(
         var refreshToken = tokenService.GenerateRefreshToken();
 
         await identityService.AddRefreshTokenAsync(user.Id, refreshToken, cancellationToken);
+        await userRepository.UpdateLastLoginAtAsync(user.Id, timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
 
         LogUserAuthenticatedSuccessfully(logger, maskedEmail, user.Id);
 

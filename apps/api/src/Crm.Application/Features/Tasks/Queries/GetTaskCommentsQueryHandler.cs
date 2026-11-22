@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Tasks.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
@@ -14,30 +13,27 @@ namespace Crm.Application.Features.Tasks.Queries;
 /// Handles the <see cref="GetTaskCommentsQuery"/> to retrieve a paginated list of comments on a task.
 /// </summary>
 /// <param name="commentRepository">The repository for querying task comments.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="fileUrlProvider">The file URL provider for resolving comment author avatar URLs.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class GetTaskCommentsQueryHandler(
+public sealed partial class GetTaskCommentsQueryHandler(
     ITaskCommentRepository commentRepository,
-    ICurrentUserService currentUserService,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetTaskCommentsQueryHandler> logger) : IRequestHandler<GetTaskCommentsQuery, PagedResult<TaskCommentDto>>
+    ILogger<GetTaskCommentsQueryHandler> logger) : IQueryHandler<GetTaskCommentsQuery, PagedResult<TaskCommentDto>>
 {
     /// <inheritdoc />
-    public async ValueTask<PagedResult<TaskCommentDto>> Handle(GetTaskCommentsQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<TaskCommentDto>> Handle(GetTaskCommentsQuery query, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
-        LogFetchingTaskComments(logger, request.TaskId, request.ProjectId);
+        LogFetchingTaskComments(logger, query.TaskId, query.ProjectId);
 
         var paged = await commentRepository.GetPagedByTaskIdAsync<TaskCommentDto>(
-            request.TaskId,
-            request.PageNumber,
-            request.PageSize,
+            query.TaskId,
+            query.PageNumber,
+            query.PageSize,
             cancellationToken);
 
-        var enriched = paged.Items.EnrichUrls(fileUrlProvider, currentUserId);
+        var enriched = paged.Items.EnrichUrls(fileUrlProvider, query.CurrentUserId);
 
-        LogTaskCommentsFetched(logger, enriched.Count, request.TaskId);
+        LogTaskCommentsFetched(logger, enriched.Count, query.TaskId);
 
         return new PagedResult<TaskCommentDto>(enriched, paged.TotalCount, paged.PageNumber, paged.PageSize);
     }

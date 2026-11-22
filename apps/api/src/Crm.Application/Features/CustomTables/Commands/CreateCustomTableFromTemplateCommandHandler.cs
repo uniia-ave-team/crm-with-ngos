@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.CustomTables.Commands;
-using Crm.Application.Dtos.CustomTemplates;
+using Crm.Application.Dtos.TableTemplates;
 using Crm.Domain.Entities;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
@@ -17,35 +16,38 @@ namespace Crm.Application.Features.CustomTables.Commands;
 /// <param name="tableTemplateRepository">The repository used for retrieving the source table template.</param>
 /// <param name="ngoRepository">The repository used for validating the existence of the NGO.</param>
 /// <param name="logger">The logger instance for tracking command execution.</param>
-public partial class CreateCustomTableFromTemplateCommandHandler(
+public sealed partial class CreateCustomTableFromTemplateCommandHandler(
     ICustomTableRepository customTableRepository,
     ITableTemplateRepository tableTemplateRepository,
     INgoRepository ngoRepository,
-    ILogger<CreateCustomTableFromTemplateCommandHandler> logger) : IRequestHandler<CreateCustomTableFromTemplateCommand, Guid>
+    ILogger<CreateCustomTableFromTemplateCommandHandler> logger) : ICommandHandler<CreateCustomTableFromTemplateCommand, Guid>
 {
-    public async ValueTask<Guid> Handle(CreateCustomTableFromTemplateCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<Guid> Handle(CreateCustomTableFromTemplateCommand command, CancellationToken cancellationToken)
     {
         var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
 
-        LogCreatingCustomTableFromTemplate(logger, request.Name, request.SourceTemplateId, ngoId);
+        LogCreatingCustomTableFromTemplate(logger, command.Name, command.SourceTemplateId, ngoId);
 
-        var template = await tableTemplateRepository.GetAsync<TableTemplateDto>(request.SourceTemplateId, cancellationToken);
+        var template = await tableTemplateRepository.GetAsync<TableTemplateDto>(command.SourceTemplateId, cancellationToken);
 
         var customTable = template.Adapt<CustomTable>();
 
-        customTable.Name = request.Name;
+        customTable.Name = command.Name;
         customTable.NgoId = ngoId;
 
-        if (!string.IsNullOrWhiteSpace(request.Description))
+        if (command.Description is not null)
         {
-            customTable.Description = request.Description;
+            customTable.Description = string.IsNullOrWhiteSpace(command.Description)
+                ? null
+                : command.Description.Trim();
         }
 
         customTable.Fields.EnsureValidFieldSchema();
 
         await customTableRepository.CreateAsync(customTable, cancellationToken);
 
-        LogCustomTableInstantiatedSuccessfully(logger, customTable.Id, request.SourceTemplateId, customTable.Fields.Count);
+        LogCustomTableInstantiatedSuccessfully(logger, customTable.Id, command.SourceTemplateId, customTable.Fields.Count);
 
         return customTable.Id;
     }

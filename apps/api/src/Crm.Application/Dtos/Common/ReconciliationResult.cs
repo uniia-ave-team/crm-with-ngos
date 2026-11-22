@@ -1,4 +1,4 @@
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 
 namespace Crm.Application.Dtos.Common;
 

@@ -1,5 +1,5 @@
-using Crm.Domain.Consts;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
+using Crm.Domain.Exceptions;
 
 namespace Crm.Application.Common.Consts;
 
@@ -28,7 +28,7 @@ public static class ValidationMessages
     public const string InvalidTaskStatus = "Invalid task status.";
     public const string InvalidTaskPriority = "Invalid task priority.";
     public const string StartDateRequired = "Start date is required.";
-    public const string EndDateBeforeStartDate = DomainErrorMessages.EndDateBeforeStartDate;
+    public const string EndDateBeforeStartDate = InvalidDateRangeException.DefaultMessage;
     public const string CommentContentRequired = "Comment content is required.";
     public const string NullCharacterNotAllowed = "Value cannot contain null characters.";
 

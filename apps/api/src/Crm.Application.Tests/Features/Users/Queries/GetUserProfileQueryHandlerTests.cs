@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Queries;
+using Crm.Application.Dtos.Roles;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Enums;
@@ -16,7 +15,6 @@ public class GetUserProfileQueryHandlerTests
 {
     private readonly IAuthUserRepository _authUserRepository = Substitute.For<IAuthUserRepository>();
     private readonly IAuthRoleRepository _authRoleRepository = Substitute.For<IAuthRoleRepository>();
-    private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
     private readonly IPermissionService _permissionService = Substitute.For<IPermissionService>();
     private readonly IFileUrlProvider _fileUrlProvider = Substitute.For<IFileUrlProvider>();
     private readonly ILogger<GetUserProfileQueryHandler> _logger = Substitute.For<ILogger<GetUserProfileQueryHandler>>();
@@ -28,7 +26,6 @@ public class GetUserProfileQueryHandlerTests
         _handler = new GetUserProfileQueryHandler(
             _authUserRepository,
             _authRoleRepository,
-            _currentUserService,
             _permissionService,
             _fileUrlProvider,
             _logger);
@@ -40,10 +37,7 @@ public class GetUserProfileQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var roleId = Guid.NewGuid();
-        var query = new GetUserProfileQuery(userId, IsSelf: true);
-
-        _currentUserService.GetUserId().Returns(userId);
-        _currentUserService.GetRoleIds().Returns([roleId]);
+        var query = new GetUserProfileQuery(userId, userId, [roleId], IsSelf: true);
 
         var userResult = new UserProfileResult(
             Id: userId,
@@ -74,7 +68,7 @@ public class GetUserProfileQueryHandlerTests
         _authRoleRepository.GetRolesByUserAsync<RoleDto>(userId, Arg.Any<CancellationToken>())
             .Returns(roles);
 
-        _fileUrlProvider.GetFileUrl("avatars/self.png", ApiRouteLogoConstants.UserSelfAvatar)
+        _fileUrlProvider.GetFileUrl("avatars/self.png", FileRouteConstants.UserSelfAvatar)
             .Returns("https://api.crm.org/api/v1/users/me/avatar");
 
         // Act
@@ -84,6 +78,8 @@ public class GetUserProfileQueryHandlerTests
         result.Id.ShouldBe(userId);
         result.Email.ShouldBe("self@example.com");
         result.FirstName.ShouldBe("Olena");
+        result.Pronouns.ShouldBe("she/her");
+        result.PronounCategory.ShouldBe(PronounCategory.Feminine);
         result.EmergencyContact.ShouldBe("Mom: +380509998877");
         result.AvatarUrl.ShouldBe("https://api.crm.org/api/v1/users/me/avatar");
         result.IsActive.ShouldBeTrue();
@@ -100,9 +96,7 @@ public class GetUserProfileQueryHandlerTests
         // Arrange
         var userId = Guid.NewGuid();
         var roleId = Guid.NewGuid();
-        var query = new GetUserProfileQuery(userId, IsSelf: false);
-
-        _currentUserService.GetUserId().Returns(userId);
+        var query = new GetUserProfileQuery(userId, userId, [], IsSelf: false);
 
         var userResult = new UserProfileResult(
             Id: userId,
@@ -133,7 +127,7 @@ public class GetUserProfileQueryHandlerTests
         _authRoleRepository.GetRolesByUserAsync<RoleDto>(userId, Arg.Any<CancellationToken>())
             .Returns(roles);
 
-        _fileUrlProvider.GetFileUrl("avatars/self.png", ApiRouteLogoConstants.UserSelfAvatar)
+        _fileUrlProvider.GetFileUrl("avatars/self.png", FileRouteConstants.UserSelfAvatar)
             .Returns("https://api.crm.org/api/v1/users/me/avatar");
 
         // Act
@@ -154,10 +148,7 @@ public class GetUserProfileQueryHandlerTests
         var targetUserId = Guid.NewGuid();
         var currentUserId = Guid.NewGuid();
         var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
-        var query = new GetUserProfileQuery(targetUserId, IsSelf: false);
-
-        _currentUserService.GetUserId().Returns(currentUserId);
-        _currentUserService.GetRoleIds().Returns(currentUserRoleIds);
+        var query = new GetUserProfileQuery(targetUserId, currentUserId, currentUserRoleIds, IsSelf: false);
 
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
             .Returns(false);
@@ -193,7 +184,7 @@ public class GetUserProfileQueryHandlerTests
         _authRoleRepository.GetRolesByUserAsync<RoleDto>(targetUserId, Arg.Any<CancellationToken>())
             .Returns(roles);
 
-        _fileUrlProvider.GetFileUrl("avatars/target.png", ApiRouteLogoConstants.UserAvatar(targetUserId))
+        _fileUrlProvider.GetFileUrl("avatars/target.png", FileRouteConstants.UserAvatar(targetUserId))
             .Returns($"https://api.crm.org/api/v1/users/{targetUserId}/avatar");
 
         // Act
@@ -213,10 +204,7 @@ public class GetUserProfileQueryHandlerTests
         var targetUserId = Guid.NewGuid();
         var currentUserId = Guid.NewGuid();
         var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
-        var query = new GetUserProfileQuery(targetUserId, IsSelf: false);
-
-        _currentUserService.GetUserId().Returns(currentUserId);
-        _currentUserService.GetRoleIds().Returns(currentUserRoleIds);
+        var query = new GetUserProfileQuery(targetUserId, currentUserId, currentUserRoleIds, IsSelf: false);
 
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
             .Returns(true);
@@ -255,6 +243,7 @@ public class GetUserProfileQueryHandlerTests
 
         // Assert
         result.EmergencyContact.ShouldBe("Spouse: +380501112233");
+        result.PronounCategory.ShouldBeNull();
         result.AvatarUrl.ShouldBeNull();
         result.IsActive.ShouldBeTrue();
         result.CustomFields.Count().ShouldBe(2);
@@ -267,10 +256,7 @@ public class GetUserProfileQueryHandlerTests
         var targetUserId = Guid.NewGuid();
         var currentUserId = Guid.NewGuid();
         var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
-        var query = new GetUserProfileQuery(targetUserId, IsSelf: false);
-
-        _currentUserService.GetUserId().Returns(currentUserId);
-        _currentUserService.GetRoleIds().Returns(currentUserRoleIds);
+        var query = new GetUserProfileQuery(targetUserId, currentUserId, currentUserRoleIds, IsSelf: false);
 
         var userResult = new UserProfileResult(
             Id: targetUserId,

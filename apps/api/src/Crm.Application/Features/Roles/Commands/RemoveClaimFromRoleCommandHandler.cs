@@ -1,8 +1,8 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.Role.Commands;
+using Crm.Application.Dtos.Roles;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -17,37 +17,37 @@ namespace Crm.Application.Features.Roles.Commands;
 /// <param name="authRoleRepository">The repository used to retrieve and manage role data.</param>
 /// <param name="rolesCache">The cache service used to maintain up-to-date role permissions in memory.</param>
 /// <param name="logger">The logger used to record the lifecycle and outcome of the claim removal process.</param>
-public partial class RemoveClaimFromRoleCommandHandler(
+public sealed partial class RemoveClaimFromRoleCommandHandler(
     IRoleIdentityService identityService,
     IAuthRoleRepository authRoleRepository,
     IRolePermissionsCache rolesCache,
-    ILogger<RemoveClaimFromRoleCommandHandler> logger) : IRequestHandler<RemoveClaimFromRoleCommand>
+    ILogger<RemoveClaimFromRoleCommandHandler> logger) : ICommandHandler<RemoveClaimFromRoleCommand>
 {
-    public async ValueTask<Unit> Handle(RemoveClaimFromRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(RemoveClaimFromRoleCommand command, CancellationToken cancellationToken)
     {
-        LogRemovingClaim(logger, request.ClaimValue, request.RoleId);
+        LogRemovingClaim(logger, command.ClaimValue, command.RoleId);
 
-        if (!PermissionExtensions.GetAllStringValues().Contains(request.ClaimValue))
+        if (!PermissionExtensions.GetAllStringValues().Contains(command.ClaimValue))
         {
-            LogInvalidClaimAttempt(logger, request.ClaimValue, request.RoleId);
-            throw new ArgumentException($"The permission '{request.ClaimValue}' does not exist in the system.");
+            LogInvalidClaimAttempt(logger, command.ClaimValue, command.RoleId);
+            throw new DomainValidationException($"The permission '{command.ClaimValue}' does not exist in the system.");
         }
 
-        var role = await authRoleRepository.GetAsync<RoleUserDto>(request.RoleId, cancellationToken);
+        var role = await authRoleRepository.GetAsync<RoleUserDto>(command.RoleId, cancellationToken);
 
-        if (string.Equals(role.Name, RoleConsts.Admin, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(role.Name, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase))
         {
-            LogCannotModifyAdminRole(logger, request.ClaimValue, request.RoleId);
-            throw new InvalidOperationException("Modification of claims for the Administrator role is strictly prohibited.");
+            LogCannotModifyAdminRole(logger, command.ClaimValue, command.RoleId);
+            throw new DomainValidationException("Modification of claims for the Administrator role is strictly prohibited.");
         }
 
-        await identityService.RemovePermissionFromRoleAsync(request.RoleId, request.ClaimValue, cancellationToken);
+        await identityService.RemovePermissionFromRoleAsync(command.RoleId, command.ClaimValue, cancellationToken);
 
-        LogClaimRemovedSuccessfully(logger, request.ClaimValue, request.RoleId);
+        LogClaimRemovedSuccessfully(logger, command.ClaimValue, command.RoleId);
 
         var permissions = await identityService.GetRolePermissionsAsync(role.Id, cancellationToken);
 
-        await rolesCache.SetRolePermissionsAsync(request.RoleId, permissions, cancellationToken);
+        await rolesCache.SetRolePermissionsAsync(command.RoleId, permissions, cancellationToken);
 
         return Unit.Value;
     }
@@ -60,9 +60,6 @@ public partial class RemoveClaimFromRoleCommandHandler(
 
     [LoggerMessage(EventId = LogEventIds.AdminRoleRemovingClaimAttempt, Level = LogLevel.Warning, Message = "Attempted to remove claim '{ClaimValue}' from the Admin role (ID: {RoleId}). Operation rejected.")]
     private static partial void LogCannotModifyAdminRole(ILogger logger, string claimValue, Guid roleId);
-
-    [LoggerMessage(EventId = LogEventIds.ClaimRemovalFailed, Level = LogLevel.Warning, Message = "Failed to remove claim '{ClaimValue}' from role ID {RoleId}. Reason: {Errors}")]
-    private static partial void LogClaimRemovalFailed(ILogger logger, string claimValue, Guid roleId, string errors);
 
     [LoggerMessage(EventId = LogEventIds.ClaimRemovedSuccessfully, Level = LogLevel.Information, Message = "Claim '{ClaimValue}' successfully removed from role ID: {RoleId}")]
     private static partial void LogClaimRemovedSuccessfully(ILogger logger, string claimValue, Guid roleId);

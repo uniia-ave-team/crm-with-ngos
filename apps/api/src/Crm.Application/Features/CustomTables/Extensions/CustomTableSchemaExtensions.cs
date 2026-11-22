@@ -2,7 +2,7 @@ using Crm.Application.Extensions;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 using Mapster;
 
 namespace Crm.Application.Features.CustomTables.Extensions;
@@ -26,7 +26,7 @@ public static class CustomTableSchemaExtensions
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="table"/> or <paramref name="incomingFields"/> is <see langword="null"/>.</exception>
     /// <exception cref="EntityNotFoundException{CustomField}">Thrown when an incoming field ID does not exist within the table's current field collection.</exception>
     /// <exception cref="FieldDataTypeChangeNotAllowedException">Thrown when attempting to modify a field's data type on a table that already contains records.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when duplicate field IDs are present within incoming fields.</exception>
+    /// <exception cref="DomainValidationException">Thrown when duplicate field IDs are present within incoming fields.</exception>
     public static SchemaDiffResult ComputeSchemaDiff<TDto>(
         this CustomTable table,
         IReadOnlyCollection<TDto> incomingFields,

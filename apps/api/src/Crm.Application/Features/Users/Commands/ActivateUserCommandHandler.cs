@@ -1,5 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Interfaces;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -7,33 +8,37 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Users.Commands;
 
 /// <summary>
-/// Handles the <see cref="ActivateUserCommand"/> to restore the business user and unlock the identity account.
+/// Handles the <see cref="ActivateUserCommand"/> to restore the business user,
+/// unlock the identity account, and remove the user from the revoked users cache.
 /// </summary>
-public partial class ActivateUserCommandHandler(
+public sealed partial class ActivateUserCommandHandler(
     IUserRepository userRepository,
-    ILogger<ActivateUserCommandHandler> logger) : IRequestHandler<ActivateUserCommand>
+    IRevokedUsersCache revokedUsersCache,
+    ILogger<ActivateUserCommandHandler> logger) : ICommandHandler<ActivateUserCommand>
 {
-    public async ValueTask<Unit> Handle(ActivateUserCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<Unit> Handle(ActivateUserCommand command, CancellationToken cancellationToken)
     {
-        if (request.UserId == request.CurrentUserId)
+        if (command.UserId == command.CurrentUserId)
         {
-            LogCannotActivateSelf(logger, request.UserId);
-            throw new InvalidOperationException("A user cannot activate their own account.");
+            LogCannotActivateSelf(logger, command.UserId);
+            throw new DomainValidationException("A user cannot activate their own account.");
         }
 
-        LogActivatingUser(logger, request.UserId);
+        LogActivatingUser(logger, command.UserId);
 
-        var user = await userRepository.GetAsync(request.UserId, cancellationToken);
+        bool isActive = await userRepository.IsActiveAsync(command.UserId, cancellationToken);
 
-        if (user.IsActive)
+        if (isActive)
         {
-            LogUserAlreadyActive(logger, request.UserId);
+            LogUserAlreadyActive(logger, command.UserId);
             return Unit.Value;
         }
 
-        await userRepository.SetUserActivationStatusAsync(user.Id, isActive: true, cancellationToken);
+        await userRepository.SetUserActivationStatusAsync(command.UserId, isActive: true, cancellationToken);
+        await revokedUsersCache.UnrevokeUserAsync(command.UserId, cancellationToken);
 
-        LogUserActivatedSuccessfully(logger, request.UserId);
+        LogUserActivatedSuccessfully(logger, command.UserId);
 
         return Unit.Value;
     }

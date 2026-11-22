@@ -1,5 +1,4 @@
 using Crm.Application.Dtos.CustomTables;
-using Crm.Application.Dtos.CustomTables.Commands;
 using Crm.Application.Features.CustomTables.Commands;
 using Crm.Application.Features.CustomTables.Mappings;
 using Crm.Domain.Common;
@@ -63,18 +62,21 @@ public class UpdateCustomTableCommandHandlerTests
             .Returns(false);
 
         var command = new UpdateCustomTableCommand(
-            tableId,
             "Updated Name",
             "Updated Description",
             [
                 new UpdateCustomFieldDto(existingFieldId, "Field One Renamed", "field_one", FieldDataType.Text, false, 0),
                 new UpdateCustomFieldDto(null, "Field Two", "field_two", FieldDataType.Number, true, 1),
-            ]);
+            ])
+        {
+            Id = tableId,
+        };
 
         // Act
         await _handler.Handle(command, CancellationToken.None);
 
         // Assert
+        await _customTableRepository.Received(1).LockForUpdateAsync(tableId, Arg.Any<CancellationToken>());
         customTable.Name.ShouldBe("Updated Name");
         customTable.Description.ShouldBe("Updated Description");
         customTable.Fields.Count.ShouldBe(2);
@@ -111,17 +113,20 @@ public class UpdateCustomTableCommandHandlerTests
             .Returns(true);
 
         var command = new UpdateCustomTableCommand(
-            tableId,
             "Active Table",
             null,
             [
                 new UpdateCustomFieldDto(fieldId, "Status", "status", FieldDataType.Text, true, 0),
-            ]);
+            ])
+        {
+            Id = tableId,
+        };
 
         // Act
         await _handler.Handle(command, CancellationToken.None);
 
         // Assert
+        await _customTableRepository.Received(1).LockForUpdateAsync(tableId, Arg.Any<CancellationToken>());
         await _customRecordRepository.Received(1)
             .SyncRecordSchemaAsync(
                 tableId,
@@ -140,11 +145,16 @@ public class UpdateCustomTableCommandHandlerTests
         _customTableRepository.GetForUpdateWithFieldsAsync(tableId, Arg.Any<CancellationToken>())
             .Returns(Task.FromException<CustomTable>(new EntityNotFoundException<CustomTable>(tableId)));
 
-        var command = new UpdateCustomTableCommand(tableId, "Name", null, []);
+        var command = new UpdateCustomTableCommand("Name", null, [])
+        {
+            Id = tableId,
+        };
 
         // Act & Assert
         await Should.ThrowAsync<EntityNotFoundException<CustomTable>>(() =>
             _handler.Handle(command, CancellationToken.None).AsTask());
+
+        await _customTableRepository.Received(1).LockForUpdateAsync(tableId, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -173,17 +183,20 @@ public class UpdateCustomTableCommandHandlerTests
             .Returns(true);
 
         var command = new UpdateCustomTableCommand(
-            tableId,
             "Table With Records",
             null,
             [
                 new UpdateCustomFieldDto(fieldId, "Quantity", "quantity", FieldDataType.Text, false, 0),
-            ]);
+            ])
+        {
+            Id = tableId,
+        };
 
         // Act & Assert
         await Should.ThrowAsync<FieldDataTypeChangeNotAllowedException>(() =>
             _handler.Handle(command, CancellationToken.None).AsTask());
 
+        await _customTableRepository.Received(1).LockForUpdateAsync(tableId, Arg.Any<CancellationToken>());
         await _customRecordRepository.DidNotReceive()
             .SyncRecordSchemaAsync(Arg.Any<Guid>(), Arg.Any<SchemaDiffResult>(), Arg.Any<CancellationToken>());
     }
@@ -224,17 +237,20 @@ public class UpdateCustomTableCommandHandlerTests
             .Returns(true);
 
         var command = new UpdateCustomTableCommand(
-            tableId,
             "Locations",
             null,
             [
                 new UpdateCustomFieldDto(null, "City Code", "city", FieldDataType.Number, true, 0),
-            ]);
+            ])
+        {
+            Id = tableId,
+        };
 
         // Act
         await _handler.Handle(command, CancellationToken.None);
 
         // Assert
+        await _customTableRepository.Received(1).LockForUpdateAsync(tableId, Arg.Any<CancellationToken>());
         customTable.Fields.ShouldHaveSingleItem();
         var currentField = customTable.Fields.Single();
         currentField.Id.ShouldNotBe(oldFieldId);

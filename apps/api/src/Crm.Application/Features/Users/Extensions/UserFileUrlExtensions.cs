@@ -28,8 +28,8 @@ public static class UserFileUrlExtensions
         }
 
         string routeTemplate = isSelf
-            ? ApiRouteLogoConstants.UserSelfAvatar
-            : ApiRouteLogoConstants.UserAvatar(userId);
+            ? FileRouteConstants.UserSelfAvatar
+            : FileRouteConstants.UserAvatar(userId);
 
         return fileUrlProvider.GetFileUrl(avatarKey, routeTemplate);
     }

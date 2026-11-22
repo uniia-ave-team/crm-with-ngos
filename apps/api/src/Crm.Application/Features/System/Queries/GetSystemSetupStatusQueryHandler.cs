@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.System;
-using Crm.Application.Dtos.System.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -22,9 +21,9 @@ public sealed partial class GetSystemSetupStatusQueryHandler(
     INgoRepository ngoRepository,
     IAppVersionProvider appVersionProvider,
     IMaintenanceNoticeCache maintenanceNoticeCache,
-    ILogger<GetSystemSetupStatusQueryHandler> logger) : IRequestHandler<GetSystemSetupStatusQuery, SystemStatusDto>
+    ILogger<GetSystemSetupStatusQueryHandler> logger) : IQueryHandler<GetSystemSetupStatusQuery, SystemStatusDto>
 {
-    public async ValueTask<SystemStatusDto> Handle(GetSystemSetupStatusQuery request, CancellationToken cancellationToken)
+    public async ValueTask<SystemStatusDto> Handle(GetSystemSetupStatusQuery query, CancellationToken cancellationToken)
     {
         LogCheckingSystemSetupStatus(logger);
 

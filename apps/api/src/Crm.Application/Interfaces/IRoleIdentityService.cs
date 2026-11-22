@@ -55,6 +55,18 @@ public interface IRoleIdentityService
     Task AddPermissionToRoleAsync(Guid roleId, string permissionValue, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Asynchronously adds any missing permissions (claims) from <paramref name="permissionValues"/> to a role
+    /// using a single role lookup and a single existing-claims check.
+    /// </summary>
+    /// <param name="roleId">The unique identifier of the role.</param>
+    /// <param name="permissionValues">The collection of permission claim values to ensure on the role.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The number of newly added permission claims.</returns>
+    /// <exception cref="NotFoundException">Thrown if the role with the specified ID does not exist.</exception>
+    /// <exception cref="UserOperationException">Thrown if any permission assignment operation fails.</exception>
+    Task<int> AddPermissionsToRoleAsync(Guid roleId, IEnumerable<string> permissionValues, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Asynchronously removes a specific permission (claim) from a role.
     /// </summary>
     /// <param name="roleId">The unique identifier of the role.</param>

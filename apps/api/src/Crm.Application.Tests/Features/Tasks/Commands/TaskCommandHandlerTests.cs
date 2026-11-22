@@ -1,14 +1,11 @@
 using System.Text.Json.Nodes;
-using Crm.Application.Dtos.Project.Commands;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Commands;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Projects.Commands;
 using Crm.Application.Features.Tasks.Commands;
 using Crm.Application.Features.Tasks.Mappings;
 using Crm.Application.Features.Tasks.Services;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
@@ -30,9 +27,7 @@ public class TaskCommandHandlerTests
     private readonly ITagRepository _tagRepository = Substitute.For<ITagRepository>();
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IProjectTaskRepository _taskRepository = Substitute.For<IProjectTaskRepository>();
-    private readonly ITaskAttachmentRepository _attachmentRepository = Substitute.For<ITaskAttachmentRepository>();
     private readonly IFileTransactionTracker _fileTracker = Substitute.For<IFileTransactionTracker>();
-    private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
     private readonly TimeProvider _timeProvider = Substitute.For<TimeProvider>();
     private readonly IProjectAccessService _projectAccessService = Substitute.For<IProjectAccessService>();
     private readonly ITaskAssigneeValidator _assigneeValidator;
@@ -158,8 +153,8 @@ public class TaskCommandHandlerTests
         existingTask.EndDate.ShouldBeNull();
         existingTask.EndDateWasAuto.ShouldBeFalse();
 
-        // Explicit EndDate earlier than StartDate throws InvalidTaskDateRangeException
-        await Should.ThrowAsync<InvalidTaskDateRangeException>(() => handler.Handle(
+        // Explicit EndDate earlier than StartDate throws InvalidDateRangeException
+        await Should.ThrowAsync<InvalidDateRangeException>(() => handler.Handle(
             new UpdateTaskStatusCommand(ProjectTaskStatus.Completed, EndDate: startDate.AddHours(-1))
             {
                 ProjectId = projectId,
@@ -187,24 +182,20 @@ public class TaskCommandHandlerTests
     }
 
     [Fact]
-    public async Task DeleteTaskShouldRegisterStoredAttachmentsForDeferredDeletionWithoutLoadingTaskGraph()
+    public async Task DeleteTaskShouldLockAndSoftDeleteTaskWithoutDeletingAttachmentFiles()
     {
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
 
-        _attachmentRepository.GetStoredFileNamesByTaskIdAsync(taskId, Arg.Any<CancellationToken>())
-            .Returns(["task-doc.pdf"]);
-
         var handler = new DeleteTaskCommandHandler(
             _taskRepository,
-            _attachmentRepository,
-            _fileTracker,
             Substitute.For<ILogger<DeleteTaskCommandHandler>>());
 
         await handler.Handle(new DeleteTaskCommand(projectId, taskId), CancellationToken.None);
 
-        _fileTracker.Received(1).RegisterFileForDeletion("task-doc.pdf", FileStorageConstants.TaskAttachmentsFolder);
+        await _taskRepository.Received(1).LockForUpdateAsync(taskId, Arg.Any<CancellationToken>());
         await _taskRepository.Received(1).DeleteAsync(taskId, Arg.Any<CancellationToken>());
+        _fileTracker.DidNotReceive().RegisterFileForDeletion(Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Fact]
@@ -214,7 +205,6 @@ public class TaskCommandHandlerTests
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
         var commentRepository = Substitute.For<ITaskCommentRepository>();
-        _currentUserService.GetUserId().Returns(userId);
 
         TaskComment? createdComment = null;
         commentRepository.CreateAsync(Arg.Do<TaskComment>(c => createdComment = c), Arg.Any<CancellationToken>())
@@ -222,7 +212,6 @@ public class TaskCommandHandlerTests
 
         var handler = new CreateTaskCommentCommandHandler(
             commentRepository,
-            _currentUserService,
             _timeProvider,
             Substitute.For<ILogger<CreateTaskCommentCommandHandler>>());
 
@@ -230,6 +219,7 @@ public class TaskCommandHandlerTests
         {
             ProjectId = projectId,
             TaskId = taskId,
+            CurrentUserId = userId,
         };
 
         await handler.Handle(command, CancellationToken.None);
@@ -249,14 +239,12 @@ public class TaskCommandHandlerTests
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
         var commentRepository = Substitute.For<ITaskCommentRepository>();
-        _currentUserService.GetUserId().Returns(userId);
 
         var handler = new MarkTaskCommentsReadCommandHandler(
             commentRepository,
-            _currentUserService,
             Substitute.For<ILogger<MarkTaskCommentsReadCommandHandler>>());
 
-        await handler.Handle(new MarkTaskCommentsReadCommand(projectId, taskId), CancellationToken.None);
+        await handler.Handle(new MarkTaskCommentsReadCommand(projectId, taskId, userId), CancellationToken.None);
 
         await commentRepository.Received(1).MarkAsReadAsync(taskId, userId, Arg.Any<CancellationToken>());
     }
@@ -269,7 +257,6 @@ public class TaskCommandHandlerTests
         var taskId = Guid.NewGuid();
         var commentId = Guid.NewGuid();
         var commentRepository = Substitute.For<ITaskCommentRepository>();
-        _currentUserService.GetUserId().Returns(userId);
 
         var comment = new TaskComment
         {
@@ -283,7 +270,6 @@ public class TaskCommandHandlerTests
 
         var handler = new UpdateTaskCommentCommandHandler(
             commentRepository,
-            _currentUserService,
             _timeProvider,
             Substitute.For<ILogger<UpdateTaskCommentCommandHandler>>());
 
@@ -292,6 +278,7 @@ public class TaskCommandHandlerTests
             ProjectId = projectId,
             TaskId = taskId,
             CommentId = commentId,
+            CurrentUserId = userId,
         };
 
         await handler.Handle(command, CancellationToken.None);
@@ -309,7 +296,6 @@ public class TaskCommandHandlerTests
         var taskId = Guid.NewGuid();
         var commentId = Guid.NewGuid();
         var commentRepository = Substitute.For<ITaskCommentRepository>();
-        _currentUserService.GetUserId().Returns(userId);
 
         commentRepository.GetByTaskAndIdForUpdateAsync(taskId, commentId, Arg.Any<CancellationToken>())
             .Returns(new TaskComment
@@ -325,12 +311,11 @@ public class TaskCommandHandlerTests
 
         var handler = new DeleteTaskCommentCommandHandler(
             commentRepository,
-            _currentUserService,
             _projectAccessService,
             Substitute.For<ILogger<DeleteTaskCommentCommandHandler>>());
 
         await Should.ThrowAsync<UnauthorizedAccessException>(() =>
-            handler.Handle(new DeleteTaskCommentCommand(projectId, taskId, commentId), CancellationToken.None).AsTask());
+            handler.Handle(new DeleteTaskCommentCommand(projectId, taskId, commentId, userId), CancellationToken.None).AsTask());
 
         commentRepository.GetByTaskAndIdForUpdateAsync(taskId, commentId, Arg.Any<CancellationToken>())
             .Returns(new TaskComment
@@ -341,7 +326,7 @@ public class TaskCommandHandlerTests
                 Content = "Own comment",
             });
 
-        await handler.Handle(new DeleteTaskCommentCommand(projectId, taskId, commentId), CancellationToken.None);
+        await handler.Handle(new DeleteTaskCommentCommand(projectId, taskId, commentId, userId), CancellationToken.None);
         await commentRepository.Received(1).DeleteAsync(commentId, Arg.Any<CancellationToken>());
     }
 
@@ -351,17 +336,19 @@ public class TaskCommandHandlerTests
         var projectId = Guid.NewGuid();
         var topicId = Guid.NewGuid();
 
+        _topicRepository.GetByProjectIdForUpdateAsync(projectId, Arg.Any<CancellationToken>())
+            .Returns([new Topic { Id = topicId, ProjectId = projectId, Title = "Backlog", Order = 0 }]);
         _topicRepository.HasTasksAsync(topicId, Arg.Any<CancellationToken>())
             .Returns(true);
 
         var handler = new DeleteTopicCommandHandler(
+            _projectRepository,
             _topicRepository,
             Substitute.For<ILogger<DeleteTopicCommandHandler>>());
 
         await Should.ThrowAsync<CannotDeleteTopicWithTasksException>(() =>
             handler.Handle(new DeleteTopicCommand(projectId, topicId), CancellationToken.None).AsTask());
 
-        await _topicRepository.Received(1).EnsureExistsInProjectAsync(projectId, topicId, Arg.Any<CancellationToken>());
         await _topicRepository.DidNotReceive().DeleteAsync(topicId, Arg.Any<CancellationToken>());
     }
 
@@ -370,18 +357,23 @@ public class TaskCommandHandlerTests
     {
         var projectId = Guid.NewGuid();
         var topicId = Guid.NewGuid();
+        var secondTopic = new Topic { Id = Guid.NewGuid(), ProjectId = projectId, Title = "Done", Order = 1 };
 
+        _topicRepository.GetByProjectIdForUpdateAsync(projectId, Arg.Any<CancellationToken>())
+            .Returns([new Topic { Id = topicId, ProjectId = projectId, Title = "Backlog", Order = 0 }, secondTopic]);
         _topicRepository.HasTasksAsync(topicId, Arg.Any<CancellationToken>())
             .Returns(false);
 
         var handler = new DeleteTopicCommandHandler(
+            _projectRepository,
             _topicRepository,
             Substitute.For<ILogger<DeleteTopicCommandHandler>>());
 
         await handler.Handle(new DeleteTopicCommand(projectId, topicId), CancellationToken.None);
 
-        await _topicRepository.Received(1).EnsureExistsInProjectAsync(projectId, topicId, Arg.Any<CancellationToken>());
         await _topicRepository.Received(1).DeleteAsync(topicId, Arg.Any<CancellationToken>());
+        secondTopic.Order.ShouldBe((byte)0);
+        await _topicRepository.Received(1).ResolveOrderCollisionsAsync(projectId, Arg.Any<CancellationToken>());
     }
 
     [Fact]

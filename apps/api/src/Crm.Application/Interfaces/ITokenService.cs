@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using Crm.Application.Dtos.Auth;
-using Crm.Application.Dtos.User;
+using Crm.Application.Dtos.Users;
 
 namespace Crm.Application.Interfaces;
 
@@ -49,11 +49,12 @@ public interface ITokenService
     /// Asynchronously validates a provided invitation token and extracts its embedded claims.
     /// </summary>
     /// <param name="token">The JWT invitation token to validate.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task representing the asynchronous operation, containing a <see cref="ClaimsPrincipal"/> with the token's claims if validation is successful;
     /// otherwise, <c>null</c> if the token is invalid, expired, or lacks the required registration claims.
     /// </returns>
-    Task<ClaimsPrincipal?> ValidateInvitationTokenAsync(string token);
+    Task<ClaimsPrincipal?> ValidateInvitationTokenAsync(string token, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Generates a time-limited password restore token along with its expiration time used for securely resetting a user's password.
@@ -66,9 +67,10 @@ public interface ITokenService
     /// Asynchronously validates a provided password restore token and extracts its embedded claims.
     /// </summary>
     /// <param name="token">The JWT password restore token to validate.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>
     /// A task representing the asynchronous operation, containing a <see cref="ClaimsPrincipal"/> with the token's claims if validation is successful;
     /// otherwise, <c>null</c> if the token is invalid, expired, or lacks the required password reset claim.
     /// </returns>
-    Task<ClaimsPrincipal?> ValidateRestorePasswordTokenAsync(string token);
+    Task<ClaimsPrincipal?> ValidateRestorePasswordTokenAsync(string token, CancellationToken cancellationToken = default);
 }

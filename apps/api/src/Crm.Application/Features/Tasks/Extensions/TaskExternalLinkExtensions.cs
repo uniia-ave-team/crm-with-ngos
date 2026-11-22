@@ -1,5 +1,5 @@
-using Crm.Application.Dtos.Task;
-using Crm.Domain.Common;
+using Crm.Application.Dtos.Tasks;
+using Crm.Domain.ValueObjects;
 
 namespace Crm.Application.Features.Tasks.Extensions;
 
@@ -16,12 +16,5 @@ internal static class TaskExternalLinkExtensions
     public static List<TaskExternalLink> NormalizeExternalLinks(this IReadOnlyList<TaskExternalLinkDto>? links)
         => links is null
             ? []
-            :
-            [
-                .. links.Select(l => new TaskExternalLink
-                {
-                    Title = string.IsNullOrWhiteSpace(l.Title) ? null : l.Title.Trim(),
-                    Url = l.Url.Trim(),
-                }),
-            ];
+            : [.. links.Select(l => new TaskExternalLink(l.Url, l.Title))];
 }

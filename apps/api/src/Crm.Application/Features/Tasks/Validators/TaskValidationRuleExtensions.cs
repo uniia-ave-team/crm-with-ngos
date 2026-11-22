@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Application.Dtos.Tasks;
+using Crm.Domain.Constants.Validation;
 using FluentValidation;
 
 namespace Crm.Application.Features.Tasks.Validators;

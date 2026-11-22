@@ -1,10 +1,9 @@
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Application.Features.Tasks.Commands;
 using Crm.Application.Features.Tasks.Mappings;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -25,7 +24,6 @@ public class TaskAttachmentCommandHandlerTests
     private readonly IFileStorageService _fileStorageService = Substitute.For<IFileStorageService>();
     private readonly IFileTransactionTracker _fileTracker = Substitute.For<IFileTransactionTracker>();
     private readonly IFileUrlProvider _fileUrlProvider = Substitute.For<IFileUrlProvider>();
-    private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
     private readonly TimeProvider _timeProvider = Substitute.For<TimeProvider>();
 
     static TaskAttachmentCommandHandlerTests()
@@ -44,7 +42,6 @@ public class TaskAttachmentCommandHandlerTests
         var userId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        _currentUserService.GetUserId().Returns(userId);
         _attachmentRepository.GetTaskAttachmentStatsAsync(taskId, Arg.Any<CancellationToken>())
             .Returns(TaskAttachmentStats.Empty);
 
@@ -67,16 +64,16 @@ public class TaskAttachmentCommandHandlerTests
             _fileStorageService,
             _fileTracker,
             _fileUrlProvider,
-            _currentUserService,
             _timeProvider,
             Substitute.For<ILogger<UploadTaskAttachmentCommandHandler>>());
 
         using var stream = new MemoryStream([1, 2, 3, 4]);
         var dto = await handler.Handle(
-            new UploadTaskAttachmentCommand(projectId, taskId, stream, @"C:\fakepath\report.pdf", "application/pdf", 4),
+            new UploadTaskAttachmentCommand(projectId, taskId, stream, @"C:\fakepath\report.pdf", "application/pdf", 4, userId),
             CancellationToken.None);
 
         dto.OriginalFileName.ShouldBe("report.pdf");
+        dto.UploadedBy.ShouldBe(userId);
         dto.Url.ShouldBe("http://localhost:5065/api/v1/projects/p/tasks/t/attachments/a?v=stored-123");
         await _taskRepository.Received(1).LockForUpdateAsync(taskId, Arg.Any<CancellationToken>());
         _fileTracker.Received(1).RegisterCreatedFile("stored-123.pdf", FileStorageConstants.TaskAttachmentsFolder);
@@ -88,7 +85,6 @@ public class TaskAttachmentCommandHandlerTests
         var userId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
-        _currentUserService.GetUserId().Returns(userId);
 
         var handler = new UploadTaskAttachmentCommandHandler(
             _taskRepository,
@@ -96,7 +92,6 @@ public class TaskAttachmentCommandHandlerTests
             _fileStorageService,
             _fileTracker,
             _fileUrlProvider,
-            _currentUserService,
             _timeProvider,
             Substitute.For<ILogger<UploadTaskAttachmentCommandHandler>>());
 
@@ -106,17 +101,17 @@ public class TaskAttachmentCommandHandlerTests
             .Returns(new TaskAttachmentStats(TaskValidationConstants.MaxAttachmentsPerTask, 100L));
 
         await Should.ThrowAsync<TaskAttachmentLimitExceededException>(() => handler.Handle(
-            new UploadTaskAttachmentCommand(projectId, taskId, stream, "report.pdf", "application/pdf", 4),
+            new UploadTaskAttachmentCommand(projectId, taskId, stream, "report.pdf", "application/pdf", 4, userId),
             CancellationToken.None).AsTask());
 
         _attachmentRepository.GetTaskAttachmentStatsAsync(taskId, Arg.Any<CancellationToken>())
             .Returns(new TaskAttachmentStats(5, TaskValidationConstants.MaxTotalAttachmentSizePerTask - 2));
 
         await Should.ThrowAsync<StorageQuotaExceededException>(() => handler.Handle(
-            new UploadTaskAttachmentCommand(projectId, taskId, stream, "report.pdf", "application/pdf", 4),
+            new UploadTaskAttachmentCommand(projectId, taskId, stream, "report.pdf", "application/pdf", 4, userId),
             CancellationToken.None).AsTask());
 
-        await _fileStorageService.DidNotReceiveWithAnyArgs().SaveFileAsync(default, default, default, Arg.Any<CancellationToken>());
+        await _fileStorageService.DidNotReceiveWithAnyArgs().SaveFileAsync(default!, default!, default!, Arg.Any<CancellationToken>());
     }
 
     [Fact]
