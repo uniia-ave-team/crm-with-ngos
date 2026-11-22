@@ -26,4 +26,13 @@ public static class CliLogEventIds
     public const int CreateAdminOperationFailed = 5204;
     public const int CreateAdminUnexpectedError = 5205;
     public const int CreateAdminSuccess = 5206;
+
+    // 5300s: Scheduled Maintenance Notice (notice)
+    public const int NoticeInvalidSubcommand = 5301;
+    public const int NoticeValidationFailed = 5302;
+    public const int NoticeEndTimeInPast = 5303;
+    public const int NoticeSetSuccess = 5304;
+    public const int NoticeCleared = 5305;
+    public const int NoticeAlreadyClear = 5306;
+    public const int NoticeUnexpectedError = 5307;
 }

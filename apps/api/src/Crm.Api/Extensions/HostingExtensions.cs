@@ -2,7 +2,9 @@ using Crm.Api.Logging;
 using Crm.Api.Middleware;
 using Crm.Api.ModelBinding;
 using Crm.Api.Serialization;
+using Crm.Api.Services;
 using Crm.Application.Extensions;
+using Crm.Application.Interfaces;
 using Crm.Infrastructure.Extensions;
 using Crm.Infrastructure.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -54,6 +56,8 @@ public static class HostingExtensions
         builder.Services.AddCustomRateLimiting(builder.Configuration);
 
         builder.Services.AddCustomAuthorization();
+
+        builder.Services.AddSingleton<IAppVersionProvider, AssemblyAppVersionProvider>();
 
         builder.Services.AddInfrastructureServices(builder.Configuration, builder.Environment);
         builder.Services.AddApplicationServices();

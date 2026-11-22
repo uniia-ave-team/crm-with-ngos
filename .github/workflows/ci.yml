@@ -141,6 +141,14 @@ jobs:
           printf 'Changed-2b\nChanged-2b\n' | docker compose exec -T api crm reset-password -e smoke@example.org
           curl -fsS -o /dev/null -X POST http://localhost:5065/api/v1/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"smoke@example.org","password":"Changed-2b"}'
+          docker compose exec -T api crm notice set \
+            --message "Scheduled maintenance" \
+            --starts-at 2099-01-01T22:00:00Z \
+            --ends-at 2099-01-01T23:00:00Z
+          status=$(curl -fsS http://localhost:5065/api/v1/system/status)
+          echo "$status"
+          jq -e '.version == "dev" and .notice.message == "Scheduled maintenance"' <<<"$status" >/dev/null
+          docker compose exec -T api crm notice clear
 
       # Raster validation loads a native library, and SVG uploads must come back sanitized.
       - name: Smoke test image uploads

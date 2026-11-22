@@ -130,6 +130,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IProjectTaskRepository, ProjectTaskRepository>();
         services.AddScoped<ITaskCommentRepository, TaskCommentRepository>();
         services.AddScoped<ITaskAttachmentRepository, TaskAttachmentRepository>();
+        services.AddScoped<IMaintenanceNoticeRepository, MaintenanceNoticeRepository>();
 
         return services;
     }
@@ -247,6 +248,7 @@ public static class InfrastructureServiceCollectionExtensions
     {
         services.AddMemoryCache();
         services.AddSingleton<IRolePermissionsCache, RolePermissionsCache>();
+        services.AddSingleton<IMaintenanceNoticeCache, MaintenanceNoticeCache>();
 
         return services;
     }

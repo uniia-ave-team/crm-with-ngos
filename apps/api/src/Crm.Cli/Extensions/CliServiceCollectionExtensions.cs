@@ -28,6 +28,7 @@ public static class CliServiceCollectionExtensions
     /// <returns>The original service collection instance for method chaining.</returns>
     public static IServiceCollection AddCliServices(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ICliConsole, SystemCliConsole>();
         services.AddPersistence(configuration);
         services.AddRepositories();

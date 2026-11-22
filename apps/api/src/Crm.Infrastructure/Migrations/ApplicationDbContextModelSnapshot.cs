@@ -142,6 +142,35 @@ namespace Crm.Infrastructure.Migrations
                     b.ToTable("LoginPageImages", (string)null);
                 });
 
+            modelBuilder.Entity("Crm.Domain.Entities.MaintenanceNotice", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MaintenanceNotice", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MaintenanceNotice_EndsAfterStarts", "\"EndsAt\" > \"StartsAt\"");
+
+                            t.HasCheckConstraint("CK_MaintenanceNotice_Singleton", "\"Id\" = 1");
+                        });
+                });
+
             modelBuilder.Entity("Crm.Domain.Entities.Ngo", b =>
                 {
                     b.Property<Guid>("Id")

@@ -9,4 +9,9 @@ public static class CacheConstants
     /// The default expiration time in hours for the role permissions cache.
     /// </summary>
     public const int RolePermissionsCacheExpirationHours = 24;
+
+    /// <summary>
+    /// The maximum expiration time in seconds for the scheduled maintenance notice cache.
+    /// </summary>
+    public const int MaintenanceNoticeCacheExpirationSeconds = 30;
 }

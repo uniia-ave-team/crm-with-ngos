@@ -3,6 +3,8 @@
 		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<StyleCopTreatErrorsAsWarnings>false</StyleCopTreatErrorsAsWarnings>
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+		<InformationalVersion Condition="'$(InformationalVersion)' == ''">dev</InformationalVersion>
 	</PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="StyleCop.Analyzers.Unstable" Version="1.2.0.556">

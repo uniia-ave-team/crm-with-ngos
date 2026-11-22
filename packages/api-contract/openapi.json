@@ -8260,6 +8260,27 @@
         },
         "description": "Request to log out the currently authenticated user by revoking their refresh token."
       },
+      "MaintenanceNoticeDto": {
+        "required": [
+          "message",
+          "startsAt",
+          "endsAt"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "NgoDto": {
         "required": [
           "id",
@@ -9224,7 +9245,9 @@
         "required": [
           "hasAdmin",
           "hasNgo",
-          "isSetupComplete"
+          "isSetupComplete",
+          "version",
+          "notice"
         ],
         "type": "object",
         "properties": {
@@ -9236,6 +9259,19 @@
           },
           "isSetupComplete": {
             "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          },
+          "notice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MaintenanceNoticeDto"
+              }
+            ]
           }
         }
       },

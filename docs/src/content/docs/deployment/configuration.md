@@ -142,3 +142,25 @@ docker compose exec -e CRM_CLI_Logging__LogLevel__Microsoft=Information api crm 
 ```
 
 Змінні з префіксом `CRM_CLI_` діють лише на утиліту, а не на API.
+
+## Оголошення про заплановані роботи
+
+Адміністратор сервера може вивести банер про технічні роботи без перезапуску
+API та входу в інтерфейс:
+
+```bash
+docker compose exec api crm notice set \
+  --message "Заплановане оновлення системи" \
+  --starts-at 2026-11-20T22:00:00Z \
+  --ends-at 2026-11-20T23:00:00Z
+```
+
+Щоб прибрати оголошення достроково:
+
+```bash
+docker compose exec api crm notice clear
+```
+
+Оголошення зберігається в базі даних і кешується API не довше ніж на 30 секунд.
+Після часу `ends-at` поле `notice` у `GET /api/v1/system/status` автоматично
+стає `null`.
