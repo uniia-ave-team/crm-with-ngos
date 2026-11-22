@@ -1,5 +1,10 @@
+using System.Security.Authentication;
+using Crm.Api.Extensions;
+using Crm.Application.Enums;
 using Crm.Application.Extensions;
+using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
+using FluentValidation;
 using Microsoft.AspNetCore.Http;
 using Shouldly;
 
@@ -17,7 +22,6 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status409Conflict);
         exception.IsClientError().ShouldBeTrue();
-        exception.IsExpectedDomainError().ShouldBeTrue();
     }
 
     [Theory]
@@ -31,7 +35,6 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status409Conflict);
         exception.IsClientError().ShouldBeTrue();
-        exception.IsExpectedDomainError().ShouldBeTrue();
     }
 
     [Fact]
@@ -41,7 +44,6 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status409Conflict);
         exception.IsClientError().ShouldBeTrue();
-        exception.IsExpectedDomainError().ShouldBeTrue();
     }
 
     [Fact]
@@ -51,7 +53,6 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status413PayloadTooLarge);
         exception.IsClientError().ShouldBeTrue();
-        exception.IsExpectedDomainError().ShouldBeTrue();
     }
 
     [Fact]
@@ -61,22 +62,26 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status500InternalServerError);
         exception.IsClientError().ShouldBeFalse();
-        exception.IsExpectedDomainError().ShouldBeFalse();
+        exception.Classify().ShouldBe(ExceptionCategory.InternalError);
     }
 
     [Fact]
-    public void GenericBclClientExceptionsShouldNotBeTreatedAsExpectedDomainErrorsSoStackTracesArePreserved()
+    public void GenericBclExceptionsShouldSurfaceAs500InternalServerErrors()
     {
-        var invalidOp = new InvalidOperationException("Unexpected state");
-        var argEx = new ArgumentException("Invalid argument");
+        Exception[] bclExceptions =
+        [
+            new InvalidOperationException("Unexpected state"),
+            new ArgumentException("Invalid argument"),
+            new ArgumentNullException("param"),
+            new FileNotFoundException("Missing library file"),
+        ];
 
-        invalidOp.MapToStatusCode().ShouldBe(StatusCodes.Status400BadRequest);
-        invalidOp.IsClientError().ShouldBeTrue();
-        invalidOp.IsExpectedDomainError().ShouldBeFalse();
-
-        argEx.MapToStatusCode().ShouldBe(StatusCodes.Status400BadRequest);
-        argEx.IsClientError().ShouldBeTrue();
-        argEx.IsExpectedDomainError().ShouldBeFalse();
+        foreach (var exception in bclExceptions)
+        {
+            exception.Classify().ShouldBe(ExceptionCategory.InternalError);
+            exception.MapToStatusCode().ShouldBe(StatusCodes.Status500InternalServerError);
+            exception.IsClientError().ShouldBeFalse();
+        }
     }
 
     [Fact]
@@ -86,6 +91,40 @@ public class ExceptionExtensionsTests
 
         exception.MapToStatusCode().ShouldBe(StatusCodes.Status500InternalServerError);
         exception.IsClientError().ShouldBeFalse();
-        exception.IsExpectedDomainError().ShouldBeFalse();
+        exception.Classify().ShouldBe(ExceptionCategory.InternalError);
+    }
+
+    [Fact]
+    public void ClassifyShouldMapRemainingCategoriesAndConsistentHttpCodes()
+    {
+        var validation = new ValidationException("Invalid input");
+        validation.Classify().ShouldBe(ExceptionCategory.Validation);
+        validation.MapToStatusCode().ShouldBe(StatusCodes.Status400BadRequest);
+        validation.IsClientError().ShouldBeTrue();
+
+        var domainValidation = new DomainValidationException("Domain validation failed");
+        domainValidation.Classify().ShouldBe(ExceptionCategory.Validation);
+        domainValidation.MapToStatusCode().ShouldBe(StatusCodes.Status400BadRequest);
+        domainValidation.IsClientError().ShouldBeTrue();
+
+        var unauthorized = new InvalidCredentialException("Invalid credentials");
+        unauthorized.Classify().ShouldBe(ExceptionCategory.Unauthorized);
+        unauthorized.MapToStatusCode().ShouldBe(StatusCodes.Status401Unauthorized);
+        unauthorized.IsClientError().ShouldBeTrue();
+
+        var forbidden = new UnauthorizedAccessException("Forbidden");
+        forbidden.Classify().ShouldBe(ExceptionCategory.Forbidden);
+        forbidden.MapToStatusCode().ShouldBe(StatusCodes.Status403Forbidden);
+        forbidden.IsClientError().ShouldBeTrue();
+
+        var notFound = new EntityNotFoundException<Domain.Entities.Project>(Guid.CreateVersion7());
+        notFound.Classify().ShouldBe(ExceptionCategory.NotFound);
+        notFound.MapToStatusCode().ShouldBe(StatusCodes.Status404NotFound);
+        notFound.IsClientError().ShouldBeTrue();
+
+        var storageNotFound = new StorageFileNotFoundException("missing.png", "users");
+        storageNotFound.Classify().ShouldBe(ExceptionCategory.NotFound);
+        storageNotFound.MapToStatusCode().ShouldBe(StatusCodes.Status404NotFound);
+        storageNotFound.IsClientError().ShouldBeTrue();
     }
 }

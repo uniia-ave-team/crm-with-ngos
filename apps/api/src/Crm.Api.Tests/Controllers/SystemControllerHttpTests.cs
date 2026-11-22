@@ -5,7 +5,7 @@ using Crm.Api.Extensions;
 using Crm.Api.ModelBinding;
 using Crm.Api.Serialization;
 using Crm.Application.Dtos.System;
-using Crm.Application.Dtos.System.Queries;
+using Crm.Application.Features.System.Queries;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
@@ -110,19 +110,20 @@ public class SystemControllerHttpTests
     {
         public ValueTask<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
         {
-            if (request is GetSystemSetupStatusQuery && statusDto is TResponse typed)
-            {
-                return ValueTask.FromResult(typed);
-            }
-
-            throw new InvalidOperationException($"Unexpected request {request.GetType().Name}");
+            return request is GetSystemSetupStatusQuery && statusDto is TResponse typed
+                ? ValueTask.FromResult(typed)
+                : throw new InvalidOperationException($"Unexpected request {request.GetType().Name}");
         }
 
         public ValueTask<TResponse> Send<TResponse>(ICommand<TResponse> command, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public ValueTask<TResponse> Send<TResponse>(IQuery<TResponse> query, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        {
+            return query is GetSystemSetupStatusQuery && statusDto is TResponse typed
+                ? ValueTask.FromResult(typed)
+                : throw new InvalidOperationException($"Unexpected query {query.GetType().Name}");
+        }
 
         public ValueTask<object?> Send(object message, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
