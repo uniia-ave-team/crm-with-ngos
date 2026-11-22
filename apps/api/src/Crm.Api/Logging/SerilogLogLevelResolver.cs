@@ -10,8 +10,8 @@ public static class SerilogLogLevelResolver
 {
     public static LogEventLevel Resolve(HttpContext httpContext, Exception? exception)
         => exception is not null
-        ? ResolveByException(exception)
-        : ResolveByStatusCode(httpContext.Response.StatusCode);
+            ? ResolveByException(exception)
+            : ResolveByStatusCode(httpContext.Response.StatusCode);
 
     private static LogEventLevel ResolveByException(Exception exception) =>
         exception.IsClientError()

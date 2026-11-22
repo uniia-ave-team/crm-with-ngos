@@ -1,20 +1,20 @@
+using System.Net;
 using System.Threading.RateLimiting;
-using Crm.Infrastructure.Options;
-using Microsoft.AspNetCore.Http;
+using Crm.Api.Options;
+using Crm.Application.Common.Consts;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Crm.Infrastructure.RateLimiting;
+namespace Crm.Api.RateLimiting;
 
 /// <summary>
 /// Represents a custom rate-limiting policy based on the client's IP address.
 /// Implements <see cref="IRateLimiterPolicy{TKey}"/> using a fixed window algorithm
-/// configured via options and provides centralized logging for rejected requests.
+/// configured via options and provides structured logging for rejected requests.
 /// </summary>
 /// <param name="options">The options containing rate limit parameters such as permit limit, window size, and queue limit.</param>
 /// <param name="logger">The logger used to record rate-limiting violations and security warnings.</param>
-public sealed class IpRateLimiterPolicy(
+public sealed partial class IpRateLimiterPolicy(
     IOptions<RateLimitOptions> options,
     ILogger<IpRateLimiterPolicy> logger) : IRateLimiterPolicy<string>
 {
@@ -28,7 +28,7 @@ public sealed class IpRateLimiterPolicy(
     public Func<OnRejectedContext, CancellationToken, ValueTask>? OnRejected =>
         (context, _) =>
         {
-            logger.LogWarning("Rate limit exceeded for IP {IpAddress}", context.HttpContext.Connection.RemoteIpAddress);
+            LogRateLimitExceeded(logger, context.HttpContext.Connection.RemoteIpAddress);
             context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             return default;
         };
@@ -41,7 +41,7 @@ public sealed class IpRateLimiterPolicy(
     /// <returns>A <see cref="RateLimitPartition{TKey}"/> configured with fixed-window options for the target client IP.</returns>
     public RateLimitPartition<string> GetPartition(HttpContext httpContext)
     {
-        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? UnknownIpAddress;
+        string clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? UnknownIpAddress;
 
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: clientIp,
@@ -52,4 +52,7 @@ public sealed class IpRateLimiterPolicy(
                 QueueLimit = _options.QueueLimit,
             });
     }
+
+    [LoggerMessage(EventId = LogEventIds.RateLimitExceeded, Level = LogLevel.Warning, Message = "Rate limit exceeded for IP {IpAddress}.")]
+    private static partial void LogRateLimitExceeded(ILogger logger, IPAddress? ipAddress);
 }

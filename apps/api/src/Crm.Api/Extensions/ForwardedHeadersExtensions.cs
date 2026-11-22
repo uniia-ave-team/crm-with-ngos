@@ -1,4 +1,4 @@
-using Crm.Infrastructure.Options;
+using Crm.Api.Options;
 using Microsoft.AspNetCore.HttpOverrides;
 using SystemIpNetwork = System.Net.IPNetwork;
 

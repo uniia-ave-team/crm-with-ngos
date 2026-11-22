@@ -1,5 +1,4 @@
-using Crm.Api.HealthChecks;
-
+using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 namespace Crm.Api.Extensions;
@@ -23,7 +22,7 @@ public static class HealthCheckEndpointExtensions
 
         endpoints.MapHealthChecks(path, new HealthCheckOptions
         {
-            ResponseWriter = HealthCheckResponseWriter.WriteJsonResponse,
+            ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse,
         });
 
         return endpoints;

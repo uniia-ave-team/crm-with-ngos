@@ -1,6 +1,7 @@
+using Crm.Application.Interfaces;
 using Crm.Cli.Commands;
 using Crm.Cli.Parsing;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Interfaces.Repositories;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -20,8 +21,10 @@ public class NoticeCommandTests
     {
         var ct = TestContext.Current.CancellationToken;
         var repository = Substitute.For<IMaintenanceNoticeRepository>();
+        var unitOfWork = Substitute.For<IUnitOfWork>();
         var command = new NoticeCommand(
             repository,
+            unitOfWork,
             new FixedTimeProvider(FixedNow),
             NullLogger<NoticeCommand>.Instance);
 
@@ -45,6 +48,7 @@ public class NoticeCommandTests
             new DateTime(2026, 11, 20, 23, 0, 0, DateTimeKind.Utc),
             FixedNow.UtcDateTime,
             ct);
+        await unitOfWork.Received(1).SaveChangesAsync(ct);
     }
 
     [Theory]
@@ -54,10 +58,12 @@ public class NoticeCommandTests
     {
         var ct = TestContext.Current.CancellationToken;
         var repository = Substitute.For<IMaintenanceNoticeRepository>();
+        var unitOfWork = Substitute.For<IUnitOfWork>();
         repository.ClearAsync(ct).Returns(existed);
 
         var command = new NoticeCommand(
             repository,
+            unitOfWork,
             new FixedTimeProvider(FixedNow),
             NullLogger<NoticeCommand>.Instance);
 
@@ -80,8 +86,10 @@ public class NoticeCommandTests
     {
         var ct = TestContext.Current.CancellationToken;
         var repository = Substitute.For<IMaintenanceNoticeRepository>();
+        var unitOfWork = Substitute.For<IUnitOfWork>();
         var command = new NoticeCommand(
             repository,
+            unitOfWork,
             new FixedTimeProvider(FixedNow),
             NullLogger<NoticeCommand>.Instance);
 
@@ -96,6 +104,7 @@ public class NoticeCommandTests
             Arg.Any<DateTime>(),
             Arg.Any<DateTime>(),
             Arg.Any<CancellationToken>());
+        await unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -103,8 +112,10 @@ public class NoticeCommandTests
     {
         var ct = TestContext.Current.CancellationToken;
         var repository = Substitute.For<IMaintenanceNoticeRepository>();
+        var unitOfWork = Substitute.For<IUnitOfWork>();
         var command = new NoticeCommand(
             repository,
+            unitOfWork,
             new FixedTimeProvider(FixedNow),
             NullLogger<NoticeCommand>.Instance);
 
@@ -128,6 +139,7 @@ public class NoticeCommandTests
             Arg.Any<DateTime>(),
             Arg.Any<DateTime>(),
             Arg.Any<CancellationToken>());
+        await unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider

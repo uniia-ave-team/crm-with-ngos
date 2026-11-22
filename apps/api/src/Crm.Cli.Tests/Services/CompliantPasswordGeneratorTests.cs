@@ -1,5 +1,5 @@
 using Crm.Application.Dtos.Common;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Features.Users.Commands;
 using Crm.Application.Features.Users.Validators;
 using Crm.Application.Interfaces;
 using Crm.Cli.Services;

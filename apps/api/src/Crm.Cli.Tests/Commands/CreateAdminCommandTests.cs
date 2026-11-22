@@ -1,7 +1,7 @@
 using Crm.Application.Dtos.Common;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Enums;
 using Crm.Application.Exceptions;
+using Crm.Application.Features.Users.Commands;
 using Crm.Application.Features.Users.Validators;
 using Crm.Application.Interfaces;
 using Crm.Cli.Abstractions;
@@ -205,7 +205,7 @@ public class CreateAdminCommandTests
     }
 
     private static CreateAdminCommand CreateCommand(
-        IRequestHandler<CreateUserCommand, Guid> handler,
+        ICommandHandler<CreateUserCommand, Guid> handler,
         IUnitOfWork unitOfWork,
         IOptionService optionService,
         ICliConsole console)
@@ -218,17 +218,17 @@ public class CreateAdminCommandTests
             NullLogger<CreateAdminCommand>.Instance);
 
     private sealed class StubCreateUserHandler(Func<CreateUserCommand, Guid> onHandle)
-        : IRequestHandler<CreateUserCommand, Guid>
+        : ICommandHandler<CreateUserCommand, Guid>
     {
         public int CallCount { get; private set; }
 
         public CreateUserCommand? LastCommand { get; private set; }
 
-        public ValueTask<Guid> Handle(CreateUserCommand message, CancellationToken cancellationToken)
+        public ValueTask<Guid> Handle(CreateUserCommand command, CancellationToken cancellationToken)
         {
             CallCount++;
-            LastCommand = message;
-            return ValueTask.FromResult(onHandle(message));
+            LastCommand = command;
+            return ValueTask.FromResult(onHandle(command));
         }
     }
 

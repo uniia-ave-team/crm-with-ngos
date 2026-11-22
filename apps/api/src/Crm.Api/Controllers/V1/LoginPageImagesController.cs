@@ -3,9 +3,9 @@ using Asp.Versioning;
 using Crm.Api.Consts;
 using Crm.Api.Extensions;
 using Crm.Api.Security;
-using Crm.Application.Dtos.LoginPageImage;
-using Crm.Application.Dtos.LoginPageImage.Commands;
-using Crm.Application.Dtos.LoginPageImage.Queries;
+using Crm.Application.Dtos.LoginPageImages;
+using Crm.Application.Features.LoginPageImages.Commands;
+using Crm.Application.Features.LoginPageImages.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
@@ -19,9 +19,9 @@ namespace Crm.Api.Controllers.V1;
 /// </summary>
 /// <param name="mediator">The mediator instance for handling requests and responses.</param>
 [ApiController]
-[ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/[controller]")]
-public class LoginPageImagesController(IMediator mediator) : ControllerBase
+[ApiVersion(ApiVersions.V1)]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
+public sealed class LoginPageImagesController(IMediator mediator) : ControllerBase
 {
     /// <summary>
     /// Retrieves a specific login page image by its unique identifier.
@@ -32,6 +32,7 @@ public class LoginPageImagesController(IMediator mediator) : ControllerBase
     [HttpGet("{id:guid}", Name = nameof(GetById))]
     [HasAccessRight(AccessRight.ViewLoginPageImages)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -41,31 +42,6 @@ public class LoginPageImagesController(IMediator mediator) : ControllerBase
     {
         var result = await mediator.Send(new GetLoginPageImageByIdQuery(id), cancellationToken);
         return Ok(result);
-    }
-
-    /// <summary>
-    /// Creates a new login page image in the system.
-    /// </summary>
-    /// <param name="command">The command containing the URL or storage path of the new image.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The unique identifier of the newly created image.</returns>
-    [HttpPost]
-    [HasAccessRight(AccessRight.CreateLoginPageImages)]
-    [ProducesResponseType(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<Guid>> Create(
-        [FromBody] CreateLoginPageImageCommand command,
-        CancellationToken cancellationToken)
-    {
-        var loginPageImageId = await mediator.Send(command, cancellationToken);
-
-        return CreatedAtRoute(
-            nameof(GetById),
-            new { id = loginPageImageId },
-            new { Id = loginPageImageId });
     }
 
     /// <summary>
@@ -85,8 +61,7 @@ public class LoginPageImagesController(IMediator mediator) : ControllerBase
         CancellationToken cancellationToken)
     {
         var fileDto = await mediator.Send(new GetLoginPageImageFileQuery(id), cancellationToken);
-
-        return File(fileDto.Stream, fileDto.GetContentType(), enableRangeProcessing: true);
+        return this.ServeFile(fileDto);
     }
 
     /// <summary>
@@ -99,27 +74,22 @@ public class LoginPageImagesController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.CreateLoginPageImages)]
     [Consumes(MediaTypeNames.Multipart.FormData)]
     [RequestSizeLimit(FileLimitConstants.MaxImageUploadSize)]
+    [RequestFormLimits(MultipartBodyLengthLimit = FileLimitConstants.MaxImageUploadSize)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<ActionResult<Guid>> Upload(
         IFormFile file,
         CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
-        {
-            return BadRequest("A file is required.");
-        }
-
         using var stream = file.OpenReadStream();
 
         var loginPageImageId = await mediator.Send(new UploadLoginPageImageCommand(stream, file.FileName), cancellationToken);
 
-        return CreatedAtRoute(
-            nameof(GetById),
-            new { id = loginPageImageId },
-            new { Id = loginPageImageId });
+        return CreatedAtRoute(nameof(GetById), new { id = loginPageImageId }, loginPageImageId);
     }
 
     /// <summary>

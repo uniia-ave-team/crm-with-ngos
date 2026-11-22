@@ -1,16 +1,16 @@
+using Crm.Api.Consts;
 using Crm.Api.Logging;
 using Crm.Api.Middleware;
 using Crm.Api.ModelBinding;
+using Crm.Api.Options;
 using Crm.Api.Serialization;
 using Crm.Api.Services;
 using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
-using Crm.Infrastructure.Extensions;
-using Crm.Infrastructure.Options;
+using Crm.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Scalar.AspNetCore;
 using Serilog;
-using Serilog.Events;
 
 namespace Crm.Api.Extensions;
 
@@ -28,7 +28,7 @@ public static class HostingExtensions
     /// <returns>The configured <see cref="WebApplicationBuilder"/>.</returns>
     public static WebApplicationBuilder ConfigureServices(this WebApplicationBuilder builder)
     {
-        builder.Host.AddSerilog();
+        builder.Host.AddCustomSerilog();
 
         builder.Services.Configure<RouteOptions>(options =>
         {
@@ -46,20 +46,25 @@ public static class HostingExtensions
 
         builder.Services.AddCustomApiVersioning();
 
-        builder.Services.AddHealthChecks();
-
         builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-        builder.Services.AddProblemDetails();
+        builder.Services.AddProblemDetails(options =>
+        {
+            options.CustomizeProblemDetails = context =>
+            {
+                context.ProblemDetails.Instance ??= context.HttpContext.Request.Path;
+                context.HttpContext.Response.Headers.XContentTypeOptions = SecurityHeaderValues.NoSniff;
+            };
+        });
 
-        builder.Services.AddCustomForwardedHeaders(builder.Configuration);
-
+        builder.Services.AddCustomSerilogOptions(builder.Configuration);
+        builder.Services.AddCustomCors(builder.Configuration, builder.Environment);
         builder.Services.AddCustomRateLimiting(builder.Configuration);
-
+        builder.Services.AddCustomForwardedHeaders(builder.Configuration);
         builder.Services.AddCustomAuthorization();
 
         builder.Services.AddSingleton<IAppVersionProvider, AssemblyAppVersionProvider>();
 
-        builder.Services.AddInfrastructureServices(builder.Configuration, builder.Environment);
+        builder.Services.AddInfrastructureServices(builder.Configuration);
         builder.Services.AddApplicationServices();
 
         return builder;
@@ -74,6 +79,7 @@ public static class HostingExtensions
     public static WebApplication ConfigurePipeline(this WebApplication app)
     {
         app.UseForwardedHeaders();
+        app.UseSecurityHeaders();
 
         app.UseSerilogRequestLogging(options =>
         {
@@ -110,41 +116,9 @@ public static class HostingExtensions
         app.UseAuthentication();
         app.UseAuthorization();
 
-        app.MapControllers().RequireRateLimiting(RateLimitingExtensions.GlobalPolicyName);
+        app.MapControllers().RequireRateLimiting(RateLimitOptions.PolicyName);
         app.MapCustomHealthChecks();
 
         return app;
-    }
-
-    /// <summary>
-    /// Configures Serilog as the primary logging provider, setting up console
-    /// and file sinks with daily rolling intervals and log retention limits.
-    /// </summary>
-    /// <param name="host">The <see cref="ConfigureHostBuilder"/> to configure.</param>
-    private static void AddSerilog(this ConfigureHostBuilder host)
-    {
-        host.UseSerilog((ctx, lc) =>
-        {
-            var serilogOptions = new SerilogOptions();
-            ctx.Configuration.GetSection(SerilogOptions.Position).Bind(serilogOptions);
-
-            string logsPath = Path.IsPathRooted(serilogOptions.LogPath)
-                ? serilogOptions.LogPath
-                : Path.Combine(AppContext.BaseDirectory, serilogOptions.LogPath);
-
-            lc.ReadFrom.Configuration(ctx.Configuration)
-              .WriteTo.Console()
-              .WriteTo.File(
-                  Path.Combine(logsPath, serilogOptions.AllLogsFileName),
-                  rollingInterval: RollingInterval.Day,
-                  shared: true,
-                  retainedFileCountLimit: serilogOptions.RetainedFileCountLimit)
-              .WriteTo.File(
-                  Path.Combine(logsPath, serilogOptions.ErrorLogsFileName),
-                  rollingInterval: RollingInterval.Day,
-                  shared: true,
-                  restrictedToMinimumLevel: LogEventLevel.Error,
-                  retainedFileCountLimit: serilogOptions.RetainedErrorFileCountLimit);
-        });
     }
 }

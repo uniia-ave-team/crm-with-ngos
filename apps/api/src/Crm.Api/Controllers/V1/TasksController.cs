@@ -1,8 +1,9 @@
 using Asp.Versioning;
 using Crm.Api.Consts;
 using Crm.Api.Security;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Dtos.Tasks;
+using Crm.Application.Features.Tasks.Queries;
+using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
@@ -15,12 +16,15 @@ namespace Crm.Api.Controllers.V1;
 /// filtered strictly by the authenticated user's visible projects.
 /// </summary>
 /// <param name="mediator">The mediator instance used for dispatching queries.</param>
+/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 [ApiController]
 [ApiVersion(ApiVersions.V1)]
-[Route("api/v{version:apiVersion}/[controller]")]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
-public class TasksController(IMediator mediator) : ControllerBase
+public sealed class TasksController(
+    IMediator mediator,
+    ICurrentUserService currentUserService) : ControllerBase
 {
     /// <summary>
     /// Retrieves a paginated, filtered, and sorted list of tasks across all projects visible to the currently authenticated user
@@ -37,7 +41,9 @@ public class TasksController(IMediator mediator) : ControllerBase
         [FromQuery] GetProjectTasksQuery query,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(query with { ProjectId = null }, cancellationToken);
+        var result = await mediator.Send(
+            query with { ProjectId = null, CurrentUserId = currentUserService.GetUserId() },
+            cancellationToken);
         return Ok(result);
     }
 }

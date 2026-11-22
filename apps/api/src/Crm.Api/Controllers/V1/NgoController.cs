@@ -3,9 +3,9 @@ using Asp.Versioning;
 using Crm.Api.Consts;
 using Crm.Api.Extensions;
 using Crm.Api.Security;
-using Crm.Application.Dtos.Ngo;
-using Crm.Application.Dtos.Ngo.Commands;
-using Crm.Application.Dtos.Ngo.Queries;
+using Crm.Application.Dtos.Ngos;
+using Crm.Application.Features.Ngos.Commands;
+using Crm.Application.Features.Ngos.Queries;
 using Crm.Domain.Enums;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
@@ -16,15 +16,15 @@ namespace Crm.Api.Controllers.V1;
 /// <summary>
 /// Controller responsible for managing Non-Governmental Organization (NGO) data and settings.
 /// </summary>
+/// <param name="mediator">The mediator instance for handling requests and responses.</param>
 [ApiController]
-[ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/[controller]")]
+[ApiVersion(ApiVersions.V1)]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-[ProducesResponseType(StatusCodes.Status403Forbidden)]
-public class NgoController(IMediator mediator) : ControllerBase
+public sealed class NgoController(IMediator mediator) : ControllerBase
 {
     /// <summary>
-    /// Retrieves the details of an NGO by its unique identifier.
+    /// Retrieves the details of the system's NGO.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A DTO containing the NGO details.</returns>
@@ -51,8 +51,7 @@ public class NgoController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> GetLogo(CancellationToken cancellationToken)
     {
         var fileDto = await mediator.Send(new GetNgoLogoQuery(), cancellationToken);
-
-        return File(fileDto.Stream, fileDto.GetContentType(), enableRangeProcessing: true);
+        return this.ServeFile(fileDto);
     }
 
     /// <summary>
@@ -60,11 +59,13 @@ public class NgoController(IMediator mediator) : ControllerBase
     /// </summary>
     /// <param name="command">The command containing the NGO creation data.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The unique identifier of the created NGO.</returns>
+    /// <returns>A status code indicating successful creation.</returns>
     [HttpPost]
     [HasAccessRight(AccessRight.CreateNgo)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(
         [FromBody] CreateNgoCommand command,
         CancellationToken cancellationToken)
@@ -78,22 +79,21 @@ public class NgoController(IMediator mediator) : ControllerBase
     /// </summary>
     /// <param name="file">The logo file to upload.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The URL of the uploaded logo.</returns>
+    /// <returns>An empty OK response indicating successful upload.</returns>
     [HttpPost("logo")]
     [HasAccessRight(AccessRight.UpdateNgo)]
     [RequestSizeLimit(FileLimitConstants.MaxImageUploadSize)]
+    [RequestFormLimits(MultipartBodyLengthLimit = FileLimitConstants.MaxImageUploadSize)]
     [Consumes(MediaTypeNames.Multipart.FormData)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> UploadLogo(
         IFormFile file,
         CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
-        {
-            return BadRequest("A file is required.");
-        }
-
         using var stream = file.OpenReadStream();
 
         await mediator.Send(new UploadNgoLogoCommand(stream, file.FileName), cancellationToken);
@@ -111,6 +111,8 @@ public class NgoController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.UpdateNgo)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
         [FromBody] UpdateNgoCommand command,
         CancellationToken cancellationToken)

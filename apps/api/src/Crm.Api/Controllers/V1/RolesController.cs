@@ -1,9 +1,9 @@
 using Asp.Versioning;
-using Crm.Api.Dtos;
+using Crm.Api.Consts;
 using Crm.Api.Security;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.Role.Commands;
-using Crm.Application.Dtos.Role.Queries;
+using Crm.Application.Dtos.Roles;
+using Crm.Application.Features.Roles.Commands;
+using Crm.Application.Features.Roles.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
@@ -16,11 +16,10 @@ namespace Crm.Api.Controllers.V1;
 /// Controller responsible for managing system roles and their associated permissions.
 /// </summary>
 [ApiController]
-[ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/[controller]")]
+[ApiVersion(ApiVersions.V1)]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-[ProducesResponseType(StatusCodes.Status403Forbidden)]
-public class RolesController(IMediator mediator) : ControllerBase
+public sealed class RolesController(IMediator mediator) : ControllerBase
 {
     /// <summary>
     /// Retrieves a paginated, filtered, and sorted list of user roles.
@@ -31,6 +30,7 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HttpGet]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedResult<RoleDto>>> GetRoles(
         [FromQuery] GetAllRolesQuery query,
         CancellationToken cancellationToken)
@@ -48,6 +48,7 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HttpGet("{id:guid}", Name = nameof(GetRoleById))]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<RoleDetailsDto>> GetRoleById(
         Guid id,
@@ -81,35 +82,35 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.ManageRole)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<Guid>> CreateRole(
         [FromBody] CreateRoleCommand command,
         CancellationToken cancellationToken)
     {
         var roleId = await mediator.Send(command, cancellationToken);
 
-        return CreatedAtRoute(
-            nameof(GetRoleById),
-            new { id = roleId },
-            new { Id = roleId });
+        return CreatedAtRoute(nameof(GetRoleById), new { id = roleId }, roleId);
     }
 
     /// <summary>
     /// Updates an existing role's details.
     /// </summary>
     /// <param name="id">The unique identifier of the role to update.</param>
-    /// <param name="request">The updated role details.</param>
+    /// <param name="command">The updated role details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPut("{id:guid}")]
     [HasAccessRight(AccessRight.ManageRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateRole(
         Guid id,
-        [FromBody] UpdateRoleRequest request,
+        [FromBody] UpdateRoleCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(id), cancellationToken);
+        await mediator.Send(command with { Id = id }, cancellationToken);
         return NoContent();
     }
 
@@ -122,6 +123,9 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HttpDelete("{id:guid}")]
     [HasAccessRight(AccessRight.ManageRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteRole(
         Guid id,
         CancellationToken cancellationToken)
@@ -141,6 +145,8 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.ManageRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddClaimToRole(
         Guid id,
         string claimValue,
@@ -160,6 +166,9 @@ public class RolesController(IMediator mediator) : ControllerBase
     [HttpDelete("{id:guid}/claims/{claimValue}")]
     [HasAccessRight(AccessRight.ManageRole)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveClaimFromRole(
         Guid id,
         string claimValue,

@@ -9,10 +9,11 @@ namespace Crm.Api.OpenApi.Transformers;
 /// <c>text/plain</c>, <c>text/json</c> or <c>application/*+json</c>.
 /// The API still accepts those media types; the document lists one so generated clients get one function per operation.
 /// </summary>
-public class JsonContentTypeOperationTransformer : IOpenApiOperationTransformer
+public sealed class JsonContentTypeOperationTransformer : IOpenApiOperationTransformer
 {
     private static readonly string[] RedundantMediaTypes = [MediaTypeNames.Text.Plain, "text/json", "application/*+json"];
 
+    /// <inheritdoc />
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
     {
         RemoveRedundantMediaTypes(operation.RequestBody?.Content);

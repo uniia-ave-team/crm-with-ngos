@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace Crm.Infrastructure.Options;
+namespace Crm.Api.Options;
 
 /// <summary>
 /// Represents configuration options for rate limiting, defining time windows,
@@ -12,6 +12,11 @@ public sealed class RateLimitOptions
     /// Gets the configuration section key name used to bind rate limiting settings from appsettings.
     /// </summary>
     public const string Position = "RateLimiting";
+
+    /// <summary>
+    /// Gets the name of the global rate limiting policy applied across the application.
+    /// </summary>
+    public const string PolicyName = "Global";
 
     /// <summary>
     /// Gets or sets the duration of the time window in seconds during which requests are tracked and limited.

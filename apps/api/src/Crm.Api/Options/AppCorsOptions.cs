@@ -1,10 +1,10 @@
-namespace Crm.Infrastructure.Options;
+namespace Crm.Api.Options;
 
 /// <summary>
 /// Represents configuration options for Cross-Origin Resource Sharing (CORS),
 /// defining binding positions and allowed origin endpoints for secure client communication.
 /// </summary>
-public class AppCorsOptions
+public sealed class AppCorsOptions
 {
     /// <summary>
     /// Gets the configuration section key name used to bind CORS settings from appsettings.

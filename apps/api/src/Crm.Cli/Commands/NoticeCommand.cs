@@ -1,8 +1,9 @@
 using System.Globalization;
+using Crm.Application.Interfaces;
 using Crm.Cli.Abstractions;
 using Crm.Cli.Constants;
 using Crm.Cli.Models;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
 
@@ -13,6 +14,7 @@ namespace Crm.Cli.Commands;
 /// </summary>
 public partial class NoticeCommand(
     IMaintenanceNoticeRepository maintenanceNoticeRepository,
+    IUnitOfWork unitOfWork,
     TimeProvider timeProvider,
     ILogger<NoticeCommand> logger) : ICliCommand
 {
@@ -103,6 +105,7 @@ public partial class NoticeCommand(
         try
         {
             await maintenanceNoticeRepository.UpsertAsync(message, startsAt, endsAt, utcNow, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
             LogNoticeSet(logger, startsAt, endsAt);
             return 0;
         }

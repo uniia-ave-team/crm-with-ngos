@@ -1,9 +1,9 @@
 using Asp.Versioning;
-using Crm.Api.Dtos;
+using Crm.Api.Consts;
 using Crm.Api.Security;
 using Crm.Application.Dtos.CustomTables;
-using Crm.Application.Dtos.CustomTables.Commands;
-using Crm.Application.Dtos.CustomTables.Queries;
+using Crm.Application.Features.CustomTables.Commands;
+using Crm.Application.Features.CustomTables.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
@@ -15,11 +15,11 @@ namespace Crm.Api.Controllers.V1;
 /// Controller responsible for managing NGO custom tables and schema definitions.
 /// </summary>
 [ApiController]
-[ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/[controller]")]
+[ApiVersion(ApiVersions.V1)]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
-public class CustomTablesController(IMediator mediator) : ControllerBase
+public sealed class CustomTablesController(IMediator mediator) : ControllerBase
 {
     /// <summary>
     /// Retrieves a paginated list of custom tables belonging to an NGO.
@@ -30,6 +30,8 @@ public class CustomTablesController(IMediator mediator) : ControllerBase
     [HttpGet]
     [HasAccessRight(AccessRight.ViewCustomTable)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PagedResult<CustomTableSummaryDto>>> GetPaged(
         [FromQuery] GetCustomTablesPagedQuery query,
         CancellationToken cancellationToken)
@@ -47,6 +49,7 @@ public class CustomTablesController(IMediator mediator) : ControllerBase
     [HttpGet("{id:guid}", Name = nameof(GetCustomTableById))]
     [HasAccessRight(AccessRight.ViewCustomTable)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CustomTableDto>> GetCustomTableById(
         Guid id,
@@ -66,7 +69,8 @@ public class CustomTablesController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.CreateCustomTable)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create(
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<Guid>> Create(
         [FromBody] CreateCustomTableCommand command,
         CancellationToken cancellationToken)
     {
@@ -85,7 +89,7 @@ public class CustomTablesController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> CreateFromTemplate(
+    public async Task<ActionResult<Guid>> CreateFromTemplate(
         [FromBody] CreateCustomTableFromTemplateCommand command,
         CancellationToken cancellationToken)
     {
@@ -94,10 +98,10 @@ public class CustomTablesController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Updates metadata (Name and Description) of an existing custom table.
+    /// Updates the metadata and synchronizes the field schema of an existing custom table.
     /// </summary>
     /// <param name="id">The unique identifier of the custom table to update.</param>
-    /// <param name="request">The request containing updated metadata.</param>
+    /// <param name="command">The command containing updated metadata and fields.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status code indicating successful update.</returns>
     [HttpPut("{id:guid}")]
@@ -105,12 +109,13 @@ public class CustomTablesController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(
         Guid id,
-        [FromBody] UpdateCustomTableRequest request,
+        [FromBody] UpdateCustomTableCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(id), cancellationToken);
+        await mediator.Send(command with { Id = id }, cancellationToken);
         return NoContent();
     }
 

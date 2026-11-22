@@ -17,11 +17,11 @@ var configuration = new ConfigurationBuilder()
     .AddCliConfiguration()
     .Build();
 
-using var serviceProvider = new ServiceCollection()
+await using var serviceProvider = new ServiceCollection()
     .AddCliServices(configuration)
     .BuildServiceProvider();
 
-using var scope = serviceProvider.CreateScope();
+await using var scope = serviceProvider.CreateAsyncScope();
 var runner = scope.ServiceProvider.GetRequiredService<CliRunner>();
 
 return await runner.RunAsync(parsedArgs);

@@ -1,5 +1,5 @@
-using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Exceptions;
+using Crm.Application.Features.Users.Commands;
 using Crm.Application.Interfaces;
 using Crm.Cli.Abstractions;
 using Crm.Cli.Constants;
@@ -17,7 +17,7 @@ namespace Crm.Cli.Commands;
 /// Enforces the same rules as <see cref="CreateUserCommand"/> and <c>CreateUserCommandHandler</c>.
 /// </summary>
 public partial class CreateAdminCommand(
-    IRequestHandler<CreateUserCommand, Guid> createUserHandler,
+    ICommandHandler<CreateUserCommand, Guid> createUserHandler,
     IValidator<CreateUserCommand> validator,
     IUnitOfWork unitOfWork,
     IOptionService optionService,

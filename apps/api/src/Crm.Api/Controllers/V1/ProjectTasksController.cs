@@ -3,10 +3,10 @@ using Asp.Versioning;
 using Crm.Api.Consts;
 using Crm.Api.Extensions;
 using Crm.Api.Security;
-using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Dtos.Tasks;
+using Crm.Application.Features.Tasks.Commands;
+using Crm.Application.Features.Tasks.Queries;
+using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
@@ -15,16 +15,19 @@ using Microsoft.AspNetCore.Mvc;
 namespace Crm.Api.Controllers.V1;
 
 /// <summary>
-/// Controller responsible for managing project tasks (Planner, Board, Tables, global My Tasks),
+/// Controller responsible for managing project-scoped tasks (Planner, Board, Tables),
 /// task assignments, tags, comments, unread comment tracking, and file attachments.
 /// </summary>
 /// <param name="mediator">The mediator instance used for dispatching commands and queries.</param>
+/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 [ApiController]
 [ApiVersion(ApiVersions.V1)]
 [Route(ApiRouteConstants.ProjectTasksRoutePrefix)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
-public class ProjectTasksController(IMediator mediator) : ControllerBase
+public sealed class ProjectTasksController(
+    IMediator mediator,
+    ICurrentUserService currentUserService) : ControllerBase
 {
     /// <summary>
     /// Retrieves a paginated, filtered, and sorted list of project tasks
@@ -44,7 +47,9 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
         [FromQuery] GetProjectTasksQuery query,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(query with { ProjectId = projectId }, cancellationToken);
+        var result = await mediator.Send(
+            query with { ProjectId = projectId, CurrentUserId = currentUserService.GetUserId() },
+            cancellationToken);
         return Ok(result);
     }
 
@@ -64,7 +69,9 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
         Guid taskId,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetTaskByIdQuery(projectId, taskId), cancellationToken);
+        var result = await mediator.Send(
+            new GetTaskByIdQuery(projectId, taskId, currentUserService.GetUserId()),
+            cancellationToken);
         return Ok(result);
     }
 
@@ -169,6 +176,7 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AssignUser(
         Guid projectId,
         Guid taskId,
@@ -190,6 +198,7 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     [HttpDelete("{taskId:guid}/assignees/{userId:guid}")]
     [HasAccessRight(AccessRight.UpdateTask)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UnassignUser(
         Guid projectId,
@@ -212,7 +221,9 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     [HttpPost("{taskId:guid}/tags/{tagId:guid}")]
     [HasAccessRight(AccessRight.UpdateTask)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddTag(
         Guid projectId,
         Guid taskId,
@@ -234,6 +245,7 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     [HttpDelete("{taskId:guid}/tags/{tagId:guid}")]
     [HasAccessRight(AccessRight.UpdateTask)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveTag(
         Guid projectId,
@@ -264,7 +276,9 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
         [FromQuery] GetTaskCommentsQuery query,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(query with { ProjectId = projectId, TaskId = taskId }, cancellationToken);
+        var result = await mediator.Send(
+            query with { ProjectId = projectId, TaskId = taskId, CurrentUserId = currentUserService.GetUserId() },
+            cancellationToken);
         return Ok(result);
     }
 
@@ -287,7 +301,9 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
         [FromBody] CreateTaskCommentCommand command,
         CancellationToken cancellationToken)
     {
-        var commentId = await mediator.Send(command with { ProjectId = projectId, TaskId = taskId }, cancellationToken);
+        var commentId = await mediator.Send(
+            command with { ProjectId = projectId, TaskId = taskId, CurrentUserId = currentUserService.GetUserId() },
+            cancellationToken);
         return StatusCode(StatusCodes.Status201Created, commentId);
     }
 
@@ -312,7 +328,15 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
         [FromBody] UpdateTaskCommentCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command with { ProjectId = projectId, TaskId = taskId, CommentId = commentId }, cancellationToken);
+        await mediator.Send(
+            command with
+            {
+                ProjectId = projectId,
+                TaskId = taskId,
+                CommentId = commentId,
+                CurrentUserId = currentUserService.GetUserId(),
+            },
+            cancellationToken);
         return NoContent();
     }
 
@@ -327,6 +351,7 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     [HttpDelete("{taskId:guid}/comments/{commentId:guid}")]
     [HasAccessRight(AccessRight.ViewTask)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteComment(
         Guid projectId,
@@ -334,7 +359,9 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
         Guid commentId,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(new DeleteTaskCommentCommand(projectId, taskId, commentId), cancellationToken);
+        await mediator.Send(
+            new DeleteTaskCommentCommand(projectId, taskId, commentId, currentUserService.GetUserId()),
+            cancellationToken);
         return NoContent();
     }
 
@@ -354,7 +381,9 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
         Guid taskId,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(new MarkTaskCommentsReadCommand(projectId, taskId), cancellationToken);
+        await mediator.Send(
+            new MarkTaskCommentsReadCommand(projectId, taskId, currentUserService.GetUserId()),
+            cancellationToken);
         return NoContent();
     }
 
@@ -379,7 +408,7 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Uploads and attaches a file to a task using the Docker volume file storage system.
+    /// Uploads and attaches a file to a task.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>
     /// <param name="taskId">The unique identifier of the task.</param>
@@ -409,7 +438,8 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
             stream,
             file.FileName,
             file.ContentType,
-            file.Length);
+            file.Length,
+            currentUserService.GetUserId());
 
         var attachment = await mediator.Send(command, cancellationToken);
         return StatusCode(StatusCodes.Status201Created, attachment);
@@ -423,7 +453,7 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     /// <param name="attachmentId">The unique identifier of the attachment.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The file stream of the requested task attachment.</returns>
-    [HttpGet(ApiRouteConstants.TaskAttachmentFileRouteTemplate)]
+    [HttpGet("{taskId:guid}/attachments/{attachmentId:guid}")]
     [HasAccessRight(AccessRight.ViewTask)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -434,12 +464,11 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
         CancellationToken cancellationToken)
     {
         var fileDto = await mediator.Send(new GetTaskAttachmentFileQuery(projectId, taskId, attachmentId), cancellationToken);
-        Response.Headers.XContentTypeOptions = SecurityHeaderValues.NoSniff;
-        return File(fileDto.Stream, fileDto.GetContentType(), fileDto.FileName, enableRangeProcessing: true);
+        return this.ServeFile(fileDto, asAttachment: true);
     }
 
     /// <summary>
-    /// Deletes a file attachment from a task and removes the stored file from disk.
+    /// Deletes a file attachment from a task and removes the stored file from storage.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>
     /// <param name="taskId">The unique identifier of the task.</param>
@@ -449,6 +478,7 @@ public class ProjectTasksController(IMediator mediator) : ControllerBase
     [HttpDelete("{taskId:guid}/attachments/{attachmentId:guid}")]
     [HasAccessRight(AccessRight.UpdateTask)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteAttachment(
         Guid projectId,

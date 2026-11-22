@@ -1,4 +1,4 @@
-namespace Crm.Infrastructure.Options;
+namespace Crm.Api.Options;
 
 /// <summary>
 /// Configuration settings for trusted reverse proxy networks used by forwarded headers middleware.

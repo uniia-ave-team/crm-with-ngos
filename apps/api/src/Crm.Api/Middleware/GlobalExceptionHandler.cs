@@ -1,4 +1,4 @@
-using Crm.Api.Consts;
+using Crm.Api.Extensions;
 using Crm.Application.Common.Consts;
 using Crm.Application.Extensions;
 using FluentValidation;
@@ -16,6 +16,10 @@ public sealed partial class GlobalExceptionHandler(
     IWebHostEnvironment env)
     : IExceptionHandler
 {
+    private const string UnexpectedErrorDetail = "An unexpected error occurred while processing your request. Please try again later.";
+    private const string StackTraceExtensionKey = "stackTrace";
+
+    /// <inheritdoc />
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
@@ -35,17 +39,13 @@ public sealed partial class GlobalExceptionHandler(
             _ => new ProblemDetails
             {
                 Status = statusCode,
-                Title = isClientError ? ProblemDetailsDefaults.ClientErrorTitle : ProblemDetailsDefaults.ServerErrorTitle,
                 Detail = GetDetailMessage(exception, isClientError, env.IsDevelopment()),
-                Type = ProblemDetailsDefaults.GetTypeUrl(statusCode),
             },
         };
 
-        problemDetails.Instance = httpContext.Request.Path;
-
         if (env.IsDevelopment() && exception is not ValidationException)
         {
-            problemDetails.Extensions[ProblemDetailsDefaults.StackTraceExtensionKey] = exception.StackTrace;
+            problemDetails.Extensions[StackTraceExtensionKey] = exception.StackTrace;
         }
 
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
@@ -71,9 +71,6 @@ public sealed partial class GlobalExceptionHandler(
         return new HttpValidationProblemDetails(errors)
         {
             Status = statusCode,
-            Title = ProblemDetailsDefaults.ValidationFailedTitle,
-            Detail = ProblemDetailsDefaults.ValidationFailedDetail,
-            Type = ProblemDetailsDefaults.GetTypeUrl(statusCode),
         };
     }
 
@@ -83,20 +80,16 @@ public sealed partial class GlobalExceptionHandler(
     private static string GetDetailMessage(Exception exception, bool isClientError, bool isDev)
         => isDev || isClientError
             ? exception.Message
-            : ProblemDetailsDefaults.UnexpectedErrorDetail;
+            : UnexpectedErrorDetail;
 
     /// <summary>
     /// Routes the exception to the appropriate high-performance logger method.
     /// </summary>
     private static void LogException(ILogger logger, Exception exception, bool isClientError)
     {
-        if (exception.IsExpectedDomainError())
+        if (isClientError)
         {
             LogClientError(logger, exception.GetType().Name, exception.Message);
-        }
-        else if (isClientError)
-        {
-            LogUnexpectedClientError(logger, exception, exception.GetType().Name, exception.Message);
         }
         else
         {
@@ -106,9 +99,6 @@ public sealed partial class GlobalExceptionHandler(
 
     [LoggerMessage(EventId = LogEventIds.ClientError, Level = LogLevel.Warning, Message = "Client error occurred: {ExceptionType} - {Message}")]
     private static partial void LogClientError(ILogger logger, string exceptionType, string message);
-
-    [LoggerMessage(EventId = LogEventIds.UnexpectedClientError, Level = LogLevel.Warning, Message = "Unexpected client error occurred: {ExceptionType} - {Message}")]
-    private static partial void LogUnexpectedClientError(ILogger logger, Exception exception, string exceptionType, string message);
 
     [LoggerMessage(EventId = LogEventIds.ServerError, Level = LogLevel.Error, Message = "Unhandled server exception: {ExceptionType} - {Message}")]
     private static partial void LogServerError(ILogger logger, Exception exception, string exceptionType, string message);

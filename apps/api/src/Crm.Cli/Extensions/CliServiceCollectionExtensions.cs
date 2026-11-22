@@ -1,12 +1,11 @@
 using System.Reflection;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Features.Users.Commands;
 using Crm.Application.Features.Users.Validators;
 using Crm.Application.Interfaces;
 using Crm.Cli.Abstractions;
 using Crm.Cli.Services;
-using Crm.Infrastructure.Extensions;
-using Crm.Infrastructure.Services;
+using Crm.Infrastructure.DependencyInjection;
+using Crm.Infrastructure.Services.Identity;
 using FluentValidation;
 using Mediator;
 using Microsoft.Extensions.Configuration;
@@ -33,9 +32,10 @@ public static class CliServiceCollectionExtensions
         services.AddPersistence(configuration);
         services.AddRepositories();
         services.AddCustomIdentity(configuration);
-        services.AddScoped<IOptionService, OptionService>();
+        services.AddMapsterMappings();
+        services.AddSingleton<IOptionService, OptionService>();
         services.AddScoped<IValidator<CreateUserCommand>, CreateUserCommandValidator>();
-        services.AddScoped<IRequestHandler<CreateUserCommand, Guid>, CreateUserCommandHandler>();
+        services.AddScoped<ICommandHandler<CreateUserCommand, Guid>, CreateUserCommandHandler>();
         services.AddCliLogging(configuration);
         services.AddCliCommands();
 
