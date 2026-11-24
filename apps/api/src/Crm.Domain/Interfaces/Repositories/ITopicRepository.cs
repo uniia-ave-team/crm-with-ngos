@@ -106,6 +106,7 @@ public interface ITopicRepository : IGenericRepository<Topic>
 
     /// <summary>
     /// Asynchronously determines whether any tasks are currently assigned to the specified topic.
+    /// Soft-deleted tasks are not counted: deleting the topic purges them.
     /// </summary>
     /// <param name="topicId">The unique identifier of the topic.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

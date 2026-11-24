@@ -26,6 +26,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
 using Crm.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -675,11 +676,91 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         await LoginAsync(anonClient, "password-owner@ngo.org", "NewStrongPass2!", ct);
     }
 
+    [Fact]
+    public async Task DeletingATopicShouldPurgeItsSoftDeletedTasksButNotWhileItHasLiveOnes()
+    {
+        if (!fixture.IsDockerAvailable)
+        {
+            Assert.Skip("Docker is not running on host machine.");
+            return;
+        }
+
+        var ct = TestContext.Current.CancellationToken;
+        using var factory = fixture.CreateFactory($"crm_topic_delete_{Guid.NewGuid():N}");
+        var (client, projectId) = await CreateAdminWithProjectAsync(factory, "topics-owner@ngo.org", ct);
+        var backlogTopicId = await CreateTopicAsync(client, projectId, "Backlog", 0, ct);
+        var doneTopicId = await CreateTopicAsync(client, projectId, "Done", 1, ct);
+
+        // Deleting a task only soft-deletes it, so the task still references its topic...
+        var doneTaskId = await CreateTaskAsync(client, projectId, doneTopicId, "Finished", ct);
+        (await client.DeleteAsync($"/api/v1/projects/{projectId}/tasks/{doneTaskId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // ...but it no longer blocks deleting the topic: the topic goes, and the soft-deleted task with it.
+        (await client.DeleteAsync($"/api/v1/projects/{projectId}/topics/{doneTopicId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.Set<ProjectTask>().IgnoreQueryFilters().AnyAsync(t => t.Id == doneTaskId, ct)).ShouldBeFalse();
+        }
+
+        // A topic with a live task still cannot be deleted, and the task stays.
+        var openTaskId = await CreateTaskAsync(client, projectId, backlogTopicId, "Open", ct);
+        (await client.DeleteAsync($"/api/v1/projects/{projectId}/topics/{backlogTopicId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await client.GetAsync($"/api/v1/projects/{projectId}/tasks/{openTaskId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     private static async Task<AuthTokensDto> LoginAsync(HttpClient client, string email, string password, CancellationToken ct)
     {
         var resp = await client.PostAsJsonAsync("/api/v1/auth/login", new AuthenticateUserCommand(email, password), ct);
         resp.StatusCode.ShouldBe(HttpStatusCode.OK);
         return (await resp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
+    }
+
+    private static async Task<(HttpClient Client, Guid ProjectId)> CreateAdminWithProjectAsync(
+        WebApplicationFactory<Program> factory,
+        string email,
+        CancellationToken ct)
+    {
+        var anonClient = factory.CreateClient();
+        (await anonClient.PostAsJsonAsync(
+                "/api/v1/users",
+                new CreateUserCommand("Project", "Owner", null, email, "StrongPass1!", "StrongPass1!"),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        var tokens = await LoginAsync(anonClient, email, "StrongPass1!", ct);
+
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
+        (await client.PostAsJsonAsync("/api/v1/ngo", new CreateNgoCommand("Test NGO"), ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var projectResp = await client.PostAsJsonAsync(
+            "/api/v1/projects",
+            new CreateProjectCommand("Test Project", "Desc", ProjectVisibility.Private, new DateTime(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc)),
+            ct);
+        projectResp.StatusCode.ShouldBe(HttpStatusCode.Created);
+        return (client, await projectResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct));
+    }
+
+    private static async Task<Guid> CreateTopicAsync(HttpClient client, Guid projectId, string title, byte order, CancellationToken ct)
+    {
+        var resp = await client.PostAsJsonAsync($"/api/v1/projects/{projectId}/topics", new CreateTopicCommand(title, order), ct);
+        resp.StatusCode.ShouldBe(HttpStatusCode.Created);
+        return await resp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
+    }
+
+    private static async Task<Guid> CreateTaskAsync(HttpClient client, Guid projectId, Guid topicId, string title, CancellationToken ct)
+    {
+        var resp = await client.PostAsJsonAsync(
+            $"/api/v1/projects/{projectId}/tasks",
+            new CreateTaskCommand(topicId, title, null, null, null, new DateTime(2026, 11, 20, 9, 0, 0, DateTimeKind.Utc)),
+            ct);
+        resp.StatusCode.ShouldBe(HttpStatusCode.Created);
+        return await resp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
     }
 
     private static MultipartFormDataContent CreateMultipartFile(

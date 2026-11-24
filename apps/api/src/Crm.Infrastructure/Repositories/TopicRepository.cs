@@ -180,4 +180,19 @@ public sealed class TopicRepository(ApplicationDbContext appDbContext)
             .AsNoTracking()
             .AnyAsync(t => t.TopicId == topicId, cancellationToken);
     }
+
+    /// <inheritdoc />
+    public override async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        // Soft-deleted tasks still reference the topic, and ProjectTask -> Topic uses Restrict delete
+        // behavior: without purging them first, a topic that ever had a task deleted could never be
+        // deleted. Live tasks are left alone (callers refuse to delete a topic that has any, see
+        // HasTasksAsync); the rows of the purged tasks' comments, attachments, assignees and tags cascade.
+        await Context.Set<ProjectTask>()
+            .IgnoreQueryFilters()
+            .Where(t => t.TopicId == id && t.IsDeleted)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        await base.DeleteAsync(id, cancellationToken);
+    }
 }
