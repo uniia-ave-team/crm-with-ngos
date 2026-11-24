@@ -20,6 +20,23 @@ public interface ITaskAttachmentRepository : IGenericRepository<TaskAttachment>
     Task<List<TResult>> GetByTaskIdAsync<TResult>(Guid taskId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Asynchronously deletes all attachments of a specific task and returns their stored file names,
+    /// so the caller can delete the files once the transaction commits.
+    /// </summary>
+    /// <param name="taskId">The unique identifier of the task.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The stored (on-disk) file names of the deleted attachments.</returns>
+    Task<List<string>> DeleteByTaskIdAsync(Guid taskId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously retrieves the stored file names of all attachments of the live tasks of a specific project.
+    /// </summary>
+    /// <param name="projectId">The unique identifier of the project.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The stored (on-disk) file names of the attachments of the project's tasks.</returns>
+    Task<List<string>> GetStoredFileNamesByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Asynchronously retrieves a specific task attachment by task ID and attachment ID.
     /// </summary>
     /// <param name="taskId">The unique identifier of the parent task.</param>

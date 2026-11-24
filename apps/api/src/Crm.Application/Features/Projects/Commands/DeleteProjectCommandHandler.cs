@@ -1,4 +1,6 @@
 using Crm.Application.Common.Consts;
+using Crm.Application.Interfaces;
+using Crm.Domain.Constants;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -6,13 +8,18 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Projects.Commands;
 
 /// <summary>
-/// Handles the <see cref="DeleteProjectCommand"/> to soft-delete a project while preserving
-/// attachment files on disk so soft-deleted data remains recoverable.
+/// Handles the <see cref="DeleteProjectCommand"/> to soft-delete a project. The project's tasks are deleted
+/// for good (see <see cref="IProjectRepository"/>), and their attachment rows with them, so the attachment
+/// files are deleted too once the transaction commits; otherwise nothing would ever reference them again.
 /// </summary>
 /// <param name="projectRepository">The repository for deleting projects.</param>
+/// <param name="attachmentRepository">The repository for reading the stored file names of the project's attachments.</param>
+/// <param name="fileTracker">The transaction file tracker used to delete the attachment files upon commit.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
 public sealed partial class DeleteProjectCommandHandler(
     IProjectRepository projectRepository,
+    ITaskAttachmentRepository attachmentRepository,
+    IFileTransactionTracker fileTracker,
     ILogger<DeleteProjectCommandHandler> logger) : ICommandHandler<DeleteProjectCommand>
 {
     /// <inheritdoc />
@@ -21,6 +28,13 @@ public sealed partial class DeleteProjectCommandHandler(
         LogDeletingProject(logger, command.Id, command.CurrentUserId);
 
         await projectRepository.LockForUpdateAsync(command.Id, cancellationToken);
+
+        var storedFileNames = await attachmentRepository.GetStoredFileNamesByProjectIdAsync(command.Id, cancellationToken);
+        foreach (string storedFileName in storedFileNames)
+        {
+            fileTracker.RegisterFileForDeletion(storedFileName, FileStorageConstants.TaskAttachmentsFolder);
+        }
+
         await projectRepository.DeleteAsync(command.Id, cancellationToken);
 
         LogProjectDeletedSuccessfully(logger, command.Id);

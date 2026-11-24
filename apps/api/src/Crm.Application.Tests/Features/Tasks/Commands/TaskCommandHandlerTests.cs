@@ -6,6 +6,7 @@ using Crm.Application.Features.Tasks.Mappings;
 using Crm.Application.Features.Tasks.Services;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
@@ -182,20 +183,28 @@ public class TaskCommandHandlerTests
     }
 
     [Fact]
-    public async Task DeleteTaskShouldLockAndSoftDeleteTaskWithoutDeletingAttachmentFiles()
+    public async Task DeleteTaskShouldLockSoftDeleteTaskAndDeleteItsAttachmentsWithTheirFiles()
     {
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
+        var attachmentRepository = Substitute.For<ITaskAttachmentRepository>();
+        attachmentRepository.DeleteByTaskIdAsync(taskId, Arg.Any<CancellationToken>())
+            .Returns(["first.pdf", "second.png"]);
 
         var handler = new DeleteTaskCommandHandler(
             _taskRepository,
+            attachmentRepository,
+            _fileTracker,
             Substitute.For<ILogger<DeleteTaskCommandHandler>>());
 
         await handler.Handle(new DeleteTaskCommand(projectId, taskId), CancellationToken.None);
 
         await _taskRepository.Received(1).LockForUpdateAsync(taskId, Arg.Any<CancellationToken>());
+        await attachmentRepository.Received(1).DeleteByTaskIdAsync(taskId, Arg.Any<CancellationToken>());
         await _taskRepository.Received(1).DeleteAsync(taskId, Arg.Any<CancellationToken>());
-        _fileTracker.DidNotReceive().RegisterFileForDeletion(Arg.Any<string>(), Arg.Any<string>());
+        _fileTracker.Received(1).RegisterFileForDeletion("first.pdf", FileStorageConstants.TaskAttachmentsFolder);
+        _fileTracker.Received(1).RegisterFileForDeletion("second.png", FileStorageConstants.TaskAttachmentsFolder);
+        _fileTracker.Received(2).RegisterFileForDeletion(Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Fact]

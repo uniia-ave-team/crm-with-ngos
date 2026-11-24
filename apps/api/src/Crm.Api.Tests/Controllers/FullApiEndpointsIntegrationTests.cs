@@ -22,13 +22,16 @@ using Crm.Application.Features.TableTemplates.Commands;
 using Crm.Application.Features.Tasks.Commands;
 using Crm.Application.Features.Users.Commands;
 using Crm.Domain.Common;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
+using Crm.Infrastructure.Options;
 using Crm.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Shouldly;
 
 namespace Crm.Api.Tests.Controllers;
@@ -713,6 +716,47 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
+    [Fact]
+    public async Task DeletingTasksAndProjectsShouldDeleteTheirAttachmentFiles()
+    {
+        if (!fixture.IsDockerAvailable)
+        {
+            Assert.Skip("Docker is not running on host machine.");
+            return;
+        }
+
+        var ct = TestContext.Current.CancellationToken;
+        using var factory = fixture.CreateFactory($"crm_attachment_files_{Guid.NewGuid():N}");
+        var (client, projectId) = await CreateAdminWithProjectAsync(factory, "files-owner@ngo.org", ct);
+        var topicId = await CreateTopicAsync(client, projectId, "Backlog", 0, ct);
+
+        // Deleting a task soft-deletes it, but its attachments go for good: the rows and the files.
+        var deletedTaskId = await CreateTaskAsync(client, projectId, topicId, "Deleted", ct);
+        var deletedAttachmentId = await UploadAttachmentAsync(client, projectId, deletedTaskId, "deleted.txt", ct);
+        var deletedFile = await GetStoredAttachmentPathAsync(factory.Services, deletedAttachmentId, ct);
+        File.Exists(deletedFile).ShouldBeTrue();
+
+        (await client.DeleteAsync($"/api/v1/projects/{projectId}/tasks/{deletedTaskId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        File.Exists(deletedFile).ShouldBeFalse();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.Set<ProjectTask>().IgnoreQueryFilters().SingleAsync(t => t.Id == deletedTaskId, ct)).IsDeleted.ShouldBeTrue();
+            (await db.Set<TaskAttachment>().IgnoreQueryFilters().AnyAsync(a => a.Id == deletedAttachmentId, ct)).ShouldBeFalse();
+        }
+
+        // Deleting the project deletes its tasks for good, so the attachment files of its tasks go too.
+        var openTaskId = await CreateTaskAsync(client, projectId, topicId, "Open", ct);
+        var openAttachmentId = await UploadAttachmentAsync(client, projectId, openTaskId, "open.txt", ct);
+        var openFile = await GetStoredAttachmentPathAsync(factory.Services, openAttachmentId, ct);
+        File.Exists(openFile).ShouldBeTrue();
+
+        (await client.DeleteAsync($"/api/v1/projects/{projectId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        File.Exists(openFile).ShouldBeFalse();
+    }
+
     private static async Task<AuthTokensDto> LoginAsync(HttpClient client, string email, string password, CancellationToken ct)
     {
         var resp = await client.PostAsJsonAsync("/api/v1/auth/login", new AuthenticateUserCommand(email, password), ct);
@@ -761,6 +805,26 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
             ct);
         resp.StatusCode.ShouldBe(HttpStatusCode.Created);
         return await resp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
+    }
+
+    private static async Task<Guid> UploadAttachmentAsync(HttpClient client, Guid projectId, Guid taskId, string fileName, CancellationToken ct)
+    {
+        using var form = CreateMultipartFile("file", fileName, "text/plain", Encoding.UTF8.GetBytes($"body of {fileName}"));
+        var resp = await client.PostAsync($"/api/v1/projects/{projectId}/tasks/{taskId}/attachments", form, ct);
+        resp.StatusCode.ShouldBe(HttpStatusCode.Created);
+        return (await resp.Content.ReadFromJsonAsync<TaskAttachmentDto>(JsonOptions, ct))!.Id;
+    }
+
+    private static async Task<string> GetStoredAttachmentPathAsync(IServiceProvider services, Guid attachmentId, CancellationToken ct)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var storedFileName = await db.Set<TaskAttachment>()
+            .Where(a => a.Id == attachmentId)
+            .Select(a => a.StoredFileName)
+            .SingleAsync(ct);
+        var uploadDirectory = scope.ServiceProvider.GetRequiredService<IOptions<FileStorageOptions>>().Value.UploadDirectory;
+        return Path.Combine(uploadDirectory, FileStorageConstants.TaskAttachmentsFolder, storedFileName);
     }
 
     private static MultipartFormDataContent CreateMultipartFile(
