@@ -23,9 +23,11 @@ export type CurrentUser = UserProfile;
 /**
  * Результат перевірки входу:
  * - `ok` — сервер підтвердив токен, профіль завантажено;
- * - `unauthorized` — сервер не прийняв токени (навіть після їх оновлення) або їх нема;
- * - `unavailable` — перевірити не вдалося (мережа, 5xx, 404, відповідь не за контрактом,
- *   або поки йшов запит, активним став інший акаунт): це не доказ, що користувач не увійшов.
+ * - `unauthorized` — сервер не прийняв токени (навіть після їх оновлення) або їх нема, чи
+ *   користувача на сервері вже нема (404 від API: акаунт видалили);
+ * - `unavailable` — перевірити не вдалося (мережа, 5xx, 404 не від API, відповідь не за
+ *   контрактом, або поки йшов запит, активним став інший акаунт): це не доказ, що
+ *   користувач не увійшов.
  */
 export type CurrentUserResult = 'ok' | 'unauthorized' | 'unavailable';
 
@@ -181,6 +183,14 @@ export class CurrentUserService {
         console.warn('[CurrentUserService] Сервер не прийняв токени');
         return 'unauthorized';
       }
+      if (isUserGone(error)) {
+        // Токен ще чинний, але користувача за ним уже нема (акаунт видалили): сесія цього
+        // акаунта закінчилась. Він лишається з позначкою «Сеанс закінчився» й перестає бути
+        // активним, а `SessionService` веде на повторний вхід.
+        console.warn('[CurrentUserService] Користувача на сервері вже нема', error);
+        this.auth.expireSession(session, 'unauthorized');
+        return 'unauthorized';
+      }
       console.warn('[CurrentUserService] Перевірити вхід не вдалося', error);
       return 'unavailable';
     }
@@ -316,4 +326,16 @@ export class CurrentUserService {
       lease.release();
     }
   }
+}
+
+/**
+ * 404 саме від API (тіло — ProblemDetails зі `status: 404`): користувача, чий токен надіслано,
+ * на сервері нема. 404 без такого тіла (проксі, інший сервіс за адресою) нічого не доводить.
+ */
+function isUserGone(error: unknown): boolean {
+  if (!(error instanceof HttpErrorResponse) || error.status !== 404) {
+    return false;
+  }
+  const body = error.error as Untrusted<{ status: number }> | null;
+  return typeof body === 'object' && body !== null && body.status === 404;
 }

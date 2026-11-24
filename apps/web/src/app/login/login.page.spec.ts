@@ -833,6 +833,24 @@ describe('LoginPage', () => {
       expect(navigate).not.toHaveBeenCalledWith('/planner');
     });
 
+    it('shows the forms when it is entered again after the last account was removed on /relogin', async () => {
+      const { fixture, connection, element, request, store } = createWithAccounts([
+        { identity: 'user-1', access: jwtAt(-60), refresh: 'r1' },
+      ]);
+      request.flush({ status: 'Healthy' });
+      (await vi.waitFor(() => http.expectOne(refreshUrl()))).flush({}, { status: 401, statusText: 'Unauthorized' });
+      (await vi.waitFor(() => http.expectOne(healthUrl()))).flush({ status: 'Healthy' });
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
+
+      // На /relogin акаунт видалили, і Ionic повертає на /login той самий екземпляр сторінки.
+      store.remove(store.accounts()[0].id);
+      fixture.componentInstance.ionViewWillEnter();
+      answerStatus(connection, fixture, { hasAdmin: false, hasNgo: false, isSetupComplete: false });
+
+      expect(element.textContent).not.toContain(uk.login.loading);
+      expect(element.textContent).toContain(uk.login.admin.title);
+    });
+
     it('marks a rejected account as outdated and one whose server does not answer as unavailable, keeps both, and goes to /relogin', async () => {
       const { request, store } = createWithAccounts(
         [

@@ -52,8 +52,45 @@ describe('UsersService', () => {
     expect(await result).toBe('unreachable');
   });
 
+  describe('the account of a colleague: deactivate, activate, delete', () => {
+    const cases = [
+      ['deactivate', 'POST', '/u%201/deactivate'],
+      ['activate', 'POST', '/u%201/activate'],
+      ['delete', 'DELETE', '/u%201'],
+    ] as const;
+
+    it.each(cases)('%s sends %s to the users path with the encoded id, no body, and gives done on 204', async (name, method, path) => {
+      const result = service[name]('u 1');
+      const request = http.expectOne(`${url}${path}`);
+      expect(request.request.method).toBe(method);
+      expect(request.request.body).toBeNull();
+      request.flush(null, { status: 204, statusText: 'No Content' });
+      expect(await result).toBe('done');
+    });
+
+    it.each([
+      [400, 'invalid'],
+      [401, 'unauthorized'],
+      [403, 'forbidden'],
+      [404, 'error'],
+      [500, 'error'],
+    ])('maps HTTP %i to %s', async (status, failure) => {
+      for (const [name, , path] of cases) {
+        const result = service[name]('u 1');
+        http.expectOne(`${url}${path}`).flush(null, { status, statusText: 'x' });
+        expect(await result).toBe(failure);
+      }
+    });
+
+    it('reports an unreachable server', async () => {
+      const result = service.deactivate('u 1');
+      http.expectOne(`${url}/u%201/deactivate`).error(new ProgressEvent('error'));
+      expect(await result).toBe('unreachable');
+    });
+  });
+
   describe('list (GET /users, one page of the colleagues)', () => {
-    const NO_EXTRA = { patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] };
+    const NO_EXTRA = { patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [], isActive: true };
     const page = (n: number) => http.expectOne((request) => request.url === url && request.params.get('PageNumber') === String(n));
 
     it('asks for the page with the number and the size that were given (GET, no body)', async () => {
@@ -61,6 +98,8 @@ describe('UsersService', () => {
       const request = page(3);
       expect(request.request.method).toBe('GET');
       expect(request.request.params.get('PageSize')).toBe('20');
+      // Разом із вимкненими акаунтами: без цього сервер їх не віддає.
+      expect(request.request.params.get('ShowDeleted')).toBe('true');
       request.flush({ items: [], hasNextPage: false });
       expect(await result).toEqual({ items: [], hasNextPage: false });
     });
@@ -136,14 +175,20 @@ describe('UsersService', () => {
 
     it.each([
       ['an older server that does not give them', {}],
-      ['null values', { patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: null }],
+      ['null values', { patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: null, isActive: null }],
       ['empty or blank texts', { phoneNumber: '', pronouns: '  ', avatarUrl: ' ' }],
-      ['values of a wrong type', { phoneNumber: 5, pronouns: {}, pronounCategory: '2', avatarUrl: 7, roles: 'x' }],
-    ])('gives null and an empty list of roles for %s', async (_name, extra) => {
+      ['values of a wrong type', { phoneNumber: 5, pronouns: {}, pronounCategory: '2', avatarUrl: 7, roles: 'x', isActive: 'false' }],
+    ])('gives null, an empty list of roles and an enabled account for %s', async (_name, extra) => {
       const result = service.list(1, 20);
       page(1).flush({ items: [{ id: 'u1', ...extra }], hasNextPage: false });
       const [colleague] = ((await result) as UsersPage).items;
       expect(colleague).toMatchObject(NO_EXTRA);
+    });
+
+    it('takes a disabled account only from an explicit isActive: false', async () => {
+      const result = service.list(1, 20);
+      page(1).flush({ items: [{ id: 'u1', isActive: false }, { id: 'u2', isActive: true }], hasNextPage: false });
+      expect(((await result) as UsersPage).items.map((colleague) => colleague.isActive)).toEqual([false, true]);
     });
 
     it('keeps only the roles that have a text id and a text name', async () => {
