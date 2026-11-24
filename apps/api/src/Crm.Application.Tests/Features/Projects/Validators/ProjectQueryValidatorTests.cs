@@ -1,6 +1,6 @@
-using Crm.Application.Dtos.Project.Queries;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Features.Projects.Queries;
 using Crm.Application.Features.Projects.Validators;
+using Crm.Application.Features.Tasks.Queries;
 using Crm.Application.Features.Tasks.Validators;
 using Shouldly;
 

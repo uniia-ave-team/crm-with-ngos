@@ -1,21 +1,47 @@
 using Crm.Application.Dtos.CustomTables;
-using Crm.Application.Dtos.CustomTables.Commands;
-using Crm.Application.Dtos.CustomTemplates;
+using Crm.Application.Dtos.TableTemplates;
+using Crm.Application.Features.CustomTables.Commands;
 using Crm.Domain.Entities;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 using Mapster;
 
 namespace Crm.Application.Features.CustomTables.Mappings;
 
 /// <summary>
-/// Registers Mapster mapping rules between <see cref="TableTemplateDto"/> and <see cref="CustomTable"/>.
+/// Registers Mapster mapping rules for <see cref="CustomTable"/> and <see cref="CustomField"/> entities, DTOs, and commands.
 /// </summary>
-public class CustomTableMappingRegister : IRegister
+public sealed class CustomTableMappingRegister : IRegister
 {
+    /// <inheritdoc />
     public void Register(TypeAdapterConfig config)
     {
+        config.NewConfig<CustomTable, CustomTableSummaryDto>()
+            .MapWith(src => new CustomTableSummaryDto(
+                src.Id,
+                src.Name,
+                src.Description,
+                src.SourceTemplateId,
+                src.Fields.Count(),
+                src.Records.Count()));
+
         config.NewConfig<CustomTable, CustomTableDto>()
-            .Map(dest => dest.Fields, src => src.Fields.OrderBy(f => f.Order));
+            .MapWith(src => new CustomTableDto(
+                src.Id,
+                src.NgoId,
+                src.Name,
+                src.Description,
+                src.SourceTemplateId,
+                src.Fields
+                    .OrderBy(f => f.Order)
+                    .ThenBy(f => f.Id)
+                    .Select(f => new CustomFieldDto(
+                        f.Id,
+                        f.Name,
+                        f.Key,
+                        f.DataType,
+                        f.IsRequired,
+                        f.Order))
+                    .ToList()));
 
         config.NewConfig<TableTemplateDto, CustomTable>()
             .Map(dest => dest.SourceTemplateId, src => src.Id)

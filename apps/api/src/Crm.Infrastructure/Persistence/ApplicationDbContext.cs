@@ -6,6 +6,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Persistence;
 
+/// <summary>
+/// Entity Framework Core database context combining ASP.NET Core Identity tables and CRM domain entities.
+/// </summary>
+/// <param name="options">The database context configuration options.</param>
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
     : IdentityDbContext<
     AuthUser,
@@ -18,9 +22,19 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     IdentityUserToken<Guid>>(options)
 {
     /// <summary>
-    /// Configures the entity mappings and seeds initial data for the model.
+    /// Configures global model conventions for the database context.
     /// </summary>
-    /// <param name="builder">The modelBuilder used to construct the model for the context.</param>
+    /// <param name="configurationBuilder">The model configuration builder.</param>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.AddUtcDateTimeConventions();
+    }
+
+    /// <summary>
+    /// Configures the entity mappings and database functions for the model.
+    /// </summary>
+    /// <param name="builder">The model builder used to construct the model for the context.</param>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

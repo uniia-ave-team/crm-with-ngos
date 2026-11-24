@@ -1,23 +1,20 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
-using Crm.Infrastructure.Persistence.ValueGenerators;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Crm.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// Configures the Entity Framework mapping for the <see cref="Project"/> entity.
+/// Configures the Entity Framework Core mapping for the <see cref="Project"/> entity.
 /// </summary>
-public class ProjectConfiguration : IEntityTypeConfiguration<Project>
+public sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
 {
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<Project> builder)
     {
-        builder.HasKey(p => p.Id);
-
-        builder.Property(p => p.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+        builder.ConfigureGuidV7Key();
 
         builder.Property(p => p.Title)
             .IsRequired()
@@ -32,10 +29,8 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(p => p.StartDate)
             .IsRequired();
 
-        builder.HasOne(p => p.Creator)
-            .WithMany()
-            .HasForeignKey(p => p.CreatedBy)
-            .OnDelete(DeleteBehavior.SetNull);
+        builder.ConfigureAuthorTracking(p => p.Creator, p => p.Updater);
+        builder.ConfigureSoftDelete();
 
         builder.HasMany(p => p.Members)
             .WithOne(m => m.Project)
@@ -57,7 +52,6 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .HasForeignKey(t => t.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(p => p.CreatedBy);
         builder.HasIndex(p => p.Visibility);
     }
 }

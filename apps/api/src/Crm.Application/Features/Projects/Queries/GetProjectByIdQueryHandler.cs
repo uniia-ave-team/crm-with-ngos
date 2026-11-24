@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Project.Queries;
+using Crm.Application.Dtos.Projects;
 using Crm.Application.Features.Projects.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
@@ -13,25 +12,22 @@ namespace Crm.Application.Features.Projects.Queries;
 /// Handles the <see cref="GetProjectByIdQuery"/> to retrieve detailed project information.
 /// </summary>
 /// <param name="projectRepository">The repository for projecting project details.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="fileUrlProvider">The file URL provider for resolving member avatar URLs.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class GetProjectByIdQueryHandler(
+public sealed partial class GetProjectByIdQueryHandler(
     IProjectRepository projectRepository,
-    ICurrentUserService currentUserService,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetProjectByIdQueryHandler> logger) : IRequestHandler<GetProjectByIdQuery, ProjectDto>
+    ILogger<GetProjectByIdQueryHandler> logger) : IQueryHandler<GetProjectByIdQuery, ProjectDto>
 {
     /// <inheritdoc />
-    public async ValueTask<ProjectDto> Handle(GetProjectByIdQuery request, CancellationToken cancellationToken)
+    public async ValueTask<ProjectDto> Handle(GetProjectByIdQuery query, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
-        LogFetchingProjectById(logger, request.Id, currentUserId);
+        LogFetchingProjectById(logger, query.Id, query.CurrentUserId);
 
-        var project = await projectRepository.GetAsync<ProjectDto>(request.Id, cancellationToken);
-        var result = project.EnrichUrls(fileUrlProvider, currentUserId);
+        var project = await projectRepository.GetAsync<ProjectDto>(query.Id, cancellationToken);
+        var result = project.EnrichUrls(fileUrlProvider, query.CurrentUserId);
 
-        LogProjectByIdFetched(logger, request.Id);
+        LogProjectByIdFetched(logger, query.Id);
 
         return result;
     }

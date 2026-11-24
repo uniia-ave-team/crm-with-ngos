@@ -1,5 +1,5 @@
 using Crm.Domain.Entities;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 using Microsoft.AspNetCore.Identity;
 
 namespace Crm.Infrastructure.Entities;
@@ -14,7 +14,7 @@ public class AuthUser : IdentityUser<Guid>, IEntity
     /// <summary>
     /// Gets or sets the extended business profile associated with this authentication user.
     /// </summary>
-    public User UserProfile { get; set; }
+    public User UserProfile { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the collection of role assignments for this authentication user.

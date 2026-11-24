@@ -1,6 +1,7 @@
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Project.Commands;
+using Crm.Application.Dtos.Projects;
+using Crm.Application.Features.Projects.Commands;
 using Crm.Domain.Entities;
+using Crm.Domain.Extensions;
 using Mapster;
 
 namespace Crm.Application.Features.Projects.Mappings;
@@ -22,7 +23,9 @@ public sealed class ProjectMappingRegister : IRegister
                 src.Visibility,
                 src.StartDate,
                 src.EndDate,
-                src.CreatedBy));
+                src.CreatedBy,
+                src.CreatedAt,
+                src.UpdatedAt));
 
         config.NewConfig<ProjectMember, ProjectMemberDto>()
             .MapWith(src => new ProjectMemberDto(
@@ -33,7 +36,8 @@ public sealed class ProjectMappingRegister : IRegister
                 src.User.Patronymic,
                 src.User.Avatar,
                 src.RoleTitle,
-                src.Claim));
+                src.Claim,
+                src.User.IsActive));
 
         config.NewConfig<Topic, TopicDto>()
             .MapWith(src => new TopicDto(
@@ -60,6 +64,7 @@ public sealed class ProjectMappingRegister : IRegister
                 src.Members
                     .OrderBy(m => m.User.LastName)
                     .ThenBy(m => m.User.FirstName)
+                    .ThenBy(m => m.UserId)
                     .Select(m => new ProjectMemberDto(
                         m.ProjectId,
                         m.UserId,
@@ -68,11 +73,12 @@ public sealed class ProjectMappingRegister : IRegister
                         m.User.Patronymic,
                         m.User.Avatar,
                         m.RoleTitle,
-                        m.Claim))
+                        m.Claim,
+                        m.User.IsActive))
                     .ToList(),
                 src.Topics
                     .OrderBy(t => t.Order)
-                    .ThenBy(t => t.Title)
+                    .ThenBy(t => t.Id)
                     .Select(t => new TopicDto(
                         t.Id,
                         t.ProjectId,
@@ -81,21 +87,24 @@ public sealed class ProjectMappingRegister : IRegister
                     .ToList(),
                 src.Tags
                     .OrderBy(t => t.Title)
+                    .ThenBy(t => t.Id)
                     .Select(t => new TagDto(
                         t.Id,
                         t.ProjectId,
                         t.Title))
-                    .ToList()));
+                    .ToList(),
+                src.CreatedAt,
+                src.UpdatedAt));
 
         config.NewConfig<CreateProjectCommand, Project>()
             .Ignore(dest => dest.Id)
             .Map(dest => dest.Title, src => src.Title.Trim())
-            .Map(dest => dest.Description, src => src.Description == null ? null : src.Description.Trim());
+            .Map(dest => dest.Description, src => string.IsNullOrWhiteSpace(src.Description) ? null : src.Description.Trim());
 
         config.NewConfig<UpdateProjectCommand, Project>()
             .Ignore(dest => dest.Id)
             .Map(dest => dest.Title, src => src.Title.Trim())
-            .Map(dest => dest.Description, src => src.Description == null ? null : src.Description.Trim());
+            .Map(dest => dest.Description, src => string.IsNullOrWhiteSpace(src.Description) ? null : src.Description.Trim());
 
         config.NewConfig<AssignProjectMemberCommand, ProjectMember>()
             .Map(dest => dest.RoleTitle, src => (src.RoleTitle ?? string.Empty).Trim());
@@ -108,23 +117,23 @@ public sealed class ProjectMappingRegister : IRegister
         config.NewConfig<CreateTopicCommand, Topic>()
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.NormalizedTitle)
-            .Map(dest => dest.Title, src => src.Title.Trim());
+            .AfterMapping((_, dest) => dest.SyncNormalizedTitle());
 
         config.NewConfig<UpdateTopicCommand, Topic>()
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.ProjectId)
             .Ignore(dest => dest.NormalizedTitle)
-            .Map(dest => dest.Title, src => src.Title.Trim());
+            .AfterMapping((_, dest) => dest.SyncNormalizedTitle());
 
         config.NewConfig<CreateTagCommand, Tag>()
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.NormalizedTitle)
-            .Map(dest => dest.Title, src => src.Title.Trim());
+            .AfterMapping((_, dest) => dest.SyncNormalizedTitle());
 
         config.NewConfig<UpdateTagCommand, Tag>()
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.ProjectId)
             .Ignore(dest => dest.NormalizedTitle)
-            .Map(dest => dest.Title, src => src.Title.Trim());
+            .AfterMapping((_, dest) => dest.SyncNormalizedTitle());
     }
 }

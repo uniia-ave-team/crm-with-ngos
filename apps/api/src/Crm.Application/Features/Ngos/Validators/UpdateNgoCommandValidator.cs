@@ -1,5 +1,6 @@
-using Crm.Application.Dtos.Ngo.Commands;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Application.Common.Consts;
+using Crm.Application.Features.Ngos.Commands;
+using Crm.Domain.Constants.Validation;
 using FluentValidation;
 
 namespace Crm.Application.Features.Ngos.Validators;
@@ -7,7 +8,7 @@ namespace Crm.Application.Features.Ngos.Validators;
 /// <summary>
 /// Provides validation rules for the <see cref="UpdateNgoCommand"/>.
 /// </summary>
-public class UpdateNgoCommandValidator : AbstractValidator<UpdateNgoCommand>
+public sealed class UpdateNgoCommandValidator : AbstractValidator<UpdateNgoCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UpdateNgoCommandValidator"/> class.
@@ -15,8 +16,11 @@ public class UpdateNgoCommandValidator : AbstractValidator<UpdateNgoCommand>
     public UpdateNgoCommandValidator()
     {
         RuleFor(x => x.Name)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage("NGO name is required.")
             .MaximumLength(NgoValidationConstants.MaxNameLength)
-                .WithMessage($"NGO name must not exceed {NgoValidationConstants.MaxNameLength} characters.");
+                .WithMessage($"NGO name must not exceed {NgoValidationConstants.MaxNameLength} characters.")
+            .Must(name => !name.Contains('\0'))
+                .WithMessage(ValidationMessages.NullCharacterNotAllowed);
     }
 }

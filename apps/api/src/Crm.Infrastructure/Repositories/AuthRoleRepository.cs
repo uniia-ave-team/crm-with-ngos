@@ -1,12 +1,13 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Expressions;
 using Mapster;
+using Mapster.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -14,19 +15,13 @@ namespace Crm.Infrastructure.Repositories;
 /// <summary>
 /// Provides repository implementation for managing <see cref="AuthRole"/> entities.
 /// </summary>
-public class AuthRoleRepository(
+/// <param name="appDbContext">The application database context.</param>
+public sealed class AuthRoleRepository(
     ApplicationDbContext appDbContext)
     : GenericRepository<AuthRole>(appDbContext),
       IAuthRoleRepository
 {
-    /// <summary>
-    /// Asynchronously checks if an entity with the specified role name exists.
-    /// Throws an exception if the entity is not found.
-    /// </summary>
-    /// <param name="roleName">The name of the role to check.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="NotFoundException">Thrown if no entity with the specified role name exists.</exception>
+    /// <inheritdoc />
     public async Task EnsureExistsAsync(string roleName, CancellationToken cancellationToken = default)
     {
         var normalizedName = roleName.ToUpperInvariant();
@@ -41,49 +36,32 @@ public class AuthRoleRepository(
         }
     }
 
-    /// <summary>
-    /// Asynchronously retrieves the unique identifier of an application role by its name.
-    /// </summary>
-    /// <param name="roleName">The name of the role to find.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation. The task result contains the role's <see cref="Guid"/> identifier.</returns>
-    /// <exception cref="NotFoundException">Thrown if no role with the specified name exists.</exception>
+    /// <inheritdoc />
     public async Task<Guid> GetRoleIdByNameAsync(string roleName, CancellationToken cancellationToken = default)
+        => await FindRoleIdByNameAsync(roleName, cancellationToken)
+           ?? throw new EntityNotFoundException<AuthRole>(roleName);
+
+    /// <inheritdoc />
+    public Task<Guid?> FindRoleIdByNameAsync(string roleName, CancellationToken cancellationToken = default)
     {
         var normalizedName = roleName.ToUpperInvariant();
 
-        var roleId = await DbSet
+        return DbSet
             .AsNoTracking()
             .Where(m => m.NormalizedName == normalizedName)
             .Select(m => (Guid?)m.Id)
             .FirstOrDefaultAsync(cancellationToken);
-
-        return roleId ?? throw new EntityNotFoundException<AuthRole>(roleName);
     }
 
-    /// <summary>
-    /// Asynchronously retrieves all roles assigned to a specific user by their unique identifier,
-    /// projected to the target type <typeparamref name="TRole"/> using compile-time projection.
-    /// </summary>
-    /// <typeparam name="TRole">The type of the role DTO/model to project into.</typeparam>
-    /// <param name="userId">The unique identifier of the user.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A list of projected roles assigned to the user.</returns>
-    public async Task<List<TRole>> GetRolesByUserAsync<TRole>(Guid userId, CancellationToken cancellationToken = default)
-        => await DbSet
+    /// <inheritdoc />
+    public Task<List<TRole>> GetRolesByUserAsync<TRole>(Guid userId, CancellationToken cancellationToken = default)
+        => DbSet
             .AsNoTracking()
             .Where(role => role.UserRoles.Any(ur => ur.UserId == userId))
             .ProjectToType<TRole>()
             .ToListAsync(cancellationToken);
 
-    /// <summary>
-    /// Asynchronously retrieves all roles assigned to the specified users, grouped by user ID,
-    /// projected to the target type <typeparamref name="TRole"/>.
-    /// </summary>
-    /// <typeparam name="TRole">The type of the role DTO/model to project into.</typeparam>
-    /// <param name="userIds">The collection of unique identifiers of the users.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A lookup mapping each user ID to their assigned projected roles.</returns>
+    /// <inheritdoc />
     public async Task<ILookup<Guid, TRole>> GetRolesByUserIdsAsync<TRole>(
         IEnumerable<Guid> userIds,
         CancellationToken cancellationToken = default)
@@ -94,48 +72,37 @@ public class AuthRoleRepository(
             return Enumerable.Empty<TRole>().ToLookup(_ => Guid.Empty);
         }
 
+        var projection = BuildUserRoleProjection<TRole>();
+        if (projection is not null)
+        {
+            var projectedPairs = await Context.Set<AuthUserRole>()
+                .AsNoTracking()
+                .Where(ur => distinctUserIds.Contains(ur.UserId))
+                .Select(projection)
+                .ToListAsync(cancellationToken);
+
+            return projectedPairs.ToLookup(static pair => pair.Key, static pair => pair.Value);
+        }
+
         var userRoles = await Context.Set<AuthUserRole>()
             .AsNoTracking()
             .Where(ur => distinctUserIds.Contains(ur.UserId))
-            .Select(ur => new
-            {
-                ur.UserId,
-                ur.Role,
-            })
+            .Select(ur => new { ur.UserId, ur.Role })
             .ToListAsync(cancellationToken);
 
-        return userRoles
-            .Select(ur => new { ur.UserId, Role = ur.Role.Adapt<TRole>() })
-            .ToLookup(x => x.UserId, x => x.Role);
+        return userRoles.ToLookup(static ur => ur.UserId, static ur => ur.Role.Adapt<TRole>());
     }
 
-    /// <summary>
-    /// Asynchronously retrieves the unique identifiers of all roles assigned to a specific user.
-    /// </summary>
-    /// <param name="userId">The unique identifier of the user.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A list of role IDs assigned to the user.</returns>
-    public async Task<List<Guid>> GetRoleIdsByUserAsync(Guid userId, CancellationToken cancellationToken = default)
-    {
-        return await Context
+    /// <inheritdoc />
+    public Task<List<Guid>> GetRoleIdsByUserAsync(Guid userId, CancellationToken cancellationToken = default)
+        => Context
             .Set<AuthUserRole>()
             .AsNoTracking()
             .Where(aur => aur.UserId == userId)
             .Select(aur => aur.RoleId)
             .ToListAsync(cancellationToken);
-    }
 
-    /// <summary>
-    /// Asynchronously retrieves a paginated, filtered, and sorted list of projected role entities based on the search term.
-    /// </summary>
-    /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
-    /// <param name="searchTerm">Optional search term to filter roles by name, feminitive name, or plural name.</param>
-    /// <param name="orderBy">The name of the property to sort by.</param>
-    /// <param name="sortOrder">The sort direction (e.g., <see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>). Defaults to <see cref="SortOrderConstants.Ascending"/>.</param>
-    /// <param name="pageNumber">The current page number (1-based index). Defaults to 1.</param>
-    /// <param name="pageSize">The number of items per page. Defaults to 10.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains a paginated collection of projected items along with pagination metadata.</returns>
+    /// <inheritdoc />
     public Task<PagedResult<TResult>> GetPagedAsync<TResult>(
         string? searchTerm = null,
         string? orderBy = null,
@@ -151,31 +118,26 @@ public class AuthRoleRepository(
             pageSize: pageSize,
             cancellationToken: cancellationToken);
 
-    /// <summary>
-    /// Asynchronously checks if the specified user is the last active administrator in the system.
-    /// </summary>
-    /// <param name="userId">The unique identifier of the user.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>True if the user is the last active administrator; otherwise, false.</returns>
+    /// <inheritdoc />
     public async Task<bool> IsUserLastAdminAsync(Guid userId, CancellationToken cancellationToken = default)
     {
+        var normalizedAdminName = RoleConstants.Admin.ToUpperInvariant();
+
         var activeAdminIds = await Context.Set<AuthUserRole>()
-            .Where(ur => ur.Role.Name == RoleConsts.Admin && ur.User.UserProfile.IsActive)
+            .AsNoTracking()
+            .Where(ur =>
+                ur.Role.NormalizedName == normalizedAdminName &&
+                ur.User.UserProfile.IsActive)
             .Select(ur => ur.UserId)
             .Distinct()
+            .OrderBy(id => id)
+            .Take(2)
             .ToListAsync(cancellationToken);
 
         return activeAdminIds.Count == 1 && activeAdminIds[0] == userId;
     }
 
-    /// <summary>
-    /// Asynchronously retrieves the names of the roles matching the specified identifiers.
-    /// Throws an exception containing all missing role IDs if any role is not found.
-    /// </summary>
-    /// <param name="roleIds">The collection of role identifiers to fetch names for.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A list of role names corresponding to the provided identifiers.</returns>
-    /// <exception cref="EntitiesNotFoundException">Thrown if one or more role IDs do not exist.</exception>
+    /// <inheritdoc />
     public async Task<List<string>> GetRoleNamesByIdsAsync(IEnumerable<Guid> roleIds, CancellationToken cancellationToken = default)
     {
         var distinctRoleIds = roleIds.Distinct().ToList();
@@ -204,46 +166,71 @@ public class AuthRoleRepository(
         return [.. roles.Select(r => r.Name ?? throw new InvalidOperationException($"Role {r.Id} has a null Name."))];
     }
 
-    /// <summary>
-    /// Asynchronously retrieves all role permissions from the database, grouped by their respective role identifiers.
-    /// </summary>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task that represents the asynchronous operation. The task result contains a <see cref="Dictionary{TKey, TValue}"/>
-    /// where the key is the Role ID (<see cref="Guid"/>) and the value is a <see cref="HashSet{T}"/> of permission strings (claims)
-    /// associated with that role.
-    /// </returns>
+    /// <inheritdoc />
     public async Task<Dictionary<Guid, HashSet<string>>> GetAllRolesPermissionsAsync(CancellationToken cancellationToken = default)
     {
-        return await Context.Set<AuthRoleClaim>()
+        var claims = await Context.Set<AuthRoleClaim>()
+            .AsNoTracking()
             .Where(c => c.ClaimType == CustomClaimTypes.Permission && c.ClaimValue != null)
-            .Select(c => new { c.RoleId, c.ClaimValue })
-            .GroupBy(c => c.RoleId)
-            .ToDictionaryAsync(
-                g => g.Key,
-                g => g.Select(c => c.ClaimValue!).ToHashSet(),
-                cancellationToken);
+            .Select(c => new { c.RoleId, ClaimValue = c.ClaimValue! })
+            .ToListAsync(cancellationToken);
+
+        var result = new Dictionary<Guid, HashSet<string>>();
+        foreach (var claim in claims)
+        {
+            if (!result.TryGetValue(claim.RoleId, out var permissions))
+            {
+                permissions = new HashSet<string>(StringComparer.Ordinal);
+                result[claim.RoleId] = permissions;
+            }
+
+            permissions.Add(claim.ClaimValue);
+        }
+
+        return result;
     }
 
-    /// <summary>
-    /// Builds the filter expression for querying roles based on an optional search term.
-    /// Matches against the standard name, feminitive name, or plural name.
-    /// </summary>
-    [SuppressMessage("Globalization", "CA1311:Specify a culture or use an invariant version", Justification = "EF Core translates this to SQL")]
-    [SuppressMessage("Globalization", "CA1307:Specify StringComparison for clarity", Justification = "EF Core translates this to SQL")]
-    [SuppressMessage("Performance", "CA1862:Use the 'StringComparison' method overloads to perform case-insensitive string comparisons", Justification = "EF Core requires ToLower for correct SQL translation")]
     private static Expression<Func<AuthRole, bool>>? BuildRoleFilter(string? searchTerm)
+        => string.IsNullOrWhiteSpace(searchTerm)
+            ? null
+            : QueryFilterExpressions.ContainsIgnoreCase<AuthRole>(
+                searchTerm,
+                role => role.Name,
+                role => role.FeminitiveName,
+                role => role.PluralName);
+
+    private static Expression<Func<AuthUserRole, KeyValuePair<Guid, TRole>>>? BuildUserRoleProjection<TRole>()
     {
-        if (string.IsNullOrWhiteSpace(searchTerm))
+        if (typeof(TRole) == typeof(AuthRole))
         {
             return null;
         }
 
-        string term = searchTerm.Trim().ToUpperInvariant();
+        try
+        {
+            var roleMapExpression = TypeAdapterConfig.GlobalSettings.CreateMapExpression(
+                new TypeTuple(typeof(AuthRole), typeof(TRole)),
+                MapType.Projection);
 
-        return role =>
-            (role.NormalizedName != null && role.NormalizedName.Contains(term)) ||
-            (role.FeminitiveName != null && role.FeminitiveName.ToUpper().Contains(term)) ||
-            (role.PluralName != null && role.PluralName.ToUpper().Contains(term));
+            if (roleMapExpression is null)
+            {
+                return null;
+            }
+
+            ParameterExpression userRoleParam = Expression.Parameter(typeof(AuthUserRole), "ur");
+            MemberExpression roleProperty = Expression.Property(userRoleParam, nameof(AuthUserRole.Role));
+            MemberExpression userIdProperty = Expression.Property(userRoleParam, nameof(AuthUserRole.UserId));
+            Expression projectedRoleBody = new ParameterReplacer(roleMapExpression.Parameters[0], roleProperty)
+                .Visit(roleMapExpression.Body);
+
+            var ctor = typeof(KeyValuePair<Guid, TRole>).GetConstructor([typeof(Guid), typeof(TRole)])!;
+            NewExpression newPair = Expression.New(ctor, userIdProperty, projectedRoleBody);
+
+            return Expression.Lambda<Func<AuthUserRole, KeyValuePair<Guid, TRole>>>(newPair, userRoleParam);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

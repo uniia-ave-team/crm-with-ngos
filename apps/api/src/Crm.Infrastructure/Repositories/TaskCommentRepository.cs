@@ -1,5 +1,5 @@
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories;
@@ -13,7 +13,7 @@ namespace Crm.Infrastructure.Repositories;
 /// and <see cref="TaskReadState"/> unread markers.
 /// </summary>
 /// <param name="appDbContext">The application database context.</param>
-public class TaskCommentRepository(ApplicationDbContext appDbContext)
+public sealed class TaskCommentRepository(ApplicationDbContext appDbContext)
     : GenericRepository<TaskComment>(appDbContext),
     ITaskCommentRepository
 {
@@ -45,20 +45,49 @@ public class TaskCommentRepository(ApplicationDbContext appDbContext)
     {
         ArgumentNullException.ThrowIfNull(comment);
 
-        List<Guid> recipientIds = await Context.Set<User>()
+        var taskInfo = await Context.Set<ProjectTask>()
             .AsNoTracking()
-            .Where(u => u.IsActive
-                        && u.Id != authorUserId
-                        && Context.Set<ProjectTask>().Any(t =>
-                            t.Id == comment.TaskId
-                            && (t.Project.Visibility != ProjectVisibility.Private
-                                || t.Project.Members.Any(m => m.UserId == u.Id)))
-                        && (Context.Set<TaskUser>().Any(tu => tu.TaskId == comment.TaskId && tu.UserId == u.Id)
-                            || Context.Set<ProjectTask>().Any(t => t.Id == comment.TaskId
-                                && t.Project.Members.Any(m => m.UserId == u.Id))
-                            || DbSet.Any(c => c.TaskId == comment.TaskId && c.UserId == u.Id)))
-            .Select(u => u.Id)
-            .ToListAsync(cancellationToken);
+            .Where(t => t.Id == comment.TaskId)
+            .Select(t => new { t.ProjectId, t.Project.Visibility })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (taskInfo is null)
+        {
+            return;
+        }
+
+        IQueryable<Guid> memberIds = Context.Set<ProjectMember>()
+            .AsNoTracking()
+            .Where(m => m.ProjectId == taskInfo.ProjectId && m.UserId != authorUserId && m.User.IsActive)
+            .Select(m => m.UserId);
+
+        IQueryable<Guid> recipientQuery;
+        if (taskInfo.Visibility == ProjectVisibility.Private)
+        {
+            recipientQuery = memberIds.Distinct();
+        }
+        else
+        {
+            IQueryable<Guid> assigneeIds = Context.Set<TaskUser>()
+                .AsNoTracking()
+                .Where(tu => tu.TaskId == comment.TaskId && tu.UserId != authorUserId && tu.User.IsActive)
+                .Select(tu => tu.UserId);
+
+            IQueryable<Guid> commenterIds = DbSet
+                .AsNoTracking()
+                .Where(c => c.TaskId == comment.TaskId
+                            && c.UserId.HasValue
+                            && c.UserId.Value != authorUserId
+                            && c.User != null
+                            && c.User.IsActive)
+                .Select(c => c.UserId!.Value);
+
+            recipientQuery = memberIds
+                .Union(assigneeIds)
+                .Union(commenterIds);
+        }
+
+        List<Guid> recipientIds = await recipientQuery.ToListAsync(cancellationToken);
 
         if (recipientIds.Count > 0)
         {

@@ -1,4 +1,5 @@
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
+using Crm.Domain.Exceptions;
 
 namespace Crm.Application.Interfaces;
 
@@ -16,6 +17,7 @@ public interface IFileStorageService
     /// <param name="folderName">The target folder name (e.g., from <see cref="FileStorageConstants"/>).</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A unique file name (e.g., GUID-based) under which the file was saved.</returns>
+    /// <exception cref="DomainValidationException">Thrown if the file stream is empty or the original file name is missing.</exception>
     Task<string> SaveFileAsync(Stream contentStream, string originalFileName, string folderName, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -26,7 +28,7 @@ public interface IFileStorageService
     /// <param name="folderName">The target folder name (e.g., from <see cref="FileStorageConstants"/>).</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A unique file name under which the validated image was saved.</returns>
-    /// <exception cref="ArgumentException">Thrown if the file is not a valid image or has an unsupported extension.</exception>
+    /// <exception cref="DomainValidationException">Thrown if the file is not a valid image, is empty, or has an unsupported extension.</exception>
     Task<string> SaveImageAsync(Stream contentStream, string originalFileName, string folderName, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -36,8 +38,8 @@ public interface IFileStorageService
     /// <param name="folderName">The folder where the file resides (e.g., from <see cref="FileStorageConstants"/>).</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A <see cref="Stream"/> of the file.</returns>
-    /// <exception cref="ArgumentException">Thrown if the provided file name is an external URL rather than a local file.</exception>
-    /// <exception cref="FileNotFoundException">Thrown if the physical file does not exist on disk.</exception>
+    /// <exception cref="DomainValidationException">Thrown if the provided file name is an external URL rather than a local file.</exception>
+    /// <exception cref="StorageFileNotFoundException">Thrown if the physical file does not exist on disk.</exception>
     Task<Stream> GetFileAsync(string fileName, string folderName, CancellationToken cancellationToken = default);
 
     /// <summary>

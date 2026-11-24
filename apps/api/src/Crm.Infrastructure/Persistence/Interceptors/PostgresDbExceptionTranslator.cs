@@ -1,3 +1,4 @@
+using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
 using Crm.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;

@@ -1,4 +1,5 @@
-using Crm.Application.Dtos.Role.Commands;
+using Crm.Application.Features.Roles.Commands;
+using Crm.Domain.Extensions;
 using FluentValidation;
 
 namespace Crm.Application.Features.Roles.Validators;
@@ -6,7 +7,7 @@ namespace Crm.Application.Features.Roles.Validators;
 /// <summary>
 /// Provides validation rules for the <see cref="RemoveClaimFromRoleCommand"/>.
 /// </summary>
-public class RemoveClaimFromRoleCommandValidator : AbstractValidator<RemoveClaimFromRoleCommand>
+public sealed class RemoveClaimFromRoleCommandValidator : AbstractValidator<RemoveClaimFromRoleCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RemoveClaimFromRoleCommandValidator"/> class.
@@ -17,6 +18,9 @@ public class RemoveClaimFromRoleCommandValidator : AbstractValidator<RemoveClaim
             .NotEmpty().WithMessage("Role ID is required.");
 
         RuleFor(x => x.ClaimValue)
-            .NotEmpty().WithMessage("Claim value is required.");
+            .Cascade(CascadeMode.Stop)
+            .NotEmpty().WithMessage("Claim value is required.")
+            .Must(claim => PermissionExtensions.GetAllStringValues().Contains(claim))
+            .WithMessage("The specified permission claim does not exist in the system.");
     }
 }

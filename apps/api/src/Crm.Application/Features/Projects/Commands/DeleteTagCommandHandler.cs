@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -11,19 +10,19 @@ namespace Crm.Application.Features.Projects.Commands;
 /// </summary>
 /// <param name="tagRepository">The repository for deleting project-scoped tag entities.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class DeleteTagCommandHandler(
+public sealed partial class DeleteTagCommandHandler(
     ITagRepository tagRepository,
-    ILogger<DeleteTagCommandHandler> logger) : IRequestHandler<DeleteTagCommand>
+    ILogger<DeleteTagCommandHandler> logger) : ICommandHandler<DeleteTagCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(DeleteTagCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteTagCommand command, CancellationToken cancellationToken)
     {
-        LogDeletingTag(logger, request.TagId, request.ProjectId);
+        LogDeletingTag(logger, command.TagId, command.ProjectId);
 
-        await tagRepository.EnsureExistsInProjectAsync(request.ProjectId, request.TagId, cancellationToken);
-        await tagRepository.DeleteAsync(request.TagId, cancellationToken);
+        await tagRepository.EnsureExistsInProjectAsync(command.ProjectId, command.TagId, cancellationToken);
+        await tagRepository.DeleteAsync(command.TagId, cancellationToken);
 
-        LogTagDeletedSuccessfully(logger, request.TagId, request.ProjectId);
+        LogTagDeletedSuccessfully(logger, command.TagId, command.ProjectId);
 
         return Unit.Value;
     }

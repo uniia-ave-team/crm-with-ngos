@@ -1,6 +1,6 @@
 using Crm.Application.Dtos.Common;
 using Crm.Domain.Exceptions;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 
 namespace Crm.Application.Extensions;
 
@@ -24,9 +24,9 @@ public static class FieldSchemaSynchronizer
     /// <param name="updateEntity">A delegate that updates properties of an existing entity from an incoming DTO.</param>
     /// <param name="onMatched">An optional callback executed for each matched entity/DTO pair <c>before</c> properties are updated (e.g., for domain validation or detecting schema mutations).</param>
     /// <returns>A <see cref="ReconciliationResult{TEntity}"/> instance containing categorized lists of removed, added, and matched entities.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="existingItems"/> or <paramref name="incomingDtos"/> is <see langword="null"/>.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when duplicate field IDs are present in <paramref name="incomingDtos"/>.</exception>
-    /// <exception cref="Exception">Thrown via <paramref name="notFoundExceptionFactory"/> when a specified field ID is not found.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="existingItems"/>, <paramref name="incomingDtos"/>, <paramref name="notFoundExceptionFactory"/>, <paramref name="createEntity"/>, or <paramref name="updateEntity"/> is <see langword="null"/>.</exception>
+    /// <exception cref="DomainValidationException">Thrown when duplicate field IDs are present in <paramref name="incomingDtos"/>.</exception>
+    /// <exception cref="NotFoundException">Thrown via <paramref name="notFoundExceptionFactory"/> when a specified field ID is not found.</exception>
     public static ReconciliationResult<TEntity> Reconcile<TEntity, TDto>(
          IReadOnlyCollection<TEntity> existingItems,
          IEnumerable<TDto> incomingDtos,
@@ -39,6 +39,7 @@ public static class FieldSchemaSynchronizer
     {
         ArgumentNullException.ThrowIfNull(existingItems);
         ArgumentNullException.ThrowIfNull(incomingDtos);
+        ArgumentNullException.ThrowIfNull(notFoundExceptionFactory);
         ArgumentNullException.ThrowIfNull(createEntity);
         ArgumentNullException.ThrowIfNull(updateEntity);
 
@@ -137,7 +138,7 @@ public static class FieldSchemaSynchronizer
 
             if (!claimed.Add(id))
             {
-                throw new InvalidOperationException($"Duplicate field ID '{id}' in update request.");
+                throw new DomainValidationException($"Duplicate field ID '{id}' in update request.");
             }
         }
 

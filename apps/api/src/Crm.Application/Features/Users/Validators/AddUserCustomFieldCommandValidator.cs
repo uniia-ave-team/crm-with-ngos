@@ -1,5 +1,5 @@
-using Crm.Application.Dtos.User.Commands;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Application.Features.Users.Commands;
+using Crm.Domain.Constants.Validation;
 using FluentValidation;
 
 namespace Crm.Application.Features.Users.Validators;
@@ -7,7 +7,7 @@ namespace Crm.Application.Features.Users.Validators;
 /// <summary>
 /// Provides validation rules for the <see cref="AddUserCustomFieldCommand"/>.
 /// </summary>
-public class AddUserCustomFieldCommandValidator : AbstractValidator<AddUserCustomFieldCommand>
+public sealed class AddUserCustomFieldCommandValidator : AbstractValidator<AddUserCustomFieldCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AddUserCustomFieldCommandValidator"/> class.

@@ -1,8 +1,8 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.Role.Commands;
+using Crm.Application.Dtos.Roles;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -12,26 +12,29 @@ namespace Crm.Application.Features.Roles.Commands;
 /// <summary>
 /// Handles the <see cref="UpdateRoleCommand"/> to modify an existing Identity Role.
 /// </summary>
-public partial class UpdateRoleCommandHandler(
+/// <param name="authRoleRepository">The repository used to retrieve role data.</param>
+/// <param name="roleIdentityService">The service used to interact with the Identity system for role updates.</param>
+/// <param name="logger">The logger used to record the lifecycle and outcome of the role update process.</param>
+public sealed partial class UpdateRoleCommandHandler(
     IAuthRoleRepository authRoleRepository,
     IRoleIdentityService roleIdentityService,
-    ILogger<UpdateRoleCommandHandler> logger) : IRequestHandler<UpdateRoleCommand>
+    ILogger<UpdateRoleCommandHandler> logger) : ICommandHandler<UpdateRoleCommand>
 {
-    public async ValueTask<Unit> Handle(UpdateRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateRoleCommand command, CancellationToken cancellationToken)
     {
-        LogUpdatingRole(logger, request.Id, request.NewName);
+        LogUpdatingRole(logger, command.Id, command.NewName);
 
-        var role = await authRoleRepository.GetAsync<RoleUserDto>(request.Id, cancellationToken);
+        var role = await authRoleRepository.GetAsync<RoleUserDto>(command.Id, cancellationToken);
 
-        if (role.Name == RoleConsts.Admin)
+        if (string.Equals(role.Name, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase))
         {
             LogCannotModifySystemRole(logger, role.Name);
-            throw new InvalidOperationException($"The system role '{role.Name}' cannot be modified.");
+            throw new DomainValidationException($"The system role '{role.Name}' cannot be modified.");
         }
 
-        await roleIdentityService.UpdateRoleAsync(role.Id, request.NewName, request.FeminitiveName, request.PluralName, cancellationToken);
+        await roleIdentityService.UpdateRoleAsync(role.Id, command.NewName, command.FeminitiveName, command.PluralName, cancellationToken);
 
-        LogRoleUpdatedSuccessfully(logger, request.Id);
+        LogRoleUpdatedSuccessfully(logger, command.Id);
 
         return Unit.Value;
     }

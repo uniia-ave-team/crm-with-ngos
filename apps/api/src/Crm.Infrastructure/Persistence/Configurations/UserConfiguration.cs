@@ -1,12 +1,16 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Crm.Infrastructure.Persistence.Configurations;
 
-public class UserConfiguration : IEntityTypeConfiguration<User>
+/// <summary>
+/// Configures the Entity Framework Core mapping for the <see cref="User"/> profile entity.
+/// </summary>
+public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<User> builder)
     {
         builder.HasKey(u => u.Id);
@@ -44,8 +48,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(UserValidationConstants.MaxAvatarUrlLength);
 
         builder.HasOne(u => u.Ngo)
-               .WithMany(n => n.Users)
-               .HasForeignKey(u => u.NgoId)
-               .OnDelete(DeleteBehavior.SetNull);
+            .WithMany(n => n.Users)
+            .HasForeignKey(u => u.NgoId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

@@ -1,22 +1,20 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
-using Crm.Infrastructure.Persistence.ValueGenerators;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Crm.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// Configures the entity framework mapping for the <see cref="TableTemplate"/> entity.
+/// Configures the Entity Framework Core mapping for the <see cref="TableTemplate"/> entity.
 /// </summary>
-public class TableTemplateConfiguration : IEntityTypeConfiguration<TableTemplate>
+public sealed class TableTemplateConfiguration : IEntityTypeConfiguration<TableTemplate>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<TableTemplate> builder)
     {
-        builder.HasKey(t => t.Id);
-
-        builder.Property(t => t.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+        builder.ConfigureGuidV7Key();
 
         builder.Property(t => t.Name)
             .IsRequired()
@@ -27,6 +25,8 @@ public class TableTemplateConfiguration : IEntityTypeConfiguration<TableTemplate
 
         builder.Property(t => t.IsSystemPreset)
             .IsRequired();
+
+        builder.ConfigureAuthorTracking(t => t.Creator, t => t.Updater);
 
         builder.HasMany(t => t.Fields)
             .WithOne(f => f.Template)

@@ -1,5 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
+using Crm.Application.Features.Projects.Commands;
 using FluentValidation;
 
 namespace Crm.Application.Features.Projects.Validators;
@@ -7,7 +7,7 @@ namespace Crm.Application.Features.Projects.Validators;
 /// <summary>
 /// Provides validation rules for <see cref="DeleteTagCommand"/>.
 /// </summary>
-public class DeleteTagCommandValidator : AbstractValidator<DeleteTagCommand>
+public sealed class DeleteTagCommandValidator : AbstractValidator<DeleteTagCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="DeleteTagCommandValidator"/> class.

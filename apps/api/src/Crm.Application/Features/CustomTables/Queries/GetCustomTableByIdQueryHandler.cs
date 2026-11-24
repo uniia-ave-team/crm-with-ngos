@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.CustomTables;
-using Crm.Application.Dtos.CustomTables.Queries;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -12,17 +11,18 @@ namespace Crm.Application.Features.CustomTables.Queries;
 /// </summary>
 /// <param name="customTableRepository">The repository used for retrieving custom table data.</param>
 /// <param name="logger">The logger instance for tracking query execution.</param>
-public partial class GetCustomTableByIdQueryHandler(
+public sealed partial class GetCustomTableByIdQueryHandler(
     ICustomTableRepository customTableRepository,
-    ILogger<GetCustomTableByIdQueryHandler> logger) : IRequestHandler<GetCustomTableByIdQuery, CustomTableDto>
+    ILogger<GetCustomTableByIdQueryHandler> logger) : IQueryHandler<GetCustomTableByIdQuery, CustomTableDto>
 {
-    public async ValueTask<CustomTableDto> Handle(GetCustomTableByIdQuery request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<CustomTableDto> Handle(GetCustomTableByIdQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingCustomTable(logger, request.Id);
+        LogFetchingCustomTable(logger, query.Id);
 
-        var customTableDto = await customTableRepository.GetAsync<CustomTableDto>(request.Id, cancellationToken);
+        var customTableDto = await customTableRepository.GetAsync<CustomTableDto>(query.Id, cancellationToken);
 
-        LogCustomTableFetchedSuccessfully(logger, request.Id);
+        LogCustomTableFetchedSuccessfully(logger, query.Id);
 
         return customTableDto;
     }

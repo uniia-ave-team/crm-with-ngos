@@ -1,8 +1,8 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { CreateRoleCommand, PagedResultOfRoleDto, RoleDetailsDto, RoleDto, UpdateRoleRequest } from '../../api/generated/models';
+import { CreateRoleCommand, PagedResultOfRoleDto, RoleDetailsDto, RoleDto, UpdateRoleCommand } from '../../api/generated/models';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
@@ -145,7 +145,7 @@ export class RolesService {
     const server = this.connection.serverUrl();
     const url = `${server}${API_ROLES_PATH}/${encodeURIComponent(id)}`;
     try {
-      const body = { newName: draft.name, feminitiveName: draft.feminitiveName, pluralName: draft.pluralName } satisfies UpdateRoleRequest;
+      const body = { newName: draft.name, feminitiveName: draft.feminitiveName, pluralName: draft.pluralName } satisfies UpdateRoleCommand;
       await firstValueFrom(this.http.put(url, body).pipe(timeout(REQUEST_TIMEOUT_MS)));
     } catch (error) {
       const failure = toRequestFailure(error);
@@ -169,8 +169,9 @@ export class RolesService {
 
   /**
    * Видаляє роль: `DELETE /api/v1/roles/{id}` (потрібне право `ManageRole`; 204 без тіла).
-   * Сервер відмовляє (400 — `invalid`), якщо роль має хтось із колег або це системна роль
-   * адміністратора. Повертає `deleted` або причину невдачі.
+   * Сервер відмовляє, якщо це системна роль адміністратора (400) або роль має хтось із колег
+   * (409; старші версії API відповідали тут теж 400) — обидва випадки `invalid`: повтор не
+   * допоможе. Повертає `deleted` або причину невдачі.
    */
   async delete(id: string): Promise<'deleted' | RequestFailure> {
     const url = `${this.connection.serverUrl()}${API_ROLES_PATH}/${encodeURIComponent(id)}`;
@@ -178,7 +179,7 @@ export class RolesService {
       await firstValueFrom(this.http.delete(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return 'deleted';
     } catch (error) {
-      const failure = toRequestFailure(error);
+      const failure = error instanceof HttpErrorResponse && error.status === 409 ? 'invalid' : toRequestFailure(error);
       console.warn(`[RolesService] Не вдалося видалити роль ${id} (${failure})`, error);
       return failure;
     }

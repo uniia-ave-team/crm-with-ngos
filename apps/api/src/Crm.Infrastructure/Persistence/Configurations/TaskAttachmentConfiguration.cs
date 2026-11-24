@@ -1,23 +1,20 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
-using Crm.Infrastructure.Persistence.ValueGenerators;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Crm.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// Configures the Entity Framework mapping for the <see cref="TaskAttachment"/> entity.
+/// Configures the Entity Framework Core mapping for the <see cref="TaskAttachment"/> entity.
 /// </summary>
-public class TaskAttachmentConfiguration : IEntityTypeConfiguration<TaskAttachment>
+public sealed class TaskAttachmentConfiguration : IEntityTypeConfiguration<TaskAttachment>
 {
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<TaskAttachment> builder)
     {
-        builder.HasKey(a => a.Id);
-
-        builder.Property(a => a.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+        builder.ConfigureGuidV7Key();
 
         builder.Property(a => a.OriginalFileName)
             .IsRequired()
@@ -44,5 +41,7 @@ public class TaskAttachmentConfiguration : IEntityTypeConfiguration<TaskAttachme
 
         builder.HasIndex(a => a.TaskId);
         builder.HasIndex(a => a.UploadedBy);
+
+        builder.HasQueryFilter(a => !a.Task.IsDeleted && !a.Task.Project.IsDeleted);
     }
 }

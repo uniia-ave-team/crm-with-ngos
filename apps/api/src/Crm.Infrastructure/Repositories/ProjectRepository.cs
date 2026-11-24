@@ -1,13 +1,14 @@
 using System.Linq.Expressions;
+using Crm.Application.Dtos.Projects;
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
-using Crm.Domain.Expressions;
 using Crm.Domain.Interfaces.Repositories;
-using Crm.Infrastructure.Helpers;
+using Crm.Infrastructure.Auditing;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Expressions;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,18 +22,6 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
     : GenericRepository<Project>(appDbContext),
     IProjectRepository
 {
-    /// <inheritdoc />
-    public override async Task<TResult> GetAsync<TResult>(Guid id, CancellationToken cancellationToken = default)
-    {
-        return await DbSet
-            .AsNoTracking()
-            .AsSplitQuery()
-            .Where(p => p.Id == id)
-            .ProjectToType<TResult>()
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? throw new EntityNotFoundException<Project>(id);
-    }
-
     /// <inheritdoc />
     public Task<PagedResult<TResult>> GetPagedAsync<TResult>(
         Guid userId,
@@ -155,11 +144,13 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
         List<Guid> distinctIds = [.. userIds.Distinct()];
         return distinctIds.Count == 0
             ? []
-            : [.. await Context.Set<ProjectMember>()
+            : [
+                .. await Context.Set<ProjectMember>()
                 .AsNoTracking()
                 .Where(m => m.ProjectId == projectId && distinctIds.Contains(m.UserId))
                 .Select(m => m.UserId)
-                .ToListAsync(cancellationToken)];
+                .ToListAsync(cancellationToken),
+              ];
     }
 
     /// <inheritdoc />
@@ -170,6 +161,7 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
             .Where(m => m.ProjectId == projectId)
             .OrderBy(m => m.User.LastName)
             .ThenBy(m => m.User.FirstName)
+            .ThenBy(m => m.UserId)
             .ProjectToType<TResult>()
             .ToListAsync(cancellationToken);
     }
@@ -199,8 +191,6 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
     /// <inheritdoc />
     public override async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await EnsureExistsAsync(id, cancellationToken);
-
         // Delete tasks first because Topic -> ProjectTask uses Restrict delete behavior,
         // which would block Project -> Topic cascade deletion in PostgreSQL.
         await Context.Set<ProjectTask>()
@@ -221,6 +211,8 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
         {
             throw new EntityNotFoundException<ProjectMember>(userId);
         }
+
+        Context.TryEnqueueBulkDeleteAudit<ProjectMember>($"{projectId}:{userId}");
     }
 
     /// <summary>
@@ -237,7 +229,30 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
             ? visibilityFilter
             : ProjectVisibilityExpressions.CombineAnd(
                 visibilityFilter,
-                QueryFilterExpressions.ContainsIgnoreCase<Project>(p => p.Title, p => p.Description, searchTerm));
+                QueryFilterExpressions.ContainsIgnoreCase<Project>(searchTerm, p => p.Title, p => p.Description));
+    }
+
+    /// <summary>
+    /// Applies project ordering with null-safe <see cref="ProjectSummaryDto.EndDate"/> sorting
+    /// and native <see cref="GenericRepository{T}.ApplyOrdering{TResult}"/> fallback.
+    /// </summary>
+    /// <typeparam name="TResult">The target DTO or projection type.</typeparam>
+    /// <param name="query">The source project queryable.</param>
+    /// <param name="orderBy">The requested DTO sort property name.</param>
+    /// <param name="sortOrder">The sort direction (<c>asc</c> or <c>desc</c>).</param>
+    /// <returns>The ordered project queryable.</returns>
+    protected override IQueryable<Project> ApplyOrdering<TResult>(
+        IQueryable<Project> query,
+        string orderBy,
+        string? sortOrder)
+    {
+        string normalized = orderBy.Trim();
+        return string.Equals(normalized, nameof(ProjectSummaryDto.EndDate), StringComparison.OrdinalIgnoreCase)
+            ? (IsDescending(sortOrder)
+                    ? query.OrderBy(p => p.EndDate == null).ThenByDescending(p => p.EndDate)
+                    : query.OrderBy(p => p.EndDate == null).ThenBy(p => p.EndDate))
+                .ThenBy(p => p.Id)
+            : base.ApplyOrdering<TResult>(query, normalized, sortOrder);
     }
 
     /// <summary>
@@ -257,4 +272,7 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
                     .Select(m => (ProjectClaim?)m.Claim)
                     .FirstOrDefault(),
                 userId));
+
+    private static bool IsDescending(string? sortOrder)
+        => string.Equals(sortOrder?.Trim(), SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
 }

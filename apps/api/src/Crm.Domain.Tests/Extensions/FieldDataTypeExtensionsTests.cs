@@ -55,7 +55,7 @@ public class FieldDataTypeExtensionsTests
     public void GetBackfillJsonForUndefinedTypeShouldThrowArgumentOutOfRangeException()
     {
         // Arrange
-        var undefinedType = (FieldDataType)999;
+        var undefinedType = (FieldDataType)byte.MaxValue;
 
         // Act & Assert
         var exception = Should.Throw<ArgumentOutOfRangeException>(() => undefinedType.GetBackfillJson());

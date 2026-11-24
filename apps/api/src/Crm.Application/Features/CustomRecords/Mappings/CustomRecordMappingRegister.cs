@@ -8,15 +8,16 @@ namespace Crm.Application.Features.CustomRecords.Mappings;
 /// <summary>
 /// Registers Mapster mapping rules for <see cref="CustomRecord"/> and <see cref="JsonObject"/> payloads.
 /// </summary>
-public class CustomRecordMappingRegister : IRegister
+public sealed class CustomRecordMappingRegister : IRegister
 {
+    /// <inheritdoc />
     public void Register(TypeAdapterConfig config)
     {
         config.NewConfig<JsonObject, JsonObject>()
-            .MapWith(src => src == null ? null : (JsonObject)src.DeepClone());
+            .MapWith(src => src == null ? null! : (JsonObject)src.DeepClone());
 
         config.NewConfig<JsonNode, JsonNode>()
-            .MapWith(src => src == null ? null : src.DeepClone());
+            .MapWith(src => src == null ? null! : src.DeepClone());
 
         config.NewConfig<CustomRecord, CustomRecordDto>();
     }

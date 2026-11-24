@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Queries;
+using Crm.Application.Dtos.Roles;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Enums;
@@ -14,40 +13,36 @@ namespace Crm.Application.Features.Users.Queries;
 /// <summary>
 /// Handles the <see cref="GetUserProfileQuery"/> to retrieve specific user profile details.
 /// </summary>
-public partial class GetUserProfileQueryHandler(
+public sealed partial class GetUserProfileQueryHandler(
     IAuthUserRepository authUserRepository,
     IAuthRoleRepository authRoleRepository,
-    ICurrentUserService currentUserService,
     IPermissionService permissionService,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetUserProfileQueryHandler> logger) : IRequestHandler<GetUserProfileQuery, UserProfileDto>
+    ILogger<GetUserProfileQueryHandler> logger) : IQueryHandler<GetUserProfileQuery, UserProfileDto>
 {
-    public async ValueTask<UserProfileDto> Handle(GetUserProfileQuery request, CancellationToken cancellationToken)
+    public async ValueTask<UserProfileDto> Handle(GetUserProfileQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingUserProfile(logger, request.UserId);
+        LogFetchingUserProfile(logger, query.UserId);
 
-        var user = await authUserRepository.GetAsync<UserProfileResult>(request.UserId, cancellationToken);
-        var roles = await authRoleRepository.GetRolesByUserAsync<RoleDto>(request.UserId, cancellationToken);
+        var user = await authUserRepository.GetAsync<UserProfileResult>(query.UserId, cancellationToken);
+        var roles = await authRoleRepository.GetRolesByUserAsync<RoleDto>(query.UserId, cancellationToken);
 
-        LogUserProfileFetched(logger, request.UserId);
+        LogUserProfileFetched(logger, query.UserId);
 
-        var currentUserId = currentUserService.GetUserId();
-        var isSelf = request.IsSelf || currentUserId == request.UserId;
+        var isSelf = query.IsSelf || query.CurrentUserId == query.UserId;
 
         bool hasGlobalEmergencyContactAccess = false;
         bool hasGlobalCustomFieldsAccess = false;
 
         if (!isSelf)
         {
-            var currentUserRoleIds = currentUserService.GetRoleIds();
-
             hasGlobalEmergencyContactAccess = await permissionService.HasAccessAsync(
-                currentUserRoleIds,
+                query.CurrentUserRoleIds,
                 AccessRight.ViewEmergencyContact,
                 cancellationToken);
 
             hasGlobalCustomFieldsAccess = await permissionService.HasAccessAsync(
-                currentUserRoleIds,
+                query.CurrentUserRoleIds,
                 AccessRight.ViewCustomFields,
                 cancellationToken);
         }
@@ -55,7 +50,7 @@ public partial class GetUserProfileQueryHandler(
         return user.SecureAndEnrich(
             roles,
             fileUrlProvider,
-            currentUserId,
+            query.CurrentUserId,
             hasGlobalEmergencyContactAccess,
             hasGlobalCustomFieldsAccess,
             isSelf);

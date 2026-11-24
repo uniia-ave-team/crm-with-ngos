@@ -1,22 +1,20 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
-using Crm.Infrastructure.Persistence.ValueGenerators;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Crm.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// Configures the entity framework mapping for the <see cref="CustomTable"/> entity.
+/// Configures the Entity Framework Core mapping for the <see cref="CustomTable"/> entity.
 /// </summary>
-public class CustomTableConfiguration : IEntityTypeConfiguration<CustomTable>
+public sealed class CustomTableConfiguration : IEntityTypeConfiguration<CustomTable>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<CustomTable> builder)
     {
-        builder.HasKey(t => t.Id);
-
-        builder.Property(t => t.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+        builder.ConfigureGuidV7Key();
 
         builder.Property(t => t.Name)
             .IsRequired()
@@ -34,6 +32,9 @@ public class CustomTableConfiguration : IEntityTypeConfiguration<CustomTable>
             .WithMany()
             .HasForeignKey(t => t.SourceTemplateId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        builder.ConfigureAuthorTracking(t => t.Creator, t => t.Updater);
+        builder.ConfigureSoftDelete();
 
         builder.HasMany(t => t.Fields)
             .WithOne(f => f.CustomTable)

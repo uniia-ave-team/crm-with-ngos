@@ -1,14 +1,13 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
-using Crm.Domain.Consts.Entities.GeneralConstants;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Expressions;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,28 +16,17 @@ namespace Crm.Infrastructure.Repositories;
 /// <summary>
 /// Provides repository implementation for managing <see cref="AuthUser"/> entities.
 /// </summary>
+/// <param name="appDbContext">The application database context.</param>
 public class AuthUserRepository(
     ApplicationDbContext appDbContext)
     : GenericRepository<AuthUser>(appDbContext),
     IAuthUserRepository
 {
-    /// <summary>
-    /// Asynchronously gets the total count of users assigned to a specific role.
-    /// </summary>
-    /// <param name="roleId">The unique identifier of the role.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The number of users that have the specified role assigned.</returns>
+    /// <inheritdoc />
     public Task<int> GetCountByRoleIdAsync(Guid roleId, CancellationToken cancellationToken = default)
-        => Context.Set<AuthUserRole>().CountAsync(ur => ur.RoleId == roleId, cancellationToken);
+        => Context.Set<AuthUserRole>().AsNoTracking().CountAsync(ur => ur.RoleId == roleId, cancellationToken);
 
-    /// <summary>
-    /// Asynchronously retrieves and projects an entity by its email address using Mapster.
-    /// </summary>
-    /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
-    /// <param name="email">The email address of the entity to retrieve.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The projected entity DTO associated with the specified email address.</returns>
-    /// <exception cref="NotFoundException">Thrown if the entity with the specified email address is not found.</exception>
+    /// <inheritdoc />
     public async Task<TResult> GetAsync<TResult>(string email, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = email.ToUpperInvariant();
@@ -51,18 +39,7 @@ public class AuthUserRepository(
             ?? throw new EntityNotFoundException<AuthUser>(email);
     }
 
-    /// <summary>
-    /// Asynchronously retrieves a paginated, filtered, and sorted list of projected entities based on the search term.
-    /// </summary>
-    /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
-    /// <param name="searchTerm">Optional search term to filter entities (e.g., by name, email, or other relevant fields).</param>
-    /// <param name="orderBy">The name of the property to sort by.</param>
-    /// <param name="sortOrder">The sort direction (e.g., <see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>). Defaults to <see cref="SortOrderConstants.Ascending"/>.</param>
-    /// <param name="pageNumber">The current page number (1-based index). Defaults to 1.</param>
-    /// <param name="pageSize">The number of items per page. Defaults to 10.</param>
-    /// <param name="showDeleted">A value indicating whether to include soft-deleted entities in the results. Defaults to false.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains a paginated collection of projected items along with pagination metadata.</returns>
+    /// <inheritdoc />
     public Task<PagedResult<TResult>> GetPagedAsync<TResult>(
         string? searchTerm = null,
         string? orderBy = null,
@@ -79,15 +56,8 @@ public class AuthUserRepository(
             pageSize: pageSize,
             cancellationToken: cancellationToken);
 
-    /// <summary>
-    /// Asynchronously ensures that an entity with the specified email address does not already exist.
-    /// Throws an exception if an entity with this email is found.
-    /// </summary>
-    /// <param name="email">The email address to check for uniqueness.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous validation operation.</returns>
-    /// <exception cref="EntityAlreadyExistsException">Thrown if an entity with the specified email already exists.</exception>
-    public async Task EnsureNotExistsAsync(string email, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public async Task EnsureDoesNotExistAsync(string email, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = email.ToUpperInvariant();
 
@@ -114,7 +84,7 @@ public class AuthUserRepository(
         string orderBy,
         string? sortOrder)
     {
-        bool isDescending = string.Equals(sortOrder, SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
+        bool isDescending = string.Equals(sortOrder?.Trim(), SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
         string normalizedOrderBy = orderBy.Trim();
 
         return normalizedOrderBy switch
@@ -148,29 +118,26 @@ public class AuthUserRepository(
         };
     }
 
-    /// <summary>
-    /// Builds the filter expression for querying users based on search term and deletion status.
-    /// </summary>
-    [SuppressMessage("Globalization", "CA1311:Specify a culture or use an invariant version", Justification = "EF Core translates this to SQL")]
-    [SuppressMessage("Globalization", "CA1307:Specify StringComparison for clarity", Justification = "EF Core translates this to SQL")]
-    [SuppressMessage("Performance", "CA1862:Use the 'StringComparison' method overloads to perform case-insensitive string comparisons", Justification = "EF Core requires ToLower for correct SQL translation")]
-    private static Expression<Func<AuthUser, bool>> BuildUserFilter(string? searchTerm, bool showDeleted)
+    private static Expression<Func<AuthUser, bool>>? BuildUserFilter(string? searchTerm, bool showDeleted)
     {
+        Expression<Func<AuthUser, bool>>? activeFilter = showDeleted ? null : u => u.UserProfile.IsActive;
+
         if (string.IsNullOrWhiteSpace(searchTerm))
         {
-            return u => showDeleted || u.UserProfile.IsActive;
+            return activeFilter;
         }
 
-        string term = searchTerm.Trim().ToLowerInvariant();
+        Expression<Func<AuthUser, bool>> searchFilter = QueryFilterExpressions.ContainsIgnoreCase<AuthUser>(
+            searchTerm,
+            u => u.UserProfile.FirstName,
+            u => u.UserProfile.LastName,
+            u => u.UserProfile.Patronymic,
+            u => u.UserProfile.PhoneNumber,
+            u => u.UserProfile.Country,
+            u => u.Email);
 
-        return u =>
-            (showDeleted || u.UserProfile.IsActive) &&
-            (
-                u.UserProfile.FirstName.ToLower().Contains(term) ||
-                u.UserProfile.LastName.ToLower().Contains(term) ||
-                (u.UserProfile.Patronymic != null && u.UserProfile.Patronymic.ToLower().Contains(term)) ||
-                (u.UserProfile.PhoneNumber != null && u.UserProfile.PhoneNumber.ToLower().Contains(term)) ||
-                (u.UserProfile.Country != null && u.UserProfile.Country.ToLower().Contains(term)) ||
-                (u.Email != null && u.Email.ToLower().Contains(term)));
+        return activeFilter is null
+            ? searchFilter
+            : ProjectVisibilityExpressions.CombineAnd(activeFilter, searchFilter);
     }
 }

@@ -5,17 +5,17 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Crm.Application.Dtos.Auth;
-using Crm.Application.Dtos.Ngo.Commands;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Project.Commands;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.Role.Commands;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Dtos.Projects;
+using Crm.Application.Dtos.Roles;
+using Crm.Application.Dtos.Tasks;
+using Crm.Application.Dtos.Users;
+using Crm.Application.Features.Ngos.Commands;
+using Crm.Application.Features.Projects.Commands;
+using Crm.Application.Features.Roles.Commands;
+using Crm.Application.Features.Tasks.Commands;
+using Crm.Application.Features.Users.Commands;
 using Crm.Domain.Common;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Enums;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -102,17 +102,23 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
             ct);
         updateMemberResp.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // 4. Create Topics and Project-Scoped Tags (case-insensitive uniqueness B-10)
-        var topicSmmResp = await client2.PostAsJsonAsync($"/api/v1/projects/{projectId}/topics", new CreateTopicCommand("SMM", 1), ct);
-        topicSmmResp.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var topicSmmId = await topicSmmResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
+        // 4. Create Topics (contiguous 0-based order) and Project-Scoped Tags (case-insensitive uniqueness B-10)
+        var nonSequentialFirstTopicResp = await client2.PostAsJsonAsync($"/api/v1/projects/{projectId}/topics", new CreateTopicCommand("SMM", 1), ct);
+        nonSequentialFirstTopicResp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
         var topicDevResp = await client1.PostAsJsonAsync($"/api/v1/projects/{projectId}/topics", new CreateTopicCommand("Розробка", 0), ct);
         topicDevResp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var topicDevId = await topicDevResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
+        var topicSmmResp = await client2.PostAsJsonAsync($"/api/v1/projects/{projectId}/topics", new CreateTopicCommand("SMM", 1), ct);
+        topicSmmResp.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var topicSmmId = await topicSmmResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
+
         var duplicateOrderTopicResp = await client1.PostAsJsonAsync($"/api/v1/projects/{projectId}/topics", new CreateTopicCommand("Дубль позиції", 0), ct);
         duplicateOrderTopicResp.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        var gapOrderTopicResp = await client1.PostAsJsonAsync($"/api/v1/projects/{projectId}/topics", new CreateTopicCommand("Пропуск позиції", 3), ct);
+        gapOrderTopicResp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
         var tagResp = await client1.PostAsJsonAsync($"/api/v1/projects/{projectId}/tags", new CreateTagCommand("Urgent"), ct);
         tagResp.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -466,8 +472,7 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
             new CreateRoleCommand("UsersOnly", null, null),
             ct);
         restrictedRoleResp.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var restrictedRoleId = (await restrictedRoleResp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions, ct))
-            .GetProperty("id").GetGuid();
+        var restrictedRoleId = await restrictedRoleResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
         var (restrictedClient, _) = await InviteAndRegisterUserAsync(factory, adminClient, "limited@ngo.org", "Limited", "Four", restrictedRoleId, ct);
         using var restrictedClientScope = restrictedClient;
 
@@ -699,8 +704,7 @@ public class ProjectsAndTasksEndpointsIntegrationTests(
             new CreateUserCommand(firstName, lastName, null, email, "StrongPass1!", "StrongPass1!"),
             ct);
         createUserResp.StatusCode.ShouldBe(HttpStatusCode.Created);
-        var userId = (await createUserResp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions, ct))
-            .GetProperty("userId").GetGuid();
+        var userId = await createUserResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
         var loginResp = await client.PostAsJsonAsync(
             "/api/v1/auth/login",

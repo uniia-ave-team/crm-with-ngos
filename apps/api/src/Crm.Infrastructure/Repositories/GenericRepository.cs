@@ -1,12 +1,13 @@
 using System.Collections.Concurrent;
-using System.Linq.Dynamic.Core;
 using System.Linq.Expressions;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Exceptions;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 using Crm.Domain.Interfaces.Repositories.Generic;
-using Crm.Infrastructure.Helpers;
+using Crm.Infrastructure.Auditing;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Extensions;
+using Crm.Infrastructure.Persistence.Sorting;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,16 +25,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// Thread-safe cache mapping DTO properties to their corresponding Entity navigation paths (via Mapster).
     /// Prevents reflection and expression parsing overhead during runtime.
     /// </summary>
-    private static readonly ConcurrentDictionary<Type, Dictionary<string, string>> _dtoSortMappingCache = new();
-
-    /// <summary>
-    /// Case-insensitive whitelist of allowed sort direction specifiers (<see cref="SortOrderConstants.Ascending"/> / <see cref="SortOrderConstants.Descending"/>) for dynamic sorting validation.
-    /// </summary>
-    private static readonly HashSet<string> _allowedSortOrders = new(StringComparer.OrdinalIgnoreCase)
-    {
-        SortOrderConstants.Ascending,
-        SortOrderConstants.Descending,
-    };
+    private static readonly ConcurrentDictionary<Type, Dictionary<string, string>> DtoSortMappingCache = new();
 
     /// <summary>
     /// Gets the <see cref="DbSet{TEntity}"/> for the entity type <typeparamref name="T"/>.
@@ -45,100 +37,68 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// </summary>
     protected DbContext Context { get; } = context;
 
-    /// <summary>
-    /// Asynchronously creates a new entity in the database.
-    /// </summary>
-    /// <param name="entity">The entity to create.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation. The task result contains the newly created entity.</returns>
+    /// <inheritdoc />
     public virtual async Task<T> CreateAsync(T entity, CancellationToken cancellationToken = default)
     {
         var entry = await DbSet.AddAsync(entity, cancellationToken);
         return entry.Entity;
     }
 
-    /// <summary>
-    /// Asynchronously adds a collection of entities to the database context.
-    /// </summary>
-    /// <param name="entities">The collection of entities to create.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous save operation.</returns>
+    /// <inheritdoc />
     public virtual Task CreateAsync(IEnumerable<T> entities, CancellationToken cancellationToken = default)
         => DbSet.AddRangeAsync(entities, cancellationToken);
 
-    /// <summary>
-    /// Asynchronously deletes an entity by its unique identifier using a bulk delete operation.
-    /// </summary>
-    /// <param name="id">The unique identifier of the entity to delete.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    /// <inheritdoc />
     public virtual async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
+        if (typeof(ISoftDeletableEntity).IsAssignableFrom(typeof(T)))
+        {
+            T entity = await DbSet.FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+                ?? throw new EntityNotFoundException<T>(id);
+
+            DbSet.Remove(entity);
+            return;
+        }
+
         var rowsAffected = await DbSet
-                    .Where(x => x.Id == id)
-                    .ExecuteDeleteAsync(cancellationToken);
+            .Where(x => x.Id == id)
+            .ExecuteDeleteAsync(cancellationToken);
 
         if (rowsAffected == 0)
         {
             throw new EntityNotFoundException<T>(id);
         }
+
+        Context.TryEnqueueBulkDeleteAudit<T>(id.ToString());
     }
 
-    /// <summary>
-    /// Asynchronously retrieves an entity by its unique identifier.
-    /// </summary>
-    /// <param name="id">The unique identifier of the entity to retrieve.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The entity with the specified ID.</returns>
-    /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    /// <inheritdoc />
     public virtual Task<T> GetAsync(Guid id, CancellationToken cancellationToken = default)
         => GetAsync(x => x.Id == id, id, cancellationToken);
 
-    /// <summary>
-    /// Asynchronously retrieves and projects an entity by its unique identifier using Mapster.
-    /// </summary>
-    /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
-    /// <param name="id">The unique identifier of the entity to retrieve.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The projected entity DTO with the specified ID.</returns>
-    /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    /// <inheritdoc />
     public virtual Task<TResult> GetAsync<TResult>(Guid id, CancellationToken cancellationToken = default)
         => GetAsync<TResult>(x => x.Id == id, id, cancellationToken);
 
-    /// <summary>
-    /// Asynchronously retrieves an entity by its unique identifier with change tracking enabled.
-    /// </summary>
-    /// <param name="id">The unique identifier of the entity to retrieve.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The tracked entity with the specified ID.</returns>
-    /// <exception cref="NotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    /// <inheritdoc />
     public virtual Task<T> GetForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
         => GetForUpdateAsync(x => x.Id == id, id, cancellationToken);
 
-    /// <summary>
-    /// Asynchronously checks if an entity with the specified unique identifier exists.
-    /// Throws an exception if the entity is not found.
-    /// </summary>
-    /// <param name="id">The unique identifier of the entity to check.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="NotFoundException">Thrown if no entity with the specified ID exists.</exception>
+    /// <inheritdoc />
     public virtual Task EnsureExistsAsync(Guid id, CancellationToken cancellationToken = default)
         => EnsureExistsAsync(m => m.Id == id, id, cancellationToken);
 
-    /// <summary>
-    /// Asynchronously ensures that entities exist for all specified unique identifiers.
-    /// Throws an exception containing all missing keys if any entity is not found.
-    /// </summary>
-    /// <param name="ids">The collection of unique identifiers to check.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="EntitiesNotFoundException">Thrown if any entity with the specified ID is not found.</exception>
+    /// <inheritdoc />
     public virtual Task EnsureAllExistAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
         => EnsureAllExistAsync(ids, scopePredicate: null, cancellationToken);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Asynchronously acquires a pessimistic row-level write lock (<c>FOR NO KEY UPDATE</c>) on the entity
+    /// with the specified identifier within the active transaction without blocking foreign-key child inserts.
+    /// </summary>
+    /// <param name="id">The unique identifier of the entity to lock.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task representing the asynchronous lock operation.</returns>
     public virtual async Task LockForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
     {
         if (!Context.Database.IsRelational())
@@ -155,31 +115,6 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     }
 
     /// <summary>
-    /// Asynchronously retrieves all entities of type <typeparamref name="T"/>.
-    /// </summary>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A list of all entities.</returns>
-    public virtual async Task<List<T>> GetListAsync(CancellationToken cancellationToken = default)
-        => await DbSet.AsNoTracking().ToListAsync(cancellationToken);
-
-    /// <summary>
-    /// Asynchronously retrieves a single random entity from the database and projects it to the specified type using Mapster.
-    /// </summary>
-    /// <typeparam name="TResult">The type of the projected element (e.g., DTO).</typeparam>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A random projected entity.</returns>
-    /// <exception cref="NotFoundException">Thrown if no entities exist in the database for this type.</exception>
-    public virtual async Task<TResult> GetRandomAsync<TResult>(CancellationToken cancellationToken = default)
-    {
-        return await DbSet
-            .AsNoTracking()
-            .OrderBy(x => Guid.NewGuid())
-            .ProjectToType<TResult>()
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? throw new EntityNotFoundException<T>();
-    }
-
-    /// <summary>
     /// Asynchronously retrieves a paginated, filtered, and sorted list of projected entities.
     /// </summary>
     /// <typeparam name="TResult">The type of the projected elements (e.g., DTO).</typeparam>
@@ -193,7 +128,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     /// <param name="pageSize">The number of items per page.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A paginated result containing the projected items and metadata.</returns>
-    public virtual Task<Domain.Common.PagedResult<TResult>> GetPagedAsync<TResult>(
+    protected virtual Task<Domain.Common.PagedResult<TResult>> GetPagedAsync<TResult>(
         Expression<Func<T, bool>>? predicate = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
@@ -215,6 +150,16 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
         return ToPagedResultAsync<TResult>(query, pageNumber, pageSize, cancellationToken);
     }
 
+    /// <summary>
+    /// Executes pagination over a filtered and ordered queryable, applying <c>Skip</c>/<c>Take</c>
+    /// before Mapster SQL projection so nested subqueries only evaluate on the requested page.
+    /// </summary>
+    /// <typeparam name="TResult">The target projection DTO type.</typeparam>
+    /// <param name="query">The filtered and ordered entity queryable.</param>
+    /// <param name="pageNumber">The 1-based page number.</param>
+    /// <param name="pageSize">The requested page size.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A paginated result containing the projected page items and total item count.</returns>
     protected virtual async Task<Domain.Common.PagedResult<TResult>> ToPagedResultAsync<TResult>(
         IQueryable<T> query,
         int pageNumber,
@@ -233,34 +178,39 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
         }
 
         var items = await query
-            .ProjectToType<TResult>()
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
+            .ProjectToType<TResult>()
             .ToListAsync(cancellationToken);
 
         return new(items, totalCount, pageNumber, pageSize);
     }
 
     /// <summary>
-    /// Applies dynamic ordering to the query. Can be overridden in derived repositories
-    /// to support custom sorting logic.
+    /// Applies strongly-typed ordering resolved from Mapster DTO-to-entity mappings.
+    /// Can be overridden in derived repositories to support custom sorting logic.
     /// </summary>
+    /// <typeparam name="TResult">The target DTO or projection type.</typeparam>
+    /// <param name="query">The source entity queryable.</param>
+    /// <param name="orderBy">The requested DTO property name to sort by.</param>
+    /// <param name="sortOrder">The sort direction (<c>asc</c> or <c>desc</c>).</param>
+    /// <returns>The ordered entity queryable.</returns>
     protected virtual IQueryable<T> ApplyOrdering<TResult>(
         IQueryable<T> query,
         string orderBy,
         string? sortOrder)
     {
+        string normalizedOrderBy = orderBy.Trim();
         var sortMapping = GetSortMapping<TResult>();
 
-        if (sortMapping.TryGetValue(orderBy, out string? resolvedEntityPath)
-            && resolvedEntityPath.All(c => char.IsLetterOrDigit(c) || c == '.'))
+        if (sortMapping.TryGetValue(normalizedOrderBy, out string? resolvedEntityPath))
         {
-            string safeSortOrder = _allowedSortOrders.Contains(sortOrder ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                ? sortOrder
-                : SortOrderConstants.Ascending;
+            bool isDescending = string.Equals(sortOrder?.Trim(), SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
 
-            return query.OrderBy($"{resolvedEntityPath} {safeSortOrder}")
-                .ThenBy(e => e.Id);
+            if (TypedPropertyOrderBuilder.TryApplyOrdering(query, resolvedEntityPath, isDescending, out IQueryable<T> orderedQuery))
+            {
+                return orderedQuery;
+            }
         }
 
         return query.OrderBy(e => e.Id);
@@ -327,7 +277,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
 
     /// <summary>
     /// Asynchronously locks all rows matching <paramref name="predicate"/> in deterministic identifier order
-    /// (<c>ORDER BY Id FOR UPDATE</c>) to prevent deadlocks and returns their unique identifiers.
+    /// (<c>ORDER BY Id FOR NO KEY UPDATE</c>) to prevent deadlocks and returns their unique identifiers.
     /// </summary>
     /// <param name="predicate">A SQL-translatable filter expression selecting the rows to lock.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
@@ -511,5 +461,5 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
     }
 
     private static Dictionary<string, string> GetSortMapping<TResult>() =>
-        _dtoSortMappingCache.GetOrAdd(typeof(TResult), _ => MapsterSortResolver.GetSortMapping<T, TResult>());
+        DtoSortMappingCache.GetOrAdd(typeof(TResult), _ => MapsterSortResolver.GetSortMapping<T, TResult>());
 }

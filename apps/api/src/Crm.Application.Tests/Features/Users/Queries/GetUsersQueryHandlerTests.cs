@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Queries;
+using Crm.Application.Dtos.Roles;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
@@ -17,7 +16,6 @@ public class GetUsersQueryHandlerTests
 {
     private readonly IAuthUserRepository _userRepository = Substitute.For<IAuthUserRepository>();
     private readonly IAuthRoleRepository _authRoleRepository = Substitute.For<IAuthRoleRepository>();
-    private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
     private readonly IPermissionService _permissionService = Substitute.For<IPermissionService>();
     private readonly IFileUrlProvider _fileUrlProvider = Substitute.For<IFileUrlProvider>();
     private readonly ILogger<GetUsersQueryHandler> _logger = Substitute.For<ILogger<GetUsersQueryHandler>>();
@@ -29,7 +27,6 @@ public class GetUsersQueryHandlerTests
         _handler = new GetUsersQueryHandler(
             _userRepository,
             _authRoleRepository,
-            _currentUserService,
             _permissionService,
             _fileUrlProvider,
             _logger);
@@ -72,9 +69,6 @@ public class GetUsersQueryHandlerTests
         var currentUserId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
         var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
-
-        _currentUserService.GetUserId().Returns(currentUserId);
-        _currentUserService.GetRoleIds().Returns(currentUserRoleIds);
 
         // Current user does NOT have global ViewEmergencyContact permission
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
@@ -135,12 +129,16 @@ public class GetUsersQueryHandlerTests
         _authRoleRepository.GetRolesByUserIdsAsync<RoleDto>(Arg.Any<IEnumerable<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(roleLookup);
 
-        _fileUrlProvider.GetFileUrl("avatars/self.png", ApiRouteLogoConstants.UserSelfAvatar)
+        _fileUrlProvider.GetFileUrl("avatars/self.png", FileRouteConstants.UserSelfAvatar)
             .Returns("https://api.crm.org/api/v1/users/me/avatar");
-        _fileUrlProvider.GetFileUrl("avatars/other.png", ApiRouteLogoConstants.UserAvatar(otherUserId))
+        _fileUrlProvider.GetFileUrl("avatars/other.png", FileRouteConstants.UserAvatar(otherUserId))
             .Returns($"https://api.crm.org/api/v1/users/{otherUserId}/avatar");
 
-        var query = new GetUsersQuery(PageNumber: 1, PageSize: 10);
+        var query = new GetUsersQuery(PageNumber: 1, PageSize: 10)
+        {
+            CurrentUserId = currentUserId,
+            CurrentUserRoleIds = currentUserRoleIds,
+        };
 
         // Act
         var result = await _handler.Handle(query, CancellationToken.None);
@@ -174,9 +172,6 @@ public class GetUsersQueryHandlerTests
         var currentUserId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
         var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
-
-        _currentUserService.GetUserId().Returns(currentUserId);
-        _currentUserService.GetRoleIds().Returns(currentUserRoleIds);
 
         // Current user HAS global ViewEmergencyContact permission
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
@@ -213,7 +208,11 @@ public class GetUsersQueryHandlerTests
         _authRoleRepository.GetRolesByUserIdsAsync<RoleDto>(Arg.Any<IEnumerable<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(emptyRoleLookup);
 
-        var query = new GetUsersQuery(PageNumber: 1, PageSize: 10);
+        var query = new GetUsersQuery(PageNumber: 1, PageSize: 10)
+        {
+            CurrentUserId = currentUserId,
+            CurrentUserRoleIds = currentUserRoleIds,
+        };
 
         // Act
         var result = await _handler.Handle(query, CancellationToken.None);
@@ -233,8 +232,6 @@ public class GetUsersQueryHandlerTests
         var currentUserId = Guid.NewGuid();
         var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
 
-        _currentUserService.GetUserId().Returns(currentUserId);
-        _currentUserService.GetRoleIds().Returns(currentUserRoleIds);
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
             .Returns(false);
 
@@ -284,7 +281,11 @@ public class GetUsersQueryHandlerTests
         _authRoleRepository.GetRolesByUserIdsAsync<RoleDto>(Arg.Any<IEnumerable<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(emptyRoleLookup);
 
-        var query = new GetUsersQuery(PageNumber: 1, PageSize: 10, ShowDeleted: true);
+        var query = new GetUsersQuery(PageNumber: 1, PageSize: 10, ShowDeleted: true)
+        {
+            CurrentUserId = currentUserId,
+            CurrentUserRoleIds = currentUserRoleIds,
+        };
 
         // Act
         var result = await _handler.Handle(query, CancellationToken.None);
@@ -293,5 +294,91 @@ public class GetUsersQueryHandlerTests
         result.Items.Count.ShouldBe(2);
         result.Items.Single(u => u.Id == activeUserId).IsActive.ShouldBeTrue();
         result.Items.Single(u => u.Id == inactiveUserId).IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task HandleWhenOrderByIsEmergencyContactAndCallerLacksPermissionShouldPassNullOrderByToRepository()
+    {
+        // Arrange
+        var currentUserId = Guid.NewGuid();
+        var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
+
+        _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var emptyPagedResult = new PagedResult<UserDto>([], 0, 1, 10);
+
+        _userRepository.GetPagedAsync<UserDto>(
+                searchTerm: Arg.Any<string?>(),
+                orderBy: Arg.Is<string?>(x => x == null),
+                sortOrder: Arg.Any<string?>(),
+                pageNumber: 1,
+                pageSize: 10,
+                showDeleted: false,
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(emptyPagedResult);
+
+        var query = new GetUsersQuery(OrderBy: " emergencycontact ", PageNumber: 1, PageSize: 10)
+        {
+            CurrentUserId = currentUserId,
+            CurrentUserRoleIds = currentUserRoleIds,
+        };
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.Items.ShouldBeEmpty();
+        await _userRepository.Received(1).GetPagedAsync<UserDto>(
+            searchTerm: null,
+            orderBy: null,
+            sortOrder: query.SortOrder,
+            pageNumber: 1,
+            pageSize: 10,
+            showDeleted: false,
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleWhenOrderByIsEmergencyContactAndCallerHasPermissionShouldPreserveOrderBy()
+    {
+        // Arrange
+        var currentUserId = Guid.NewGuid();
+        var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
+
+        _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var emptyPagedResult = new PagedResult<UserDto>([], 0, 1, 10);
+
+        _userRepository.GetPagedAsync<UserDto>(
+                searchTerm: Arg.Any<string?>(),
+                orderBy: nameof(UserDto.EmergencyContact),
+                sortOrder: Arg.Any<string?>(),
+                pageNumber: 1,
+                pageSize: 10,
+                showDeleted: false,
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(emptyPagedResult);
+
+        var query = new GetUsersQuery(OrderBy: nameof(UserDto.EmergencyContact), PageNumber: 1, PageSize: 10)
+        {
+            CurrentUserId = currentUserId,
+            CurrentUserRoleIds = currentUserRoleIds,
+        };
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.Items.ShouldBeEmpty();
+        await _userRepository.Received(1).GetPagedAsync<UserDto>(
+            searchTerm: null,
+            orderBy: nameof(UserDto.EmergencyContact),
+            sortOrder: query.SortOrder,
+            pageNumber: 1,
+            pageSize: 10,
+            showDeleted: false,
+            cancellationToken: Arg.Any<CancellationToken>());
     }
 }

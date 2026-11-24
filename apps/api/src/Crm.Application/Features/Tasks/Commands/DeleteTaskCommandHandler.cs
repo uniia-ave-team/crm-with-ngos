@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -9,32 +8,36 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Tasks.Commands;
 
 /// <summary>
-/// Handles the <see cref="DeleteTaskCommand"/> to delete a task and schedule its attachment files for deletion.
+/// Handles the <see cref="DeleteTaskCommand"/> to soft-delete a task. The task's attachments are deleted
+/// for good: their rows now and their files once the transaction commits. Storage quota is measured on
+/// disk, so keeping the files would mean that deleting tasks never frees any space.
 /// </summary>
 /// <param name="taskRepository">The repository for deleting task entities.</param>
-/// <param name="attachmentRepository">The repository for retrieving stored attachment file names on the task.</param>
-/// <param name="fileTracker">The transaction file tracker used to schedule physical files for deletion upon commit.</param>
+/// <param name="attachmentRepository">The repository for deleting the task's attachments.</param>
+/// <param name="fileTracker">The transaction file tracker used to delete the attachment files upon commit.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class DeleteTaskCommandHandler(
+public sealed partial class DeleteTaskCommandHandler(
     IProjectTaskRepository taskRepository,
     ITaskAttachmentRepository attachmentRepository,
     IFileTransactionTracker fileTracker,
-    ILogger<DeleteTaskCommandHandler> logger) : IRequestHandler<DeleteTaskCommand>
+    ILogger<DeleteTaskCommandHandler> logger) : ICommandHandler<DeleteTaskCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(DeleteTaskCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteTaskCommand command, CancellationToken cancellationToken)
     {
-        LogDeletingTask(logger, request.TaskId, request.ProjectId);
+        LogDeletingTask(logger, command.TaskId, command.ProjectId);
 
-        var storedFileNames = await attachmentRepository.GetStoredFileNamesByTaskIdAsync(request.TaskId, cancellationToken);
+        await taskRepository.LockForUpdateAsync(command.TaskId, cancellationToken);
+
+        var storedFileNames = await attachmentRepository.DeleteByTaskIdAsync(command.TaskId, cancellationToken);
         foreach (string storedFileName in storedFileNames)
         {
             fileTracker.RegisterFileForDeletion(storedFileName, FileStorageConstants.TaskAttachmentsFolder);
         }
 
-        await taskRepository.DeleteAsync(request.TaskId, cancellationToken);
+        await taskRepository.DeleteAsync(command.TaskId, cancellationToken);
 
-        LogTaskDeletedSuccessfully(logger, request.TaskId, request.ProjectId);
+        LogTaskDeletedSuccessfully(logger, command.TaskId, command.ProjectId);
 
         return Unit.Value;
     }

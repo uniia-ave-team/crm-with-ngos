@@ -1,6 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.LoginPageImage;
-using Crm.Application.Dtos.LoginPageImage.Queries;
+using Crm.Application.Dtos.LoginPageImages;
+using Crm.Application.Features.LoginPageImages.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
@@ -15,28 +15,26 @@ namespace Crm.Application.Features.LoginPageImages.Queries;
 /// <param name="repository">The repository used to manage data access operations for login page images.</param>
 /// <param name="fileUrlProvider">The service responsible for generating public URLs for the stored login page images.</param>
 /// <param name="logger">The logger used to record the execution of the image retrieval process.</param>
-public partial class GetPagedLoginPageImagesQueryHandler(
+public sealed partial class GetPagedLoginPageImagesQueryHandler(
     ILoginPageImageRepository repository,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetPagedLoginPageImagesQueryHandler> logger) : IRequestHandler<GetPagedLoginPageImagesQuery, PagedResult<LoginPageImageDto>>
+    ILogger<GetPagedLoginPageImagesQueryHandler> logger) : IQueryHandler<GetPagedLoginPageImagesQuery, PagedResult<LoginPageImageDto>>
 {
-    public async ValueTask<PagedResult<LoginPageImageDto>> Handle(GetPagedLoginPageImagesQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<LoginPageImageDto>> Handle(GetPagedLoginPageImagesQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingImages(logger, request.PageNumber, request.PageSize, request.SearchTerm != null);
+        bool hasSearchFilter = !string.IsNullOrWhiteSpace(query.SearchTerm);
+        LogFetchingImages(logger, query.PageNumber, query.PageSize, hasSearchFilter);
 
         var pagedResult = await repository.GetPagedAsync<LoginPageImageDto>(
-            searchTerm: request.SearchTerm,
-            orderBy: request.OrderBy,
-            sortOrder: request.SortOrder,
-            pageNumber: request.PageNumber,
-            pageSize: request.PageSize,
+            searchTerm: query.SearchTerm,
+            orderBy: query.OrderBy,
+            sortOrder: query.SortOrder,
+            pageNumber: query.PageNumber,
+            pageSize: query.PageSize,
             cancellationToken: cancellationToken);
 
         var updatedItems = pagedResult.Items
-            .Select(item => item with
-            {
-                Url = fileUrlProvider.GetFileUrl(item.Url, ApiRouteLogoConstants.LoginPageImageFile(item.Id)) ?? item.Url,
-            })
+            .Select(item => item.WithResolvedUrl(fileUrlProvider))
             .ToList();
 
         LogImagesFetched(logger, pagedResult.Items.Count, pagedResult.TotalCount);
@@ -44,9 +42,9 @@ public partial class GetPagedLoginPageImagesQueryHandler(
         return new PagedResult<LoginPageImageDto>(updatedItems, pagedResult.TotalCount, pagedResult.PageNumber, pagedResult.PageSize);
     }
 
-    [LoggerMessage(EventId = LogEventIds.FetchingAllLoginPageImages, Level = LogLevel.Information, Message = "Fetching login page images - Page: {pageNumber}, Size: {pageSize}, HasSearchFilter: {HasSearchFilter}.")]
+    [LoggerMessage(EventId = LogEventIds.FetchingAllLoginPageImages, Level = LogLevel.Information, Message = "Fetching login page images - Page: {PageNumber}, Size: {PageSize}, HasSearchFilter: {HasSearchFilter}.")]
     private static partial void LogFetchingImages(ILogger logger, int pageNumber, int pageSize, bool hasSearchFilter);
 
-    [LoggerMessage(EventId = LogEventIds.AllLoginPageImagesFetched, Level = LogLevel.Information, Message = "Successfully retrieved {fetchedCount} login page images out of {totalCount} total matched.")]
+    [LoggerMessage(EventId = LogEventIds.AllLoginPageImagesFetched, Level = LogLevel.Information, Message = "Successfully retrieved {FetchedCount} login page images out of {TotalCount} total matched.")]
     private static partial void LogImagesFetched(ILogger logger, int fetchedCount, int totalCount);
 }

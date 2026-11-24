@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
@@ -11,23 +10,23 @@ namespace Crm.Application.Features.Users.Commands;
 /// <summary>
 /// Handles the <see cref="AddUserCustomFieldCommand"/> to create and attach a new custom field to a user profile.
 /// </summary>
-public partial class AddUserCustomFieldCommandHandler(
+public sealed partial class AddUserCustomFieldCommandHandler(
     IUserCustomFieldRepository customFieldRepository,
     IUserRepository userRepository,
-    ILogger<AddUserCustomFieldCommandHandler> logger) : IRequestHandler<AddUserCustomFieldCommand>
+    ILogger<AddUserCustomFieldCommandHandler> logger) : ICommandHandler<AddUserCustomFieldCommand>
 {
-    public async ValueTask<Unit> Handle(AddUserCustomFieldCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(AddUserCustomFieldCommand command, CancellationToken cancellationToken)
     {
         // TODO: Make another handler to add a custom field to many users at once (or introduce a global user schema / field definition) and implement bulk delete for that as well.
-        LogAddingCustomField(logger, request.Key, request.UserId);
+        LogAddingCustomField(logger, command.Key, command.UserId);
 
-        await userRepository.EnsureExistsAsync(request.UserId, cancellationToken);
+        await userRepository.EnsureExistsAsync(command.UserId, cancellationToken);
 
-        await customFieldRepository.EnsureKeyDoesNotExistAsync(request.UserId, request.Key, cancellationToken);
+        await customFieldRepository.EnsureKeyDoesNotExistAsync(command.UserId, command.Key, cancellationToken);
 
-        await customFieldRepository.CreateAsync(request.Adapt<UserCustomField>(), cancellationToken);
+        await customFieldRepository.CreateAsync(command.Adapt<UserCustomField>(), cancellationToken);
 
-        LogCustomFieldAddedSuccessfully(logger, request.Key, request.UserId);
+        LogCustomFieldAddedSuccessfully(logger, command.Key, command.UserId);
 
         return Unit.Value;
     }

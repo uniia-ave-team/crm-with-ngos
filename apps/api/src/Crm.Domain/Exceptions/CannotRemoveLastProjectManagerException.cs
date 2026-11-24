@@ -3,7 +3,7 @@ namespace Crm.Domain.Exceptions;
 /// <summary>
 /// Exception thrown when an attempt is made to remove, demote, deactivate, or delete the last remaining active manager of a project.
 /// </summary>
-public class CannotRemoveLastProjectManagerException : DomainValidationException
+public sealed class CannotRemoveLastProjectManagerException : DomainValidationException
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="CannotRemoveLastProjectManagerException"/> class

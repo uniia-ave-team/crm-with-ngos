@@ -4,17 +4,24 @@ using Crm.Cli.Parsing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-var parsedArgs = CommandLineParser.Parse(args);
+HashSet<string> knownBooleanFlags = new(StringComparer.OrdinalIgnoreCase)
+{
+    "help",
+    "h",
+    "password-stdin",
+};
+
+var parsedArgs = CommandLineParser.Parse(args, knownBooleanFlags);
 
 var configuration = new ConfigurationBuilder()
     .AddCliConfiguration()
     .Build();
 
-using var serviceProvider = new ServiceCollection()
+await using var serviceProvider = new ServiceCollection()
     .AddCliServices(configuration)
     .BuildServiceProvider();
 
-using var scope = serviceProvider.CreateScope();
+await using var scope = serviceProvider.CreateAsyncScope();
 var runner = scope.ServiceProvider.GetRequiredService<CliRunner>();
 
 return await runner.RunAsync(parsedArgs);

@@ -47,17 +47,7 @@ dotnet_diagnostic.CS1712.severity = none
 
 dotnet_diagnostic.CS1717.severity = none
 
-dotnet_diagnostic.CS8600.severity = none
-
-dotnet_diagnostic.CS8602.severity = none
-
 dotnet_diagnostic.CS8632.severity = error
-
-dotnet_diagnostic.CS8603.severity = none
-
-dotnet_diagnostic.CS8618.severity = none
-
-dotnet_diagnostic.CS8625.severity = none
 
 dotnet_diagnostic.IDE0161.severity = error
 

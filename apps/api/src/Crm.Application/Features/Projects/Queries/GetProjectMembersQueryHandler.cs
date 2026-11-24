@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Project.Queries;
+using Crm.Application.Dtos.Projects;
 using Crm.Application.Features.Projects.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
@@ -13,25 +12,22 @@ namespace Crm.Application.Features.Projects.Queries;
 /// Handles the <see cref="GetProjectMembersQuery"/> to retrieve all members of a project.
 /// </summary>
 /// <param name="projectRepository">The repository for projecting project members.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="fileUrlProvider">The file URL provider for resolving member avatar URLs.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class GetProjectMembersQueryHandler(
+public sealed partial class GetProjectMembersQueryHandler(
     IProjectRepository projectRepository,
-    ICurrentUserService currentUserService,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetProjectMembersQueryHandler> logger) : IRequestHandler<GetProjectMembersQuery, List<ProjectMemberDto>>
+    ILogger<GetProjectMembersQueryHandler> logger) : IQueryHandler<GetProjectMembersQuery, List<ProjectMemberDto>>
 {
     /// <inheritdoc />
-    public async ValueTask<List<ProjectMemberDto>> Handle(GetProjectMembersQuery request, CancellationToken cancellationToken)
+    public async ValueTask<List<ProjectMemberDto>> Handle(GetProjectMembersQuery query, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
-        LogFetchingProjectMembers(logger, request.ProjectId);
+        LogFetchingProjectMembers(logger, query.ProjectId);
 
-        var members = await projectRepository.GetMembersAsync<ProjectMemberDto>(request.ProjectId, cancellationToken);
-        var result = members.EnrichUrls(fileUrlProvider, currentUserId);
+        var members = await projectRepository.GetMembersAsync<ProjectMemberDto>(query.ProjectId, cancellationToken);
+        var result = members.EnrichUrls(fileUrlProvider, query.CurrentUserId);
 
-        LogProjectMembersFetched(logger, result.Count, request.ProjectId);
+        LogProjectMembersFetched(logger, result.Count, query.ProjectId);
 
         return result;
     }

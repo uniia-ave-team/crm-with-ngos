@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -13,26 +12,28 @@ namespace Crm.Application.Features.Users.Commands;
 /// Handles the <see cref="DeleteUserCommand"/> to perform a complete GDPR hard-delete
 /// of the authentication account, business profile, and all cascading personal data.
 /// </summary>
-public partial class DeleteUserCommandHandler(
+public sealed partial class DeleteUserCommandHandler(
     IIdentityService identityService,
     IAuthRoleRepository roleRepository,
     IUserRepository userRepository,
     IProjectRepository projectRepository,
     IFileTransactionTracker fileTransactionTracker,
-    ILogger<DeleteUserCommandHandler> logger) : IRequestHandler<DeleteUserCommand>
+    IRevokedUsersCache revokedUsersCache,
+    ILogger<DeleteUserCommandHandler> logger) : ICommandHandler<DeleteUserCommand>
 {
-    public async ValueTask<Unit> Handle(DeleteUserCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteUserCommand command, CancellationToken cancellationToken)
     {
-        LogDeletingUser(logger, request.UserId);
+        LogDeletingUser(logger, command.UserId);
 
-        await EnsureUserIsNotLastAdminAsync(request.UserId, cancellationToken);
-        await HandleSoleManagedProjectsAsync(request.UserId, request.CurrentUserId, cancellationToken);
+        await EnsureUserIsNotLastAdminAsync(command.UserId, cancellationToken);
+        await HandleSoleManagedProjectsAsync(command.UserId, command.CurrentUserId, cancellationToken);
 
-        await TryDeleteUserAvatarAsync(request.UserId, cancellationToken);
+        await TryDeleteUserAvatarAsync(command.UserId, cancellationToken);
 
-        await identityService.DeleteUserAsync(request.UserId, cancellationToken);
+        await identityService.DeleteUserAsync(command.UserId, cancellationToken);
+        await revokedUsersCache.RevokeUserAsync(command.UserId, cancellationToken);
 
-        LogUserDeletedSuccessfully(logger, request.UserId);
+        LogUserDeletedSuccessfully(logger, command.UserId);
 
         return Unit.Value;
     }
@@ -45,7 +46,7 @@ public partial class DeleteUserCommandHandler(
         if (await roleRepository.IsUserLastAdminAsync(userId, cancellationToken))
         {
             LogCannotDeleteLastAdmin(logger, userId);
-            throw new InvalidOperationException("Cannot delete the user because they are the last system administrator.");
+            throw new DomainValidationException("Cannot delete the user because they are the last system administrator.");
         }
     }
 

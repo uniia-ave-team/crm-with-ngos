@@ -1,6 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Dtos.Users;
+using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -17,40 +17,42 @@ namespace Crm.Application.Features.Users.Commands;
 /// <param name="roleRepository">The repository used to validate role existence.</param>
 /// <param name="tokenService">The service responsible for generating JWT tokens.</param>
 /// <param name="logger">The logger used to record the invitation process.</param>
-public partial class InviteUserCommandHandler(
+public sealed partial class InviteUserCommandHandler(
     IAuthUserRepository userRepository,
     INgoRepository ngoRepository,
     IAuthRoleRepository roleRepository,
     ITokenService tokenService,
-    ILogger<InviteUserCommandHandler> logger) : IRequestHandler<InviteUserCommand, TokenResultDto>
+    ILogger<InviteUserCommandHandler> logger) : ICommandHandler<InviteUserCommand, TokenResultDto>
 {
     /// <summary>
     /// Executes the user invitation process asynchronously.
     /// </summary>
-    /// <param name="request">The command containing the email and role IDs for the invite.</param>
+    /// <param name="command">The command containing the email and role IDs for the invite.</param>
     /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
     /// <returns>A task returning the generated JWT invitation token.</returns>
     /// <exception cref="EntitiesNotFoundException">Thrown when any requested role is not found.</exception>
     /// <exception cref="NotFoundException">Thrown when the NGO is not found.</exception>
     /// <exception cref="EntityAlreadyExistsException">Thrown when a user with the specified email already exists.</exception>
-    public async ValueTask<TokenResultDto> Handle(InviteUserCommand request, CancellationToken cancellationToken)
+    public async ValueTask<TokenResultDto> Handle(InviteUserCommand command, CancellationToken cancellationToken)
     {
-        LogInvitingUser(logger, request.Email, request.RoleIds);
+        var maskedEmail = command.Email.MaskEmail();
 
-        await userRepository.EnsureNotExistsAsync(request.Email, cancellationToken);
+        LogInvitingUser(logger, maskedEmail, command.RoleIds);
+
+        await userRepository.EnsureDoesNotExistAsync(command.Email, cancellationToken);
 
         var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
 
-        await roleRepository.EnsureAllExistAsync(request.RoleIds, cancellationToken);
+        await roleRepository.EnsureAllExistAsync(command.RoleIds, cancellationToken);
 
         var generateInvitationDto = new GenerateInvitationDto(
-            request.Email,
+            command.Email,
             ngoId,
-            request.RoleIds);
+            command.RoleIds);
 
         var invitationToken = tokenService.GenerateInvitationToken(generateInvitationDto);
 
-        LogUserInvitedSuccessfully(logger, request.Email);
+        LogUserInvitedSuccessfully(logger, maskedEmail);
 
         return invitationToken;
     }

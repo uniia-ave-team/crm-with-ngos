@@ -1,35 +1,31 @@
-using Crm.Infrastructure.Options;
-using Crm.Infrastructure.RateLimiting;
+using Crm.Api.Options;
+using Crm.Api.RateLimiting;
 
 namespace Crm.Api.Extensions;
 
 /// <summary>
-/// Provides extension methods for registering and configuring rate limiting services in the dependency injection container.
+/// Provides extension methods for configuring HTTP rate limiting policies in the API layer.
 /// </summary>
 public static class RateLimitingExtensions
 {
     /// <summary>
-    /// Gets the name of the global rate limiting policy applied across the application.
+    /// Registers and validates <see cref="RateLimitOptions"/> and configures the global IP-based rate limiter policy.
     /// </summary>
-    public const string GlobalPolicyName = "Global";
-
-    /// <summary>
-    /// Configures and registers global rate limiting services using a fixed window limiter policy
-    /// bound from the application configuration with pre-startup data annotation validation.
-    /// </summary>
-    /// <param name="services">The <see cref="IServiceCollection"/> to add the services to.</param>
-    /// <param name="configuration">The application <see cref="IConfiguration"/> used to bind rate limiting options.</param>
-    /// <returns>The original <see cref="IServiceCollection"/> instance for method chaining.</returns>
-    public static IServiceCollection AddCustomRateLimiting(this IServiceCollection services, IConfiguration configuration)
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">The application configuration.</param>
+    /// <returns>The original <see cref="IServiceCollection"/> instance for chaining.</returns>
+    public static IServiceCollection AddCustomRateLimiting(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
         services.AddOptions<RateLimitOptions>()
-                .Bind(configuration.GetSection(RateLimitOptions.Position))
-                .ValidateDataAnnotations()
-                .ValidateOnStart();
+            .Bind(configuration.GetSection(RateLimitOptions.Position))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         services.AddRateLimiter(options =>
         {
-            options.AddPolicy<string, IpRateLimiterPolicy>(GlobalPolicyName);
+            options.AddPolicy<string, IpRateLimiterPolicy>(RateLimitOptions.PolicyName);
         });
 
         return services;

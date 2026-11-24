@@ -1,42 +1,45 @@
 using System.Data;
 using System.Linq.Expressions;
 using System.Text.Json.Nodes;
-using Crm.Domain.Common;
-using Crm.Infrastructure.Persistence.Extensions.FunctionExtensions;
+using Crm.Infrastructure.Persistence.Consts;
+using Crm.Infrastructure.Persistence.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Crm.Infrastructure.Persistence.Extensions;
 
+/// <summary>
+/// Registers custom PostgreSQL <c>jsonb</c> extraction and schema-patching database function translations on <see cref="ModelBuilder"/>.
+/// </summary>
 public static class ModelBuilderDbFunctionsExtensions
 {
-    private const string JsonbStoreType = "jsonb";
-    private const string TextStoreType = "text";
-    private const string TextArrayStoreType = "text[]";
     private const string JsonbExtractPathFunction = "jsonb_extract_path";
     private const string JsonbExtractPathTextFunction = "jsonb_extract_path_text";
     private const string JsonbBuildObjectFunction = "jsonb_build_object";
     private const string JsonbConcatFunction = "jsonb_concat";
 
-    private static readonly RelationalTypeMapping JsonbMapping = new StringTypeMapping(JsonbStoreType, DbType.String);
-    private static readonly RelationalTypeMapping TextMapping = new StringTypeMapping(TextStoreType, DbType.String);
-    private static readonly RelationalTypeMapping BoolMapping = new BoolTypeMapping("boolean", DbType.Boolean);
-    private static readonly RelationalTypeMapping IntMapping = new IntTypeMapping("integer", DbType.Int32);
-    private static readonly SqlFragmentExpression JsonNullSqlFragment = new($"'null'::{JsonbStoreType}");
+    private static readonly RelationalTypeMapping JsonbMapping = new StringTypeMapping(PostgresConstants.Jsonb, DbType.String);
+    private static readonly RelationalTypeMapping TextMapping = new StringTypeMapping(PostgresConstants.Text, DbType.String);
+    private static readonly RelationalTypeMapping BoolMapping = new BoolTypeMapping(PostgresConstants.Boolean, DbType.Boolean);
+    private static readonly RelationalTypeMapping TimestamptzMapping = new GenericTypeMapping(PostgresConstants.TimestampWithTimeZone, typeof(DateTime));
+    private static readonly RelationalTypeMapping TimestampWithoutTimeZoneMapping = new GenericTypeMapping(PostgresConstants.TimestampWithoutTimeZone, typeof(DateTime));
+    private static readonly SqlFragmentExpression JsonNullSqlFragment = new($"'null'::{PostgresConstants.Jsonb}");
 
     /// <summary>
     /// Registers custom database function translations for EF Core.
     /// </summary>
+    /// <param name="modelBuilder">The EF Core model builder.</param>
+    /// <returns>The configured <see cref="ModelBuilder"/> for chaining.</returns>
     public static ModelBuilder AddCustomDbFunctions(this ModelBuilder modelBuilder)
     {
         RegisterJsonbApplyPatch(modelBuilder);
 
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathText), TextStoreType, typeof(string));
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathNumber), "numeric", typeof(decimal?));
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathBoolean), "boolean", typeof(bool?));
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDate), "date", typeof(DateOnly?));
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDateTime), "timestamp with time zone", typeof(DateTime?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathText), PostgresConstants.Text, typeof(string));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathNumber), PostgresConstants.Numeric, typeof(decimal?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathBoolean), PostgresConstants.Boolean, typeof(bool?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDate), PostgresConstants.Date, typeof(DateOnly?));
+        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDateTime), PostgresConstants.TimestampWithTimeZone, typeof(DateTime?));
 
         return modelBuilder;
     }
@@ -58,8 +61,8 @@ public static class ModelBuilderDbFunctionsExtensions
 
         modelBuilder.HasDbFunction(method)
             .HasStoreType(targetStoreType)
-            .HasParameter("json", p => p.HasStoreType(JsonbStoreType))
-            .HasParameter("key", p => p.HasStoreType(TextStoreType))
+            .HasParameter("json", p => p.HasStoreType(PostgresConstants.Jsonb))
+            .HasParameter("key", p => p.HasStoreType(PostgresConstants.Text))
             .HasTranslation(args =>
             {
                 var typedJson = EnsureTypeMapping(args[0], JsonbMapping);
@@ -78,11 +81,11 @@ public static class ModelBuilderDbFunctionsExtensions
                     return textExtractFunc;
                 }
 
-                bool isDate = string.Equals(targetStoreType, "date", StringComparison.OrdinalIgnoreCase);
-                bool isNumeric = string.Equals(targetStoreType, "numeric", StringComparison.OrdinalIgnoreCase);
-                bool isTemporal = string.Equals(targetStoreType, "timestamp with time zone", StringComparison.OrdinalIgnoreCase) || isDate;
+                bool isDate = string.Equals(targetStoreType, PostgresConstants.Date, StringComparison.OrdinalIgnoreCase);
+                bool isNumeric = string.Equals(targetStoreType, PostgresConstants.Numeric, StringComparison.OrdinalIgnoreCase);
+                bool isTemporal = string.Equals(targetStoreType, PostgresConstants.TimestampWithTimeZone, StringComparison.OrdinalIgnoreCase) || isDate;
 
-                string validCheckStoreType = isDate ? "timestamp with time zone" : targetStoreType;
+                string validCheckStoreType = isDate ? PostgresConstants.TimestampWithTimeZone : targetStoreType;
 
                 SqlExpression isValidFunc = new SqlFunctionExpression(
                     functionName: "pg_input_is_valid",
@@ -100,10 +103,11 @@ public static class ModelBuilderDbFunctionsExtensions
 
                     var isSpecialValue = new SqlFunctionExpression(
                         functionName: "regexp_like",
-                        arguments: [
+                        arguments:
+                        [
                             textExtractFunc,
                             new SqlConstantExpression(exclusionPattern, TextMapping),
-                            new SqlConstantExpression("i", TextMapping)
+                            new SqlConstantExpression("i", TextMapping),
                         ],
                         nullable: true,
                         argumentsPropagateNullability: [true, true, true],
@@ -127,16 +131,24 @@ public static class ModelBuilderDbFunctionsExtensions
                 SqlExpression castExpr;
                 if (isDate)
                 {
-                    var timestamptzMapping = new GenericTypeMapping("timestamp with time zone", typeof(DateTime));
                     var timestamptzCast = new SqlUnaryExpression(
                         ExpressionType.Convert,
                         textExtractFunc,
                         typeof(DateTime),
-                        timestamptzMapping);
+                        TimestamptzMapping);
+
+                    // Normalize to UTC before extracting the calendar date so ordering is independent of DB session TimeZone.
+                    var utcTimestamp = new SqlFunctionExpression(
+                        functionName: "timezone",
+                        arguments: [new SqlConstantExpression("UTC", TextMapping), timestamptzCast],
+                        nullable: true,
+                        argumentsPropagateNullability: [false, true],
+                        type: typeof(DateTime),
+                        typeMapping: TimestampWithoutTimeZoneMapping);
 
                     castExpr = new SqlUnaryExpression(
                         ExpressionType.Convert,
-                        timestamptzCast,
+                        utcTimestamp,
                         nonNullableType,
                         targetMapping);
                 }
@@ -166,12 +178,12 @@ public static class ModelBuilderDbFunctionsExtensions
         var parameters = method.GetParameters().ToDictionary(p => p.Name!, StringComparer.OrdinalIgnoreCase);
 
         modelBuilder.HasDbFunction(method)
-            .HasStoreType(JsonbStoreType)
-            .HasParameter(parameters["json"].Name!, p => p.HasStoreType(JsonbStoreType))
-            .HasParameter(parameters[nameof(SchemaPatch.DropKeys)].Name!, p => p.HasStoreType(TextArrayStoreType))
-            .HasParameter(parameters[nameof(SchemaPatch.TargetKeys)].Name!, p => p.HasStoreType(TextArrayStoreType))
-            .HasParameter(parameters[nameof(SchemaPatch.SourceKeys)].Name!, p => p.HasStoreType(TextArrayStoreType))
-            .HasParameter(parameters[nameof(SchemaPatch.FallbackJson)].Name!, p => p.HasStoreType(TextArrayStoreType))
+            .HasStoreType(PostgresConstants.Jsonb)
+            .HasParameter(parameters["json"].Name!, p => p.HasStoreType(PostgresConstants.Jsonb))
+            .HasParameter(parameters[nameof(SchemaPatch.DropKeys)].Name!, p => p.HasStoreType(PostgresConstants.TextArray))
+            .HasParameter(parameters[nameof(SchemaPatch.TargetKeys)].Name!, p => p.HasStoreType(PostgresConstants.TextArray))
+            .HasParameter(parameters[nameof(SchemaPatch.SourceKeys)].Name!, p => p.HasStoreType(PostgresConstants.TextArray))
+            .HasParameter(parameters[nameof(SchemaPatch.FallbackJson)].Name!, p => p.HasStoreType(PostgresConstants.TextArray))
             .HasTranslation(args =>
             {
                 const int maxPairsPerCall = 50;
@@ -188,8 +200,8 @@ public static class ModelBuilderDbFunctionsExtensions
                 SqlExpression baseJson = typedJson;
                 if (dropKeys.Length > 0)
                 {
-                    var arraySql = string.Join(", ", dropKeys.Select(k => $"'{k.Replace("'", "''")}'"));
-                    var arrayExpr = new SqlFragmentExpression($"ARRAY[{arraySql}]::{TextArrayStoreType}");
+                    var arraySql = string.Join(", ", dropKeys.Select(FormatSqlStringLiteral));
+                    var arrayExpr = new SqlFragmentExpression($"ARRAY[{arraySql}]::{PostgresConstants.TextArray}");
 
                     baseJson = new SqlBinaryExpression(
                         ExpressionType.Subtract,
@@ -250,7 +262,7 @@ public static class ModelBuilderDbFunctionsExtensions
 
         if (!hasSource && hasFallback)
         {
-            return new SqlFragmentExpression($"'{fallbackJson.Replace("'", "''")}'::jsonb");
+            return new SqlFragmentExpression($"{FormatSqlStringLiteral(fallbackJson)}::{PostgresConstants.Jsonb}");
         }
 
         if (hasSource && !hasFallback)
@@ -272,7 +284,7 @@ public static class ModelBuilderDbFunctionsExtensions
                 type: typeof(JsonNode),
                 typeMapping: jsonMapping);
 
-            var fallbackExpr = new SqlFragmentExpression($"'{fallbackJson.Replace("'", "''")}'::jsonb");
+            var fallbackExpr = new SqlFragmentExpression($"{FormatSqlStringLiteral(fallbackJson)}::{PostgresConstants.Jsonb}");
 
             return new SqlFunctionExpression(
                 functionName: "COALESCE",
@@ -285,6 +297,11 @@ public static class ModelBuilderDbFunctionsExtensions
 
         return JsonNullSqlFragment;
     }
+
+    private static string FormatSqlStringLiteral(string value)
+        => value.Contains('\0', StringComparison.Ordinal)
+            ? throw new ArgumentException("SQL literal cannot contain null characters.", nameof(value))
+            : $"'{value.Replace("'", "''", StringComparison.Ordinal)}'";
 
     private static string[] ReadConstArray(SqlExpression expression)
     {

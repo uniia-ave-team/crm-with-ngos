@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -14,26 +13,26 @@ namespace Crm.Application.Features.Projects.Commands;
 /// </summary>
 /// <param name="tagRepository">The repository for retrieving and updating project-scoped tag entities.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class UpdateTagCommandHandler(
+public sealed partial class UpdateTagCommandHandler(
     ITagRepository tagRepository,
-    ILogger<UpdateTagCommandHandler> logger) : IRequestHandler<UpdateTagCommand>
+    ILogger<UpdateTagCommandHandler> logger) : ICommandHandler<UpdateTagCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(UpdateTagCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateTagCommand command, CancellationToken cancellationToken)
     {
-        LogUpdatingTag(logger, request.TagId, request.ProjectId);
+        LogUpdatingTag(logger, command.TagId, command.ProjectId);
 
-        var tag = await tagRepository.GetByProjectAndIdForUpdateAsync(request.ProjectId, request.TagId, cancellationToken);
+        var tag = await tagRepository.GetByProjectAndIdForUpdateAsync(command.ProjectId, command.TagId, cancellationToken);
 
-        string trimmedTitle = request.Title.Trim();
-        if (await tagRepository.ExistsWithTitleAsync(request.ProjectId, trimmedTitle, request.TagId, cancellationToken))
+        string trimmedTitle = command.Title.Trim();
+        if (await tagRepository.ExistsWithTitleAsync(command.ProjectId, trimmedTitle, command.TagId, cancellationToken))
         {
             throw new EntityAlreadyExistsException(nameof(Tag), trimmedTitle);
         }
 
-        request.Adapt(tag);
+        command.Adapt(tag);
 
-        LogTagUpdatedSuccessfully(logger, request.TagId, request.ProjectId);
+        LogTagUpdatedSuccessfully(logger, command.TagId, command.ProjectId);
 
         return Unit.Value;
     }

@@ -1,11 +1,12 @@
 using System.Reflection;
 using Crm.Api.Controllers.V1;
 using Crm.Application.Common.Interfaces;
-using Crm.Application.Dtos.Project.Commands;
-using Crm.Application.Dtos.Project.Queries;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Application.Dtos.Task.Queries;
 using Crm.Application.Extensions;
+using Crm.Application.Features.Projects.Commands;
+using Crm.Application.Features.Projects.Queries;
+using Crm.Application.Features.Tasks.Commands;
+using Crm.Application.Features.Tasks.Queries;
+using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
 using Crm.Infrastructure.Persistence;
 using Mediator;
@@ -64,8 +65,35 @@ public class ArchitectureTests
             .ImplementInterface(typeof(IRequestHandler<,>))
             .Or()
             .ImplementInterface(typeof(IRequestHandler<>))
+            .Or()
+            .ImplementInterface(typeof(ICommandHandler<,>))
+            .Or()
+            .ImplementInterface(typeof(ICommandHandler<>))
+            .Or()
+            .ImplementInterface(typeof(IQueryHandler<,>))
             .ShouldNot()
             .HaveDependencyOn(typeof(DbContext).Namespace)
+            .GetResult();
+
+        Assert.True(result.IsSuccessful, FormatFailingTypes(result));
+    }
+
+    [Fact]
+    public void ApplicationHandlersShouldNotDependOnCurrentUserService()
+    {
+        var result = Types.InAssembly(ApplicationAssembly)
+            .That()
+            .ImplementInterface(typeof(IRequestHandler<,>))
+            .Or()
+            .ImplementInterface(typeof(IRequestHandler<>))
+            .Or()
+            .ImplementInterface(typeof(ICommandHandler<,>))
+            .Or()
+            .ImplementInterface(typeof(ICommandHandler<>))
+            .Or()
+            .ImplementInterface(typeof(IQueryHandler<,>))
+            .ShouldNot()
+            .HaveDependencyOn(typeof(ICurrentUserService).FullName)
             .GetResult();
 
         Assert.True(result.IsSuccessful, FormatFailingTypes(result));
@@ -110,14 +138,16 @@ public class ArchitectureTests
             typeof(GetProjectsQuery),
         ];
 
-        List<Type> violatingTypes = [.. ApplicationAssembly.GetTypes()
+        List<Type> violatingTypes = [
+            .. ApplicationAssembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false }
                         && t.Namespace is not null
-                        && (t.Namespace.StartsWith("Crm.Application.Dtos.Project", StringComparison.Ordinal)
-                            || t.Namespace.StartsWith("Crm.Application.Dtos.Task", StringComparison.Ordinal))
+                        && (t.Namespace.StartsWith("Crm.Application.Features.Projects", StringComparison.Ordinal)
+                            || t.Namespace.StartsWith("Crm.Application.Features.Tasks", StringComparison.Ordinal))
                         && IsMediatorRequest(t)
                         && !allowedUnscopedRequests.Contains(t)
-                        && !typeof(IProjectScoped).IsAssignableFrom(t))];
+                        && !typeof(IProjectScoped).IsAssignableFrom(t)),
+        ];
 
         Assert.True(
             violatingTypes.Count == 0,
@@ -135,14 +165,16 @@ public class ArchitectureTests
             typeof(DeleteTaskCommand),
         ];
 
-        List<Type> violatingTypes = [.. ApplicationAssembly.GetTypes()
+        List<Type> violatingTypes = [
+            .. ApplicationAssembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false }
                         && t.Namespace is not null
-                        && t.Namespace.StartsWith("Crm.Application.Dtos.Task", StringComparison.Ordinal)
+                        && t.Namespace.StartsWith("Crm.Application.Features.Tasks", StringComparison.Ordinal)
                         && IsMediatorRequest(t)
                         && t.GetProperty("TaskId") is not null
                         && !directTaskRequests.Contains(t)
-                        && !typeof(ITaskScoped).IsAssignableFrom(t))];
+                        && !typeof(ITaskScoped).IsAssignableFrom(t)),
+        ];
 
         Assert.True(
             violatingTypes.Count == 0,

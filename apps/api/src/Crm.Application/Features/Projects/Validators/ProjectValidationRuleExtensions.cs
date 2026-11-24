@@ -1,5 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using FluentValidation;
 
 namespace Crm.Application.Features.Projects.Validators;
@@ -28,34 +28,28 @@ internal static class ProjectValidationRuleExtensions
     /// </summary>
     /// <typeparam name="T">The command type being validated.</typeparam>
     /// <param name="ruleBuilder">The rule builder for the project description property.</param>
-    /// <param name="selector">A function retrieving the description value from the command.</param>
     /// <returns>The configured rule builder options.</returns>
     public static IRuleBuilderOptions<T, string?> ValidProjectDescription<T>(
-        this IRuleBuilder<T, string?> ruleBuilder,
-        Func<T, string?> selector)
+        this IRuleBuilder<T, string?> ruleBuilder)
         => ruleBuilder
             .MaximumLength(ProjectValidationConstants.MaxDescriptionLength)
             .WithMessage(ValidationMessages.ProjectDescriptionMaxLength)
             .Must(ContainsNoNullChar)
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
-            .When(x => !string.IsNullOrEmpty(selector(x)));
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
 
     /// <summary>
     /// Applies standard validation rules for a project member's optional custom functional role title.
     /// </summary>
     /// <typeparam name="T">The command type being validated.</typeparam>
     /// <param name="ruleBuilder">The rule builder for the role title property.</param>
-    /// <param name="selector">A function retrieving the role title value from the command.</param>
     /// <returns>The configured rule builder options.</returns>
     public static IRuleBuilderOptions<T, string?> ValidProjectRoleTitle<T>(
-        this IRuleBuilder<T, string?> ruleBuilder,
-        Func<T, string?> selector)
+        this IRuleBuilder<T, string?> ruleBuilder)
         => ruleBuilder
             .MaximumLength(ProjectValidationConstants.MaxRoleTitleLength)
             .WithMessage(ValidationMessages.ProjectRoleTitleMaxLength)
             .Must(ContainsNoNullChar)
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
-            .When(x => !string.IsNullOrEmpty(selector(x)));
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
 
     /// <summary>
     /// Applies standard validation rules for a project-scoped tag title.

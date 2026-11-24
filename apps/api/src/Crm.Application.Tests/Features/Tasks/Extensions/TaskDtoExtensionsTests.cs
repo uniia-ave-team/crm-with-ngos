@@ -1,6 +1,5 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
-using Crm.Application.Dtos.Task;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Tasks.Extensions;
 using Crm.Application.Features.Tasks.Mappings;
 using Crm.Application.Interfaces;
@@ -24,12 +23,15 @@ public class TaskDtoExtensionsTests
     }
 
     [Fact]
-    public void TaskAttachmentMappingShouldKeepUrlNullAndHideStorageKeyFromJson()
+    public void TaskAttachmentMappingShouldProjectStoredFileNameIntoUrlForEnrichment()
     {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var attachmentId = Guid.NewGuid();
         var attachment = new TaskAttachment
         {
-            Id = Guid.NewGuid(),
-            TaskId = Guid.NewGuid(),
+            Id = attachmentId,
+            TaskId = taskId,
             OriginalFileName = "doc.pdf",
             StoredFileName = "secret-internal-key.pdf",
             ContentType = "application/pdf",
@@ -39,12 +41,41 @@ public class TaskDtoExtensionsTests
 
         var dto = attachment.Adapt<TaskAttachmentDto>();
 
-        dto.Url.ShouldBeNull();
-        dto.StorageKey.ShouldBe("secret-internal-key.pdf");
+        dto.Url.ShouldBe("secret-internal-key.pdf");
 
-        string serialized = JsonSerializer.Serialize(dto);
-        serialized.ShouldNotContain("secret-internal-key.pdf");
-        serialized.ShouldNotContain("StorageKey", Case.Insensitive);
+        var fileUrlProvider = Substitute.For<IFileUrlProvider>();
+        fileUrlProvider.GetFileUrl(
+                "secret-internal-key.pdf",
+                $"api/v1/projects/{projectId}/tasks/{taskId}/attachments/{attachmentId}")
+            .Returns($"https://cdn.example/api/v1/projects/{projectId}/tasks/{taskId}/attachments/{attachmentId}?v=secret-internal-key");
+
+        var enriched = dto.EnrichUrl(projectId, fileUrlProvider);
+
+        enriched.Url.ShouldBe($"https://cdn.example/api/v1/projects/{projectId}/tasks/{taskId}/attachments/{attachmentId}?v=secret-internal-key");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void EnrichUrlWhenAttachmentUrlIsNullOrWhitespaceShouldReturnNullWithoutCallingProvider(string? url)
+    {
+        var projectId = Guid.NewGuid();
+        var dto = new TaskAttachmentDto(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "doc.pdf",
+            "application/pdf",
+            42,
+            url,
+            DateTime.UtcNow);
+        var fileUrlProvider = Substitute.For<IFileUrlProvider>();
+
+        var enriched = dto.EnrichUrl(projectId, fileUrlProvider);
+
+        enriched.Url.ShouldBeNull();
+        fileUrlProvider.DidNotReceiveWithAnyArgs().GetFileUrl(default!, default!);
     }
 
     [Fact]
@@ -85,7 +116,7 @@ public class TaskDtoExtensionsTests
             Tags: [],
             Attachments:
             [
-                new TaskAttachmentDto(attachmentId, taskId, currentUserId, "doc.pdf", "application/pdf", 42, null, DateTime.UtcNow, "stored-doc.pdf"),
+                new TaskAttachmentDto(attachmentId, taskId, currentUserId, "doc.pdf", "application/pdf", 42, "stored-doc.pdf", DateTime.UtcNow),
             ],
             ExternalLinks: [new TaskExternalLinkDto("Docs", "https://example.org")],
             Metadata: new JsonObject { ["source"] = "grant" },
@@ -98,6 +129,5 @@ public class TaskDtoExtensionsTests
         enriched.AssignedUsers[0].AvatarUrl.ShouldBe("https://cdn.example/api/v1/users/me/avatar");
         enriched.AssignedUsers[1].AvatarUrl.ShouldBe($"https://cdn.example/api/v1/users/{otherUserId}/avatar");
         enriched.Attachments.Single().Url.ShouldBe($"https://cdn.example/api/v1/projects/{projectId}/tasks/{taskId}/attachments/{attachmentId}");
-        enriched.Attachments.Single().StorageKey.ShouldBeNull();
     }
 }

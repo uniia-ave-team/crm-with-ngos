@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role.Queries;
 using Crm.Domain.Extensions;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -9,10 +8,11 @@ namespace Crm.Application.Features.Roles.Queries;
 /// <summary>
 /// Handles the <see cref="GetAvailableAccessRightsQuery"/> to return all system-defined access rights.
 /// </summary>
-public partial class GetAvailableAccessRightsQueryHandler(
-    ILogger<GetAvailableAccessRightsQueryHandler> logger) : IRequestHandler<GetAvailableAccessRightsQuery, IReadOnlySet<string>>
+/// <param name="logger">The logger used to record the execution of the query.</param>
+public sealed partial class GetAvailableAccessRightsQueryHandler(
+    ILogger<GetAvailableAccessRightsQueryHandler> logger) : IQueryHandler<GetAvailableAccessRightsQuery, IReadOnlySet<string>>
 {
-    public ValueTask<IReadOnlySet<string>> Handle(GetAvailableAccessRightsQuery request, CancellationToken cancellationToken)
+    public ValueTask<IReadOnlySet<string>> Handle(GetAvailableAccessRightsQuery query, CancellationToken cancellationToken)
     {
         LogFetchingAvailableAccessRights(logger);
 

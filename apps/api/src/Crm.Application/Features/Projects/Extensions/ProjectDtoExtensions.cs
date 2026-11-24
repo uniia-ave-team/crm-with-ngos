@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.Project;
+using Crm.Application.Dtos.Projects;
 using Crm.Application.Features.Users.Extensions;
 using Crm.Application.Interfaces;
 

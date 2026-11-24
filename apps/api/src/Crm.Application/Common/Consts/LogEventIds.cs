@@ -1,7 +1,6 @@
 namespace Crm.Application.Common.Consts;
 
 // TODO: Translate logs in different languages.
-// TODO: Write unit tests for logging to ensure that all log consts are unique and they are used only once in the application. This will help to avoid duplicate log event.
 // TODO: Before end refactor all code values entirely
 
 /// <summary>
@@ -23,15 +22,12 @@ public static class LogEventIds
     public const int AddingClaim = 1013;
     public const int ClaimAddedSuccessfully = 1016;
     public const int CreatingRole = 1017;
-    public const int RoleCreationFailed = 1018;
     public const int RoleCreatedSuccessfully = 1019;
     public const int DeletingRole = 1020;
-    public const int DeleteRoleCommandHandlerRoleNotFound = 1021;
     public const int CannotModifySystemRole = 1022;
     public const int RoleInUse = 1023;
     public const int RoleDeletedSuccessfully = 1025;
     public const int RemovingClaim = 1026;
-    public const int ClaimRemovalFailed = 1028;
     public const int ClaimRemovedSuccessfully = 1029;
     public const int UpdatingRole = 1030;
     public const int UpdateRoleCommandHandlerCannotModifySystemRole = 1032;
@@ -45,6 +41,8 @@ public static class LogEventIds
     public const int AdminRoleRemovingClaimAttempt = 1042;
     public const int InvalidClaimToAddAttempt = 1043;
     public const int InvalidClaimToRemoveAttempt = 1044;
+    public const int UserAddedToRevokedCache = 1045;
+    public const int UserRemovedFromRevokedCache = 1046;
 
     // 2000s: Users, Authentication, and Profiles
     public const int ActivatingUser = 2001;
@@ -79,8 +77,6 @@ public static class LogEventIds
     public const int PasswordUpdatedSuccessfully = 2047;
     public const int UpdatingUserProfile = 2048;
     public const int UserProfileUpdatedSuccessfully = 2049;
-    public const int CheckingUsersExistence = 2050;
-    public const int UsersExistenceResult = 2051;
     public const int FetchingUserProfile = 2052;
     public const int UserProfileFetched = 2053;
     public const int FetchingUsers = 2054;
@@ -146,7 +142,6 @@ public static class LogEventIds
     public const int FailedToDeleteFile = 4008;
     public const int FailedToCleanupOrphanedFile = 4009;
     public const int TransactionRolledBackOnClientError = 4010;
-    public const int TransactionRolledBackOnUnexpectedClientError = 4011;
 
     // 5000s: Security, Authorization, and Tokens
     public const int MissingRoleIdClaim = 5001;
@@ -158,15 +153,14 @@ public static class LogEventIds
     public const int InvalidExpiredToken = 5007;
     public const int ExpiredTokenValidationFailed = 5008;
     public const int PasswordResetTokenGenerated = 5009;
+    public const int RevokedUserAccessTokenRejected = 5010;
 
     // 6000s: Global Errors and Middlewares
     public const int ClientError = 6001;
     public const int ServerError = 6002;
-    public const int UnexpectedClientError = 6003;
+    public const int RateLimitExceeded = 6004;
 
     // 7000s: UI Customizations and Settings
-    public const int CreatingLoginPageImage = 7001;
-    public const int LoginPageImageCreatedSuccessfully = 7002;
     public const int DeletingLoginPageImage = 7003;
     public const int LoginPageImageDeletedSuccessfully = 7004;
     public const int FetchingAllLoginPageImages = 7005;
@@ -178,7 +172,7 @@ public static class LogEventIds
     public const int UploadingLoginPageImage = 7011;
     public const int LoginPageImageUploadedSuccessfully = 7012;
     public const int FetchingLoginPageImageFile = 7013;
-    public const int LogLoginPageImageFileFetched = 7014;
+    public const int LoginPageImageFileFetched = 7014;
 
     // 8000s: Background Services
     public const int CleanupServiceStarting = 8001;
@@ -305,4 +299,16 @@ public static class LogEventIds
     public const int UserUnassignedFromTask = 10070;
     public const int UpdatingTaskStatus = 10071;
     public const int TaskStatusUpdated = 10072;
+
+    // 11000s: Entity Auditing
+    public const int AuditWriterStarting = 11001;
+    public const int AuditWriterStopping = 11002;
+    public const int AuditWriterFatalError = 11003;
+    public const int AuditBatchWriteFailed = 11004;
+    public const int AuditQueueItemDropped = 11005;
+    public const int AuditCleanupServiceStarting = 11006;
+    public const int AuditCleanupServiceStopping = 11007;
+    public const int AuditCleanupServiceFatalError = 11008;
+    public const int AuditCleanupCompleted = 11009;
+    public const int AuditCleanupFailed = 11010;
 }

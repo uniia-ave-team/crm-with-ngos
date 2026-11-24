@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -11,26 +10,23 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// Handles the <see cref="DeleteTaskCommentCommand"/> to delete a comment from a task.
 /// </summary>
 /// <param name="commentRepository">The repository for retrieving and deleting task comments.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="projectAccessService">The scoped service resolving cached project access metadata.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class DeleteTaskCommentCommandHandler(
+public sealed partial class DeleteTaskCommentCommandHandler(
     ITaskCommentRepository commentRepository,
-    ICurrentUserService currentUserService,
     IProjectAccessService projectAccessService,
-    ILogger<DeleteTaskCommentCommandHandler> logger) : IRequestHandler<DeleteTaskCommentCommand>
+    ILogger<DeleteTaskCommentCommandHandler> logger) : ICommandHandler<DeleteTaskCommentCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(DeleteTaskCommentCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteTaskCommentCommand command, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
-        LogDeletingTaskComment(logger, request.CommentId, request.TaskId);
+        LogDeletingTaskComment(logger, command.CommentId, command.TaskId);
 
-        var comment = await commentRepository.GetByTaskAndIdForUpdateAsync(request.TaskId, request.CommentId, cancellationToken);
+        var comment = await commentRepository.GetByTaskAndIdForUpdateAsync(command.TaskId, command.CommentId, cancellationToken);
 
-        if (comment.UserId != currentUserId)
+        if (comment.UserId != command.CurrentUserId)
         {
-            var projectAccess = await projectAccessService.GetRequiredAsync(request.ProjectId, cancellationToken);
+            var projectAccess = await projectAccessService.GetRequiredAsync(command.ProjectId, cancellationToken);
             if (!projectAccess.CanManage)
             {
                 throw new UnauthorizedAccessException(TaskErrorMessages.CommentDeleteForbidden);
@@ -39,7 +35,7 @@ public partial class DeleteTaskCommentCommandHandler(
 
         await commentRepository.DeleteAsync(comment.Id, cancellationToken);
 
-        LogTaskCommentDeletedSuccessfully(logger, request.CommentId, request.TaskId);
+        LogTaskCommentDeletedSuccessfully(logger, command.CommentId, command.TaskId);
 
         return Unit.Value;
     }

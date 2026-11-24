@@ -1,6 +1,6 @@
-using Crm.Domain.Consts.Entities.GeneralConstants;
 using Crm.Domain.Entities;
-using Crm.Infrastructure.Persistence.ValueGenerators;
+using Crm.Infrastructure.Persistence.Consts;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NpgsqlTypes;
@@ -8,30 +8,29 @@ using NpgsqlTypes;
 namespace Crm.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// Configures the entity framework mapping for the <see cref="CustomRecord"/> entity.
+/// Configures the Entity Framework Core mapping for the <see cref="CustomRecord"/> entity.
 /// </summary>
-public class CustomRecordConfiguration : IEntityTypeConfiguration<CustomRecord>
+public sealed class CustomRecordConfiguration : IEntityTypeConfiguration<CustomRecord>
 {
-    private const string IndexMethodGin = "gin";
     private static readonly string ComputedSearchVectorSql =
-        $"jsonb_to_tsvector('{CustomRecordConstants.SearchVectorConfiguration}', \"Data\", '[\"string\",\"numeric\"]')";
+        $"jsonb_to_tsvector('{CustomRecordSearchConstants.SearchVectorConfiguration}', \"Data\", '[\"string\",\"numeric\"]')";
 
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<CustomRecord> builder)
     {
-        builder.HasKey(r => r.Id);
-
-        builder.Property(r => r.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+        builder.ConfigureGuidV7Key();
 
         builder.Property(r => r.Data)
-            .HasColumnType(nameof(NpgsqlDbType.Jsonb).ToLowerInvariant())
-            .IsRequired();
+            .ConfigureJsonbColumn();
 
-        builder.Property<NpgsqlTsVector>(CustomRecordConstants.SearchVectorPropertyName)
-                    .HasComputedColumnSql(ComputedSearchVectorSql, stored: true);
+        builder.Property<NpgsqlTsVector>(CustomRecordSearchConstants.SearchVectorPropertyName)
+            .HasComputedColumnSql(ComputedSearchVectorSql, stored: true);
 
-        builder.HasIndex(CustomRecordConstants.SearchVectorPropertyName)
-            .HasMethod(IndexMethodGin);
+        builder.HasIndex(CustomRecordSearchConstants.SearchVectorPropertyName)
+            .HasMethod(PostgresConstants.Gin);
+
+        builder.ConfigureAuthorTracking(r => r.Creator, r => r.Updater);
+        builder.HasQueryFilter(r => !r.CustomTable.IsDeleted);
 
         builder.HasIndex(r => new { r.CustomTableId, r.Id });
     }

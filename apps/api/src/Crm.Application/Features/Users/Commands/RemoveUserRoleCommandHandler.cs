@@ -1,7 +1,8 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Dtos.Roles;
 using Crm.Application.Interfaces;
+using Crm.Domain.Constants;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -12,21 +13,29 @@ namespace Crm.Application.Features.Users.Commands;
 /// Handles the <see cref="RemoveUserRoleCommand"/> to remove a specific Identity Role from a user.
 /// </summary>
 /// <param name="identityService">The identity service used for user and role management.</param>
+/// <param name="authRoleRepository">The repository for managing authentication roles.</param>
 /// <param name="logger">The logger used to record the lifecycle and outcome of the role removal process.</param>
-public partial class RemoveUserRoleCommandHandler(
+public sealed partial class RemoveUserRoleCommandHandler(
     IIdentityService identityService,
     IAuthRoleRepository authRoleRepository,
-    ILogger<RemoveUserRoleCommandHandler> logger) : IRequestHandler<RemoveUserRoleCommand>
+    ILogger<RemoveUserRoleCommandHandler> logger) : ICommandHandler<RemoveUserRoleCommand>
 {
-    public async ValueTask<Unit> Handle(RemoveUserRoleCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<Unit> Handle(RemoveUserRoleCommand command, CancellationToken cancellationToken)
     {
-        LogRemovingRole(logger, request.RoleId, request.UserId);
+        LogRemovingRole(logger, command.RoleId, command.UserId);
 
-        var role = await authRoleRepository.GetAsync<RoleUserDto>(request.RoleId, cancellationToken);
+        var role = await authRoleRepository.GetAsync<RoleUserDto>(command.RoleId, cancellationToken);
 
-        await identityService.RemoveFromRoleAsync(request.UserId, role.Name, cancellationToken);
+        if (string.Equals(role.Name, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase) &&
+            await authRoleRepository.IsUserLastAdminAsync(command.UserId, cancellationToken))
+        {
+            throw new DomainValidationException("Cannot remove the Administrator role from the last active administrator.");
+        }
 
-        LogRoleRemovedSuccessfully(logger, request.RoleId, request.UserId);
+        await identityService.RemoveFromRoleAsync(command.UserId, role.Name, cancellationToken);
+
+        LogRoleRemovedSuccessfully(logger, command.RoleId, command.UserId);
 
         return Unit.Value;
     }

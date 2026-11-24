@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using Mediator;
@@ -10,34 +10,43 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Projects.Commands;
 
 /// <summary>
-/// Handles the <see cref="CreateTopicCommand"/> to create a new board column/section in a project.
+/// Handles the <see cref="CreateTopicCommand"/> to create a new board column/section in a project,
+/// enforcing contiguous 0-based sequential <see cref="Topic.Order"/> values.
 /// </summary>
+/// <param name="projectRepository">The repository used to lock the parent project against concurrent order mutations.</param>
 /// <param name="topicRepository">The repository for persisting board topic entities.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class CreateTopicCommandHandler(
+public sealed partial class CreateTopicCommandHandler(
+    IProjectRepository projectRepository,
     ITopicRepository topicRepository,
-    ILogger<CreateTopicCommandHandler> logger) : IRequestHandler<CreateTopicCommand, Guid>
+    ILogger<CreateTopicCommandHandler> logger) : ICommandHandler<CreateTopicCommand, Guid>
 {
-    /// <inheritdoc />
-    public async ValueTask<Guid> Handle(CreateTopicCommand request, CancellationToken cancellationToken)
-    {
-        LogCreatingTopic(logger, request.ProjectId);
+    private const string NonSequentialTopicOrderMessage =
+        "Topic display order values must be continuous and sequential starting from 0 without gaps.";
 
-        string trimmedTitle = request.Title.Trim();
-        if (await topicRepository.ExistsWithTitleAsync(request.ProjectId, trimmedTitle, cancellationToken: cancellationToken))
+    /// <inheritdoc />
+    public async ValueTask<Guid> Handle(CreateTopicCommand command, CancellationToken cancellationToken)
+    {
+        LogCreatingTopic(logger, command.ProjectId);
+
+        await projectRepository.LockForUpdateAsync(command.ProjectId, cancellationToken);
+
+        string trimmedTitle = command.Title.Trim();
+        if (await topicRepository.ExistsWithTitleAsync(command.ProjectId, trimmedTitle, cancellationToken: cancellationToken))
         {
             throw new EntityAlreadyExistsException(nameof(Topic), trimmedTitle);
         }
 
-        if (await topicRepository.ExistsWithOrderAsync(request.ProjectId, request.Order, cancellationToken: cancellationToken))
-        {
-            throw new EntityAlreadyExistsException(nameof(Topic), request.Order);
-        }
+        List<byte> existingOrders = await topicRepository.GetOrdersByProjectIdAsync(command.ProjectId, cancellationToken);
+        existingOrders.EnsureValidNextOrder(
+            command.Order,
+            onDuplicate: () => new EntityAlreadyExistsException(nameof(Topic), command.Order),
+            onNonSequential: static () => new NonSequentialOrderException(NonSequentialTopicOrderMessage));
 
-        var topic = request.Adapt<Topic>();
+        var topic = command.Adapt<Topic>();
         await topicRepository.CreateAsync(topic, cancellationToken);
 
-        LogTopicCreatedSuccessfully(logger, topic.Id, request.ProjectId);
+        LogTopicCreatedSuccessfully(logger, topic.Id, command.ProjectId);
 
         return topic.Id;
     }

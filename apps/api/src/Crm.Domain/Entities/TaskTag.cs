@@ -13,7 +13,7 @@ public class TaskTag
     /// <summary>
     /// Gets or sets the navigation property pointing to the <see cref="Entities.Tag"/>.
     /// </summary>
-    public Tag Tag { get; set; }
+    public Tag Tag { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the foreign key identifier of the <see cref="ProjectTask"/>.
@@ -23,5 +23,5 @@ public class TaskTag
     /// <summary>
     /// Gets or sets the navigation property pointing to the <see cref="ProjectTask"/>.
     /// </summary>
-    public ProjectTask Task { get; set; }
+    public ProjectTask Task { get; set; } = null!;
 }

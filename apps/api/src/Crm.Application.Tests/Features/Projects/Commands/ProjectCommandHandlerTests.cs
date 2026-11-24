@@ -1,9 +1,8 @@
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Application.Features.Projects.Commands;
 using Crm.Application.Features.Projects.Mappings;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
@@ -23,9 +22,7 @@ public class ProjectCommandHandlerTests
     private readonly IProjectRepository _projectRepository = Substitute.For<IProjectRepository>();
     private readonly IProjectTaskRepository _taskRepository = Substitute.For<IProjectTaskRepository>();
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
-    private readonly ITaskAttachmentRepository _attachmentRepository = Substitute.For<ITaskAttachmentRepository>();
     private readonly IFileTransactionTracker _fileTracker = Substitute.For<IFileTransactionTracker>();
-    private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
     private readonly IProjectAccessService _projectAccessService = Substitute.For<IProjectAccessService>();
 
     static ProjectCommandHandlerTests()
@@ -37,7 +34,6 @@ public class ProjectCommandHandlerTests
     public async Task CreateProjectShouldCreateProjectWithCreatorMemberAndDefaultClaims()
     {
         var creatorId = Guid.NewGuid();
-        _currentUserService.GetUserId().Returns(creatorId);
 
         Project? captured = null;
         _projectRepository.CreateAsync(Arg.Do<Project>(p => captured = p), Arg.Any<CancellationToken>())
@@ -45,7 +41,6 @@ public class ProjectCommandHandlerTests
 
         var handler = new CreateProjectCommandHandler(
             _projectRepository,
-            _currentUserService,
             Substitute.For<ILogger<CreateProjectCommandHandler>>());
 
         var startDate = new DateTime(2026, 11, 1, 9, 0, 0, DateTimeKind.Utc);
@@ -54,7 +49,10 @@ public class ProjectCommandHandlerTests
             "  Board description  ",
             ProjectVisibility.Private,
             startDate,
-            new DateTime(2026, 12, 31, 18, 0, 0, DateTimeKind.Utc));
+            new DateTime(2026, 12, 31, 18, 0, 0, DateTimeKind.Utc))
+        {
+            CurrentUserId = creatorId,
+        };
 
         await handler.Handle(command, CancellationToken.None);
 
@@ -77,7 +75,6 @@ public class ProjectCommandHandlerTests
         var editorId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
-        _currentUserService.GetUserId().Returns(editorId);
 
         var project = new Project
         {
@@ -96,7 +93,6 @@ public class ProjectCommandHandlerTests
             _projectRepository,
             _taskRepository,
             _projectAccessService,
-            _currentUserService,
             Substitute.For<ILogger<UpdateProjectCommandHandler>>());
 
         var projectStartDate = new DateTime(2026, 11, 1, 9, 0, 0, DateTimeKind.Utc);
@@ -107,6 +103,7 @@ public class ProjectCommandHandlerTests
             projectStartDate)
         {
             Id = projectId,
+            CurrentUserId = editorId,
         };
 
         // Public project editor does NOT have Manage permission -> 403
@@ -122,6 +119,7 @@ public class ProjectCommandHandlerTests
             projectEndDate)
         {
             Id = projectId,
+            CurrentUserId = editorId,
         };
 
         await handler.Handle(renameOnlyCommand, CancellationToken.None);
@@ -134,9 +132,8 @@ public class ProjectCommandHandlerTests
         // Owner changing visibility from Public -> Private triggers inaccessible user data cleanup (B-13)
         _projectAccessService.GetRequiredAsync(projectId, Arg.Any<CancellationToken>())
             .Returns(new ProjectAccess(ProjectVisibility.Public, ProjectClaim.Manage, ownerId));
-        _currentUserService.GetUserId().Returns(ownerId);
 
-        await handler.Handle(changeVisibilityCommand, CancellationToken.None);
+        await handler.Handle(changeVisibilityCommand with { CurrentUserId = ownerId }, CancellationToken.None);
         project.Visibility.ShouldBe(ProjectVisibility.Private);
         await _taskRepository.Received(1).RemoveInaccessibleUserDataAsync(projectId, Arg.Any<CancellationToken>());
     }
@@ -233,26 +230,27 @@ public class ProjectCommandHandlerTests
     }
 
     [Fact]
-    public async Task DeleteProjectShouldRegisterAttachmentsForDeferredDeletion()
+    public async Task DeleteProjectShouldLockSoftDeleteProjectAndDeleteTheAttachmentFilesOfItsTasks()
     {
         var ownerId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
-        _currentUserService.GetUserId().Returns(ownerId);
-
-        _attachmentRepository.GetStoredFileNamesByProjectIdAsync(projectId, Arg.Any<CancellationToken>())
-            .Returns(["file1.pdf"]);
+        var attachmentRepository = Substitute.For<ITaskAttachmentRepository>();
+        attachmentRepository.GetStoredFileNamesByProjectIdAsync(projectId, Arg.Any<CancellationToken>())
+            .Returns(["report.pdf"]);
 
         var handler = new DeleteProjectCommandHandler(
             _projectRepository,
-            _attachmentRepository,
+            attachmentRepository,
             _fileTracker,
-            _currentUserService,
             Substitute.For<ILogger<DeleteProjectCommandHandler>>());
 
-        await handler.Handle(new DeleteProjectCommand(projectId), CancellationToken.None);
+        await handler.Handle(new DeleteProjectCommand(projectId, ownerId), CancellationToken.None);
 
-        _fileTracker.Received(1).RegisterFileForDeletion("file1.pdf", FileStorageConstants.TaskAttachmentsFolder);
+        await _projectRepository.Received(1).LockForUpdateAsync(projectId, Arg.Any<CancellationToken>());
+        await attachmentRepository.Received(1).GetStoredFileNamesByProjectIdAsync(projectId, Arg.Any<CancellationToken>());
         await _projectRepository.Received(1).DeleteAsync(projectId, Arg.Any<CancellationToken>());
+        _fileTracker.Received(1).RegisterFileForDeletion("report.pdf", FileStorageConstants.TaskAttachmentsFolder);
+        _fileTracker.Received(1).RegisterFileForDeletion(Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Fact]
@@ -264,12 +262,13 @@ public class ProjectCommandHandlerTests
 
         topicRepository.ExistsWithTitleAsync(projectId, "Board", null, Arg.Any<CancellationToken>())
             .Returns(true);
-        topicRepository.GetByProjectAndIdForUpdateAsync(projectId, topicId, Arg.Any<CancellationToken>())
-            .Returns(new Topic { Id = topicId, ProjectId = projectId, Title = "Old" });
+        topicRepository.GetByProjectIdForUpdateAsync(projectId, Arg.Any<CancellationToken>())
+            .Returns([new Topic { Id = topicId, ProjectId = projectId, Title = "Old", Order = 0 }]);
         topicRepository.ExistsWithTitleAsync(projectId, "Board", topicId, Arg.Any<CancellationToken>())
             .Returns(true);
 
         var createHandler = new CreateTopicCommandHandler(
+            _projectRepository,
             topicRepository,
             Substitute.For<ILogger<CreateTopicCommandHandler>>());
 
@@ -277,6 +276,7 @@ public class ProjectCommandHandlerTests
             createHandler.Handle(new CreateTopicCommand("  Board  ", 0) { ProjectId = projectId }, CancellationToken.None).AsTask());
 
         var updateHandler = new UpdateTopicCommandHandler(
+            _projectRepository,
             topicRepository,
             Substitute.For<ILogger<UpdateTopicCommandHandler>>());
 
@@ -285,31 +285,67 @@ public class ProjectCommandHandlerTests
     }
 
     [Fact]
-    public async Task CreateAndUpdateTopicWhenOrderExistsShouldThrowEntityAlreadyExistsException()
+    public async Task CreateUpdateAndDeleteTopicShouldEnforceSequentialOrderAndReorderOrCompactNeighbors()
     {
         var projectId = Guid.NewGuid();
-        var topicId = Guid.NewGuid();
+        var topic0 = new Topic { Id = Guid.NewGuid(), ProjectId = projectId, Title = "First", Order = 0 };
+        var topic1 = new Topic { Id = Guid.NewGuid(), ProjectId = projectId, Title = "Second", Order = 1 };
+        var topic2 = new Topic { Id = Guid.NewGuid(), ProjectId = projectId, Title = "Third", Order = 2 };
         var topicRepository = Substitute.For<ITopicRepository>();
 
-        topicRepository.ExistsWithOrderAsync(projectId, 0, null, Arg.Any<CancellationToken>())
-            .Returns(true);
-        topicRepository.GetByProjectAndIdForUpdateAsync(projectId, topicId, Arg.Any<CancellationToken>())
-            .Returns(new Topic { Id = topicId, ProjectId = projectId, Title = "Old", Order = 1 });
-        topicRepository.ExistsWithOrderAsync(projectId, 0, topicId, Arg.Any<CancellationToken>())
-            .Returns(true);
+        // Create on empty project with non-zero order -> NonSequentialOrderException
+        topicRepository.GetOrdersByProjectIdAsync(projectId, Arg.Any<CancellationToken>())
+            .Returns([]);
 
         var createHandler = new CreateTopicCommandHandler(
+            _projectRepository,
             topicRepository,
             Substitute.For<ILogger<CreateTopicCommandHandler>>());
 
+        await Should.ThrowAsync<NonSequentialOrderException>(() =>
+            createHandler.Handle(new CreateTopicCommand("SkipZero", 1) { ProjectId = projectId }, CancellationToken.None).AsTask());
+
+        // Create when [0, 1] exist: duplicate 0 -> EntityAlreadyExistsException, gap 3 -> NonSequentialOrderException, next 2 -> succeeds
+        topicRepository.GetOrdersByProjectIdAsync(projectId, Arg.Any<CancellationToken>())
+            .Returns([0, 1]);
+
         await Should.ThrowAsync<EntityAlreadyExistsException>(() =>
-            createHandler.Handle(new CreateTopicCommand("NewTopic", 0) { ProjectId = projectId }, CancellationToken.None).AsTask());
+            createHandler.Handle(new CreateTopicCommand("DupZero", 0) { ProjectId = projectId }, CancellationToken.None).AsTask());
+
+        await Should.ThrowAsync<NonSequentialOrderException>(() =>
+            createHandler.Handle(new CreateTopicCommand("GapThree", 3) { ProjectId = projectId }, CancellationToken.None).AsTask());
+
+        await createHandler.Handle(new CreateTopicCommand("NextTwo", 2) { ProjectId = projectId }, CancellationToken.None);
+        await topicRepository.Received(1).CreateAsync(Arg.Is<Topic>(t => t.Order == 2), Arg.Any<CancellationToken>());
+
+        // Update with out-of-bounds order (>= count) -> NonSequentialOrderException; valid target reorders neighbors
+        topicRepository.GetByProjectIdForUpdateAsync(projectId, Arg.Any<CancellationToken>())
+            .Returns([topic0, topic1, topic2]);
 
         var updateHandler = new UpdateTopicCommandHandler(
+            _projectRepository,
             topicRepository,
             Substitute.For<ILogger<UpdateTopicCommandHandler>>());
 
-        await Should.ThrowAsync<EntityAlreadyExistsException>(() =>
-            updateHandler.Handle(new UpdateTopicCommand("NewTopic", 0) { ProjectId = projectId, TopicId = topicId }, CancellationToken.None).AsTask());
+        await Should.ThrowAsync<NonSequentialOrderException>(() =>
+            updateHandler.Handle(new UpdateTopicCommand("Third", 3) { ProjectId = projectId, TopicId = topic2.Id }, CancellationToken.None).AsTask());
+
+        await updateHandler.Handle(new UpdateTopicCommand("Third Moved First", 0) { ProjectId = projectId, TopicId = topic2.Id }, CancellationToken.None);
+        topic2.Order.ShouldBe((byte)0);
+        topic0.Order.ShouldBe((byte)1);
+        topic1.Order.ShouldBe((byte)2);
+        await topicRepository.Received(1).ResolveOrderCollisionsAsync(projectId, Arg.Any<CancellationToken>());
+
+        // Delete middle/first topic compacts remaining orders to 0..count-1
+        var deleteHandler = new DeleteTopicCommandHandler(
+            _projectRepository,
+            topicRepository,
+            Substitute.For<ILogger<DeleteTopicCommandHandler>>());
+
+        await deleteHandler.Handle(new DeleteTopicCommand(projectId, topic2.Id), CancellationToken.None);
+        topic0.Order.ShouldBe((byte)0);
+        topic1.Order.ShouldBe((byte)1);
+        await topicRepository.Received(1).DeleteAsync(topic2.Id, Arg.Any<CancellationToken>());
+        await topicRepository.Received(2).ResolveOrderCollisionsAsync(projectId, Arg.Any<CancellationToken>());
     }
 }

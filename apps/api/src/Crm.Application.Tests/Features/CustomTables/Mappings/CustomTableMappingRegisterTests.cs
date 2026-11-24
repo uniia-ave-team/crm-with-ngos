@@ -1,9 +1,9 @@
 using Crm.Application.Dtos.CustomTables;
-using Crm.Application.Dtos.CustomTables.Commands;
+using Crm.Application.Features.CustomTables.Commands;
 using Crm.Application.Features.CustomTables.Mappings;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 using Mapster;
 using Shouldly;
 
@@ -124,12 +124,14 @@ public class CustomTableMappingRegisterTests
         };
 
         var command = new UpdateCustomTableCommand(
-            Guid.NewGuid(),
             "New Name",
             "New Description",
             [
                 new UpdateCustomFieldDto(Guid.NewGuid(), "New Field", "field_new", FieldDataType.Number, false, 0),
-            ]);
+            ])
+        {
+            Id = Guid.NewGuid(),
+        };
 
         // Act
         command.Adapt(existingTable, _config);

@@ -1,7 +1,8 @@
 using System.Text.RegularExpressions;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Application.Common.Consts;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Extensions;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 using FluentValidation;
 
 namespace Crm.Application.Common.Validators;
@@ -9,7 +10,8 @@ namespace Crm.Application.Common.Validators;
 /// <summary>
 /// Provides validation rules for objects implementing <see cref="IFieldSchema"/>.
 /// </summary>
-public partial class FieldValidationRules<TField> : AbstractValidator<TField>
+/// <typeparam name="TField">The field schema type being validated.</typeparam>
+public sealed partial class FieldValidationRules<TField> : AbstractValidator<TField>
     where TField : IFieldSchema
 {
     /// <summary>
@@ -19,11 +21,14 @@ public partial class FieldValidationRules<TField> : AbstractValidator<TField>
     {
         RuleFor(x => x.Name)
             .NotEmpty()
-            .MaximumLength(CustomFieldValidationConstants.MaxNameLength);
+            .MaximumLength(FieldSchemaValidationConstants.MaxNameLength)
+            .Must(name => name is null || !name.Contains('\0', StringComparison.Ordinal))
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
 
         RuleFor(x => x.Key)
+            .Cascade(CascadeMode.Stop)
             .NotEmpty()
-            .MaximumLength(CustomFieldValidationConstants.MaxKeyLength)
+            .MaximumLength(FieldSchemaValidationConstants.MaxKeyLength)
             .Matches(KeyRegex()).WithMessage("Key must be snake_case.")
             .Must(k => !CustomFieldExtensions.IsReservedKey(k)).WithMessage("Key cannot be a reserved entity property name.");
 
@@ -31,6 +36,10 @@ public partial class FieldValidationRules<TField> : AbstractValidator<TField>
             .IsInEnum();
     }
 
+    /// <summary>
+    /// Compiled regular expression matching valid snake_case field keys.
+    /// </summary>
+    /// <returns>The compiled <see cref="Regex"/> instance.</returns>
     [GeneratedRegex(@"^[a-z][a-z0-9_]*\z", RegexOptions.CultureInvariant)]
     public static partial Regex KeyRegex();
 }

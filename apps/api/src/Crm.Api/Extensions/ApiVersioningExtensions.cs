@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
 using Crm.Api.OpenApi.Transformers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
 namespace Crm.Api.Extensions;
@@ -37,49 +36,28 @@ public static class ApiVersioningExtensions
         })
         .AddOpenApi(options =>
         {
-            options.Document.AddDocumentTransformer((document, context, cancellationToken) =>
+            options.Document.AddDocumentTransformer((document, _, _) =>
             {
                 document.Info.Title = ApiTitle;
                 document.Info.Description = ApiDescription;
-                return Task.CompletedTask;
-            });
-        });
 
-        services.ConfigureAll<OpenApiOptions>(options =>
-        {
-            options.AddDocumentTransformer((document, context, cancellationToken) =>
-            {
-                var scheme = new OpenApiSecurityScheme
+                document.Components ??= new OpenApiComponents();
+                document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+                document.Components.SecuritySchemes[JwtBearerDefaults.AuthenticationScheme] = new OpenApiSecurityScheme
                 {
                     Type = SecuritySchemeType.Http,
                     Scheme = JwtBearerDefaults.AuthenticationScheme,
                     BearerFormat = JwtConstants.TokenType,
                 };
 
-                document.Components ??= new OpenApiComponents();
-                document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
-                document.Components.SecuritySchemes[JwtBearerDefaults.AuthenticationScheme] = scheme;
-
-                var requirement = new OpenApiSecurityRequirement
-                {
-                    [new OpenApiSecuritySchemeReference(JwtBearerDefaults.AuthenticationScheme)] = [],
-                };
-
-                var operations = document.Paths?.Values.SelectMany(p => p.Operations.Values) ?? [];
-
-                foreach (var operation in operations)
-                {
-                    operation.Security ??= [];
-                    operation.Security.Add(requirement);
-                }
-
                 return Task.CompletedTask;
             });
 
-            options.AddOperationTransformer<AccessRightOperationTransformer>();
-            options.AddOperationTransformer<OperationIdOperationTransformer>();
-            options.AddOperationTransformer<JsonContentTypeOperationTransformer>();
-            options.AddOperationTransformer<JsonIgnoreParameterOperationTransformer>();
+            options.Document.AddOperationTransformer<BearerSecurityOperationTransformer>();
+            options.Document.AddOperationTransformer<AccessRightOperationTransformer>();
+            options.Document.AddOperationTransformer<OperationIdOperationTransformer>();
+            options.Document.AddOperationTransformer<JsonContentTypeOperationTransformer>();
+            options.Document.AddOperationTransformer<JsonIgnoreParameterOperationTransformer>();
         });
 
         return services;

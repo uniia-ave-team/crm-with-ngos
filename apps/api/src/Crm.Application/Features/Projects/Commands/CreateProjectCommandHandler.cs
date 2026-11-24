@@ -1,8 +1,7 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
-using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using Mediator;
@@ -14,27 +13,24 @@ namespace Crm.Application.Features.Projects.Commands;
 /// Handles the <see cref="CreateProjectCommand"/> to create a new project and register its creator.
 /// </summary>
 /// <param name="projectRepository">The repository for persisting project entities.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class CreateProjectCommandHandler(
+public sealed partial class CreateProjectCommandHandler(
     IProjectRepository projectRepository,
-    ICurrentUserService currentUserService,
-    ILogger<CreateProjectCommandHandler> logger) : IRequestHandler<CreateProjectCommand, Guid>
+    ILogger<CreateProjectCommandHandler> logger) : ICommandHandler<CreateProjectCommand, Guid>
 {
     /// <inheritdoc />
-    public async ValueTask<Guid> Handle(CreateProjectCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateProjectCommand command, CancellationToken cancellationToken)
     {
-        var userId = currentUserService.GetUserId();
+        LogCreatingProject(logger, command.CurrentUserId);
 
-        LogCreatingProject(logger, userId);
-
-        var project = request.Adapt<Project>();
-        project.CreatedBy = userId;
+        var project = command.Adapt<Project>();
+        project.EnsureValidDateRange();
+        project.CreatedBy = command.CurrentUserId;
 
         project.Members.Add(new()
         {
             RoleTitle = string.Empty,
-            UserId = userId,
+            UserId = command.CurrentUserId,
             Claim = ProjectClaim.Manage,
         });
 

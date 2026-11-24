@@ -7,4 +7,4 @@ namespace Crm.Application.Dtos.Auth;
 /// <param name="ExpiresAt">The exact UTC time when the token expires.</param>
 public record TokenResult(
     string Token,
-    DateTime ExpiresAt);
+    DateTimeOffset ExpiresAt);

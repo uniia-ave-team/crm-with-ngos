@@ -1,11 +1,13 @@
 using Asp.Versioning;
+using Crm.Api.Consts;
 using Crm.Api.Security;
 using Crm.Application.Dtos.Auth;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Commands;
-using Crm.Application.Dtos.User.Queries;
+using Crm.Application.Dtos.Users;
+using Crm.Application.Features.Users.Commands;
+using Crm.Application.Features.Users.Queries;
 using Crm.Domain.Enums;
 using Mediator;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Crm.Api.Controllers.V1;
@@ -14,9 +16,9 @@ namespace Crm.Api.Controllers.V1;
 /// Controller responsible for managing user invitations and onboarding lifecycle.
 /// </summary>
 [ApiController]
-[ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/[controller]")]
-public class InvitationsController(IMediator mediator) : ControllerBase
+[ApiVersion(ApiVersions.V1)]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
+public sealed class InvitationsController(IMediator mediator) : ControllerBase
 {
     /// <summary>
     /// Generates an invitation link/token for a new user.
@@ -30,6 +32,8 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<TokenResultDto>> InviteUser(
         [FromBody] InviteUserCommand command,
         CancellationToken cancellationToken)
@@ -45,8 +49,10 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The extracted details from the valid invitation token.</returns>
     [HttpGet("validate")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<InvitationDetailsDto>> ValidateInvitation(
         [FromQuery] ValidateInvitationTokenQuery query,
         CancellationToken cancellationToken)
@@ -62,8 +68,11 @@ public class InvitationsController(IMediator mediator) : ControllerBase
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A DTO containing the JWT access token and refresh token.</returns>
     [HttpPost("accept")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<AuthTokensDto>> AcceptInvitation(
         [FromBody] CompleteRegistrationCommand command,
         CancellationToken cancellationToken)

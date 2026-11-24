@@ -1,37 +1,10 @@
-using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Ngo.Commands;
-using Crm.Domain.Interfaces.Repositories;
-using Mapster;
+using Crm.Application.Common.Interfaces;
 using Mediator;
-using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Ngos.Commands;
 
 /// <summary>
-/// Handles the <see cref="UpdateNgoCommand"/> to update details of an existing NGO.
+/// Represents a command to update an existing NGO in the system.
 /// </summary>
-/// <param name="repository">The repository used for accessing and persisting NGO data.</param>
-/// <param name="logger">The logger instance for tracking command execution.</param>
-public partial class UpdateNgoCommandHandler(
-    INgoRepository repository,
-    ILogger<UpdateNgoCommandHandler> logger) : IRequestHandler<UpdateNgoCommand>
-{
-    public async ValueTask<Unit> Handle(UpdateNgoCommand request, CancellationToken cancellationToken)
-    {
-        var ngo = await repository.GetForUpdateAsync(cancellationToken);
-
-        LogUpdatingNgo(logger, ngo.Id);
-
-        request.Adapt(ngo);
-
-        LogNgoUpdatedSuccessfully(logger, ngo.Id);
-
-        return Unit.Value;
-    }
-
-    [LoggerMessage(EventId = LogEventIds.UpdatingNgo, Level = LogLevel.Information, Message = "Updating details for NGO ID: {NgoId}")]
-    private static partial void LogUpdatingNgo(ILogger logger, Guid ngoId);
-
-    [LoggerMessage(EventId = LogEventIds.NgoUpdatedSuccessfully, Level = LogLevel.Information, Message = "NGO ID: {NgoId} details successfully updated.")]
-    private static partial void LogNgoUpdatedSuccessfully(ILogger logger, Guid ngoId);
-}
+/// <param name="Name">The new name for the NGO.</param>
+public record UpdateNgoCommand(string Name) : ICommand, ITransactionalCommand;

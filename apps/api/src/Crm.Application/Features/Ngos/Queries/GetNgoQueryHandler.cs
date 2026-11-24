@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Ngo;
-using Crm.Application.Dtos.Ngo.Queries;
+using Crm.Application.Dtos.Ngos;
 using Crm.Application.Interfaces;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -15,19 +14,19 @@ namespace Crm.Application.Features.Ngos.Queries;
 /// <param name="repository">The repository used for accessing NGO data.</param>
 /// <param name="fileUrlProvider">The provider used to construct the full web URL for the NGO's logo.</param>
 /// <param name="logger">The logger instance for tracking query execution.</param>
-public partial class GetNgoQueryHandler(
+public sealed partial class GetNgoQueryHandler(
     INgoRepository repository,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetNgoQueryHandler> logger) : IRequestHandler<GetNgoQuery, NgoDto?>
+    ILogger<GetNgoQueryHandler> logger) : IQueryHandler<GetNgoQuery, NgoDto>
 {
     /// <summary>
     /// Handles the retrieval process for the NGO asynchronously.
     /// </summary>
-    /// <param name="request">The query request.</param>
+    /// <param name="query">The query query.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation, containing the mapped <see cref="NgoDto"/>.</returns>
     /// <exception cref="NotFoundException">Thrown if the NGO is not found in the database.</exception>
-    public async ValueTask<NgoDto?> Handle(GetNgoQuery request, CancellationToken cancellationToken)
+    public async ValueTask<NgoDto> Handle(GetNgoQuery query, CancellationToken cancellationToken)
     {
         LogFetchingNgoDetails(logger);
 
@@ -37,7 +36,7 @@ public partial class GetNgoQueryHandler(
         {
             ngoDto = ngoDto with
             {
-                LogoUrl = fileUrlProvider.GetFileUrl(ngoDto.LogoUrl, ApiRouteLogoConstants.NgoLogo),
+                LogoUrl = fileUrlProvider.GetFileUrl(ngoDto.LogoUrl, FileRouteConstants.NgoLogo),
             };
         }
 

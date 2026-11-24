@@ -1,14 +1,14 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Exceptions;
 using Crm.Application.Interfaces;
 using Crm.Cli.Abstractions;
 using Crm.Cli.Constants;
 using Crm.Cli.Models;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
-using Crm.Infrastructure.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Cli.Commands;
@@ -127,13 +127,13 @@ public partial class ResetAdminPasswordCommand(
         return password.ToString();
     }
 
-    private async Task<AuthUser?> FindAdminAsync(string email, CancellationToken cancellationToken)
+    private async Task<UserBasicDto?> FindAdminAsync(string email, CancellationToken cancellationToken)
     {
         try
         {
-            var user = await authUserRepository.GetAsync<AuthUser>(email, cancellationToken);
+            var user = await authUserRepository.GetAsync<UserBasicDto>(email, cancellationToken);
 
-            var isAdmin = await identityService.IsInRoleAsync(user.Id, RoleConsts.Admin, cancellationToken);
+            var isAdmin = await identityService.IsInRoleAsync(user.Id, RoleConstants.Admin, cancellationToken);
             if (!isAdmin)
             {
                 LogUserNotAdmin(logger, email);
@@ -154,9 +154,9 @@ public partial class ResetAdminPasswordCommand(
         }
     }
 
-    private async Task<bool> TryResetPasswordAsync(AuthUser admin, string newPassword, CancellationToken cancellationToken)
+    private async Task<bool> TryResetPasswordAsync(UserBasicDto admin, string newPassword, CancellationToken cancellationToken)
     {
-        var identifier = admin.Email ?? admin.Id.ToString();
+        var identifier = !string.IsNullOrWhiteSpace(admin.Email) ? admin.Email : admin.Id.ToString();
 
         try
         {

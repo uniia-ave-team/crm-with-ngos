@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Queries;
+using Crm.Application.Dtos.Roles;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
@@ -15,25 +14,41 @@ namespace Crm.Application.Features.Users.Queries;
 /// <summary>
 /// Handles the <see cref="GetUsersQuery"/> to retrieve a paginated, filtered, and sorted list of organizational users.
 /// </summary>
-public partial class GetUsersQueryHandler(
+public sealed partial class GetUsersQueryHandler(
     IAuthUserRepository userRepository,
     IAuthRoleRepository authRoleRepository,
-    ICurrentUserService currentUserService,
     IPermissionService permissionService,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetUsersQueryHandler> logger) : IRequestHandler<GetUsersQuery, PagedResult<UserDto>>
+    ILogger<GetUsersQueryHandler> logger) : IQueryHandler<GetUsersQuery, PagedResult<UserDto>>
 {
-    public async ValueTask<PagedResult<UserDto>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<PagedResult<UserDto>> Handle(GetUsersQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingUsers(logger, request.PageNumber, request.PageSize, request.SearchTerm != null);
+        LogFetchingUsers(logger, query.PageNumber, query.PageSize, query.SearchTerm != null);
+
+        bool isOrderingByEmergencyContact = string.Equals(
+            query.OrderBy?.Trim(),
+            nameof(UserDto.EmergencyContact),
+            StringComparison.OrdinalIgnoreCase);
+
+        bool? precheckedEmergencyContactAccess = isOrderingByEmergencyContact
+            ? await permissionService.HasAccessAsync(
+                query.CurrentUserRoleIds,
+                AccessRight.ViewEmergencyContact,
+                cancellationToken)
+            : null;
+
+        string? effectiveOrderBy = isOrderingByEmergencyContact && precheckedEmergencyContactAccess == false
+            ? null
+            : query.OrderBy;
 
         var pagedResult = await userRepository.GetPagedAsync<UserDto>(
-            searchTerm: request.SearchTerm,
-            orderBy: request.OrderBy,
-            sortOrder: request.SortOrder,
-            pageNumber: request.PageNumber,
-            pageSize: request.PageSize,
-            showDeleted: request.ShowDeleted,
+            searchTerm: query.SearchTerm,
+            orderBy: effectiveOrderBy,
+            sortOrder: query.SortOrder,
+            pageNumber: query.PageNumber,
+            pageSize: query.PageSize,
+            showDeleted: query.ShowDeleted,
             cancellationToken: cancellationToken);
 
         if (pagedResult.Items.Count == 0)
@@ -45,19 +60,17 @@ public partial class GetUsersQueryHandler(
         var userIds = pagedResult.Items.Select(u => u.Id).Distinct();
         var rolesByUser = await authRoleRepository.GetRolesByUserIdsAsync<RoleDto>(userIds, cancellationToken);
 
-        var currentUserId = currentUserService.GetUserId();
-        var currentUserRoleIds = currentUserService.GetRoleIds();
-
-        var hasGlobalEmergencyContactAccess = await permissionService.HasAccessAsync(
-            currentUserRoleIds,
-            AccessRight.ViewEmergencyContact,
-            cancellationToken);
+        var hasGlobalEmergencyContactAccess = precheckedEmergencyContactAccess
+            ?? await permissionService.HasAccessAsync(
+                query.CurrentUserRoleIds,
+                AccessRight.ViewEmergencyContact,
+                cancellationToken);
 
         var enrichedItems = pagedResult.Items
             .Select(user => user.SecureAndEnrich(
                 rolesByUser[user.Id],
                 fileUrlProvider,
-                currentUserId,
+                query.CurrentUserId,
                 hasGlobalEmergencyContactAccess))
             .ToList();
 

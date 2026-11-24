@@ -1,5 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
+using Crm.Application.Features.Tasks.Commands;
+using Crm.Domain.Extensions;
 using FluentValidation;
 
 namespace Crm.Application.Features.Tasks.Validators;
@@ -7,7 +8,7 @@ namespace Crm.Application.Features.Tasks.Validators;
 /// <summary>
 /// Provides validation rules for <see cref="UpdateTaskCommand"/>.
 /// </summary>
-public class UpdateTaskCommandValidator : AbstractValidator<UpdateTaskCommand>
+public sealed class UpdateTaskCommandValidator : AbstractValidator<UpdateTaskCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UpdateTaskCommandValidator"/> class.
@@ -39,7 +40,7 @@ public class UpdateTaskCommandValidator : AbstractValidator<UpdateTaskCommand>
             .NotEmpty().WithMessage(ValidationMessages.StartDateRequired);
 
         RuleFor(x => x.EndDate)
-            .GreaterThanOrEqualTo(x => x.StartDate)
+            .Must((command, endDate) => endDate!.Value.ToUtc() >= command.StartDate.ToUtc())
             .WithMessage(ValidationMessages.EndDateBeforeStartDate)
             .When(x => x.EndDate.HasValue);
 
@@ -48,5 +49,13 @@ public class UpdateTaskCommandValidator : AbstractValidator<UpdateTaskCommand>
 
         RuleFor(x => x.Metadata)
             .ValidTaskMetadata();
+
+        RuleForEach(x => x.AssigneeIds)
+            .NotEmpty().WithMessage(ValidationMessages.UserIdRequired)
+            .When(x => x.AssigneeIds is not null);
+
+        RuleForEach(x => x.TagIds)
+            .NotEmpty().WithMessage(ValidationMessages.TagIdRequired)
+            .When(x => x.TagIds is not null);
     }
 }

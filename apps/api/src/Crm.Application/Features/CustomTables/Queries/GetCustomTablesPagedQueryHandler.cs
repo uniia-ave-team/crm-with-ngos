@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.CustomTables;
-using Crm.Application.Dtos.CustomTables.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -14,24 +13,27 @@ namespace Crm.Application.Features.CustomTables.Queries;
 /// <param name="customTableRepository">The repository used for accessing custom table data.</param>
 /// <param name="ngoRepository">The repository used for validating the existence of the NGO.</param>
 /// <param name="logger">The logger instance for tracking query execution.</param>
-public partial class GetCustomTablesPagedQueryHandler(
+public sealed partial class GetCustomTablesPagedQueryHandler(
     ICustomTableRepository customTableRepository,
     INgoRepository ngoRepository,
-    ILogger<GetCustomTablesPagedQueryHandler> logger) : IRequestHandler<GetCustomTablesPagedQuery, PagedResult<CustomTableSummaryDto>>
+    ILogger<GetCustomTablesPagedQueryHandler> logger) : IQueryHandler<GetCustomTablesPagedQuery, PagedResult<CustomTableSummaryDto>>
 {
-    public async ValueTask<PagedResult<CustomTableSummaryDto>> Handle(GetCustomTablesPagedQuery request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<PagedResult<CustomTableSummaryDto>> Handle(GetCustomTablesPagedQuery query, CancellationToken cancellationToken)
     {
         var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
 
-        LogFetchingCustomTables(logger, ngoId, request.SearchTerm != null, request.PageNumber, request.PageSize);
+        bool hasSearchFilter = !string.IsNullOrWhiteSpace(query.SearchTerm);
+
+        LogFetchingCustomTables(logger, ngoId, hasSearchFilter, query.PageNumber, query.PageSize);
 
         var result = await customTableRepository.GetPagedAsync<CustomTableSummaryDto>(
             ngoId: ngoId,
-            searchTerm: request.SearchTerm,
-            orderBy: request.OrderBy,
-            sortOrder: request.SortOrder,
-            pageNumber: request.PageNumber,
-            pageSize: request.PageSize,
+            searchTerm: query.SearchTerm,
+            orderBy: query.OrderBy,
+            sortOrder: query.SortOrder,
+            pageNumber: query.PageNumber,
+            pageSize: query.PageSize,
             cancellationToken: cancellationToken);
 
         LogCustomTablesFetched(logger, result.Items.Count, result.TotalCount);

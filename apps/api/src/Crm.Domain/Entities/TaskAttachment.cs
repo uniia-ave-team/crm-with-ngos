@@ -1,9 +1,14 @@
+using Crm.Domain.Attributes;
+using Crm.Domain.Entities.Base;
+using Crm.Domain.Interfaces.Entities;
+
 namespace Crm.Domain.Entities;
 
 /// <summary>
 /// Represents a file attached to a <see cref="ProjectTask"/> and stored in the local/Docker volume file storage.
 /// </summary>
-public class TaskAttachment : BaseEntity
+[Auditable]
+public class TaskAttachment : BaseEntity, ICreatableEntity
 {
     /// <summary>
     /// Gets or sets the foreign key identifier of the <see cref="ProjectTask"/>.
@@ -13,7 +18,7 @@ public class TaskAttachment : BaseEntity
     /// <summary>
     /// Gets or sets the navigation property pointing to the <see cref="ProjectTask"/>.
     /// </summary>
-    public ProjectTask Task { get; set; }
+    public ProjectTask Task { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the optional foreign key identifier of the <see cref="User"/> who uploaded the file.

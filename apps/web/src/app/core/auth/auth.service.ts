@@ -2,7 +2,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, Signal, computed, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { AuthTokensDto, AuthenticateUserCommand, LogoutRequest, RefreshTokensCommand } from '../../api/generated/models';
+import { AuthTokensDto, AuthenticateUserCommand, LogoutCommand, RefreshTokensCommand } from '../../api/generated/models';
 import { AccountsService, StoredAccount } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
@@ -221,7 +221,7 @@ export class AuthService {
         this.http
           .post(
             url,
-            { refreshToken: account.refreshToken } satisfies LogoutRequest,
+            { refreshToken: account.refreshToken } satisfies LogoutCommand,
             { headers: new HttpHeaders({ Authorization: `Bearer ${account.accessToken}` }) },
           )
           .pipe(timeout(REQUEST_TIMEOUT_MS)),
@@ -301,6 +301,22 @@ export class AuthService {
     this.accounts.setActive(previous);
     void this.revoke(account);
     return false;
+  }
+
+  /**
+   * Записує акаунту нову пару токенів, яку сервер видав сам, без обміну (`refresh`). Так буває
+   * після зміни пароля: сервер відкликає всі refresh-токени користувача, щоб завершити інші
+   * сесії, а сесії, що змінила пароль, віддає нову пару. Сервер щойно її видав, тож акаунт уже
+   * не застарілий і не недоступний. Невідомий `accountId` ігнорується.
+   */
+  adoptRenewedTokens(accountId: string, tokens: AuthTokens): void {
+    this.accounts.update(accountId, {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokensIssuedAt: Date.now(),
+      outdated: false,
+      unavailable: false,
+    });
   }
 
   /**

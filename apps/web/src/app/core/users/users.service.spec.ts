@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
+import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { UsersPage, UsersService } from './users.service';
 
@@ -343,14 +344,38 @@ describe('UsersService', () => {
 
   describe('changePassword', () => {
     const passwordUrl = () => `${url}/me/password`;
+    const signIn = () =>
+      TestBed.inject(AccountsService).add({
+        server: TestBed.inject(ConnectionService).serverUrl(),
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        identity: 'user-1',
+      });
+    const tokensOf = (id: string) => {
+      const account = TestBed.inject(AccountsService).accounts().find((candidate) => candidate.id === id);
+      return { accessToken: account?.accessToken, refreshToken: account?.refreshToken };
+    };
 
-    it('posts both passwords to /users/me/password and treats 204 as changed', async () => {
+    it('posts both passwords to /users/me/password and takes the new token pair for the account that asked', async () => {
+      const account = signIn();
       const result = service.changePassword('Old1!aaa', 'New1!bbb');
       const request = http.expectOne(passwordUrl());
       expect(request.request.method).toBe('POST');
       expect(request.request.body).toEqual({ currentPassword: 'Old1!aaa', newPassword: 'New1!bbb' });
-      request.flush(null, { status: 204, statusText: 'No Content' });
+      request.flush({ accessToken: 'new-access', refreshToken: 'new-refresh' });
+
       expect(await result).toBe('changed');
+      // Сервер відкликав старий refresh-токен: зі старою парою сесія закінчилася б при наступному оновленні.
+      expect(tokensOf(account.id)).toEqual({ accessToken: 'new-access', refreshToken: 'new-refresh' });
+    });
+
+    it('keeps the token pair when an older server answers 204 without a body (it revokes nothing)', async () => {
+      const account = signIn();
+      const result = service.changePassword('Old1!aaa', 'New1!bbb');
+      http.expectOne(passwordUrl()).flush(null, { status: 204, statusText: 'No Content' });
+
+      expect(await result).toBe('changed');
+      expect(tokensOf(account.id)).toEqual({ accessToken: 'old-access', refreshToken: 'old-refresh' });
     });
 
     it.each([

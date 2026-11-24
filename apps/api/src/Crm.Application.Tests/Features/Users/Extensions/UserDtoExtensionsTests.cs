@@ -1,5 +1,5 @@
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.User;
+using Crm.Application.Dtos.Roles;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Enums;
@@ -129,6 +129,7 @@ public class UserDtoExtensionsTests
 
         // Assert
         result.EmergencyContact.ShouldBe("contact-999");
+        result.PronounCategory.ShouldBe(PronounCategory.Feminine);
         result.AvatarUrl.ShouldBe("https://api.crm.org/api/v1/users/me/avatar");
         result.IsActive.ShouldBeTrue();
         result.Roles.Single().Name.ShouldBe("Adminka");
@@ -182,6 +183,7 @@ public class UserDtoExtensionsTests
 
         // Assert
         result.EmergencyContact.ShouldBeNull();
+        result.PronounCategory.ShouldBe(PronounCategory.Masculine);
         result.AvatarUrl.ShouldBe($"https://api.crm.org/api/v1/users/{userId}/avatar");
         result.Roles.Single().Name.ShouldBe("Admin");
         result.CustomFields.ShouldHaveSingleItem().Key.ShouldBe("PublicField");
@@ -211,6 +213,7 @@ public class UserDtoExtensionsTests
 
         // Assert
         result.EmergencyContact.ShouldBe("contact-999");
+        result.PronounCategory.ShouldBeNull();
         result.AvatarUrl.ShouldBeNull();
         result.CustomFields.Count().ShouldBe(2);
     }

@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using Mediator;
@@ -11,25 +10,25 @@ namespace Crm.Application.Features.Users.Commands;
 /// Handles the <see cref="UpdateUserCustomFieldCommand"/> to update an existing custom field's value.
 /// Ensures that users can only update their own custom fields.
 /// </summary>
-public partial class UpdateUserCustomFieldCommandHandler(
+public sealed partial class UpdateUserCustomFieldCommandHandler(
     IUserCustomFieldRepository customFieldRepository,
-    ILogger<UpdateUserCustomFieldCommandHandler> logger) : IRequestHandler<UpdateUserCustomFieldCommand>
+    ILogger<UpdateUserCustomFieldCommandHandler> logger) : ICommandHandler<UpdateUserCustomFieldCommand>
 {
-    public async ValueTask<Unit> Handle(UpdateUserCustomFieldCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateUserCustomFieldCommand command, CancellationToken cancellationToken)
     {
-        LogUpdatingCustomField(logger, request.CustomFieldId, request.UserId);
+        LogUpdatingCustomField(logger, command.CustomFieldId, command.UserId);
 
-        var customField = await customFieldRepository.GetForUpdateAsync(request.CustomFieldId, cancellationToken);
+        var customField = await customFieldRepository.GetForUpdateAsync(command.CustomFieldId, cancellationToken);
 
-        if (customField.UserId != request.UserId)
+        if (customField.UserId != command.UserId)
         {
-            LogUnauthorizedCustomFieldUpdate(logger, request.CustomFieldId, request.UserId);
-            throw new InvalidOperationException("Cannot update a custom field that belongs to another user.");
+            LogUnauthorizedCustomFieldUpdate(logger, command.CustomFieldId, command.UserId);
+            throw new UnauthorizedAccessException("Cannot update a custom field that belongs to another user.");
         }
 
-        request.Adapt(customField);
+        command.Adapt(customField);
 
-        LogCustomFieldUpdatedSuccessfully(logger, request.CustomFieldId, request.UserId);
+        LogCustomFieldUpdatedSuccessfully(logger, command.CustomFieldId, command.UserId);
 
         return Unit.Value;
     }

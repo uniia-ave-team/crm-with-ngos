@@ -1,4 +1,4 @@
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 using FluentValidation;
 
 namespace Crm.Application.Common.Validators;
@@ -7,7 +7,7 @@ namespace Crm.Application.Common.Validators;
 /// Provides validation rules for collections of fields implementing <see cref="IIdentifiableField"/>.
 /// </summary>
 /// <typeparam name="TField">The type of the field schema, implementing <see cref="IIdentifiableField"/>.</typeparam>
-public class IdentifiableFieldListValidator<TField> : FieldListValidator<TField>
+public sealed class IdentifiableFieldListValidator<TField> : FieldListValidator<TField>
     where TField : IIdentifiableField
 {
     /// <summary>
@@ -16,20 +16,21 @@ public class IdentifiableFieldListValidator<TField> : FieldListValidator<TField>
     public IdentifiableFieldListValidator()
     {
         RuleFor(fields => fields)
+            .Must(NotContainEmptyGuidIds)
+            .WithMessage("Field ID cannot be an empty GUID when provided.")
             .Must(HaveUniqueIds)
-            .WithMessage("Field IDs must be unique within the schema.");
+            .WithMessage("Field IDs must be unique within the schema.")
+            .When(fields => fields is not null);
     }
 
-    /// <summary>
-    /// Validates that all non-null and non-empty field IDs in the collection are unique.
-    /// </summary>
-    /// <param name="fields">The collection of fields to validate.</param>
-    /// <returns><see langword="true"/> if all specified field IDs are unique; otherwise, <see langword="false"/>.</returns>
+    private static bool NotContainEmptyGuidIds(IReadOnlyCollection<TField> fields)
+        => fields.All(f => f is not null && (!f.Id.HasValue || f.Id.Value != Guid.Empty));
+
     private static bool HaveUniqueIds(IReadOnlyCollection<TField> fields)
     {
         var set = new HashSet<Guid>();
         return fields
-            .Where(f => f.Id.HasValue && f.Id.Value != Guid.Empty)
+            .Where(f => f is not null && f.Id.HasValue && f.Id.Value != Guid.Empty)
             .All(f => set.Add(f.Id!.Value));
     }
 }

@@ -1,8 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Common;
-using Crm.Application.Dtos.User.Queries;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -15,20 +14,20 @@ namespace Crm.Application.Features.Users.Queries;
 /// <param name="userRepository">The repository used for accessing the user record and avatar filename.</param>
 /// <param name="fileStorageService">The service responsible for physical file I/O operations.</param>
 /// <param name="logger">The logger instance for tracking query execution.</param>
-public partial class GetUserAvatarQueryHandler(
+public sealed partial class GetUserAvatarQueryHandler(
     IUserRepository userRepository,
     IFileStorageService fileStorageService,
-    ILogger<GetUserAvatarQueryHandler> logger) : IRequestHandler<GetUserAvatarQuery, FileDto>
+    ILogger<GetUserAvatarQueryHandler> logger) : IQueryHandler<GetUserAvatarQuery, FileDto>
 {
-    public async ValueTask<FileDto> Handle(GetUserAvatarQuery request, CancellationToken cancellationToken)
+    public async ValueTask<FileDto> Handle(GetUserAvatarQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingUserAvatar(logger, request.UserId);
+        LogFetchingUserAvatar(logger, query.UserId);
 
-        var avatar = await userRepository.GetAvatarAsync(request.UserId, cancellationToken);
+        var avatar = await userRepository.GetAvatarAsync(query.UserId, cancellationToken);
 
         var stream = await fileStorageService.GetFileAsync(avatar, FileStorageConstants.UsersFolder, cancellationToken);
 
-        LogUserAvatarFetched(logger, request.UserId);
+        LogUserAvatarFetched(logger, query.UserId);
 
         return new(stream, avatar);
     }

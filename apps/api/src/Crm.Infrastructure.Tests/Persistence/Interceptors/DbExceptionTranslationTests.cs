@@ -1,8 +1,9 @@
 using System.Data.Common;
 using Crm.Domain.Entities;
+using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
+using Crm.Infrastructure.DependencyInjection;
 using Crm.Infrastructure.Entities;
-using Crm.Infrastructure.Extensions;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Interceptors;
 using Microsoft.EntityFrameworkCore;
@@ -141,7 +142,7 @@ public class DbExceptionTranslationTests
         var uniqueDbUpdateEx = new DbUpdateException(
             "save failed",
             new PostgresException("dup", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation));
-        var saveEventData = new DbContextErrorEventData(eventDefinition, (_, _) => string.Empty, null, uniqueDbUpdateEx);
+        var saveEventData = new DbContextErrorEventData(eventDefinition, (_, _) => string.Empty, null!, uniqueDbUpdateEx);
 
         var syncSaveEx = Should.Throw<ConflictException>(() => interceptor.SaveChangesFailed(saveEventData));
         syncSaveEx.Kind.ShouldBe(ConflictKind.UniqueViolation);

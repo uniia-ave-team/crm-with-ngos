@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.Role.Queries;
+using Crm.Application.Features.Roles.Queries;
 using FluentValidation;
 
 namespace Crm.Application.Features.Roles.Validators;
@@ -6,7 +6,7 @@ namespace Crm.Application.Features.Roles.Validators;
 /// <summary>
 /// Provides validation rules for the <see cref="GetRoleByIdQuery"/>.
 /// </summary>
-public class GetRoleByIdQueryValidator : AbstractValidator<GetRoleByIdQuery>
+public sealed class GetRoleByIdQueryValidator : AbstractValidator<GetRoleByIdQuery>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="GetRoleByIdQueryValidator"/> class.

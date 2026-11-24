@@ -1,6 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.LoginPageImage;
-using Crm.Application.Dtos.LoginPageImage.Queries;
+using Crm.Application.Dtos.LoginPageImages;
+using Crm.Application.Features.LoginPageImages.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -14,21 +14,18 @@ namespace Crm.Application.Features.LoginPageImages.Queries;
 /// <param name="repository">The repository used to manage data access operations for login page images.</param>
 /// <param name="fileUrlProvider">The provider used to construct the full web URL for the login page image.</param>
 /// <param name="logger">The logger used to record the execution and outcome of the random image retrieval process.</param>
-public partial class GetRandomLoginPageImageQueryHandler(
+public sealed partial class GetRandomLoginPageImageQueryHandler(
     ILoginPageImageRepository repository,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetRandomLoginPageImageQueryHandler> logger) : IRequestHandler<GetRandomLoginPageImageQuery, LoginPageImageDto>
+    ILogger<GetRandomLoginPageImageQueryHandler> logger) : IQueryHandler<GetRandomLoginPageImageQuery, LoginPageImageDto>
 {
-    public async ValueTask<LoginPageImageDto> Handle(GetRandomLoginPageImageQuery request, CancellationToken cancellationToken)
+    public async ValueTask<LoginPageImageDto> Handle(GetRandomLoginPageImageQuery query, CancellationToken cancellationToken)
     {
         LogFetchingRandomImage(logger);
 
         var dto = await repository.GetRandomAsync<LoginPageImageDto>(cancellationToken);
 
-        dto = dto with
-        {
-            Url = fileUrlProvider.GetFileUrl(dto.Url, ApiRouteLogoConstants.LoginPageImageFile(dto.Id)) ?? dto.Url,
-        };
+        dto = dto.WithResolvedUrl(fileUrlProvider);
 
         LogFetchedRandomImageSuccessfully(logger, dto.Id);
 

@@ -1,6 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Domain.Consts;
 using Crm.Domain.Interfaces.Repositories;
+using Crm.Infrastructure.Consts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -11,17 +11,22 @@ namespace Crm.Infrastructure.BackgroundServices;
 /// Background service responsible for periodically removing expired refresh tokens from the database.
 /// Ensures the token storage does not grow indefinitely.
 /// </summary>
-public partial class ExpiredTokensCleanupService(
+/// <param name="scopeFactory">The DI scope factory used to resolve scoped repositories.</param>
+/// <param name="timeProvider">The time provider controlling periodic execution ticks.</param>
+/// <param name="logger">The logger instance.</param>
+public sealed partial class ExpiredTokensCleanupService(
     IServiceScopeFactory scopeFactory,
+    TimeProvider timeProvider,
     ILogger<ExpiredTokensCleanupService> logger) : BackgroundService
 {
     private readonly TimeSpan _cleanupInterval = TimeSpan.FromHours(TokenConstants.CleanupIntervalHours);
 
+    /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         LogCleanupServiceStarting(logger);
 
-        using var timer = new PeriodicTimer(_cleanupInterval);
+        using var timer = new PeriodicTimer(_cleanupInterval, timeProvider);
 
         try
         {
@@ -32,7 +37,7 @@ public partial class ExpiredTokensCleanupService(
                 await CleanupTokensAsync(stoppingToken);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             LogCleanupServiceStopping(logger);
         }
@@ -48,12 +53,16 @@ public partial class ExpiredTokensCleanupService(
         {
             LogCleanupStarted(logger);
 
-            using var scope = scopeFactory.CreateScope();
+            await using var scope = scopeFactory.CreateAsyncScope();
             var refreshTokenRepository = scope.ServiceProvider.GetRequiredService<IUserRefreshTokenRepository>();
 
             await refreshTokenRepository.RemoveExpiredTokensAsync(cancellationToken);
 
             LogCleanupSuccessfullyFinished(logger);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

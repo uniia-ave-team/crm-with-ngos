@@ -1,13 +1,17 @@
 using System.Text.Json.Nodes;
-using Crm.Domain.Common;
+using Crm.Domain.Attributes;
+using Crm.Domain.Entities.Base;
 using Crm.Domain.Enums;
+using Crm.Domain.Interfaces.Entities;
+using Crm.Domain.ValueObjects;
 
 namespace Crm.Domain.Entities;
 
 /// <summary>
 /// Represents a task within a project in the NGO CRM Task Tracker.
 /// </summary>
-public class ProjectTask : BaseEntity
+[Auditable]
+public class ProjectTask : BaseEntity, IAuditableEntity, IAuthorTrackedEntity, ISoftDeletableEntity
 {
     /// <summary>
     /// Gets or sets the foreign key identifier of the parent <see cref="Project"/>.
@@ -17,7 +21,7 @@ public class ProjectTask : BaseEntity
     /// <summary>
     /// Gets or sets the navigation property pointing to the parent <see cref="Project"/>.
     /// </summary>
-    public Project Project { get; set; }
+    public Project Project { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the foreign key identifier of the required <see cref="Topic"/> (board column/section).
@@ -27,7 +31,7 @@ public class ProjectTask : BaseEntity
     /// <summary>
     /// Gets or sets the navigation property pointing to the associated <see cref="Topic"/>.
     /// </summary>
-    public Topic Topic { get; set; }
+    public Topic Topic { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the title of the task.
@@ -50,12 +54,12 @@ public class ProjectTask : BaseEntity
     public TaskPriority Priority { get; set; } = TaskPriority.Medium;
 
     /// <summary>
-    /// Gets or sets the UTC start date/time of the task.
+    /// Gets or sets the UTC+0 start date/time of the task.
     /// </summary>
     public DateTime StartDate { get; set; }
 
     /// <summary>
-    /// Gets or sets the optional UTC end/completion date/time of the task.
+    /// Gets or sets the optional UTC+0 end/completion date/time of the task.
     /// Automatically populated with the current timestamp if null when status transitions to <see cref="ProjectTaskStatus.Completed"/>.
     /// </summary>
     public DateTime? EndDate { get; set; }
@@ -67,9 +71,9 @@ public class ProjectTask : BaseEntity
     public bool EndDateWasAuto { get; internal set; }
 
     /// <summary>
-    /// Gets or sets the collection of external links attached to the task.
+    /// Gets the collection of external links attached to the task.
     /// </summary>
-    public List<TaskExternalLink> ExternalLinks { get; set; } = [];
+    public ICollection<TaskExternalLink> ExternalLinks { get; init; } = [];
 
     /// <summary>
     /// Gets or sets the flexible key-value metadata payload attached to the task.
@@ -77,33 +81,63 @@ public class ProjectTask : BaseEntity
     public JsonObject Metadata { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the UTC timestamp when the task was created.
+    /// Gets or sets the UTC+0 timestamp when the task was created.
     /// </summary>
     public DateTime CreatedAt { get; set; }
 
     /// <summary>
-    /// Gets or sets the UTC timestamp when the task's core properties, status, tags, or assignees were last modified.
+    /// Gets or sets the UTC+0 timestamp when the task's core properties, status, tags, or assignees were last modified.
     /// Updated when task fields/status change or when tags/assignees are added or removed; not updated by comments or attachments.
     /// </summary>
     public DateTime UpdatedAt { get; set; }
 
     /// <summary>
-    /// Gets or sets the users assigned to this task.
+    /// Gets or sets the optional unique identifier of the user who created the task.
     /// </summary>
-    public ICollection<User> AssignedUsers { get; set; } = [];
+    public Guid? CreatedBy { get; set; }
 
     /// <summary>
-    /// Gets or sets the tags associated with this task.
+    /// Gets or sets the navigation property pointing to the creator <see cref="User"/>.
     /// </summary>
-    public ICollection<Tag> Tags { get; set; } = [];
+    public User? Creator { get; set; }
 
     /// <summary>
-    /// Gets or sets the comments posted on this task.
+    /// Gets or sets the optional unique identifier of the user who last updated the task.
     /// </summary>
-    public ICollection<TaskComment> Comments { get; set; } = [];
+    public Guid? UpdatedBy { get; set; }
 
     /// <summary>
-    /// Gets or sets the file attachments associated with this task.
+    /// Gets or sets the navigation property pointing to the updater <see cref="User"/>.
     /// </summary>
-    public ICollection<TaskAttachment> Attachments { get; set; } = [];
+    public User? Updater { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the task has been soft-deleted.
+    /// </summary>
+    public bool IsDeleted { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optional UTC+0 timestamp when the task was soft-deleted.
+    /// </summary>
+    public DateTime? DeletedAt { get; set; }
+
+    /// <summary>
+    /// Gets the users assigned to this task.
+    /// </summary>
+    public ICollection<User> AssignedUsers { get; init; } = [];
+
+    /// <summary>
+    /// Gets the tags associated with this task.
+    /// </summary>
+    public ICollection<Tag> Tags { get; init; } = [];
+
+    /// <summary>
+    /// Gets the comments posted on this task.
+    /// </summary>
+    public ICollection<TaskComment> Comments { get; init; } = [];
+
+    /// <summary>
+    /// Gets the file attachments associated with this task.
+    /// </summary>
+    public ICollection<TaskAttachment> Attachments { get; init; } = [];
 }
