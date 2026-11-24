@@ -2232,7 +2232,8 @@ describe('ColleaguesPage', () => {
         (dialog.querySelector('.confirm__button--confirm') as HTMLButtonElement).click();
         fixture.detectChanges();
         expect((dialog.querySelector('.confirm__button--confirm') as HTMLButtonElement).disabled).toBe(true);
-        deleteRequest('r1').flush(null, { status: 400, statusText: 'Bad Request' });
+        // Так сервер відмовляє, коли роль має хтось із колег.
+        deleteRequest('r1').flush(null, { status: 409, statusText: 'Conflict' });
         await vi.waitFor(() => {
           fixture.detectChanges();
           expect(dialog.querySelector('.confirm__error')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.deleteError.invalid);
