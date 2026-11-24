@@ -185,7 +185,7 @@ public sealed class DemoModeMiddlewareTests : IAsyncLifetime
     public async Task AuthenticatedRequestShouldRunInTheSandboxNamedInItsToken()
     {
         await StartAsync();
-        var sandbox = await Manager.CreateAsync(TestContext.Current.CancellationToken);
+        var sandbox = (await Manager.CreateAsync(TestContext.Current.CancellationToken)).ShouldNotBeNull();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "/open");
         request.Headers.Add(SandboxHeader, sandbox.Id);
@@ -219,7 +219,7 @@ public sealed class DemoModeMiddlewareTests : IAsyncLifetime
     public async Task AuthenticatedRequestAfterSandboxExpiredShouldReturn401SessionExpired()
     {
         await StartAsync();
-        var sandbox = await Manager.CreateAsync(TestContext.Current.CancellationToken);
+        var sandbox = (await Manager.CreateAsync(TestContext.Current.CancellationToken)).ShouldNotBeNull();
         _time.Advance(TimeSpan.FromMinutes(_options.Sandbox.LifetimeMinutes));
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "/open");
@@ -234,7 +234,7 @@ public sealed class DemoModeMiddlewareTests : IAsyncLifetime
     public async Task RefreshShouldRunInTheSandboxNamedInTheAccessTokenOfTheBody()
     {
         await StartAsync();
-        var sandbox = await Manager.CreateAsync(TestContext.Current.CancellationToken);
+        var sandbox = (await Manager.CreateAsync(TestContext.Current.CancellationToken)).ShouldNotBeNull();
         _tokenService.GetPrincipalFromExpiredToken("expired-token").Returns(
             new ClaimsPrincipal(new ClaimsIdentity([new Claim(DemoClaimTypes.SandboxId, sandbox.Id)])));
 
@@ -286,6 +286,7 @@ public sealed class DemoModeMiddlewareTests : IAsyncLifetime
                 .ConfigureServices(services =>
                 {
                     services.AddRouting();
+                    services.AddProblemDetails();
                     services.AddSingleton(MsOptions.Create(_options));
                     services.AddSingleton(_manager);
                     services.AddSingleton(_tokenService);

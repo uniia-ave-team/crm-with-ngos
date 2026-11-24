@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Tasks.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
@@ -15,20 +14,20 @@ namespace Crm.Application.Features.Tasks.Queries;
 /// <param name="attachmentRepository">The repository for querying task attachments.</param>
 /// <param name="fileUrlProvider">The file URL provider for resolving attachment download URLs.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class GetTaskAttachmentsQueryHandler(
+public sealed partial class GetTaskAttachmentsQueryHandler(
     ITaskAttachmentRepository attachmentRepository,
     IFileUrlProvider fileUrlProvider,
-    ILogger<GetTaskAttachmentsQueryHandler> logger) : IRequestHandler<GetTaskAttachmentsQuery, List<TaskAttachmentDto>>
+    ILogger<GetTaskAttachmentsQueryHandler> logger) : IQueryHandler<GetTaskAttachmentsQuery, List<TaskAttachmentDto>>
 {
     /// <inheritdoc />
-    public async ValueTask<List<TaskAttachmentDto>> Handle(GetTaskAttachmentsQuery request, CancellationToken cancellationToken)
+    public async ValueTask<List<TaskAttachmentDto>> Handle(GetTaskAttachmentsQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingTaskAttachments(logger, request.TaskId, request.ProjectId);
+        LogFetchingTaskAttachments(logger, query.TaskId, query.ProjectId);
 
-        var attachments = await attachmentRepository.GetByTaskIdAsync<TaskAttachmentDto>(request.TaskId, cancellationToken);
-        var result = attachments.EnrichUrls(request.ProjectId, fileUrlProvider);
+        var attachments = await attachmentRepository.GetByTaskIdAsync<TaskAttachmentDto>(query.TaskId, cancellationToken);
+        var result = attachments.EnrichUrls(query.ProjectId, fileUrlProvider);
 
-        LogTaskAttachmentsFetched(logger, result.Count, request.TaskId);
+        LogTaskAttachmentsFetched(logger, result.Count, query.TaskId);
 
         return result;
     }

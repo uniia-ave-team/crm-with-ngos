@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
@@ -19,37 +18,37 @@ namespace Crm.Application.Features.Projects.Commands;
 /// <param name="taskRepository">The repository for cleaning up task assignments and read states for users who lose access.</param>
 /// <param name="projectAccessService">The scoped service resolving cached project access metadata.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class RemoveProjectMemberCommandHandler(
+public sealed partial class RemoveProjectMemberCommandHandler(
     IProjectRepository projectRepository,
     IProjectTaskRepository taskRepository,
     IProjectAccessService projectAccessService,
-    ILogger<RemoveProjectMemberCommandHandler> logger) : IRequestHandler<RemoveProjectMemberCommand>
+    ILogger<RemoveProjectMemberCommandHandler> logger) : ICommandHandler<RemoveProjectMemberCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(RemoveProjectMemberCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(RemoveProjectMemberCommand command, CancellationToken cancellationToken)
     {
-        LogRemovingProjectMember(logger, request.UserId, request.ProjectId);
+        LogRemovingProjectMember(logger, command.UserId, command.ProjectId);
 
-        await projectRepository.LockForUpdateAsync(request.ProjectId, cancellationToken);
+        await projectRepository.LockForUpdateAsync(command.ProjectId, cancellationToken);
 
-        ProjectClaim memberClaim = await projectRepository.GetMemberClaimAsync(request.ProjectId, request.UserId, cancellationToken)
-            ?? throw new EntityNotFoundException<ProjectMember>(request.UserId);
+        ProjectClaim memberClaim = await projectRepository.GetMemberClaimAsync(command.ProjectId, command.UserId, cancellationToken)
+            ?? throw new EntityNotFoundException<ProjectMember>(command.UserId);
 
         if (memberClaim >= ProjectClaim.Manage
-            && !await projectRepository.HasAnotherManagerAsync(request.ProjectId, request.UserId, cancellationToken))
+            && !await projectRepository.HasAnotherManagerAsync(command.ProjectId, command.UserId, cancellationToken))
         {
-            throw new CannotRemoveLastProjectManagerException(request.ProjectId);
+            throw new CannotRemoveLastProjectManagerException(command.ProjectId);
         }
 
-        await projectRepository.RemoveMemberAsync(request.ProjectId, request.UserId, cancellationToken);
+        await projectRepository.RemoveMemberAsync(command.ProjectId, command.UserId, cancellationToken);
 
-        var projectAccess = await projectAccessService.GetRequiredAsync(request.ProjectId, cancellationToken);
+        var projectAccess = await projectAccessService.GetRequiredAsync(command.ProjectId, cancellationToken);
         if (projectAccess.Visibility == ProjectVisibility.Private)
         {
-            await taskRepository.RemoveInaccessibleUserDataAsync(request.ProjectId, cancellationToken);
+            await taskRepository.RemoveInaccessibleUserDataAsync(command.ProjectId, cancellationToken);
         }
 
-        LogProjectMemberRemoved(logger, request.UserId, request.ProjectId);
+        LogProjectMemberRemoved(logger, command.UserId, command.ProjectId);
 
         return Unit.Value;
     }

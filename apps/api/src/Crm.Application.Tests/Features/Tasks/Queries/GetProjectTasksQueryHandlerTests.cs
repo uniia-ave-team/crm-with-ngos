@@ -1,10 +1,9 @@
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Tasks.Mappings;
 using Crm.Application.Features.Tasks.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
@@ -21,7 +20,6 @@ namespace Crm.Application.Tests.Features.Tasks.Queries;
 public class GetProjectTasksQueryHandlerTests
 {
     private readonly IProjectTaskRepository _taskRepository = Substitute.For<IProjectTaskRepository>();
-    private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
     private readonly IFileUrlProvider _fileUrlProvider = Substitute.For<IFileUrlProvider>();
     private readonly GetProjectTasksQueryHandler _handler;
 
@@ -34,7 +32,6 @@ public class GetProjectTasksQueryHandlerTests
     {
         _handler = new GetProjectTasksQueryHandler(
             _taskRepository,
-            _currentUserService,
             _fileUrlProvider,
             Substitute.For<ILogger<GetProjectTasksQueryHandler>>());
     }
@@ -50,7 +47,6 @@ public class GetProjectTasksQueryHandlerTests
         var smmTaskId = Guid.NewGuid();
         var devTaskId = Guid.NewGuid();
 
-        _currentUserService.GetUserId().Returns(currentUserId);
         _fileUrlProvider.GetFileUrl("other-avatar.png", $"api/v1/users/{otherUserId}/avatar")
             .Returns($"https://cdn.example/api/v1/users/{otherUserId}/avatar");
         _fileUrlProvider.GetFileUrl("me-avatar.png", "api/v1/users/me/avatar")
@@ -114,7 +110,7 @@ public class GetProjectTasksQueryHandlerTests
             .Returns(new Dictionary<Guid, int> { [smmTaskId] = 2 });
 
         var result = await _handler.Handle(
-            new GetProjectTasksQuery(PageNumber: 2, PageSize: 5) { ProjectId = projectId },
+            new GetProjectTasksQuery(PageNumber: 2, PageSize: 5) { ProjectId = projectId, CurrentUserId = currentUserId },
             CancellationToken.None);
 
         result.TotalCount.ShouldBe(12);
@@ -138,7 +134,6 @@ public class GetProjectTasksQueryHandlerTests
     public async Task HandleGlobalMineQueryShouldPassNullProjectIdAndIsMineTrueToRepository()
     {
         var currentUserId = Guid.NewGuid();
-        _currentUserService.GetUserId().Returns(currentUserId);
 
         _taskRepository.GetPagedAsync<TaskSummaryDto>(
                 Arg.Is<ProjectTaskFilter>(filter => filter.ProjectId == null && filter.IsMine),
@@ -157,7 +152,7 @@ public class GetProjectTasksQueryHandlerTests
             .Returns([]);
 
         var result = await _handler.Handle(
-            new GetProjectTasksQuery(Filter: "mine") { ProjectId = null },
+            new GetProjectTasksQuery(Filter: "mine") { ProjectId = null, CurrentUserId = currentUserId },
             CancellationToken.None);
 
         result.TotalCount.ShouldBe(0);
@@ -179,7 +174,6 @@ public class GetProjectTasksQueryHandlerTests
         var taskId = Guid.NewGuid();
         var commentRepository = Substitute.For<ITaskCommentRepository>();
 
-        _currentUserService.GetUserId().Returns(currentUserId);
         _fileUrlProvider.GetFileUrl("me-avatar.png", "api/v1/users/me/avatar")
             .Returns("https://cdn.example/api/v1/users/me/avatar");
 
@@ -204,12 +198,11 @@ public class GetProjectTasksQueryHandlerTests
 
         var handler = new GetTaskCommentsQueryHandler(
             commentRepository,
-            _currentUserService,
             _fileUrlProvider,
             Substitute.For<ILogger<GetTaskCommentsQueryHandler>>());
 
         var result = await handler.Handle(
-            new GetTaskCommentsQuery(PageNumber: 2, PageSize: 5) { ProjectId = projectId, TaskId = taskId },
+            new GetTaskCommentsQuery(PageNumber: 2, PageSize: 5) { ProjectId = projectId, TaskId = taskId, CurrentUserId = currentUserId },
             CancellationToken.None);
 
         result.TotalCount.ShouldBe(6);

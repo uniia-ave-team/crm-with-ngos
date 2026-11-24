@@ -1,44 +1,56 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using Mapster;
 using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.Projects.Commands;
 
 /// <summary>
-/// Handles the <see cref="UpdateTopicCommand"/> to update a board column/section's title and display order.
+/// Handles the <see cref="UpdateTopicCommand"/> to update a board column/section's title and display order
+/// while preserving a contiguous 0-based <see cref="Topic.Order"/> sequence across the project.
 /// </summary>
+/// <param name="projectRepository">The repository used to lock the parent project against concurrent order mutations.</param>
 /// <param name="topicRepository">The repository for retrieving and updating board topic entities.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class UpdateTopicCommandHandler(
+public sealed partial class UpdateTopicCommandHandler(
+    IProjectRepository projectRepository,
     ITopicRepository topicRepository,
-    ILogger<UpdateTopicCommandHandler> logger) : IRequestHandler<UpdateTopicCommand>
+    ILogger<UpdateTopicCommandHandler> logger) : ICommandHandler<UpdateTopicCommand>
 {
+    private const string NonSequentialTopicOrderMessage =
+        "Topic display order values must be continuous and sequential starting from 0 without gaps.";
+
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(UpdateTopicCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateTopicCommand command, CancellationToken cancellationToken)
     {
-        LogUpdatingTopic(logger, request.TopicId, request.ProjectId);
+        LogUpdatingTopic(logger, command.TopicId, command.ProjectId);
 
-        var topic = await topicRepository.GetByProjectAndIdForUpdateAsync(request.ProjectId, request.TopicId, cancellationToken);
+        await projectRepository.LockForUpdateAsync(command.ProjectId, cancellationToken);
 
-        string trimmedTitle = request.Title.Trim();
-        if (await topicRepository.ExistsWithTitleAsync(request.ProjectId, trimmedTitle, request.TopicId, cancellationToken))
+        List<Topic> projectTopics = await topicRepository.GetByProjectIdForUpdateAsync(command.ProjectId, cancellationToken);
+        Topic topic = projectTopics.FirstOrDefault(t => t.Id == command.TopicId)
+            ?? throw new EntityNotFoundException<Topic>(command.TopicId);
+
+        string trimmedTitle = command.Title.Trim();
+        if (await topicRepository.ExistsWithTitleAsync(command.ProjectId, trimmedTitle, command.TopicId, cancellationToken))
         {
             throw new EntityAlreadyExistsException(nameof(Topic), trimmedTitle);
         }
 
-        if (await topicRepository.ExistsWithOrderAsync(request.ProjectId, request.Order, request.TopicId, cancellationToken))
-        {
-            throw new EntityAlreadyExistsException(nameof(Topic), request.Order);
-        }
+        projectTopics.ReorderSequential(
+            topic,
+            command.Order,
+            static (item, order) => item.Order = order,
+            onNonSequential: static () => new NonSequentialOrderException(NonSequentialTopicOrderMessage));
 
-        request.Adapt(topic);
+        topic.SetTitle(trimmedTitle);
 
-        LogTopicUpdatedSuccessfully(logger, request.TopicId, request.ProjectId);
+        await topicRepository.ResolveOrderCollisionsAsync(command.ProjectId, cancellationToken);
+
+        LogTopicUpdatedSuccessfully(logger, command.TopicId, command.ProjectId);
 
         return Unit.Value;
     }

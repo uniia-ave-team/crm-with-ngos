@@ -1,6 +1,6 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.System;
-using Crm.Application.Dtos.System.Queries;
+using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -8,27 +8,35 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.System.Queries;
 
 /// <summary>
-/// Handles the <see cref="GetSystemSetupStatusQuery"/> to determine the overall onboarding and initialization status of the CRM.
+/// Handles the <see cref="GetSystemSetupStatusQuery"/> to determine the overall onboarding status,
+/// application version, and active scheduled maintenance notice of the CRM.
 /// </summary>
 /// <param name="userRepository">The repository used to access user data.</param>
 /// <param name="ngoRepository">The repository used to access NGO data.</param>
+/// <param name="appVersionProvider">The provider returning the running application version.</param>
+/// <param name="maintenanceNoticeCache">The short-lived cache providing the active maintenance notice.</param>
 /// <param name="logger">The logger used to record the execution of the query.</param>
 public sealed partial class GetSystemSetupStatusQueryHandler(
     IUserRepository userRepository,
     INgoRepository ngoRepository,
-    ILogger<GetSystemSetupStatusQueryHandler> logger) : IRequestHandler<GetSystemSetupStatusQuery, SystemSetupStatusDto>
+    IAppVersionProvider appVersionProvider,
+    IMaintenanceNoticeCache maintenanceNoticeCache,
+    ILogger<GetSystemSetupStatusQueryHandler> logger) : IQueryHandler<GetSystemSetupStatusQuery, SystemStatusDto>
 {
-    public async ValueTask<SystemSetupStatusDto> Handle(GetSystemSetupStatusQuery request, CancellationToken cancellationToken)
+    public async ValueTask<SystemStatusDto> Handle(GetSystemSetupStatusQuery query, CancellationToken cancellationToken)
     {
         LogCheckingSystemSetupStatus(logger);
 
         bool hasAdmin = await userRepository.AnyAsync(cancellationToken);
         bool hasNgo = await ngoRepository.AnyAsync(cancellationToken);
+        var notice = await maintenanceNoticeCache.GetActiveNoticeAsync(cancellationToken);
 
-        var status = new SystemSetupStatusDto(
+        var status = new SystemStatusDto(
             HasAdmin: hasAdmin,
             HasNgo: hasNgo,
-            IsSetupComplete: hasAdmin && hasNgo);
+            IsSetupComplete: hasAdmin && hasNgo,
+            Version: appVersionProvider.Version,
+            Notice: notice);
 
         LogSystemSetupStatusResult(logger, status.HasAdmin, status.HasNgo, status.IsSetupComplete);
 

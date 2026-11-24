@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Common;
-using Crm.Application.Dtos.System.Queries;
 using Crm.Application.Interfaces;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -14,15 +13,15 @@ namespace Crm.Application.Features.System.Queries;
 /// <param name="logger">The logger used to record the execution of the query.</param>
 public sealed partial class GetIdentityOptionsQueryHandler(
     IOptionService optionService,
-    ILogger<GetIdentityOptionsQueryHandler> logger) : IRequestHandler<GetIdentityOptionsQuery, IdentityOptionsDto>
+    ILogger<GetIdentityOptionsQueryHandler> logger) : IQueryHandler<GetIdentityOptionsQuery, IdentityOptionsDto>
 {
     /// <summary>
     /// Executes the query to retrieve identity options.
     /// </summary>
-    /// <param name="request">The query request.</param>
+    /// <param name="query">The query query.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the operation, containing the identity options.</returns>
-    public ValueTask<IdentityOptionsDto> Handle(GetIdentityOptionsQuery request, CancellationToken cancellationToken)
+    public ValueTask<IdentityOptionsDto> Handle(GetIdentityOptionsQuery query, CancellationToken cancellationToken)
     {
         LogRetrievingIdentityOptions(logger);
 

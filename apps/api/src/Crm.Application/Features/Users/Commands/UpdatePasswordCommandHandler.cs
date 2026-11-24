@@ -1,6 +1,8 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Dtos.Auth;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Interfaces;
+using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
 
@@ -8,22 +10,38 @@ namespace Crm.Application.Features.Users.Commands;
 
 /// <summary>
 /// Handles the <see cref="UpdatePasswordCommand"/> to securely change a user's password.
+/// Changing the password revokes every refresh token of the user, which ends all their other sessions;
+/// the session that made the change gets a fresh token pair and stays signed in.
 /// </summary>
 /// <param name="identityService">The identity service used for user and role management.</param>
+/// <param name="authUserRepository">The repository used to read the user's identity record.</param>
+/// <param name="roleRepository">The repository used to read the user's role IDs for the new access token.</param>
+/// <param name="tokenService">The service that generates the new access and refresh tokens.</param>
 /// <param name="logger">The logger used to record the password update process.</param>
-public partial class UpdatePasswordCommandHandler(
+public sealed partial class UpdatePasswordCommandHandler(
     IIdentityService identityService,
-    ILogger<UpdatePasswordCommandHandler> logger) : IRequestHandler<UpdatePasswordCommand>
+    IAuthUserRepository authUserRepository,
+    IAuthRoleRepository roleRepository,
+    ITokenService tokenService,
+    ILogger<UpdatePasswordCommandHandler> logger) : ICommandHandler<UpdatePasswordCommand, AuthTokensDto>
 {
-    public async ValueTask<Unit> Handle(UpdatePasswordCommand request, CancellationToken cancellationToken)
+    public async ValueTask<AuthTokensDto> Handle(UpdatePasswordCommand command, CancellationToken cancellationToken)
     {
-        LogUpdatingPassword(logger, request.UserId);
+        LogUpdatingPassword(logger, command.UserId);
 
-        await identityService.ChangePasswordAsync(request.UserId, request.CurrentPassword, request.NewPassword, cancellationToken);
+        await identityService.ChangePasswordAsync(command.UserId, command.CurrentPassword, command.NewPassword, cancellationToken);
 
-        LogPasswordUpdatedSuccessfully(logger, request.UserId);
+        var user = await authUserRepository.GetAsync<UserStatusDto>(command.UserId, cancellationToken);
+        var roleIds = await roleRepository.GetRoleIdsByUserAsync(user.Id, cancellationToken);
 
-        return Unit.Value;
+        var accessToken = tokenService.GenerateAccessToken(new UserBasicDto(user.Id, user.Email), roleIds);
+        var refreshToken = tokenService.GenerateRefreshToken();
+
+        await identityService.AddRefreshTokenAsync(user.Id, refreshToken, cancellationToken);
+
+        LogPasswordUpdatedSuccessfully(logger, command.UserId);
+
+        return new AuthTokensDto(accessToken.Token, refreshToken.Token);
     }
 
     [LoggerMessage(EventId = LogEventIds.UpdatingPassword, Level = LogLevel.Information, Message = "Initiating password update for user ID: {UserId}")]

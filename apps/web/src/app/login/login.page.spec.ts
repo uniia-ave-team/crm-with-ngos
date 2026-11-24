@@ -12,7 +12,7 @@ import { AccountsService } from '../core/accounts/accounts.service';
 import { AuthService } from '../core/auth/auth.service';
 import { SessionService } from '../core/auth/session.service';
 import { SignInFormComponent } from '../core/auth/sign-in-form/sign-in-form.component';
-import { ConnectionService } from '../core/connection/connection.service';
+import { ConnectionService, SystemStatus } from '../core/connection/connection.service';
 import { LanguageService } from '../core/i18n/language.service';
 import { LoginPage } from './login.page';
 
@@ -87,14 +87,22 @@ describe('LoginPage', () => {
     return { fixture, connection, element, page, request };
   }
 
+  type SetupFlags = Pick<SystemStatus, 'hasAdmin' | 'hasNgo' | 'isSetupComplete'>;
+
+  const fullSystemStatus = (flags: SetupFlags): SystemStatus => ({
+    ...flags,
+    version: '1.0.0',
+    notice: null,
+  });
+
   /** Підключення є — відповідаємо на запит статусу системи. */
   function answerStatus(
     connection: ConnectionService,
     fixture: { detectChanges(): void },
-    status = { hasAdmin: true, hasNgo: true, isSetupComplete: true },
+    status: SetupFlags = { hasAdmin: true, hasNgo: true, isSetupComplete: true },
   ): void {
     fixture.detectChanges();
-    http.expectOne(`${connection.serverUrl()}/api/v1/system/status`).flush(status);
+    http.expectOne(`${connection.serverUrl()}/api/v1/system/status`).flush(fullSystemStatus(status));
     fixture.detectChanges();
   }
 
@@ -218,8 +226,9 @@ describe('LoginPage', () => {
     fixture.detectChanges();
 
     const status = http.expectOne(`${connection.serverUrl()}/api/v1/system/status`);
-    status.flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
-    expect(connection.systemStatus()).toEqual({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+    const expected = fullSystemStatus({ hasAdmin: true, hasNgo: true, isSetupComplete: true });
+    status.flush(expected);
+    expect(connection.systemStatus()).toEqual(expected);
   });
 
   it('does not request the system status while step 1 is shown', () => {
@@ -483,7 +492,7 @@ describe('LoginPage', () => {
         identity: 'user-1',
       });
       // Статус системи запитано, щойно знайшлося API (ще до входу в акаунт).
-      http.expectOne(`${pageServer()}/api/v1/system/status`).flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      http.expectOne(`${pageServer()}/api/v1/system/status`).flush(fullSystemStatus({ hasAdmin: true, hasNgo: false, isSetupComplete: false }));
       ctx.fixture.detectChanges();
 
       button(ctx.element)!.click();
@@ -505,7 +514,7 @@ describe('LoginPage', () => {
         identity: 'user-1',
       });
       // Статус системи запитано, щойно знайшлося API (ще до входу в акаунт).
-      http.expectOne(`${pageServer()}/api/v1/system/status`).flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      http.expectOne(`${pageServer()}/api/v1/system/status`).flush(fullSystemStatus({ hasAdmin: true, hasNgo: false, isSetupComplete: false }));
       ctx.fixture.detectChanges();
 
       button(ctx.element)!.click();
@@ -555,11 +564,13 @@ describe('LoginPage', () => {
       page.submit();
       http.expectOne(`${location.protocol}//192.168.0.9:5065/health`).flush({ status: 'Healthy' });
       ctx.fixture.detectChanges();
-      http.expectOne(`${location.protocol}//192.168.0.9:5065/api/v1/system/status`).flush({
-        hasAdmin: true,
-        hasNgo: true,
-        isSetupComplete: true,
-      });
+      http.expectOne(`${location.protocol}//192.168.0.9:5065/api/v1/system/status`).flush(
+        fullSystemStatus({
+          hasAdmin: true,
+          hasNgo: true,
+          isSetupComplete: true,
+        }),
+      );
       ctx.fixture.detectChanges();
       expect(ctx.element.querySelector('.login-form')).not.toBeNull();
     });
@@ -615,7 +626,7 @@ describe('LoginPage', () => {
       expect(login.request.body).toEqual({ email: 'a@b.org', password: 'Abcde1!x' });
       login.flush(tokens);
       await vi.waitFor(() =>
-        http.expectOne(statusUrl(connection)).flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true }),
+        http.expectOne(statusUrl(connection)).flush(fullSystemStatus({ hasAdmin: true, hasNgo: true, isSetupComplete: true })),
       );
       await done;
 
@@ -632,7 +643,7 @@ describe('LoginPage', () => {
       const done = form.submit();
       http.expectOne(loginUrl(connection)).flush(tokens);
       await vi.waitFor(() =>
-        http.expectOne(statusUrl(connection)).flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false }),
+        http.expectOne(statusUrl(connection)).flush(fullSystemStatus({ hasAdmin: true, hasNgo: false, isSetupComplete: false })),
       );
       await done;
       fixture.detectChanges();
@@ -847,6 +858,30 @@ describe('LoginPage', () => {
       expect(localStorage.getItem('yavir.language')).toBe('uk');
       expect(element.querySelector('.login-form')).toBeNull();
       expect(navigate).not.toHaveBeenCalledWith('/planner');
+    });
+
+    it('shows the forms when it is entered again after the last account was removed on /relogin', async () => {
+      const { fixture, connection, element, request, store } = createWithAccounts([
+        { identity: 'user-1', access: jwtAt(-60), refresh: 'r1' },
+      ]);
+      request.flush({ status: 'Healthy' });
+      (await vi.waitFor(() => http.expectOne(refreshUrl()))).flush({}, { status: 401, statusText: 'Unauthorized' });
+      (await pageDomainCheck()).flush({ status: 'Healthy' });
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/relogin'));
+
+      // На /relogin акаунт видалили, і Ionic повертає на /login той самий екземпляр сторінки.
+      store.remove(store.accounts()[0].id);
+      fixture.componentInstance.ionViewWillEnter();
+      fixture.detectChanges();
+      // Статус запитав сам ConnectionService після кожної вдалої перевірки підключення; чинний — останній.
+      http
+        .match(`${connection.serverUrl()}/api/v1/system/status`)
+        .find((r) => !r.cancelled)!
+        .flush(fullSystemStatus({ hasAdmin: false, hasNgo: false, isSetupComplete: false }));
+      fixture.detectChanges();
+
+      expect(element.textContent).not.toContain(uk.login.loading);
+      expect(element.textContent).toContain(uk.login.admin.title);
     });
 
     it('marks a rejected account as outdated and one whose server does not answer as unavailable, keeps both, and goes to /relogin', async () => {
@@ -1141,7 +1176,7 @@ describe('LoginPage', () => {
       login.flush({ accessToken: 'access', refreshToken: 'refresh' });
 
       await vi.waitFor(() => http.expectOne(`${connection.serverUrl()}/api/v1/system/status`)).then((status) =>
-        status.flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false }),
+        status.flush(fullSystemStatus({ hasAdmin: true, hasNgo: false, isSetupComplete: false })),
       );
       fixture.detectChanges();
       expect(element.textContent).toContain(uk.login.ngo.title);
@@ -1608,7 +1643,7 @@ describe('LoginPage', () => {
 
   describe('an address typed without a port', () => {
     const typed = `${location.protocol}//crm.example.org`;
-    const complete = { hasAdmin: true, hasNgo: true, isSetupComplete: true };
+    const complete = { hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: null };
 
     it('looks for the API at the address as typed first, and signs in there when it answers', () => {
       const { fixture, connection, element, page, request } = create();
@@ -1674,7 +1709,7 @@ describe('LoginPage', () => {
       ],
       sessionMinutes: 60,
     };
-    const complete = { hasAdmin: true, hasNgo: true, isSetupComplete: true };
+    const complete = { hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: null };
     const statusUrl = () => `${pageServer()}/api/v1/system/status`;
     const loginUrl = () => `${pageServer()}/api/v1/auth/login`;
 

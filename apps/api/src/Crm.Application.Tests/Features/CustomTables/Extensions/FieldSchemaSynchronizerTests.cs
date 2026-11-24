@@ -208,10 +208,10 @@ public class FieldSchemaSynchronizerTests
     }
 
     /// <summary>
-    /// Verifies that duplicate field identifiers in incoming DTOs cause an <see cref="InvalidOperationException"/>.
+    /// Verifies that duplicate field identifiers in incoming DTOs cause a <see cref="DomainValidationException"/>.
     /// </summary>
     [Fact]
-    public void ReconcileWhenIncomingDtosContainDuplicateIdsShouldThrowInvalidOperationException()
+    public void ReconcileWhenIncomingDtosContainDuplicateIdsShouldThrowDomainValidationException()
     {
         // Arrange
         var duplicateId = Guid.NewGuid();
@@ -221,7 +221,7 @@ public class FieldSchemaSynchronizerTests
         var dtoTwo = new UpdateCustomFieldDto(duplicateId, "Second", "second", FieldDataType.Text, false, 1);
 
         // Act & Assert
-        var exception = Should.Throw<InvalidOperationException>(() =>
+        var exception = Should.Throw<DomainValidationException>(() =>
             FieldSchemaSynchronizer.Reconcile(
                 [existingField],
                 [dtoOne, dtoTwo],

@@ -1,6 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Queries;
-using Crm.Domain.Consts;
+using Crm.Application.Features.Tasks.Queries;
+using Crm.Domain.Constants;
 using FluentValidation;
 
 namespace Crm.Application.Features.Tasks.Validators;
@@ -8,7 +8,7 @@ namespace Crm.Application.Features.Tasks.Validators;
 /// <summary>
 /// Provides validation rules for <see cref="GetTaskCommentsQuery"/>.
 /// </summary>
-public class GetTaskCommentsQueryValidator : AbstractValidator<GetTaskCommentsQuery>
+public sealed class GetTaskCommentsQueryValidator : AbstractValidator<GetTaskCommentsQuery>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="GetTaskCommentsQueryValidator"/> class.

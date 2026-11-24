@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.LoginPageImage.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -18,22 +17,22 @@ namespace Crm.Application.Features.LoginPageImages.Commands;
 /// <param name="fileTransactionTracker">The service responsible for tracking file transactions to ensure consistency and rollback in case of failures.</param>
 /// <param name="fileStorageService">The service responsible for physical file I/O operations.</param>
 /// <param name="logger">The logger used to record the lifecycle and outcome of the login page image upload process.</param>
-public partial class UploadLoginPageImageCommandHandler(
+public sealed partial class UploadLoginPageImageCommandHandler(
     ILoginPageImageRepository repository,
     INgoRepository ngoRepository,
     IFileTransactionTracker fileTransactionTracker,
     IFileStorageService fileStorageService,
-    ILogger<UploadLoginPageImageCommandHandler> logger) : IRequestHandler<UploadLoginPageImageCommand, Guid>
+    ILogger<UploadLoginPageImageCommandHandler> logger) : ICommandHandler<UploadLoginPageImageCommand, Guid>
 {
-    public async ValueTask<Guid> Handle(UploadLoginPageImageCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(UploadLoginPageImageCommand command, CancellationToken cancellationToken)
     {
-        LogUploadingImage(logger, request.OriginalFileName);
+        LogUploadingImage(logger, command.OriginalFileName);
 
         var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
 
         string savedFileName = await fileStorageService.SaveImageAsync(
-            request.ContentStream,
-            request.OriginalFileName,
+            command.ContentStream,
+            command.OriginalFileName,
             FileStorageConstants.LoginPageImagesFolder,
             cancellationToken);
 

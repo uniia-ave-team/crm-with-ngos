@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Features.Users.Commands;
 using Crm.Domain.Entities;
 using Mapster;
 
@@ -8,11 +8,11 @@ namespace Crm.Application.Features.Users.Mappings;
 /// Mapster configuration for User entity mappings.
 /// Replaces manual Expression trees and manual ApplyUpdate methods.
 /// </summary>
-public class UserMappingRegister : IRegister
+public sealed class UserMappingRegister : IRegister
 {
+    /// <inheritdoc />
     public void Register(TypeAdapterConfig config)
     {
-        config.NewConfig<UpdateUserProfileCommand, User>()
-            .Ignore(dest => dest.Id);
+        config.NewConfig<UpdateUserProfileCommand, User>();
     }
 }

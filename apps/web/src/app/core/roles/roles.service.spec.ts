@@ -177,6 +177,8 @@ describe('RolesService', () => {
 
     it.each([
       [400, 'invalid'],
+      // Роль має хтось із колег: повтор не допоможе, це та сама відмова, що й 400.
+      [409, 'invalid'],
       [401, 'unauthorized'],
       [403, 'forbidden'],
       [404, 'error'],

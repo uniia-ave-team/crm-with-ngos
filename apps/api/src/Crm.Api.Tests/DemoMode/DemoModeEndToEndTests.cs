@@ -70,7 +70,7 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
         // Refreshing tokens keeps visitor A in the same sandbox.
         var refreshed = await visitorA.PostAsJsonAsync("/api/v1/auth/refresh-token", tokensA, ct);
         refreshed.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var newTokens = await refreshed.Content.ReadFromJsonAsync<AuthTokensDto>(ct);
+        var newTokens = (await refreshed.Content.ReadFromJsonAsync<AuthTokensDto>(ct)).ShouldNotBeNull();
         visitorA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", newTokens.AccessToken);
         ReadSandboxExpiry(newTokens.AccessToken).ShouldBe(expiresAtA);
         (await ListRolesAsync(visitorA)).ShouldContain(roleName);

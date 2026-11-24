@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Project.Queries;
+using Crm.Application.Dtos.Projects;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -13,25 +12,25 @@ namespace Crm.Application.Features.Projects.Queries;
 /// </summary>
 /// <param name="tagRepository">The repository for querying project-scoped tags.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class GetProjectTagsQueryHandler(
+public sealed partial class GetProjectTagsQueryHandler(
     ITagRepository tagRepository,
-    ILogger<GetProjectTagsQueryHandler> logger) : IRequestHandler<GetProjectTagsQuery, PagedResult<TagDto>>
+    ILogger<GetProjectTagsQueryHandler> logger) : IQueryHandler<GetProjectTagsQuery, PagedResult<TagDto>>
 {
     /// <inheritdoc />
-    public async ValueTask<PagedResult<TagDto>> Handle(GetProjectTagsQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<TagDto>> Handle(GetProjectTagsQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingTags(logger, request.ProjectId, request.PageNumber, request.PageSize);
+        LogFetchingTags(logger, query.ProjectId, query.PageNumber, query.PageSize);
 
         var result = await tagRepository.GetPagedAsync<TagDto>(
-            projectId: request.ProjectId,
-            searchTerm: request.SearchTerm,
-            orderBy: request.OrderBy,
-            sortOrder: request.SortOrder,
-            pageNumber: request.PageNumber,
-            pageSize: request.PageSize,
+            projectId: query.ProjectId,
+            searchTerm: query.SearchTerm,
+            orderBy: query.OrderBy,
+            sortOrder: query.SortOrder,
+            pageNumber: query.PageNumber,
+            pageSize: query.PageSize,
             cancellationToken: cancellationToken);
 
-        LogTagsFetched(logger, result.Items.Count, result.TotalCount, request.ProjectId);
+        LogTagsFetched(logger, result.Items.Count, result.TotalCount, query.ProjectId);
 
         return result;
     }

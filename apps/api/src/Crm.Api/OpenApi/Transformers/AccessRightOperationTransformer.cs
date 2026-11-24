@@ -7,8 +7,9 @@ namespace Crm.Api.OpenApi.Transformers;
 /// <summary>
 /// Transformer for native .NET OpenAPI generation that appends required access rights to the endpoint description.
 /// </summary>
-public class AccessRightOperationTransformer : IOpenApiOperationTransformer
+public sealed class AccessRightOperationTransformer : IOpenApiOperationTransformer
 {
+    /// <inheritdoc />
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
     {
         var attributes = context.Description.ActionDescriptor.EndpointMetadata

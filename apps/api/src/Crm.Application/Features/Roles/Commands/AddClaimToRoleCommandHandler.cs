@@ -1,8 +1,8 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.Role.Commands;
+using Crm.Application.Dtos.Roles;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -17,37 +17,37 @@ namespace Crm.Application.Features.Roles.Commands;
 /// <param name="identityService">The service used to interact with the Identity system for role and claim management.</param>
 /// <param name="rolesCache">The cache service used to maintain up-to-date role permissions in memory.</param>
 /// <param name="logger">The logger used to record the lifecycle and outcome of the claim assignment process.</param>
-public partial class AddClaimToRoleCommandHandler(
+public sealed partial class AddClaimToRoleCommandHandler(
     IAuthRoleRepository authRoleRepository,
     IRoleIdentityService identityService,
     IRolePermissionsCache rolesCache,
-    ILogger<AddClaimToRoleCommandHandler> logger) : IRequestHandler<AddClaimToRoleCommand>
+    ILogger<AddClaimToRoleCommandHandler> logger) : ICommandHandler<AddClaimToRoleCommand>
 {
-    public async ValueTask<Unit> Handle(AddClaimToRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(AddClaimToRoleCommand command, CancellationToken cancellationToken)
     {
-        LogAddingClaim(logger, request.ClaimValue, request.RoleId);
+        LogAddingClaim(logger, command.ClaimValue, command.RoleId);
 
-        if (!PermissionExtensions.GetAllStringValues().Contains(request.ClaimValue))
+        if (!PermissionExtensions.GetAllStringValues().Contains(command.ClaimValue))
         {
-            LogInvalidClaimAttempt(logger, request.ClaimValue, request.RoleId);
-            throw new ArgumentException($"The permission '{request.ClaimValue}' does not exist in the system.");
+            LogInvalidClaimAttempt(logger, command.ClaimValue, command.RoleId);
+            throw new DomainValidationException($"The permission '{command.ClaimValue}' does not exist in the system.");
         }
 
-        var role = await authRoleRepository.GetAsync<RoleUserDto>(request.RoleId, cancellationToken);
+        var role = await authRoleRepository.GetAsync<RoleUserDto>(command.RoleId, cancellationToken);
 
-        if (string.Equals(role.Name, RoleConsts.Admin, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(role.Name, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase))
         {
-            LogCannotModifyAdminRole(logger, request.ClaimValue, request.RoleId);
-            throw new InvalidOperationException("Modification of claims for the Administrator role is strictly prohibited.");
+            LogCannotModifyAdminRole(logger, command.ClaimValue, command.RoleId);
+            throw new DomainValidationException("Modification of claims for the Administrator role is strictly prohibited.");
         }
 
-        await identityService.AddPermissionToRoleAsync(request.RoleId, request.ClaimValue, cancellationToken);
+        await identityService.AddPermissionToRoleAsync(command.RoleId, command.ClaimValue, cancellationToken);
 
-        LogClaimAddedSuccessfully(logger, request.ClaimValue, request.RoleId);
+        LogClaimAddedSuccessfully(logger, command.ClaimValue, command.RoleId);
 
-        var permissions = await identityService.GetRolePermissionsAsync(request.RoleId, cancellationToken);
+        var permissions = await identityService.GetRolePermissionsAsync(command.RoleId, cancellationToken);
 
-        await rolesCache.SetRolePermissionsAsync(request.RoleId, permissions, cancellationToken);
+        await rolesCache.SetRolePermissionsAsync(command.RoleId, permissions, cancellationToken);
 
         return Unit.Value;
     }

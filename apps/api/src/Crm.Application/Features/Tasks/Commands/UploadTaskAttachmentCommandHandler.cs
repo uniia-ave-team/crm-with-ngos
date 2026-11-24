@@ -1,11 +1,10 @@
 using System.Net.Mime;
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Commands;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Tasks.Extensions;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
@@ -17,52 +16,49 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Tasks.Commands;
 
 /// <summary>
-/// Handles the <see cref="UploadTaskAttachmentCommand"/> to store an uploaded file in the Docker volume storage and create a <see cref="TaskAttachment"/> record.
+/// Handles the <see cref="UploadTaskAttachmentCommand"/> to store an uploaded file and create a <see cref="TaskAttachment"/> record.
 /// </summary>
 /// <param name="taskRepository">The repository for locking the parent task during attachment quota checks.</param>
 /// <param name="attachmentRepository">The repository for persisting task attachment entities and evaluating task quotas.</param>
-/// <param name="fileStorageService">The file storage service for saving uploaded file streams to disk.</param>
+/// <param name="fileStorageService">The file storage service for saving uploaded file streams to storage.</param>
 /// <param name="fileTracker">The transaction file tracker used to roll back created files if the transaction fails.</param>
 /// <param name="fileUrlProvider">The file URL provider for resolving the attachment download URL.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class UploadTaskAttachmentCommandHandler(
+public sealed partial class UploadTaskAttachmentCommandHandler(
     IProjectTaskRepository taskRepository,
     ITaskAttachmentRepository attachmentRepository,
     IFileStorageService fileStorageService,
     IFileTransactionTracker fileTracker,
     IFileUrlProvider fileUrlProvider,
-    ICurrentUserService currentUserService,
     TimeProvider timeProvider,
-    ILogger<UploadTaskAttachmentCommandHandler> logger) : IRequestHandler<UploadTaskAttachmentCommand, TaskAttachmentDto>
+    ILogger<UploadTaskAttachmentCommandHandler> logger) : ICommandHandler<UploadTaskAttachmentCommand, TaskAttachmentDto>
 {
     /// <inheritdoc />
-    public async ValueTask<TaskAttachmentDto> Handle(UploadTaskAttachmentCommand request, CancellationToken cancellationToken)
+    public async ValueTask<TaskAttachmentDto> Handle(UploadTaskAttachmentCommand command, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        LogUploadingTaskAttachment(logger, request.OriginalFileName, request.TaskId);
+        LogUploadingTaskAttachment(logger, command.OriginalFileName, command.TaskId);
 
-        await taskRepository.LockForUpdateAsync(request.TaskId, cancellationToken);
+        await taskRepository.LockForUpdateAsync(command.TaskId, cancellationToken);
 
-        var stats = await attachmentRepository.GetTaskAttachmentStatsAsync(request.TaskId, cancellationToken);
+        var stats = await attachmentRepository.GetTaskAttachmentStatsAsync(command.TaskId, cancellationToken);
         if (stats.Count >= TaskValidationConstants.MaxAttachmentsPerTask)
         {
             throw new TaskAttachmentLimitExceededException(TaskValidationConstants.MaxAttachmentsPerTask);
         }
 
-        if (stats.TotalBytes + request.FileSize > TaskValidationConstants.MaxTotalAttachmentSizePerTask)
+        if (stats.TotalBytes + command.FileSize > TaskValidationConstants.MaxTotalAttachmentSizePerTask)
         {
             throw new StorageQuotaExceededException(
                 $"Total attachment size for a task cannot exceed {TaskValidationConstants.MaxTotalAttachmentSizePerTask} bytes.");
         }
 
-        string safeOriginalFileName = request.OriginalFileName.ExtractFileName();
+        string safeOriginalFileName = command.OriginalFileName.ExtractFileName();
 
         string storedFileName = await fileStorageService.SaveFileAsync(
-            request.ContentStream,
+            command.ContentStream,
             safeOriginalFileName,
             FileStorageConstants.TaskAttachmentsFolder,
             cancellationToken);
@@ -71,20 +67,32 @@ public partial class UploadTaskAttachmentCommandHandler(
 
         var attachment = new TaskAttachment
         {
-            TaskId = request.TaskId,
-            UploadedBy = currentUserId,
+            TaskId = command.TaskId,
+            UploadedBy = command.CurrentUserId,
             OriginalFileName = safeOriginalFileName,
             StoredFileName = storedFileName,
-            ContentType = string.IsNullOrWhiteSpace(request.ContentType) ? MediaTypeNames.Application.Octet : request.ContentType,
-            FileSize = request.FileSize,
+            ContentType = NormalizeContentType(command.ContentType),
+            FileSize = command.FileSize,
             CreatedAt = utcNow,
         };
 
         await attachmentRepository.CreateAsync(attachment, cancellationToken);
 
-        LogTaskAttachmentUploadedSuccessfully(logger, attachment.Id, request.TaskId);
+        LogTaskAttachmentUploadedSuccessfully(logger, attachment.Id, command.TaskId);
 
-        return attachment.Adapt<TaskAttachmentDto>().EnrichUrl(request.ProjectId, fileUrlProvider);
+        return attachment.Adapt<TaskAttachmentDto>().EnrichUrl(command.ProjectId, fileUrlProvider);
+    }
+
+    private static string NormalizeContentType(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return MediaTypeNames.Application.Octet;
+        }
+
+        int semicolonIndex = contentType.IndexOf(';');
+        string normalized = (semicolonIndex >= 0 ? contentType[..semicolonIndex] : contentType).Trim();
+        return string.IsNullOrEmpty(normalized) ? MediaTypeNames.Application.Octet : normalized;
     }
 
     [LoggerMessage(EventId = LogEventIds.UploadingTaskAttachment, Level = LogLevel.Information, Message = "Uploading attachment '{FileName}' for task ID: {TaskId}")]

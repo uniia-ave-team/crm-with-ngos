@@ -1,5 +1,5 @@
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
@@ -10,7 +10,7 @@ namespace Crm.Domain.Interfaces.Repositories;
 /// Defines repository operations for managing <see cref="ProjectTask"/> entities, SQL-projected queries,
 /// and unread comment tracking.
 /// </summary>
-public interface IProjectTaskRepository : IGenericRepository<ProjectTask>
+public interface IProjectTaskRepository : IGenericRepository<ProjectTask>, IRowLockRepository
 {
     /// <summary>
     /// Asynchronously retrieves and projects a single task belonging to the specified project.

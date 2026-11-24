@@ -1,8 +1,9 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.Role.Commands;
+using Crm.Application.Dtos.Roles;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
+using Crm.Domain.Enums;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -12,47 +13,51 @@ namespace Crm.Application.Features.Roles.Commands;
 /// <summary>
 /// Handles the <see cref="DeleteRoleCommand"/> to remove an existing Identity Role.
 /// </summary>
-public partial class DeleteRoleCommandHandler(
+/// <param name="roleRepository">The repository used to retrieve role data.</param>
+/// <param name="userRepository">The repository used to check for users assigned to the role.</param>
+/// <param name="rolesCache">The cache service used to evict permissions for the deleted role.</param>
+/// <param name="identityService">The service used to interact with the Identity system for role deletion.</param>
+/// <param name="logger">The logger used to record the lifecycle and outcome of the role deletion process.</param>
+public sealed partial class DeleteRoleCommandHandler(
     IAuthRoleRepository roleRepository,
     IAuthUserRepository userRepository,
     IRolePermissionsCache rolesCache,
     IRoleIdentityService identityService,
-    ILogger<DeleteRoleCommandHandler> logger) : IRequestHandler<DeleteRoleCommand>
+    ILogger<DeleteRoleCommandHandler> logger) : ICommandHandler<DeleteRoleCommand>
 {
-    public async ValueTask<Unit> Handle(DeleteRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteRoleCommand command, CancellationToken cancellationToken)
     {
-        LogDeletingRole(logger, request.Id);
+        LogDeletingRole(logger, command.Id);
 
-        var role = await roleRepository.GetAsync<RoleUserDto>(request.Id, cancellationToken);
+        var role = await roleRepository.GetAsync<RoleUserDto>(command.Id, cancellationToken);
 
-        if (role.Name == RoleConsts.Admin)
+        if (string.Equals(role.Name, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase))
         {
             LogCannotModifySystemRole(logger, role.Name);
-            throw new InvalidOperationException($"The system role '{role.Name}' cannot be deleted.");
+            throw new DomainValidationException($"The system role '{role.Name}' cannot be deleted.");
         }
 
         var usersCount = await userRepository.GetCountByRoleIdAsync(role.Id, cancellationToken);
 
         if (usersCount != 0)
         {
-            LogRoleInUse(logger, request.Id, role.Name, usersCount);
-            throw new InvalidOperationException($"Cannot delete role '{role.Name}' because it has {usersCount} assigned user(s).");
+            LogRoleInUse(logger, command.Id, role.Name, usersCount);
+            throw new ConflictException(
+                $"Cannot delete role '{role.Name}' because it has {usersCount} assigned user(s).",
+                ConflictKind.ReferenceViolation);
         }
 
         await identityService.DeleteRoleAsync(role.Id, cancellationToken);
 
-        await rolesCache.RemoveRolePermissionsAsync(request.Id, cancellationToken);
+        await rolesCache.RemoveRolePermissionsAsync(command.Id, cancellationToken);
 
-        LogRoleDeletedSuccessfully(logger, request.Id);
+        LogRoleDeletedSuccessfully(logger, command.Id);
 
         return Unit.Value;
     }
 
     [LoggerMessage(EventId = LogEventIds.DeletingRole, Level = LogLevel.Information, Message = "Initiating deletion for role ID {RoleId}")]
     private static partial void LogDeletingRole(ILogger logger, Guid roleId);
-
-    [LoggerMessage(EventId = LogEventIds.DeleteRoleCommandHandlerRoleNotFound, Level = LogLevel.Warning, Message = "Deletion failed. Role with ID {RoleId} was not found.")]
-    private static partial void LogRoleNotFound(ILogger logger, Guid roleId);
 
     [LoggerMessage(EventId = LogEventIds.CannotModifySystemRole, Level = LogLevel.Warning, Message = "Attempted to delete system role: {RoleName}")]
     private static partial void LogCannotModifySystemRole(ILogger logger, string roleName);

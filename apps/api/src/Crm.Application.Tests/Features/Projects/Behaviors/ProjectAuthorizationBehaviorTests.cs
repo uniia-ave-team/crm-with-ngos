@@ -1,11 +1,11 @@
 using Crm.Application.Common.Behaviors;
 using Crm.Application.Common.Security;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Project.Commands;
-using Crm.Application.Dtos.Project.Queries;
-using Crm.Application.Dtos.Task;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Application.Dtos.Task.Queries;
+using Crm.Application.Dtos.Projects;
+using Crm.Application.Dtos.Tasks;
+using Crm.Application.Features.Projects.Commands;
+using Crm.Application.Features.Projects.Queries;
+using Crm.Application.Features.Tasks.Commands;
+using Crm.Application.Features.Tasks.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
@@ -49,8 +49,8 @@ public class ProjectAuthorizationBehaviorTests
 
         await Should.ThrowAsync<EntityNotFoundException<Project>>(() =>
             behavior.Handle(
-                new GetProjectByIdQuery(projectId),
-                (_, _) => ValueTask.FromResult<ProjectDto>(default),
+                new GetProjectByIdQuery(projectId, userId),
+                (_, _) => ValueTask.FromResult<ProjectDto>(default!),
                 CancellationToken.None).AsTask());
     }
 
@@ -69,7 +69,7 @@ public class ProjectAuthorizationBehaviorTests
 
         await Should.ThrowAsync<UnauthorizedAccessException>(() =>
             behavior.Handle(
-                new DeleteProjectCommand(projectId),
+                new DeleteProjectCommand(projectId, userId),
                 (_, _) => ValueTask.FromResult(Unit.Value),
                 CancellationToken.None).AsTask());
     }

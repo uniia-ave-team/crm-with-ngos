@@ -4,9 +4,13 @@ namespace Crm.Domain.Enums;
 /// Specifies the grammatical category or preferred pronoun type for a user,
 /// used for role declension, feminitives, and system logic.
 /// </summary>
-public enum PronounCategory
-    : byte
+public enum PronounCategory : byte
 {
+    /// <summary>
+    /// No grammatical pronoun category specified.
+    /// </summary>
+    None = 0,
+
     /// <summary>
     /// Masculine pronouns or forms (e.g., "he/him").
     /// </summary>

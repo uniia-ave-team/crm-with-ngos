@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.CustomRecords.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
@@ -9,42 +8,41 @@ using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomRecords.Commands;
 
-// TODO: Make all handlers sealed
-
 /// <summary>
-/// Handles the <see cref="CreateCustomRecordCommand"/> to validate, reorder key-value pairs according to table schema,
-/// and persist a new custom record in the database.
+/// Handles the <see cref="CreateCustomRecordCommand"/> to validate the payload against the table schema,
+/// backfill default values for missing required fields, and persist a new custom record in the database.
 /// </summary>
 /// <param name="customFieldRepository">The repository used for retrieving custom field definitions.</param>
 /// <param name="customRecordRepository">The repository used for storing new custom record entities.</param>
 /// <param name="logger">The logger instance for tracking execution flow.</param>
-public partial class CreateCustomRecordCommandHandler(
+public sealed partial class CreateCustomRecordCommandHandler(
     ICustomFieldRepository customFieldRepository,
     ICustomRecordRepository customRecordRepository,
-    ILogger<CreateCustomRecordCommandHandler> logger) : IRequestHandler<CreateCustomRecordCommand, Guid>
+    ILogger<CreateCustomRecordCommandHandler> logger) : ICommandHandler<CreateCustomRecordCommand, Guid>
 {
-    public async ValueTask<Guid> Handle(CreateCustomRecordCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<Guid> Handle(CreateCustomRecordCommand command, CancellationToken cancellationToken)
     {
-        LogCreatingCustomRecord(logger, request.CustomTableId);
+        LogCreatingCustomRecord(logger, command.CustomTableId);
 
-        var customFields = await customFieldRepository.GetByCustomTableIdAsync(request.CustomTableId, cancellationToken);
+        var customFields = await customFieldRepository.GetByCustomTableIdAsync(command.CustomTableId, cancellationToken);
 
-        if (customFields is null || customFields.Count == 0)
+        if (customFields.Count == 0)
         {
-            throw new EntityNotFoundException<CustomTable>(request.CustomTableId);
+            throw new EntityNotFoundException<CustomTable>(command.CustomTableId);
         }
 
-        var alignedData = request.Data.ValidateAndBackfillPayload(customFields);
+        var alignedData = command.Data.ValidateAndBackfillPayload(customFields);
 
         var record = new CustomRecord
         {
-            CustomTableId = request.CustomTableId,
+            CustomTableId = command.CustomTableId,
             Data = alignedData,
         };
 
         await customRecordRepository.CreateAsync(record, cancellationToken);
 
-        LogCustomRecordCreatedSuccessfully(logger, record.Id, request.CustomTableId);
+        LogCustomRecordCreatedSuccessfully(logger, record.Id, command.CustomTableId);
 
         return record.Id;
     }

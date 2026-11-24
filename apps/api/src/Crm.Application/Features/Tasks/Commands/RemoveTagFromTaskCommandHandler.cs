@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -13,27 +12,27 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// <param name="tagRepository">The repository for verifying tag scope and removing tags from tasks.</param>
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class RemoveTagFromTaskCommandHandler(
+public sealed partial class RemoveTagFromTaskCommandHandler(
     IProjectTaskRepository taskRepository,
     ITagRepository tagRepository,
     TimeProvider timeProvider,
-    ILogger<RemoveTagFromTaskCommandHandler> logger) : IRequestHandler<RemoveTagFromTaskCommand>
+    ILogger<RemoveTagFromTaskCommandHandler> logger) : ICommandHandler<RemoveTagFromTaskCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(RemoveTagFromTaskCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(RemoveTagFromTaskCommand command, CancellationToken cancellationToken)
     {
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        LogRemovingTagFromTask(logger, request.TaskId, request.ProjectId);
+        LogRemovingTagFromTask(logger, command.TaskId, command.ProjectId);
 
-        await tagRepository.EnsureExistsInProjectAsync(request.ProjectId, request.TagId, cancellationToken);
+        await tagRepository.EnsureExistsInProjectAsync(command.ProjectId, command.TagId, cancellationToken);
 
-        if (await tagRepository.RemoveFromTaskAsync(request.TaskId, request.TagId, cancellationToken))
+        if (await tagRepository.RemoveFromTaskAsync(command.TaskId, command.TagId, cancellationToken))
         {
-            await taskRepository.UpdateUpdatedAtAsync(request.TaskId, utcNow, cancellationToken);
+            await taskRepository.UpdateUpdatedAtAsync(command.TaskId, utcNow, cancellationToken);
         }
 
-        LogTagRemovedFromTask(logger, request.TaskId, request.ProjectId);
+        LogTagRemovedFromTask(logger, command.TaskId, command.ProjectId);
 
         return Unit.Value;
     }

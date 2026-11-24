@@ -1,21 +1,23 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Infrastructure.Entities;
-using Crm.Infrastructure.Persistence.ValueGenerators;
+using Crm.Infrastructure.Persistence.Consts;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Crm.Infrastructure.Persistence.Configurations.Identity;
 
-public class AuthRoleConfiguration : IEntityTypeConfiguration<AuthRole>
+/// <summary>
+/// Configures the Entity Framework Core mapping for the <see cref="AuthRole"/> identity entity.
+/// </summary>
+public sealed class AuthRoleConfiguration : IEntityTypeConfiguration<AuthRole>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<AuthRole> builder)
     {
-        builder.ToTable("AuthRoles");
+        builder.ToTable(TableNames.AuthRoles);
 
-        builder.HasKey(r => r.Id);
-
-        builder.Property(n => n.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+        builder.ConfigureGuidV7Key();
 
         builder.Property(r => r.Name)
             .HasMaxLength(AuthRoleValidationConstants.MaxNameLength);

@@ -1,6 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -11,32 +9,29 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// Handles the <see cref="UpdateTaskCommentCommand"/> to edit a task comment.
 /// </summary>
 /// <param name="commentRepository">The repository for retrieving and updating task comments.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class UpdateTaskCommentCommandHandler(
+public sealed partial class UpdateTaskCommentCommandHandler(
     ITaskCommentRepository commentRepository,
-    ICurrentUserService currentUserService,
     TimeProvider timeProvider,
-    ILogger<UpdateTaskCommentCommandHandler> logger) : IRequestHandler<UpdateTaskCommentCommand>
+    ILogger<UpdateTaskCommentCommandHandler> logger) : ICommandHandler<UpdateTaskCommentCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(UpdateTaskCommentCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateTaskCommentCommand command, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
-        LogUpdatingTaskComment(logger, request.CommentId, request.TaskId);
+        LogUpdatingTaskComment(logger, command.CommentId, command.TaskId);
 
-        var comment = await commentRepository.GetByTaskAndIdForUpdateAsync(request.TaskId, request.CommentId, cancellationToken);
+        var comment = await commentRepository.GetByTaskAndIdForUpdateAsync(command.TaskId, command.CommentId, cancellationToken);
 
-        if (comment.UserId != currentUserId)
+        if (comment.UserId != command.CurrentUserId)
         {
             throw new UnauthorizedAccessException(TaskErrorMessages.CommentUpdateForbidden);
         }
 
-        comment.Content = request.Content.Trim();
+        comment.Content = command.Content.Trim();
         comment.UpdatedAt = timeProvider.GetUtcNow().UtcDateTime;
 
-        LogTaskCommentUpdatedSuccessfully(logger, request.CommentId, request.TaskId);
+        LogTaskCommentUpdatedSuccessfully(logger, command.CommentId, command.TaskId);
 
         return Unit.Value;
     }

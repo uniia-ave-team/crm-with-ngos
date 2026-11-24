@@ -1,6 +1,5 @@
-using Crm.Application.Dtos.User;
-using Crm.Domain.Consts;
-using Crm.Domain.Consts.Entities.GeneralConstants;
+using Crm.Application.Dtos.Users;
+using Crm.Domain.Constants;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Mappings;
 using Crm.Infrastructure.Persistence;

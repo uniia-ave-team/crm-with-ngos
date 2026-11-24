@@ -1,9 +1,9 @@
 namespace Crm.Domain.Enums;
 
 /// <summary>
-/// Represents the supported data types for dynamic fields in custom table templates.
+/// Represents the supported data types for dynamic fields in custom table templates and custom tables.
 /// </summary>
-public enum FieldDataType
+public enum FieldDataType : byte
 {
     /// <summary>
     /// Standard short text input.

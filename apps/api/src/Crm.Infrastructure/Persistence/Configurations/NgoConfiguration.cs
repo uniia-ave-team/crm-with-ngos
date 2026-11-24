@@ -1,19 +1,20 @@
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
-using Crm.Infrastructure.Persistence.ValueGenerators;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Crm.Infrastructure.Persistence.Configurations;
 
-public class NgoConfiguration : IEntityTypeConfiguration<Ngo>
+/// <summary>
+/// Configures the Entity Framework Core mapping for the <see cref="Ngo"/> entity.
+/// </summary>
+public sealed class NgoConfiguration : IEntityTypeConfiguration<Ngo>
 {
+    /// <inheritdoc />
     public void Configure(EntityTypeBuilder<Ngo> builder)
     {
-        builder.HasKey(n => n.Id);
-
-        builder.Property(n => n.Id)
-            .HasValueGenerator<GuidV7ValueGenerator>();
+        builder.ConfigureGuidV7Key();
 
         builder.Property(n => n.Name)
             .IsRequired()

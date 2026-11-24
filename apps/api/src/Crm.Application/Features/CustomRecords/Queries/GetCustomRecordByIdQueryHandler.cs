@@ -1,9 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.CustomRecords;
-using Crm.Application.Dtos.CustomRecords.Queries;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using Mapster;
 using Mediator;
 using Microsoft.Extensions.Logging;
 
@@ -15,25 +13,25 @@ namespace Crm.Application.Features.CustomRecords.Queries;
 /// <param name="customRecordRepository">The repository used for fetching custom record entities.</param>
 /// <param name="customFieldRepository">The repository used for retrieving custom field definitions.</param>
 /// <param name="logger">The logger instance for tracking execution flow.</param>
-public partial class GetCustomRecordByIdQueryHandler(
+public sealed partial class GetCustomRecordByIdQueryHandler(
     ICustomRecordRepository customRecordRepository,
     ICustomFieldRepository customFieldRepository,
-    ILogger<GetCustomRecordByIdQueryHandler> logger) : IRequestHandler<GetCustomRecordByIdQuery, CustomRecordDto>
+    ILogger<GetCustomRecordByIdQueryHandler> logger) : IQueryHandler<GetCustomRecordByIdQuery, CustomRecordDto>
 {
-    public async ValueTask<CustomRecordDto> Handle(GetCustomRecordByIdQuery request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<CustomRecordDto> Handle(GetCustomRecordByIdQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingCustomRecordById(logger, request.Id);
+        LogFetchingCustomRecordById(logger, query.Id);
 
-        var record = await customRecordRepository.GetAsync(request.Id, cancellationToken);
+        var record = await customRecordRepository.GetAsync(query.Id, cancellationToken);
 
         var customFields = await customFieldRepository.GetByCustomTableIdAsync(record.CustomTableId, cancellationToken);
 
+        string[] orderedKeys = [.. customFields.OrderBy(x => x.Order).Select(f => f.Key)];
+
         LogCustomRecordByIdFetched(logger, record.Id);
 
-        return record.Adapt<CustomRecordDto>() with
-        {
-            Data = record.Data.ReorderKeys([.. customFields.OrderBy(x => x.Order).Select(f => f.Key)]),
-        };
+        return new CustomRecordDto(record.Id, record.Data.ReorderKeys(orderedKeys));
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingCustomRecordById, Level = LogLevel.Information, Message = "Fetching custom record by ID: {RecordId}")]

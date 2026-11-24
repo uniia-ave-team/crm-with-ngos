@@ -2,20 +2,32 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Crm.Infrastructure.Options;
 
-public class JwtOptions
+/// <summary>
+/// Configuration options for JWT token signing, validation, and token lifetime policies.
+/// </summary>
+public sealed class JwtOptions
 {
     /// <summary>
     /// The configuration section name used to bind these options from the settings file.
     /// </summary>
     public const string Position = "JwtOptions";
 
+    /// <summary>
+    /// Gets or sets the symmetric signing secret used to sign and validate JWT tokens.
+    /// </summary>
     [Required(ErrorMessage = "JWT Secret is required")]
     [MinLength(16, ErrorMessage = "JWT Secret must be at least 16 characters long")]
     public string Secret { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the expected JWT issuer (<c>iss</c>).
+    /// </summary>
     [Required]
     public string Issuer { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the expected JWT audience (<c>aud</c>).
+    /// </summary>
     [Required]
     public string Audience { get; set; } = string.Empty;
 

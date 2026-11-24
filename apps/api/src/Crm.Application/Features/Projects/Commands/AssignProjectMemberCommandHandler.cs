@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -16,30 +15,30 @@ namespace Crm.Application.Features.Projects.Commands;
 /// <param name="projectRepository">The repository for managing project and project member data.</param>
 /// <param name="userRepository">The repository for verifying user existence and active status.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class AssignProjectMemberCommandHandler(
+public sealed partial class AssignProjectMemberCommandHandler(
     IProjectRepository projectRepository,
     IUserRepository userRepository,
-    ILogger<AssignProjectMemberCommandHandler> logger) : IRequestHandler<AssignProjectMemberCommand>
+    ILogger<AssignProjectMemberCommandHandler> logger) : ICommandHandler<AssignProjectMemberCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(AssignProjectMemberCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(AssignProjectMemberCommand command, CancellationToken cancellationToken)
     {
-        LogAssigningProjectMember(logger, request.UserId, request.ProjectId);
+        LogAssigningProjectMember(logger, command.UserId, command.ProjectId);
 
-        if (!await userRepository.IsActiveAsync(request.UserId, cancellationToken))
+        if (!await userRepository.IsActiveAsync(command.UserId, cancellationToken))
         {
-            throw new CannotAssignUserToProjectException(request.UserId, AssignmentErrorMessages.UserAccountDeactivated);
+            throw new CannotAssignUserToProjectException(command.UserId, AssignmentErrorMessages.UserAccountDeactivated);
         }
 
-        if (await projectRepository.MemberExistsAsync(request.ProjectId, request.UserId, cancellationToken))
+        if (await projectRepository.MemberExistsAsync(command.ProjectId, command.UserId, cancellationToken))
         {
-            throw new EntityAlreadyExistsException(nameof(ProjectMember), $"{request.ProjectId}:{request.UserId}");
+            throw new EntityAlreadyExistsException(nameof(ProjectMember), $"{command.ProjectId}:{command.UserId}");
         }
 
-        var member = request.Adapt<ProjectMember>();
+        var member = command.Adapt<ProjectMember>();
         await projectRepository.AddMemberAsync(member, cancellationToken);
 
-        LogProjectMemberAssigned(logger, request.UserId, request.ProjectId);
+        LogProjectMemberAssigned(logger, command.UserId, command.ProjectId);
 
         return Unit.Value;
     }

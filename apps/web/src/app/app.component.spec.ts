@@ -125,6 +125,8 @@ describe('AppComponent', () => {
       hasAdmin: true,
       hasNgo: true,
       isSetupComplete: true,
+      version: '1.0.0',
+      notice: null,
       demo: { accounts: [], sessionMinutes: 60 },
     });
     fixture.detectChanges();

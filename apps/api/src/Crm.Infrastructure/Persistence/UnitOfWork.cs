@@ -8,45 +8,64 @@ namespace Crm.Infrastructure.Persistence;
 /// managing database transactions and persistence boundaries.
 /// </summary>
 /// <param name="context">The application database context instance.</param>
-public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork, IAsyncDisposable
+public sealed class UnitOfWork(ApplicationDbContext context) : IUnitOfWork, IDisposable, IAsyncDisposable
 {
     private IDbContextTransaction? _currentTransaction;
+    private int _transactionDepth;
 
     /// <summary>
-    /// Begins a new database transaction asynchronously if a transaction is not already active.
+    /// Begins a new database transaction asynchronously if a transaction is not already active,
+    /// or participates in the active transaction by tracking nesting depth.
     /// </summary>
     /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
     {
-        if (_currentTransaction != null)
+        if (_currentTransaction is not null)
         {
+            _transactionDepth++;
             return;
         }
 
         _currentTransaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        _transactionDepth = 1;
     }
 
     /// <summary>
-    /// Saves all pending changes to the database and commits the active transaction,
-    /// ensuring proper resource cleanup afterward.
+    /// Saves all pending changes to the database and commits the active transaction when the outermost scope completes,
+    /// ensuring proper resource cleanup afterward without masking the original exception on rollback failure.
     /// </summary>
     /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
     {
+        if (_transactionDepth > 1)
+        {
+            await context.SaveChangesAsync(cancellationToken);
+            _transactionDepth--;
+            return;
+        }
+
         try
         {
             await context.SaveChangesAsync(cancellationToken);
 
-            if (_currentTransaction != null)
+            if (_currentTransaction is not null)
             {
                 await _currentTransaction.CommitAsync(cancellationToken);
             }
         }
         catch
         {
-            await RollbackTransactionAsync(cancellationToken);
+            try
+            {
+                await RollbackTransactionAsync(CancellationToken.None);
+            }
+            catch
+            {
+                // Preserve the original failure that triggered the rollback.
+            }
+
             throw;
         }
         finally
@@ -65,7 +84,7 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork, IAsyncDispo
     {
         try
         {
-            if (_currentTransaction != null)
+            if (_currentTransaction is not null)
             {
                 await _currentTransaction.RollbackAsync(cancellationToken);
             }
@@ -85,18 +104,28 @@ public class UnitOfWork(ApplicationDbContext context) : IUnitOfWork, IAsyncDispo
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         => context.SaveChangesAsync(cancellationToken);
 
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _currentTransaction?.Dispose();
+        _currentTransaction = null;
+        _transactionDepth = 0;
+    }
+
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         await DisposeTransactionAsync();
-        GC.SuppressFinalize(this);
     }
 
     private async Task DisposeTransactionAsync()
     {
-        if (_currentTransaction != null)
+        if (_currentTransaction is not null)
         {
             await _currentTransaction.DisposeAsync();
             _currentTransaction = null;
         }
+
+        _transactionDepth = 0;
     }
 }

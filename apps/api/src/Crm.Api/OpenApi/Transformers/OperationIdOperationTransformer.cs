@@ -8,8 +8,9 @@ namespace Crm.Api.OpenApi.Transformers;
 /// Transformer that sets a stable operation ID in the form <c>{Controller}{Action}</c>, e.g. <c>UsersAssignRole</c>.
 /// Generated API clients use operation IDs as function names.
 /// </summary>
-public class OperationIdOperationTransformer : IOpenApiOperationTransformer
+public sealed class OperationIdOperationTransformer : IOpenApiOperationTransformer
 {
+    /// <inheritdoc />
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
     {
         if (context.Description.ActionDescriptor is ControllerActionDescriptor action)

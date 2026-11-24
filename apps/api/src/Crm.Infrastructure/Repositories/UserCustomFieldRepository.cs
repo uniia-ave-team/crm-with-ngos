@@ -10,7 +10,8 @@ namespace Crm.Infrastructure.Repositories;
 /// Implements the repository for managing <see cref="UserCustomField"/> entities.
 /// Inherits standard data access operations from <see cref="GenericRepository{T}"/>.
 /// </summary>
-public class UserCustomFieldRepository(
+/// <param name="appDbContext">The application database context.</param>
+public sealed class UserCustomFieldRepository(
     ApplicationDbContext appDbContext)
     : GenericRepository<UserCustomField>(appDbContext),
     IUserCustomFieldRepository

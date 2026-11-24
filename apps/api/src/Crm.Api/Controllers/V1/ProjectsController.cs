@@ -1,9 +1,10 @@
 using Asp.Versioning;
 using Crm.Api.Consts;
 using Crm.Api.Security;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Project.Commands;
-using Crm.Application.Dtos.Project.Queries;
+using Crm.Application.Dtos.Projects;
+using Crm.Application.Features.Projects.Commands;
+using Crm.Application.Features.Projects.Queries;
+using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
@@ -15,12 +16,15 @@ namespace Crm.Api.Controllers.V1;
 /// Controller responsible for managing projects, project-level user roles/claims, board topics, and project-scoped tags.
 /// </summary>
 /// <param name="mediator">The mediator instance used for dispatching commands and queries.</param>
+/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 [ApiController]
 [ApiVersion(ApiVersions.V1)]
-[Route("api/v{version:apiVersion}/[controller]")]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
-public class ProjectsController(IMediator mediator) : ControllerBase
+public sealed class ProjectsController(
+    IMediator mediator,
+    ICurrentUserService currentUserService) : ControllerBase
 {
     /// <summary>
     /// Retrieves a paginated, filtered, and sorted list of projects visible to the currently authenticated user.
@@ -36,7 +40,9 @@ public class ProjectsController(IMediator mediator) : ControllerBase
         [FromQuery] GetProjectsQuery query,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(query, cancellationToken);
+        var result = await mediator.Send(
+            query with { CurrentUserId = currentUserService.GetUserId() },
+            cancellationToken);
         return Ok(result);
     }
 
@@ -54,14 +60,16 @@ public class ProjectsController(IMediator mediator) : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetProjectByIdQuery(id), cancellationToken);
+        var result = await mediator.Send(
+            new GetProjectByIdQuery(id, currentUserService.GetUserId()),
+            cancellationToken);
         return Ok(result);
     }
 
     /// <summary>
-    /// Creates a new project, validating view and edit visibility combinations.
+    /// Creates a new project and assigns the creator as a project manager.
     /// </summary>
-    /// <param name="command">The command containing project title, description, and visibility settings.</param>
+    /// <param name="command">The command containing project title, description, visibility, and date range settings.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The unique identifier of the newly created project.</returns>
     [HttpPost]
@@ -72,15 +80,17 @@ public class ProjectsController(IMediator mediator) : ControllerBase
         [FromBody] CreateProjectCommand command,
         CancellationToken cancellationToken)
     {
-        var id = await mediator.Send(command, cancellationToken);
+        var id = await mediator.Send(
+            command with { CurrentUserId = currentUserService.GetUserId() },
+            cancellationToken);
         return CreatedAtRoute(nameof(GetProjectById), new { id }, id);
     }
 
     /// <summary>
-    /// Updates an existing project's details and visibility settings.
+    /// Updates an existing project's details, visibility, and date range.
     /// </summary>
     /// <param name="id">The unique identifier of the project to update.</param>
-    /// <param name="command">The updated project details and visibility settings.</param>
+    /// <param name="command">The updated project details, visibility, and date range settings.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status code indicating successful update.</returns>
     [HttpPut("{id:guid}")]
@@ -93,7 +103,9 @@ public class ProjectsController(IMediator mediator) : ControllerBase
         [FromBody] UpdateProjectCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command with { Id = id }, cancellationToken);
+        await mediator.Send(
+            command with { Id = id, CurrentUserId = currentUserService.GetUserId() },
+            cancellationToken);
         return NoContent();
     }
 
@@ -111,7 +123,7 @@ public class ProjectsController(IMediator mediator) : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(new DeleteProjectCommand(id), cancellationToken);
+        await mediator.Send(new DeleteProjectCommand(id, currentUserService.GetUserId()), cancellationToken);
         return NoContent();
     }
 
@@ -129,15 +141,17 @@ public class ProjectsController(IMediator mediator) : ControllerBase
         Guid projectId,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetProjectMembersQuery(projectId), cancellationToken);
+        var result = await mediator.Send(
+            new GetProjectMembersQuery(projectId, currentUserService.GetUserId()),
+            cancellationToken);
         return Ok(result);
     }
 
     /// <summary>
-    /// Assigns an active user to a project with a custom functional role title and project-level permission claims.
+    /// Assigns an active user to a project with a custom functional role title and project-level permission claim.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>
-    /// <param name="command">The user ID, custom role title, and project claims.</param>
+    /// <param name="command">The user ID, custom role title, and project claim.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status code indicating the project member assignment was created.</returns>
     [HttpPost("{projectId:guid}/members")]
@@ -156,11 +170,11 @@ public class ProjectsController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Updates an existing project member's custom functional role title and project-level permission claims.
+    /// Updates an existing project member's custom functional role title and project-level permission claim.
     /// </summary>
     /// <param name="projectId">The unique identifier of the project.</param>
     /// <param name="userId">The unique identifier of the user on the project.</param>
-    /// <param name="command">The updated role title and project claims.</param>
+    /// <param name="command">The updated role title and project claim.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status code indicating successful update.</returns>
     [HttpPut("{projectId:guid}/members/{userId:guid}")]
@@ -365,6 +379,7 @@ public class ProjectsController(IMediator mediator) : ControllerBase
     [HttpDelete("{projectId:guid}/tags/{tagId:guid}")]
     [HasAccessRight(AccessRight.UpdateProject)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteTag(
         Guid projectId,

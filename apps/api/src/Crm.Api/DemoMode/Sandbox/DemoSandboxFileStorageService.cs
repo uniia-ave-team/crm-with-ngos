@@ -1,4 +1,5 @@
 using Crm.Application.Interfaces;
+using Crm.Domain.Exceptions;
 using Microsoft.Extensions.Options;
 
 namespace Crm.Api.DemoMode.Sandbox;
@@ -41,7 +42,7 @@ public sealed partial class DemoSandboxFileStorageService(
         {
             return await inner.GetFileAsync(fileName, DemoSandboxPaths.GetSandboxFolder(sandbox.Id, folderName), cancellationToken);
         }
-        catch (FileNotFoundException)
+        catch (StorageFileNotFoundException)
         {
             // Not uploaded in this sandbox: the file belongs to the shared demo data.
             return await inner.GetFileAsync(fileName, folderName, cancellationToken);

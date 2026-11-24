@@ -13,7 +13,7 @@ import { DemoBannerComponent } from './demo-banner.component';
 
 describe('DemoBannerComponent', () => {
   const server = 'https://demo.example.org';
-  const status = { hasAdmin: true, hasNgo: true, isSetupComplete: true };
+  const status = { hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: null };
   const demo = { accounts: [], sessionMinutes: 60 };
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.spyOn>;

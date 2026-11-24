@@ -29,7 +29,7 @@ public sealed class DemoSandboxManagerTests : IDisposable
     {
         using var manager = CreateManager();
 
-        var sandbox = await manager.CreateAsync(CancellationToken.None);
+        var sandbox = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
 
         sandbox.ShouldNotBeNull();
         sandbox.Id.Length.ShouldBe(32);
@@ -45,8 +45,8 @@ public sealed class DemoSandboxManagerTests : IDisposable
     {
         using var manager = CreateManager();
 
-        var first = await manager.CreateAsync(CancellationToken.None);
-        var second = await manager.CreateAsync(CancellationToken.None);
+        var first = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
+        var second = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
 
         first.Id.ShouldNotBe(second.Id);
         first.DatabaseName.ShouldNotBe(second.DatabaseName);
@@ -68,7 +68,7 @@ public sealed class DemoSandboxManagerTests : IDisposable
     public async Task TryGetShouldKeepAnIdleSandboxUntilItsLifetimeEnds()
     {
         using var manager = CreateManager(o => o.LifetimeMinutes = 60);
-        var sandbox = await manager.CreateAsync(CancellationToken.None);
+        var sandbox = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
 
         _time.Advance(TimeSpan.FromMinutes(59));
 
@@ -79,7 +79,7 @@ public sealed class DemoSandboxManagerTests : IDisposable
     public async Task TryGetWhenLifetimeEndedShouldReturnFalse()
     {
         using var manager = CreateManager(o => o.LifetimeMinutes = 60);
-        var sandbox = await manager.CreateAsync(CancellationToken.None);
+        var sandbox = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
         sandbox.GetExpiresAt(new DemoSandboxOptions { LifetimeMinutes = 60 }).ShouldBe(sandbox.CreatedAt.AddMinutes(60));
 
         _time.Advance(TimeSpan.FromMinutes(60));
@@ -91,7 +91,7 @@ public sealed class DemoSandboxManagerTests : IDisposable
     public async Task TryGetWhenLifetimeEndedShouldReturnFalseEvenIfTheVisitorWasActive()
     {
         using var manager = CreateManager(o => o.LifetimeMinutes = 60);
-        var sandbox = await manager.CreateAsync(CancellationToken.None);
+        var sandbox = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
 
         for (int i = 0; i < 3; i++)
         {
@@ -106,9 +106,9 @@ public sealed class DemoSandboxManagerTests : IDisposable
     public async Task RemoveExpiredAsyncShouldDropOnlyExpiredSandboxes()
     {
         using var manager = CreateManager(o => o.LifetimeMinutes = 60);
-        var old = await manager.CreateAsync(CancellationToken.None);
+        var old = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
         _time.Advance(TimeSpan.FromMinutes(40));
-        var fresh = await manager.CreateAsync(CancellationToken.None);
+        var fresh = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
         _time.Advance(TimeSpan.FromMinutes(25));
 
         int removed = await manager.RemoveExpiredAsync(CancellationToken.None);
@@ -127,9 +127,9 @@ public sealed class DemoSandboxManagerTests : IDisposable
             o.MaxSandboxes = 2;
             o.EvictableAfterIdleSeconds = 120;
         });
-        var first = await manager.CreateAsync(CancellationToken.None);
+        var first = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
         _time.Advance(TimeSpan.FromSeconds(60));
-        var second = await manager.CreateAsync(CancellationToken.None);
+        var second = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
         _time.Advance(TimeSpan.FromSeconds(180));
         manager.TryGet(second.Id, out _).ShouldBeTrue();
 
@@ -164,7 +164,7 @@ public sealed class DemoSandboxManagerTests : IDisposable
     public async Task RemoveAsyncShouldDropDatabaseAndUploadedFiles()
     {
         using var manager = CreateManager();
-        var sandbox = await manager.CreateAsync(CancellationToken.None);
+        var sandbox = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
         string uploads = Path.Combine(_uploadRoot, DemoSandboxPaths.SandboxesFolder, sandbox.Id, "users");
         Directory.CreateDirectory(uploads);
         await File.WriteAllTextAsync(Path.Combine(uploads, "avatar.png"), "x", TestContext.Current.CancellationToken);
@@ -180,7 +180,7 @@ public sealed class DemoSandboxManagerTests : IDisposable
     public async Task RemoveAsyncWhenDropFailsShouldNotThrowAndShouldForgetTheSandbox()
     {
         using var manager = CreateManager();
-        var sandbox = await manager.CreateAsync(CancellationToken.None);
+        var sandbox = (await manager.CreateAsync(CancellationToken.None)).ShouldNotBeNull();
         _database.FailDrops = true;
 
         await Should.NotThrowAsync(() => manager.RemoveAsync(sandbox.Id, CancellationToken.None));

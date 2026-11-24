@@ -25,7 +25,7 @@ public sealed class ProjectAuthorizationBehavior<TRequest, TResponse>(
         MessageHandlerDelegate<TRequest, TResponse> next,
         CancellationToken cancellationToken)
     {
-        if (message.ProjectId is not { } projectId)
+        if (message.ProjectId is not { } projectId || projectId == Guid.Empty)
         {
             return await next(message, cancellationToken);
         }
@@ -33,7 +33,7 @@ public sealed class ProjectAuthorizationBehavior<TRequest, TResponse>(
         ProjectAccess access = await projectAccessService.GetRequiredAsync(projectId, cancellationToken);
         access.EnsureHasClaim(projectId, message.RequiredProjectClaim);
 
-        if (message is ITaskScoped taskScoped)
+        if (message is ITaskScoped taskScoped && taskScoped.TaskId != Guid.Empty)
         {
             await taskRepository.EnsureExistsInProjectAsync(projectId, taskScoped.TaskId, cancellationToken);
         }

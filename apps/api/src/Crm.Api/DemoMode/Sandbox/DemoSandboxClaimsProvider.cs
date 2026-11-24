@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
-using Crm.Application.Dtos.User;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Interfaces;
 using Microsoft.Extensions.Options;
 

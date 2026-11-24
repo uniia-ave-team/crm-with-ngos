@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -14,21 +13,21 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// <param name="attachmentRepository">The repository for retrieving and deleting task attachment records.</param>
 /// <param name="fileTracker">The transaction file tracker used to schedule physical files for deletion upon commit.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class DeleteTaskAttachmentCommandHandler(
+public sealed partial class DeleteTaskAttachmentCommandHandler(
     ITaskAttachmentRepository attachmentRepository,
     IFileTransactionTracker fileTracker,
-    ILogger<DeleteTaskAttachmentCommandHandler> logger) : IRequestHandler<DeleteTaskAttachmentCommand>
+    ILogger<DeleteTaskAttachmentCommandHandler> logger) : ICommandHandler<DeleteTaskAttachmentCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(DeleteTaskAttachmentCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(DeleteTaskAttachmentCommand command, CancellationToken cancellationToken)
     {
-        LogDeletingTaskAttachment(logger, request.AttachmentId, request.TaskId);
+        LogDeletingTaskAttachment(logger, command.AttachmentId, command.TaskId);
 
-        var attachment = await attachmentRepository.GetByTaskAndIdAsync(request.TaskId, request.AttachmentId, cancellationToken);
+        var attachment = await attachmentRepository.GetByTaskAndIdAsync(command.TaskId, command.AttachmentId, cancellationToken);
         fileTracker.RegisterFileForDeletion(attachment.StoredFileName, FileStorageConstants.TaskAttachmentsFolder);
         await attachmentRepository.DeleteAsync(attachment.Id, cancellationToken);
 
-        LogTaskAttachmentDeletedSuccessfully(logger, request.AttachmentId, request.TaskId);
+        LogTaskAttachmentDeletedSuccessfully(logger, command.AttachmentId, command.TaskId);
 
         return Unit.Value;
     }

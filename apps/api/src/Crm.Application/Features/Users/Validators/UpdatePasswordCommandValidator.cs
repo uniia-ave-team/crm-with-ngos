@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Features.Users.Commands;
 using Crm.Application.Interfaces;
 using FluentValidation;
 
@@ -8,7 +8,7 @@ namespace Crm.Application.Features.Users.Validators;
 /// Provides validation rules for the <see cref="UpdatePasswordCommand"/>.
 /// Validates user identification, current password presence, and enforces new password requirements.
 /// </summary>
-public class UpdatePasswordCommandValidator : AbstractValidator<UpdatePasswordCommand>
+public sealed class UpdatePasswordCommandValidator : AbstractValidator<UpdatePasswordCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UpdatePasswordCommandValidator"/> class.
@@ -25,9 +25,7 @@ public class UpdatePasswordCommandValidator : AbstractValidator<UpdatePasswordCo
             .NotEmpty().WithMessage("Current password is required.");
 
         RuleFor(x => x.NewPassword)
-            .NotEmpty().WithMessage("New password is required.")
-            .MinimumLength(options.RequiredLength)
-                .WithMessage($"New password must be at least {options.RequiredLength} characters long.")
+            .ApplyPasswordRules(options)
             .NotEqual(x => x.CurrentPassword)
                 .WithMessage("New password must be different from the current password.");
     }

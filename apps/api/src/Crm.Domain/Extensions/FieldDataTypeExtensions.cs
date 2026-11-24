@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Crm.Domain.Enums;
+using Crm.Domain.Exceptions;
 
 namespace Crm.Domain.Extensions;
 
@@ -38,12 +39,33 @@ public static partial class FieldDataTypeExtensions
     };
 
     /// <summary>
-    /// Validates whether the provided <see cref="JsonNode"/> matches the expected <see cref="FieldDataType"/>.
+    /// Validates the provided <see cref="JsonNode"/> against the <see cref="FieldDataType"/> and required status.
     /// </summary>
     /// <param name="dataType">The expected field data type.</param>
+    /// <param name="fieldKey">The key of the field being validated (for exception messaging).</param>
     /// <param name="node">The JSON node value to validate.</param>
-    /// <returns><c>true</c> if the node is valid for the data type or null; otherwise, <c>false</c>.</returns>
-    public static bool IsValidJsonValue(this FieldDataType dataType, JsonNode? node)
+    /// <param name="isRequired">Indicates whether the field is mandatory.</param>
+    /// <exception cref="InvalidCustomRecordPayloadException">Thrown when a required value is missing or data type validation fails.</exception>
+    public static void ValidateJsonValue(this FieldDataType dataType, string fieldKey, JsonNode? node, bool isRequired)
+    {
+        if (IsNull(node))
+        {
+            if (isRequired)
+            {
+                throw new InvalidCustomRecordPayloadException($"Field '{fieldKey}' is required and cannot be null.");
+            }
+
+            return;
+        }
+
+        if (!dataType.IsValidJsonValue(node))
+        {
+            throw new InvalidCustomRecordPayloadException(
+                $"Field '{fieldKey}' has an invalid value type. Expected '{dataType}', but received '{node!.GetValueKind()}'.");
+        }
+    }
+
+    private static bool IsValidJsonValue(this FieldDataType dataType, JsonNode? node)
     {
         if (IsNull(node))
         {
@@ -89,34 +111,6 @@ public static partial class FieldDataTypeExtensions
 
             _ => false,
         };
-    }
-
-    /// <summary>
-    /// Validates the provided <see cref="JsonNode"/> against the <see cref="FieldDataType"/> and required status.
-    /// </summary>
-    /// <param name="dataType">The expected field data type.</param>
-    /// <param name="fieldKey">The key of the field being validated (for exception messaging).</param>
-    /// <param name="node">The JSON node value to validate.</param>
-    /// <param name="isRequired">Indicates whether the field is mandatory.</param>
-    /// <exception cref="ArgumentException">Thrown when a required value is missing or data type validation fails.</exception>
-    public static void ValidateJsonValue(this FieldDataType dataType, string fieldKey, JsonNode? node, bool isRequired)
-    {
-        if (IsNull(node))
-        {
-            if (isRequired)
-            {
-                throw new ArgumentException($"Field '{fieldKey}' is required and cannot be null.", fieldKey);
-            }
-
-            return;
-        }
-
-        if (!dataType.IsValidJsonValue(node))
-        {
-            throw new ArgumentException(
-                $"Field '{fieldKey}' has an invalid value type. Expected '{dataType}', but received '{node.GetValueKind()}'.",
-                fieldKey);
-        }
     }
 
     private static bool IsNull(JsonNode? node) => node is null || node.GetValueKind() == JsonValueKind.Null;

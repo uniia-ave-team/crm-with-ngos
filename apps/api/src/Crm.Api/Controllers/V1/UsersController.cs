@@ -2,12 +2,12 @@ using System.Net.Mime;
 using Asp.Versioning;
 using Crm.Api.Consts;
 using Crm.Api.DemoMode;
-using Crm.Api.Dtos;
 using Crm.Api.Extensions;
 using Crm.Api.Security;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Commands;
-using Crm.Application.Dtos.User.Queries;
+using Crm.Application.Dtos.Auth;
+using Crm.Application.Dtos.Users;
+using Crm.Application.Features.Users.Commands;
+using Crm.Application.Features.Users.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
@@ -21,9 +21,9 @@ namespace Crm.Api.Controllers.V1;
 /// Controller responsible for managing user profiles, roles, and system access status.
 /// </summary>
 [ApiController]
-[ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/[controller]")]
-public class UsersController(
+[ApiVersion(ApiVersions.V1)]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
+public sealed class UsersController(
     IMediator mediator,
     ICurrentUserService currentUserService) : ControllerBase
 {
@@ -36,12 +36,20 @@ public class UsersController(
     [HttpGet]
     [HasAccessRight(AccessRight.ViewUser)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PagedResult<UserDto>>> GetUsers(
         [FromQuery] GetUsersQuery query,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(query, cancellationToken);
+        var result = await mediator.Send(
+            query with
+            {
+                CurrentUserId = currentUserService.GetUserId(),
+                CurrentUserRoleIds = currentUserService.GetRoleIds(),
+            },
+            cancellationToken);
         return Ok(result);
     }
 
@@ -54,6 +62,9 @@ public class UsersController(
     [HttpDelete("{id:guid}")]
     [HasAccessRight(AccessRight.DeleteUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteUser(
         Guid id,
@@ -73,12 +84,17 @@ public class UsersController(
     [HttpGet("{id:guid}", Name = nameof(GetUserProfile))]
     [HasAccessRight(AccessRight.ViewUser)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UserProfileDto>> GetUserProfile(
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new GetUserProfileQuery(id), cancellationToken);
+        var result = await mediator.Send(
+            new GetUserProfileQuery(id, currentUserService.GetUserId(), currentUserService.GetRoleIds()),
+            cancellationToken);
         return Ok(result);
     }
 
@@ -96,7 +112,9 @@ public class UsersController(
     {
         var currentUserId = currentUserService.GetUserId();
 
-        var result = await mediator.Send(new GetUserProfileQuery(currentUserId, IsSelf: true), cancellationToken);
+        var result = await mediator.Send(
+            new GetUserProfileQuery(currentUserId, currentUserId, [], IsSelf: true),
+            cancellationToken);
         return Ok(result);
     }
 
@@ -109,39 +127,40 @@ public class UsersController(
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The unique identifier of the newly created user.</returns>
     [HttpPost]
+    [AllowAnonymous]
     [DemoBlocked]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<Guid>> CreateUser(
         [FromBody] CreateUserCommand command,
         CancellationToken cancellationToken)
     {
         var userId = await mediator.Send(command, cancellationToken);
 
-        return CreatedAtRoute(
-            nameof(GetUserProfile),
-            new { id = userId },
-            new { UserId = userId });
+        return CreatedAtRoute(nameof(GetUserProfile), new { id = userId }, userId);
     }
 
     /// <summary>
     /// Updates the profile details of an existing user.
     /// </summary>
     /// <param name="id">The unique identifier of the user to update.</param>
-    /// <param name="request">The updated profile details.</param>
+    /// <param name="command">The updated profile details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPut("{id:guid}")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateUserProfile(
         Guid id,
-        [FromBody] UpdateProfileRequest request,
+        [FromBody] UpdateUserProfileCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(id), cancellationToken);
+        await mediator.Send(command with { UserId = id }, cancellationToken);
 
         return NoContent();
     }
@@ -157,6 +176,8 @@ public class UsersController(
     [DemoBlocked]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ResetPassword(
         [FromBody] ResetPasswordCommand command,
         CancellationToken cancellationToken)
@@ -174,7 +195,9 @@ public class UsersController(
     [HttpDelete("me")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteMe(
         CancellationToken cancellationToken)
     {
@@ -187,7 +210,7 @@ public class UsersController(
     /// <summary>
     /// Updates the profile details of the currently authenticated user.
     /// </summary>
-    /// <param name="request">The updated profile details.</param>
+    /// <param name="command">The updated profile details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPut("me")]
@@ -195,11 +218,12 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateCurrentUserProfile(
-        [FromBody] UpdateProfileRequest request,
+        [FromBody] UpdateUserProfileCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(currentUserService.GetUserId()), cancellationToken);
+        await mediator.Send(command with { UserId = currentUserService.GetUserId() }, cancellationToken);
 
         return NoContent();
     }
@@ -218,8 +242,7 @@ public class UsersController(
     public async Task<IActionResult> GetMyAvatar(CancellationToken cancellationToken)
     {
         var fileDto = await mediator.Send(new GetUserAvatarQuery(currentUserService.GetUserId()), cancellationToken);
-
-        return File(fileDto.Stream, fileDto.GetContentType(), enableRangeProcessing: true);
+        return this.ServeFile(fileDto);
     }
 
     /// <summary>
@@ -232,18 +255,16 @@ public class UsersController(
     [Authorize]
     [Consumes(MediaTypeNames.Multipart.FormData)]
     [RequestSizeLimit(FileLimitConstants.MaxImageUploadSize)]
+    [RequestFormLimits(MultipartBodyLengthLimit = FileLimitConstants.MaxImageUploadSize)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> UploadMyAvatar(
         IFormFile file,
         CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
-        {
-            return BadRequest("A file is required.");
-        }
-
         using var stream = file.OpenReadStream();
 
         await mediator.Send(new UploadUserAvatarCommand(currentUserService.GetUserId(), stream, file.FileName), cancellationToken);
@@ -253,22 +274,25 @@ public class UsersController(
 
     /// <summary>
     /// Securely changes the password for the currently authenticated user.
+    /// The change signs the user out of all other sessions (their refresh tokens are revoked);
+    /// the calling session must switch to the returned token pair to stay signed in.
     /// </summary>
-    /// <param name="request">The current and new password details.</param>
+    /// <param name="command">The current and new password details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A status indicating the outcome of the operation.</returns>
+    /// <returns>A DTO containing a fresh JWT access token and refresh token for the calling session.</returns>
     [HttpPost("me/password")]
     [Authorize]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> UpdateMyPassword(
-        [FromBody] UpdatePasswordRequest request,
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AuthTokensDto>> UpdateMyPassword(
+        [FromBody] UpdatePasswordCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(currentUserService.GetUserId()), cancellationToken);
+        var tokens = await mediator.Send(command with { UserId = currentUserService.GetUserId() }, cancellationToken);
 
-        return NoContent();
+        return Ok(tokens);
     }
 
     /// <summary>
@@ -290,7 +314,7 @@ public class UsersController(
     /// <summary>
     /// Adds a custom key-value field to the currently authenticated user's profile.
     /// </summary>
-    /// <param name="request">The custom field key and value details.</param>
+    /// <param name="command">The custom field key and value details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPost("me/custom-fields")]
@@ -298,11 +322,13 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddMyCustomField(
-        [FromBody] AddCustomUserFieldRequest request,
+        [FromBody] AddUserCustomFieldCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(currentUserService.GetUserId()), cancellationToken);
+        await mediator.Send(command with { UserId = currentUserService.GetUserId() }, cancellationToken);
         return NoContent();
     }
 
@@ -315,6 +341,7 @@ public class UsersController(
     [HttpDelete("me/custom-fields/{customFieldId:guid}")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveMyCustomField(
@@ -331,7 +358,7 @@ public class UsersController(
     /// Updates the value of a specific custom field for the currently authenticated user.
     /// </summary>
     /// <param name="customFieldId">The unique identifier of the custom field to update.</param>
-    /// <param name="request">The updated custom field value.</param>
+    /// <param name="command">The updated custom field value.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPut("me/custom-fields/{customFieldId:guid}")]
@@ -342,10 +369,12 @@ public class UsersController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateMyCustomField(
         Guid customFieldId,
-        [FromBody] UpdateCustomFieldRequest request,
+        [FromBody] UpdateUserCustomFieldCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(customFieldId, currentUserService.GetUserId()), cancellationToken);
+        await mediator.Send(
+            command with { CustomFieldId = customFieldId, UserId = currentUserService.GetUserId() },
+            cancellationToken);
         return NoContent();
     }
 
@@ -359,6 +388,8 @@ public class UsersController(
     [HasAccessRight(AccessRight.ViewUser)]
     [ResponseCache(Duration = ResponseCacheConstants.ThirtyDays, Location = ResponseCacheLocation.Client)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserAvatar(
@@ -366,8 +397,7 @@ public class UsersController(
         CancellationToken cancellationToken)
     {
         var fileDto = await mediator.Send(new GetUserAvatarQuery(id), cancellationToken);
-
-        return File(fileDto.Stream, fileDto.GetContentType(), enableRangeProcessing: true);
+        return this.ServeFile(fileDto);
     }
 
     /// <summary>
@@ -381,20 +411,18 @@ public class UsersController(
     [HasAccessRight(AccessRight.UpdateUser)]
     [Consumes(MediaTypeNames.Multipart.FormData)]
     [RequestSizeLimit(FileLimitConstants.MaxImageUploadSize)]
+    [RequestFormLimits(MultipartBodyLengthLimit = FileLimitConstants.MaxImageUploadSize)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> UploadUserAvatar(
         Guid id,
         IFormFile file,
         CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
-        {
-            return BadRequest("A file is required.");
-        }
-
         using var stream = file.OpenReadStream();
 
         await mediator.Send(new UploadUserAvatarCommand(id, stream, file.FileName), cancellationToken);
@@ -411,6 +439,9 @@ public class UsersController(
     [HttpPost("{id:guid}/activate")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ActivateUser(
         Guid id,
@@ -429,6 +460,9 @@ public class UsersController(
     [HttpPost("{id:guid}/deactivate")]
     [HasAccessRight(AccessRight.DisableUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeactivateUser(
         Guid id,
@@ -448,6 +482,7 @@ public class UsersController(
     [HasAccessRight(AccessRight.CanResetPassword)]
     [DemoBlocked]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TokenResultDto>> GeneratePasswordResetToken(
@@ -466,20 +501,23 @@ public class UsersController(
     /// Adds a custom key-value field to a specific user's profile.
     /// </summary>
     /// <param name="id">The unique identifier of the user.</param>
-    /// <param name="request">The custom field key and value details.</param>
+    /// <param name="command">The custom field key and value details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPost("{id:guid}/custom-fields")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddCustomField(
         Guid id,
-        [FromBody] AddCustomUserFieldRequest request,
+        [FromBody] AddUserCustomFieldCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(id), cancellationToken);
+        await mediator.Send(command with { UserId = id }, cancellationToken);
         return NoContent();
     }
 
@@ -493,6 +531,9 @@ public class UsersController(
     [HttpDelete("{id:guid}/custom-fields/{customFieldId:guid}")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveCustomField(
         Guid id,
@@ -510,21 +551,23 @@ public class UsersController(
     /// </summary>
     /// <param name="id">The unique identifier of the user.</param>
     /// <param name="customFieldId">The unique identifier of the custom field to update.</param>
-    /// <param name="request">The updated custom field value.</param>
+    /// <param name="command">The updated custom field value.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
     [HttpPut("{id:guid}/custom-fields/{customFieldId:guid}")]
     [HasAccessRight(AccessRight.UpdateUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateCustomField(
         Guid id,
         Guid customFieldId,
-        [FromBody] UpdateCustomFieldRequest request,
+        [FromBody] UpdateUserCustomFieldCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(customFieldId, id), cancellationToken);
+        await mediator.Send(command with { CustomFieldId = customFieldId, UserId = id }, cancellationToken);
         return NoContent();
     }
 
@@ -539,6 +582,8 @@ public class UsersController(
     [HasAccessRight(AccessRight.AssignRoleToUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AssignRole(
         Guid id,
@@ -561,6 +606,9 @@ public class UsersController(
     [HttpDelete("{id:guid}/roles/{roleId:guid}")]
     [HasAccessRight(AccessRight.AssignRoleToUser)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveRole(
         Guid id,

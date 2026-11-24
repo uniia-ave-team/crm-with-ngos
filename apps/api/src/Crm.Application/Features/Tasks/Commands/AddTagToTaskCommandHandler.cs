@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -13,27 +12,27 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// <param name="tagRepository">The repository for verifying tag scope and attaching tags to tasks.</param>
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class AddTagToTaskCommandHandler(
+public sealed partial class AddTagToTaskCommandHandler(
     IProjectTaskRepository taskRepository,
     ITagRepository tagRepository,
     TimeProvider timeProvider,
-    ILogger<AddTagToTaskCommandHandler> logger) : IRequestHandler<AddTagToTaskCommand>
+    ILogger<AddTagToTaskCommandHandler> logger) : ICommandHandler<AddTagToTaskCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(AddTagToTaskCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(AddTagToTaskCommand command, CancellationToken cancellationToken)
     {
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        LogAddingTagToTask(logger, request.TaskId, request.ProjectId);
+        LogAddingTagToTask(logger, command.TaskId, command.ProjectId);
 
-        await tagRepository.EnsureExistsInProjectAsync(request.ProjectId, request.TagId, cancellationToken);
+        await tagRepository.EnsureExistsInProjectAsync(command.ProjectId, command.TagId, cancellationToken);
 
-        if (await tagRepository.AddToTaskAsync(request.TaskId, request.TagId, cancellationToken))
+        if (await tagRepository.AddToTaskAsync(command.TaskId, command.TagId, cancellationToken))
         {
-            await taskRepository.UpdateUpdatedAtAsync(request.TaskId, utcNow, cancellationToken);
+            await taskRepository.UpdateUpdatedAtAsync(command.TaskId, utcNow, cancellationToken);
         }
 
-        LogTagAddedToTask(logger, request.TaskId, request.ProjectId);
+        LogTagAddedToTask(logger, command.TaskId, command.ProjectId);
 
         return Unit.Value;
     }

@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using Mediator;
@@ -10,19 +9,19 @@ namespace Crm.Application.Features.Users.Commands;
 /// <summary>
 /// Handles the <see cref="UpdateUserProfileCommand"/> to modify user profile details.
 /// </summary>
-public partial class UpdateUserProfileCommandHandler(
+public sealed partial class UpdateUserProfileCommandHandler(
     IUserRepository userRepository,
-    ILogger<UpdateUserProfileCommandHandler> logger) : IRequestHandler<UpdateUserProfileCommand>
+    ILogger<UpdateUserProfileCommandHandler> logger) : ICommandHandler<UpdateUserProfileCommand>
 {
-    public async ValueTask<Unit> Handle(UpdateUserProfileCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateUserProfileCommand command, CancellationToken cancellationToken)
     {
-        LogUpdatingUserProfile(logger, request.UserId);
+        LogUpdatingUserProfile(logger, command.UserId);
 
-        var user = await userRepository.GetForUpdateAsync(request.UserId, cancellationToken);
+        var user = await userRepository.GetForUpdateAsync(command.UserId, cancellationToken);
 
-        request.Adapt(user);
+        command.Adapt(user);
 
-        LogUserProfileUpdatedSuccessfully(logger, request.UserId);
+        LogUserProfileUpdatedSuccessfully(logger, command.UserId);
 
         return Unit.Value;
     }

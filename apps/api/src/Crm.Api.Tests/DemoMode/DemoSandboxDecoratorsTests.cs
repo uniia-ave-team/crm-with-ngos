@@ -1,6 +1,7 @@
 using Crm.Api.DemoMode;
 using Crm.Api.DemoMode.Sandbox;
 using Crm.Application.Interfaces;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -82,7 +83,7 @@ public sealed class DemoSandboxDecoratorsTests
         await Should.ThrowAsync<DemoModeException>(
             () => CreateStorage().SaveFileAsync(stream, "a.txt", Folder, TestContext.Current.CancellationToken));
 
-        await _innerStorage.DidNotReceiveWithAnyArgs().SaveFileAsync(default, default, default, TestContext.Current.CancellationToken);
+        await _innerStorage.DidNotReceiveWithAnyArgs().SaveFileAsync(default!, default!, default!, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -100,7 +101,7 @@ public sealed class DemoSandboxDecoratorsTests
         UseSandbox();
         using var shared = new MemoryStream();
         _innerStorage.GetFileAsync("logo.png", SandboxFolder, Arg.Any<CancellationToken>())
-            .Returns<Task<Stream>>(_ => throw new FileNotFoundException());
+            .Returns<Task<Stream>>(_ => throw new StorageFileNotFoundException("logo.png", SandboxFolder));
         _innerStorage.GetFileAsync("logo.png", Folder, Arg.Any<CancellationToken>()).Returns(shared);
 
         var stream = await CreateStorage().GetFileAsync("logo.png", Folder, TestContext.Current.CancellationToken);
@@ -126,7 +127,7 @@ public sealed class DemoSandboxDecoratorsTests
 
         await CreateStorage().DeleteFileAsync("logo.png", Folder, TestContext.Current.CancellationToken);
 
-        await _innerStorage.DidNotReceiveWithAnyArgs().DeleteFileAsync(default, default, TestContext.Current.CancellationToken);
+        await _innerStorage.DidNotReceiveWithAnyArgs().DeleteFileAsync(default!, default!, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -151,7 +152,7 @@ public sealed class DemoSandboxDecoratorsTests
         removed.ShouldBeEmpty();
         await repository.Received(1).GetAllRolesPermissionsAsync(Arg.Any<CancellationToken>());
         await _innerCache.DidNotReceiveWithAnyArgs().GetRolePermissionsAsync(default, TestContext.Current.CancellationToken);
-        await _innerCache.DidNotReceiveWithAnyArgs().SetRolePermissionsAsync(default, default, TestContext.Current.CancellationToken);
+        await _innerCache.DidNotReceiveWithAnyArgs().SetRolePermissionsAsync(default, default!, TestContext.Current.CancellationToken);
         await _innerCache.DidNotReceiveWithAnyArgs().RemoveRolePermissionsAsync(default, TestContext.Current.CancellationToken);
     }
 
@@ -173,10 +174,10 @@ public sealed class DemoSandboxDecoratorsTests
     {
         var provider = new DemoSandboxClaimsProvider(_accessor, MsOptions.Create(_options));
 
-        provider.GetClaims(null).ShouldBeEmpty();
+        provider.GetClaims(null!).ShouldBeEmpty();
 
         UseSandbox();
-        var claims = provider.GetClaims(null).ToDictionary(c => c.Type, c => c.Value);
+        var claims = provider.GetClaims(null!).ToDictionary(c => c.Type, c => c.Value);
         claims[DemoClaimTypes.SandboxId].ShouldBe(_sandbox.Id);
         claims[DemoClaimTypes.SandboxExpiresAt].ShouldBe(
             _sandbox.CreatedAt.AddMinutes(_options.Sandbox.LifetimeMinutes).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -204,15 +205,15 @@ public sealed class DemoSandboxDecoratorsTests
         using var read = new NpgsqlCommand("SELECT 1");
 
         // Startup and background services: no HTTP request.
-        Should.NotThrow(() => guard.NonQueryExecuting(write, null, default));
+        Should.NotThrow(() => guard.NonQueryExecuting(write, null!, default));
 
         _accessor.IsHttpRequest.Returns(true);
-        Should.Throw<DemoModeException>(() => guard.NonQueryExecuting(write, null, default))
+        Should.Throw<DemoModeException>(() => guard.NonQueryExecuting(write, null!, default))
             .ErrorCode.ShouldBe(DemoErrorCodes.Restricted);
-        Should.NotThrow(() => guard.ReaderExecuting(read, null, default));
+        Should.NotThrow(() => guard.ReaderExecuting(read, null!, default));
 
         _accessor.Current.Returns(_sandbox);
-        Should.NotThrow(() => guard.NonQueryExecuting(write, null, default));
+        Should.NotThrow(() => guard.NonQueryExecuting(write, null!, default));
     }
 
     private void UseSandbox()

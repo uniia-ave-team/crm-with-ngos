@@ -1,7 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Project.Queries;
-using Crm.Application.Interfaces;
+using Crm.Application.Dtos.Projects;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -14,29 +12,26 @@ namespace Crm.Application.Features.Projects.Queries;
 /// visible to the currently authenticated user.
 /// </summary>
 /// <param name="projectRepository">The repository for querying visible projects.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class GetProjectsQueryHandler(
+public sealed partial class GetProjectsQueryHandler(
     IProjectRepository projectRepository,
-    ICurrentUserService currentUserService,
-    ILogger<GetProjectsQueryHandler> logger) : IRequestHandler<GetProjectsQuery, PagedResult<ProjectSummaryDto>>
+    ILogger<GetProjectsQueryHandler> logger) : IQueryHandler<GetProjectsQuery, PagedResult<ProjectSummaryDto>>
 {
     /// <inheritdoc />
-    public async ValueTask<PagedResult<ProjectSummaryDto>> Handle(GetProjectsQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<ProjectSummaryDto>> Handle(GetProjectsQuery query, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
-        LogFetchingProjects(logger, currentUserId, request.PageNumber, request.PageSize);
+        LogFetchingProjects(logger, query.CurrentUserId, query.PageNumber, query.PageSize);
 
         var result = await projectRepository.GetPagedAsync<ProjectSummaryDto>(
-            userId: currentUserId,
-            searchTerm: request.SearchTerm,
-            orderBy: request.OrderBy,
-            sortOrder: request.SortOrder,
-            pageNumber: request.PageNumber,
-            pageSize: request.PageSize,
+            userId: query.CurrentUserId,
+            searchTerm: query.SearchTerm,
+            orderBy: query.OrderBy,
+            sortOrder: query.SortOrder,
+            pageNumber: query.PageNumber,
+            pageSize: query.PageSize,
             cancellationToken: cancellationToken);
 
-        LogProjectsFetched(logger, result.Items.Count, result.TotalCount, currentUserId);
+        LogProjectsFetched(logger, result.Items.Count, result.TotalCount, query.CurrentUserId);
 
         return result;
     }

@@ -14,7 +14,7 @@ describe('ConnectionService', () => {
   const apiPort = `${location.protocol}//${location.hostname}:5065`;
   const health = (server: string) => `${server}/health`;
   const statusUrl = (server: string) => `${server}/api/v1/system/status`;
-  const status = { hasAdmin: true, hasNgo: true, isSetupComplete: true };
+  const status = { hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: null };
   const demo = {
     accounts: [{ name: 'Олена', email: 'olena@demo.example', password: 'Demo-1a' }],
     sessionMinutes: 60,
@@ -540,6 +540,8 @@ describe('ConnectionService', () => {
         hasAdmin: false,
         hasNgo: false,
         isSetupComplete: false,
+        version: 'dev',
+        notice: null,
       });
       expect(service.systemStatus()?.isSetupComplete).toBe(false);
     });
@@ -555,8 +557,10 @@ describe('ConnectionService', () => {
 
     it.each([
       ['has no fields', {}],
-      ['misses a field', { hasAdmin: true, hasNgo: true }],
-      ['has a field of another type', { hasAdmin: 'yes', hasNgo: true, isSetupComplete: true }],
+      ['misses a field', { hasAdmin: true, hasNgo: true, version: '1.0.0', notice: null }],
+      ['has a field of another type', { hasAdmin: 'yes', hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: null }],
+      ['misses version', { hasAdmin: true, hasNgo: true, isSetupComplete: true, notice: null }],
+      ['has invalid notice', { hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: { message: 'x' } }],
       ['is not an object', null],
     ])('fails when the answer %s: it is not the status of the contract, and nothing may be decided by it', async (_name, body) => {
       const { service, systemStatus } = connect();
@@ -577,10 +581,10 @@ describe('ConnectionService', () => {
       const second = service.loadSystemStatus();
       const requests = http.match(statusUrl(apiPort));
       expect(requests.map((r) => r.cancelled)).toEqual([true, false]);
-      requests[1].flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      requests[1].flush({ hasAdmin: true, hasNgo: false, isSetupComplete: false, version: '1.0.0', notice: null });
 
-      expect(await first).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
-      expect(await second).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false });
+      expect(await first).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false, version: '1.0.0', notice: null });
+      expect(await second).toEqual({ hasAdmin: true, hasNgo: false, isSetupComplete: false, version: '1.0.0', notice: null });
     });
 
     it('gives null for a request that a new check of the connection has cancelled: the target has changed', async () => {

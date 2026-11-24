@@ -808,7 +808,7 @@ describe('AuthService', () => {
       http.expectOne(connection.apiHealthUrl()).flush({ status: 'Healthy' });
       http
         .expectOne(`${connection.serverUrl()}/api/v1/system/status`)
-        .flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true, demo: demoInfo });
+        .flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: null, demo: demoInfo });
     }
 
     it('reports "busy" for 503 DEMO_CAPACITY_REACHED and adds no account', async () => {

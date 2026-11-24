@@ -1,14 +1,17 @@
+using System.Text.Json.Nodes;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
+using Crm.Domain.ValueObjects;
 using Shouldly;
 
 namespace Crm.Domain.Tests.Entities;
 
 /// <summary>
-/// Unit tests for <see cref="ProjectTaskExtensions.ChangeStatus"/> covering the 5-status lifecycle,
-/// automatic vs manual <see cref="ProjectTask.EndDate"/> handling, reopen rules, and the <c>EndDate &gt;= StartDate</c> invariant.
+/// Unit tests for <see cref="ProjectTask"/> status transitions and domain invariants,
+/// covering the 5-status lifecycle, automatic vs manual <see cref="ProjectTask.EndDate"/> handling,
+/// reopen rules, the <c>EndDate &gt;= StartDate</c> invariant, and <see cref="TaskExternalLink"/> equality.
 /// </summary>
 public class ProjectTaskTests
 {
@@ -35,11 +38,11 @@ public class ProjectTaskTests
     }
 
     [Fact]
-    public void ChangeStatusToDoneShouldNotAutoPopulateEndDate()
+    public void TransitionStatusToDoneShouldNotAutoPopulateEndDate()
     {
         var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
 
-        task.ChangeStatus(ProjectTaskStatus.Done, requestedEndDate: null, UtcNow, updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.Done, requestedEndDate: null, UtcNow);
 
         task.Status.ShouldBe(ProjectTaskStatus.Done);
         task.EndDate.ShouldBeNull();
@@ -48,18 +51,18 @@ public class ProjectTaskTests
     }
 
     [Fact]
-    public void ChangeStatusToCompletedWithNullEndDateShouldAutoPopulateAndReopenShouldClearAutoEndDate()
+    public void TransitionStatusToCompletedWithNullEndDateShouldAutoPopulateAndReopenShouldClearAutoEndDate()
     {
         var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.Done };
 
-        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow);
 
         task.Status.ShouldBe(ProjectTaskStatus.Completed);
         task.EndDate.ShouldBe(UtcNow);
         task.EndDateWasAuto.ShouldBeTrue();
 
         var reopenTime = UtcNow.AddHours(1);
-        task.ChangeStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, reopenTime, updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, reopenTime);
 
         task.Status.ShouldBe(ProjectTaskStatus.InProgress);
         task.EndDate.ShouldBeNull();
@@ -68,41 +71,41 @@ public class ProjectTaskTests
     }
 
     [Fact]
-    public void ChangeStatusShouldPreserveManualEndDateOnDragAndDropAndOnReopen()
+    public void TransitionStatusShouldPreserveManualEndDateOnDragAndDropAndOnReopen()
     {
         var plannedEndDate = StartDate.AddDays(10);
         var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.ToDo };
 
-        task.ChangeStatus(ProjectTaskStatus.InProgress, plannedEndDate, UtcNow, updateEndDateWhenNull: true);
+        task.ApplyFullStatusUpdate(ProjectTaskStatus.InProgress, plannedEndDate, UtcNow);
         task.EndDate.ShouldBe(plannedEndDate);
         task.EndDateWasAuto.ShouldBeFalse();
 
         // Drag-and-drop PATCH with null endDate preserves manual EndDate
-        task.ChangeStatus(ProjectTaskStatus.Done, requestedEndDate: null, UtcNow.AddHours(1), updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.Done, requestedEndDate: null, UtcNow.AddHours(1));
         task.EndDate.ShouldBe(plannedEndDate);
         task.EndDateWasAuto.ShouldBeFalse();
 
         // Complete with null endDate keeps manual EndDate
-        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow.AddHours(2), updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow.AddHours(2));
         task.EndDate.ShouldBe(plannedEndDate);
         task.EndDateWasAuto.ShouldBeFalse();
 
         // Reopen with null endDate keeps manual EndDate because EndDateWasAuto == false
-        task.ChangeStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, UtcNow.AddHours(3), updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, UtcNow.AddHours(3));
         task.EndDate.ShouldBe(plannedEndDate);
         task.EndDateWasAuto.ShouldBeFalse();
     }
 
     [Fact]
-    public void ChangeStatusShouldThrowDomainValidationExceptionWhenExplicitOrPutAutoEndDateIsBeforeStartDateAndClampPatchAutoEndDate()
+    public void StatusUpdateShouldThrowDomainValidationExceptionWhenExplicitOrPutAutoEndDateIsBeforeStartDateAndClampPatchAutoEndDate()
     {
         var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
 
-        Should.Throw<InvalidTaskDateRangeException>(() =>
-            task.ChangeStatus(ProjectTaskStatus.Completed, StartDate.AddSeconds(-1), UtcNow, updateEndDateWhenNull: false));
+        Should.Throw<InvalidDateRangeException>(() =>
+            task.TransitionStatus(ProjectTaskStatus.Completed, StartDate.AddSeconds(-1), UtcNow));
 
         var patchFutureTask = new ProjectTask { StartDate = UtcNow.AddDays(3), Status = ProjectTaskStatus.ToDo };
-        patchFutureTask.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: false);
+        patchFutureTask.TransitionStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow);
 
         patchFutureTask.Status.ShouldBe(ProjectTaskStatus.Completed);
         patchFutureTask.EndDate.ShouldBe(patchFutureTask.StartDate);
@@ -110,35 +113,35 @@ public class ProjectTaskTests
 
         var putFutureTask = new ProjectTask { StartDate = UtcNow.AddDays(3), Status = ProjectTaskStatus.ToDo };
 
-        Should.Throw<InvalidTaskDateRangeException>(() =>
-            putFutureTask.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: true));
+        Should.Throw<InvalidDateRangeException>(() =>
+            putFutureTask.ApplyFullStatusUpdate(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow));
     }
 
     [Fact]
-    public void ChangeStatusOnPutWithUnchangedAutoEndDateShouldPreserveAutoFlagAndClearOnReopen()
+    public void ApplyFullStatusUpdateWithUnchangedAutoEndDateShouldPreserveAutoFlagAndClearOnReopen()
     {
         var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
 
         // Auto-complete via PATCH
-        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow);
         task.EndDate.ShouldBe(UtcNow);
         task.EndDateWasAuto.ShouldBeTrue();
 
         // Full edit via PUT echoing back the unchanged auto EndDate preserves EndDateWasAuto
         var editTime = UtcNow.AddMinutes(10);
-        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: UtcNow, editTime, updateEndDateWhenNull: true);
+        task.ApplyFullStatusUpdate(ProjectTaskStatus.Completed, requestedEndDate: UtcNow, editTime);
         task.EndDate.ShouldBe(UtcNow);
         task.EndDateWasAuto.ShouldBeTrue();
 
         // Reopen via PATCH still clears the auto-populated EndDate
         var reopenTime = UtcNow.AddMinutes(20);
-        task.ChangeStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, reopenTime, updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, reopenTime);
         task.EndDate.ShouldBeNull();
         task.EndDateWasAuto.ShouldBeFalse();
     }
 
     [Fact]
-    public void ChangeStatusOnPutWithJsMillisecondTruncatedAutoEndDateShouldPreserveAutoFlagAndClearOnReopen()
+    public void ApplyFullStatusUpdateWithJsMillisecondTruncatedAutoEndDateShouldPreserveAutoFlagAndClearOnReopen()
     {
         var microsecondAutoEndDate = new DateTime(2026, 11, 16, 12, 0, 0, DateTimeKind.Utc)
             .AddMilliseconds(123)
@@ -149,44 +152,152 @@ public class ProjectTaskTests
         var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
 
         // Auto-complete via PATCH with PostgreSQL microsecond precision
-        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, microsecondAutoEndDate, updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.Completed, requestedEndDate: null, microsecondAutoEndDate);
         task.EndDate.ShouldBe(microsecondAutoEndDate);
         task.EndDateWasAuto.ShouldBeTrue();
 
         // Full edit via PUT echoing back JS Date-truncated millisecond timestamp preserves EndDateWasAuto
-        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: jsTruncatedEndDate, microsecondAutoEndDate.AddMinutes(5), updateEndDateWhenNull: true);
+        task.ApplyFullStatusUpdate(ProjectTaskStatus.Completed, requestedEndDate: jsTruncatedEndDate, microsecondAutoEndDate.AddMinutes(5));
         task.EndDate.ShouldBe(microsecondAutoEndDate);
         task.EndDateWasAuto.ShouldBeTrue();
 
         // Reopen via PATCH still clears the auto-populated EndDate
-        task.ChangeStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, microsecondAutoEndDate.AddMinutes(10), updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.InProgress, requestedEndDate: null, microsecondAutoEndDate.AddMinutes(10));
         task.EndDate.ShouldBeNull();
         task.EndDateWasAuto.ShouldBeFalse();
     }
 
     [Fact]
-    public void ChangeStatusOnPutWithModifiedEndDateShouldTreatItAsManual()
+    public void ApplyFullStatusUpdateWithModifiedEndDateShouldTreatItAsManual()
     {
         var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
-        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow);
         task.EndDateWasAuto.ShouldBeTrue();
 
         var customEndDate = UtcNow.AddDays(1);
-        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: customEndDate, UtcNow.AddHours(1), updateEndDateWhenNull: true);
+        task.ApplyFullStatusUpdate(ProjectTaskStatus.Completed, requestedEndDate: customEndDate, UtcNow.AddHours(1));
         task.EndDate.ShouldBe(customEndDate);
         task.EndDateWasAuto.ShouldBeFalse();
     }
 
     [Fact]
-    public void ChangeStatusOnPutWhenAlreadyCompletedAndStartDateMovesPastEndDateShouldThrow()
+    public void ApplyFullStatusUpdateWhenAlreadyCompletedAndStartDateMovesPastEndDateShouldThrow()
     {
         var task = new ProjectTask { StartDate = StartDate, Status = ProjectTaskStatus.InProgress };
-        task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow, updateEndDateWhenNull: false);
+        task.TransitionStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow);
 
         // Simulate PUT moving StartDate after existing EndDate while passing null EndDate
         task.StartDate = UtcNow.AddDays(5);
 
-        Should.Throw<InvalidTaskDateRangeException>(() =>
-            task.ChangeStatus(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow.AddHours(1), updateEndDateWhenNull: true));
+        Should.Throw<InvalidDateRangeException>(() =>
+            task.ApplyFullStatusUpdate(ProjectTaskStatus.Completed, requestedEndDate: null, UtcNow.AddHours(1)));
+    }
+
+    [Fact]
+    public void StatusTransitionWithUndefinedEnumValueShouldThrowArgumentOutOfRangeException()
+    {
+        var task = new ProjectTask { StartDate = StartDate };
+
+        Should.Throw<ArgumentOutOfRangeException>(() =>
+            task.TransitionStatus((ProjectTaskStatus)99, requestedEndDate: null, UtcNow));
+    }
+
+    [Fact]
+    public void TaskExternalLinkShouldSupportValueEqualityAndNormalizeFields()
+    {
+        var linkA = new TaskExternalLink("  https://example.org/spec  ", "  Spec  ");
+        var linkB = new TaskExternalLink("https://example.org/spec", "Spec");
+        var linkNoTitle = new TaskExternalLink("https://example.org/spec", "   ");
+
+        linkA.ShouldBe(linkB);
+        linkA.Url.ShouldBe("https://example.org/spec");
+        linkA.Title.ShouldBe("Spec");
+        linkNoTitle.Title.ShouldBeNull();
+    }
+
+    [Fact]
+    public void MaintenanceNoticeUpdateShouldEnforceWindowInvariantAndNormalizeToUtc()
+    {
+        Should.Throw<InvalidMaintenanceWindowException>(() =>
+            new MaintenanceNotice().Update("Scheduled update", UtcNow, UtcNow, UtcNow));
+
+        var unspecifiedStart = new DateTime(2026, 11, 16, 12, 0, 0, DateTimeKind.Unspecified);
+        var unspecifiedEnd = new DateTime(2026, 11, 16, 13, 0, 0, DateTimeKind.Unspecified);
+        var notice = new MaintenanceNotice().Update("  Scheduled update  ", unspecifiedStart, unspecifiedEnd, UtcNow);
+
+        notice.Id.ShouldBe(MaintenanceNotice.SingletonId);
+        notice.Message.ShouldBe("Scheduled update");
+        notice.StartsAt.Kind.ShouldBe(DateTimeKind.Utc);
+        notice.EndsAt.Kind.ShouldBe(DateTimeKind.Utc);
+        notice.UpdatedAt.Kind.ShouldBe(DateTimeKind.Utc);
+    }
+
+    [Fact]
+    public void ProjectEnsureValidDateRangeShouldThrowWhenEndDatePrecedesStartDateAndNormalizeToUtc()
+    {
+        var project = new Project
+        {
+            StartDate = StartDate,
+            EndDate = StartDate.AddMinutes(-1),
+        };
+
+        Should.Throw<InvalidDateRangeException>(project.EnsureValidDateRange);
+
+        var validProject = new Project
+        {
+            StartDate = new DateTime(2026, 11, 10, 9, 0, 0, DateTimeKind.Unspecified),
+            EndDate = new DateTime(2026, 11, 12, 9, 0, 0, DateTimeKind.Unspecified),
+        };
+        validProject.EnsureValidDateRange();
+        validProject.StartDate.Kind.ShouldBe(DateTimeKind.Utc);
+        validProject.EndDate.Value.Kind.ShouldBe(DateTimeKind.Utc);
+    }
+
+    [Fact]
+    public void DateTimeExtensionsShouldNormalizeDateTimeAndDateTimeOffsetToUtcZero()
+    {
+        var unspecified = new DateTime(2026, 11, 21, 10, 0, 0, DateTimeKind.Unspecified);
+        unspecified.ToUtc().Kind.ShouldBe(DateTimeKind.Utc);
+        unspecified.ToUtc().Hour.ShouldBe(10);
+
+        var offsetPlusTwo = new DateTimeOffset(2026, 11, 21, 12, 0, 0, TimeSpan.FromHours(2));
+        var normalizedOffset = offsetPlusTwo.ToUtc();
+        normalizedOffset.Offset.ShouldBe(TimeSpan.Zero);
+        normalizedOffset.Hour.ShouldBe(10);
+
+        DateTime? nullDt = null;
+        nullDt.ToUtc().ShouldBeNull();
+
+        DateTimeOffset? nullDto = null;
+        nullDto.ToUtc().ShouldBeNull();
+    }
+
+    [Fact]
+    public void NormalizableTitleExtensionsShouldTrimAndNormalizeTitlesForTagAndTopic()
+    {
+        var tag = new Tag().SetTitle("  Urgent  ");
+        tag.Title.ShouldBe("Urgent");
+        tag.NormalizedTitle.ShouldBe("URGENT");
+
+        var topic = new Topic { Title = "  Backend  " }.SyncNormalizedTitle();
+        topic.Title.ShouldBe("Backend");
+        topic.NormalizedTitle.ShouldBe("BACKEND");
+    }
+
+    [Fact]
+    public void JsonObjectValidateAndBackfillShouldNormalizeDateTimeFieldsToUtcZero()
+    {
+        var fields = new List<CustomField>
+        {
+            new() { Key = "event_at", DataType = FieldDataType.DateTime, IsRequired = true, Order = 0 },
+        };
+        var payload = new JsonObject
+        {
+            ["event_at"] = "2026-11-21T12:00:00.0000000+02:00",
+        };
+
+        var normalized = payload.ValidateAndBackfillPayload(fields);
+
+        normalized["event_at"]!.GetValue<string>().ShouldBe("2026-11-21T10:00:00.0000000+00:00");
     }
 }

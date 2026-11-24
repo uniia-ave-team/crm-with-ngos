@@ -1,5 +1,5 @@
-using Crm.Domain.Entities;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Entities.Base;
+using Crm.Domain.Interfaces.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Persistence.Extensions;
@@ -31,10 +31,7 @@ public static class FieldSchemaPersistenceExtensions
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(parentIdSelector);
 
-        if (context.ChangeTracker.AutoDetectChangesEnabled)
-        {
-            context.ChangeTracker.DetectChanges();
-        }
+        context.ChangeTracker.DetectChanges();
 
         var trackedEntries = context.ChangeTracker.Entries<TField>()
             .Where(e => parentIdSelector(e.Entity) == parentId)

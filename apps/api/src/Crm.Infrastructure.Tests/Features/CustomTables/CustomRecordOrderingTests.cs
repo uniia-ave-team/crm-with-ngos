@@ -1,12 +1,11 @@
 using Crm.Application.Dtos.CustomRecords;
 using Crm.Application.Features.CustomRecords.Mappings;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Extensions;
-using Crm.Infrastructure.Repositories;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
@@ -15,7 +14,7 @@ namespace Crm.Infrastructure.Tests.Features.CustomTables;
 
 /// <summary>
 /// Unit and integration tests verifying dynamic ordering translation, database functions,
-/// key extraction, security validation, and caching for <see cref="CustomRecordRepository"/>.
+/// key extraction, security validation, and concurrency safety for <see cref="CustomRecordQueryExtensions"/>.
 /// </summary>
 public class CustomRecordOrderingTests
 {
@@ -38,15 +37,14 @@ public class CustomRecordOrderingTests
     }
 
     [Fact]
-    public void ApplyOrderingWhenOrderByIdDescendingShouldOrderByIdDescending()
+    public void OrderByCustomRecordWhenOrderByIdDescendingShouldOrderByIdDescending()
     {
         // Arrange
         using var context = CreateContext();
-        var repository = new TestableCustomRecordRepository(context);
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
         // Act
-        var orderedQuery = repository.ApplyOrderingPublic<CustomRecordDto>(baseQuery, "Id", SortOrderConstants.Descending);
+        var orderedQuery = baseQuery.OrderByCustomRecord("Id", SortOrderConstants.Descending);
         var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
 
         // Assert
@@ -55,15 +53,14 @@ public class CustomRecordOrderingTests
     }
 
     [Fact]
-    public void ApplyOrderingWhenStandardPropertyUsedShouldRouteToEntityPropertyOrdering()
+    public void OrderByCustomRecordWhenStandardPropertyUsedShouldRouteToEntityPropertyOrdering()
     {
         // Arrange
         using var context = CreateContext();
-        var repository = new TestableCustomRecordRepository(context);
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
         // Act
-        var orderedQuery = repository.ApplyOrderingPublic<CustomRecord>(baseQuery, nameof(CustomRecord.CustomTableId), SortOrderConstants.Descending, null);
+        var orderedQuery = baseQuery.OrderByCustomRecord(nameof(CustomRecord.CustomTableId), SortOrderConstants.Descending, fieldDataType: null);
         var sql = orderedQuery.ToQueryString();
 
         // Assert
@@ -72,19 +69,17 @@ public class CustomRecordOrderingTests
     }
 
     [Fact]
-    public void ApplyOrderingWhenOrderByCustomTableIdWithDtoShouldGenerateCustomTableIdDesc()
+    public void OrderByCustomRecordWhenOrderByCustomTableIdWithDtoShouldGenerateCustomTableIdDesc()
     {
         // Arrange
         using var context = CreateContext();
-        var repository = new TestableCustomRecordRepository(context);
         var query = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
         // Act
-        var orderedQuery = repository.ApplyOrderingPublic<CustomRecordDto>(
-            query,
+        var orderedQuery = query.OrderByCustomRecord(
             nameof(CustomRecord.CustomTableId),
             SortOrderConstants.Descending,
-            dataType: null);
+            fieldDataType: null);
 
         var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
 
@@ -113,34 +108,33 @@ public class CustomRecordOrderingTests
     }
 
     [Fact]
-    public void ApplyOrderingWhenOrderByJsonKeyAscendingShouldGenerateJsonbExtractPathTextAscending()
+    public void OrderByCustomRecordWhenOrderByJsonKeyAscendingShouldGenerateParameterizedJsonbExtractPathTextAscending()
     {
         // Arrange
         using var context = CreateContext();
-        var repository = new TestableCustomRecordRepository(context);
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
         // Act
-        var orderedQuery = repository.ApplyOrderingPublic<CustomRecordDto>(baseQuery, "name", SortOrderConstants.Ascending);
+        var orderedQuery = baseQuery.OrderByCustomRecord("name", SortOrderConstants.Ascending);
         var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
 
         // Assert
         sql.ShouldContain("jsonb_extract_path_text");
-        sql.ShouldContain("'name'");
+        sql.ShouldContain("-- @jsonKey='name'");
+        sql.ShouldContain("@jsonKey");
         sql.ShouldContain("ORDER BY");
         sql.ShouldNotContain("DESC");
     }
 
     [Fact]
-    public void ApplyOrderingWhenOrderByJsonKeyDescendingWithDataPrefixShouldGenerateJsonbExtractPathTextDescending()
+    public void OrderByCustomRecordWhenOrderByJsonKeyDescendingWithDataPrefixShouldGenerateJsonbExtractPathTextDescending()
     {
         // Arrange
         using var context = CreateContext();
-        var repository = new TestableCustomRecordRepository(context);
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
         // Act
-        var orderedQuery = repository.ApplyOrderingPublic<CustomRecordDto>(baseQuery, "data.age", SortOrderConstants.Descending);
+        var orderedQuery = baseQuery.OrderByCustomRecord("data.age", SortOrderConstants.Descending);
         var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
 
         // Assert
@@ -150,15 +144,14 @@ public class CustomRecordOrderingTests
     }
 
     [Fact]
-    public void ApplyOrderingWhenOrderByIndexerNotationShouldExtractKeyCorrectly()
+    public void OrderByCustomRecordWhenOrderByIndexerNotationShouldExtractKeyCorrectly()
     {
         // Arrange
         using var context = CreateContext();
-        var repository = new TestableCustomRecordRepository(context);
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
         // Act
-        var orderedQuery = repository.ApplyOrderingPublic<CustomRecordDto>(baseQuery, "data[\"status\"]", SortOrderConstants.Descending);
+        var orderedQuery = baseQuery.OrderByCustomRecord("data[\"status\"]", SortOrderConstants.Descending);
         var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
 
         // Assert
@@ -172,18 +165,16 @@ public class CustomRecordOrderingTests
     [InlineData(FieldDataType.Boolean, "boolean")]
     [InlineData(FieldDataType.Date, "date")]
     [InlineData(FieldDataType.DateTime, "timestamp with time zone")]
-    public void ApplyCustomFieldOrderingWhenTypedFieldShouldGeneratePgInputIsValidAndCorrectCast(
+    public void OrderByCustomRecordWhenTypedFieldShouldGeneratePgInputIsValidAndCorrectCast(
         FieldDataType dataType,
         string expectedSqlStoreType)
     {
         // Arrange
         using var context = CreateContext();
-        var repository = new TestableCustomRecordRepository(context);
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
         // Act
-        var orderedQuery = repository.ApplyOrderingPublic<CustomRecordDto>(
-            baseQuery,
+        var orderedQuery = baseQuery.OrderByCustomRecord(
             "data.custom_val",
             SortOrderConstants.Ascending,
             dataType);
@@ -196,6 +187,7 @@ public class CustomRecordOrderingTests
         if (dataType == FieldDataType.Date)
         {
             sql.ShouldContain("timestamp with time zone");
+            sql.ShouldContain("timezone('UTC'");
             sql.ShouldContain("date");
         }
         else
@@ -219,15 +211,14 @@ public class CustomRecordOrderingTests
     [InlineData("data[0]")]
     [InlineData("_status")]
     [InlineData("data['_status']")]
-    public void ApplyOrderingWithMaliciousOrDeepKeysShouldFallbackSafelyToOrderById(string maliciousOrderBy)
+    public void OrderByCustomRecordWithMaliciousOrDeepKeysShouldFallbackSafelyToOrderById(string maliciousOrderBy)
     {
         // Arrange
         using var context = CreateContext();
-        var repository = new TestableCustomRecordRepository(context);
         var query = context.Set<CustomRecord>().AsQueryable();
 
         // Act
-        var result = repository.ApplyOrderingPublic<CustomRecord>(query, maliciousOrderBy, SortOrderConstants.Ascending, FieldDataType.Text);
+        var result = query.OrderByCustomRecord(maliciousOrderBy, SortOrderConstants.Ascending, FieldDataType.Text);
         var sql = result.ToQueryString();
 
         // Assert
@@ -301,7 +292,7 @@ public class CustomRecordOrderingTests
     }
 
     [Fact]
-    public void ApplyOrderingConcurrentCallsShouldSafelyReuseDynamicSelectorCache()
+    public void OrderByCustomRecordConcurrentCallsShouldSafelyGenerateParameterizedSql()
     {
         // Arrange
         var exceptions = new System.Collections.Concurrent.ConcurrentBag<Exception>();
@@ -312,10 +303,9 @@ public class CustomRecordOrderingTests
             try
             {
                 using var context = CreateContext();
-                var repository = new TestableCustomRecordRepository(context);
                 var query = context.Set<CustomRecord>().AsQueryable();
 
-                var orderedQuery = repository.ApplyOrderingPublic<CustomRecord>(query, "data.priority", SortOrderConstants.Descending, FieldDataType.Number);
+                var orderedQuery = query.OrderByCustomRecord("data.priority", SortOrderConstants.Descending, FieldDataType.Number);
                 var sql = orderedQuery.ToQueryString();
 
                 if (!sql.Contains("jsonb_extract_path_text") || !sql.Contains("\"Id\""))
@@ -356,22 +346,5 @@ public class CustomRecordOrderingTests
             .Options;
 
         return new ApplicationDbContext(options);
-    }
-
-    private sealed class TestableCustomRecordRepository(ApplicationDbContext context)
-        : CustomRecordRepository(context)
-    {
-        public IQueryable<CustomRecord> ApplyOrderingPublic<TResult>(
-            IQueryable<CustomRecord> query,
-            string orderBy,
-            string? sortOrder)
-            => ApplyOrdering<TResult>(query, orderBy, sortOrder);
-
-        public IQueryable<CustomRecord> ApplyOrderingPublic<TResult>(
-            IQueryable<CustomRecord> query,
-            string orderBy,
-            string? sortOrder,
-            FieldDataType? dataType)
-            => ApplyCustomFieldOrdering<TResult>(query, orderBy, sortOrder, dataType);
     }
 }

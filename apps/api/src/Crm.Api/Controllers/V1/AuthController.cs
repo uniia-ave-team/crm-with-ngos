@@ -1,8 +1,8 @@
 using Asp.Versioning;
+using Crm.Api.Consts;
 using Crm.Api.DemoMode;
-using Crm.Api.Dtos;
 using Crm.Application.Dtos.Auth;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Features.Users.Commands;
 using Crm.Application.Interfaces;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
@@ -14,9 +14,9 @@ namespace Crm.Api.Controllers.V1;
 /// Controller responsible for authentication and token management processes.
 /// </summary>
 [ApiController]
-[ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/[controller]")]
-public class AuthController(
+[ApiVersion(ApiVersions.V1)]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
+public sealed class AuthController(
     IMediator mediator,
     ICurrentUserService currentUserService) : ControllerBase
 {
@@ -27,10 +27,12 @@ public class AuthController(
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A DTO containing the JWT access token and refresh token.</returns>
     [HttpPost("login")]
+    [AllowAnonymous]
     [DemoSessionEndpoint(DemoSessionEndpointKind.SignIn)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AuthTokensDto>> Login(
         [FromBody] AuthenticateUserCommand command,
         CancellationToken cancellationToken)
@@ -46,6 +48,7 @@ public class AuthController(
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A new pair of access and refresh tokens.</returns>
     [HttpPost("refresh-token")]
+    [AllowAnonymous]
     [DemoSessionEndpoint(DemoSessionEndpointKind.Refresh)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -61,7 +64,7 @@ public class AuthController(
     /// <summary>
     /// Logs out the currently authenticated user by revoking their refresh token.
     /// </summary>
-    /// <param name="request">The logout request containing the refresh token to be revoked.</param>
+    /// <param name="command">The logout command containing the refresh token to be revoked.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status code indicating the successful logout.</returns>
     [HttpPost("logout")]
@@ -70,10 +73,10 @@ public class AuthController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Logout(
-        [FromBody] LogoutRequest request,
+        [FromBody] LogoutCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(new LogoutCommand(currentUserService.GetUserId(), request.RefreshToken), cancellationToken);
+        await mediator.Send(command with { UserId = currentUserService.GetUserId() }, cancellationToken);
         return NoContent();
     }
 }

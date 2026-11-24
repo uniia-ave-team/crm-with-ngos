@@ -1,5 +1,5 @@
 using Crm.Application.Dtos.Auth;
-using Crm.Application.Dtos.User;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Exceptions;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;

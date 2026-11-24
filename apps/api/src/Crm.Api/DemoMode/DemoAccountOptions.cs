@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 
 namespace Crm.Api.DemoMode;
 
@@ -32,7 +32,7 @@ public sealed class DemoAccountOptions
             Name = "Адміністратор",
             Email = "admin@demo.example.org",
             Password = "Demo-Admin-2026!",
-            Role = RoleConsts.Admin,
+            Role = RoleConstants.Admin,
         },
         new()
         {

@@ -1,6 +1,6 @@
-using Crm.Application.Dtos.User.Queries;
+using Crm.Application.Features.Users.Queries;
 using Crm.Application.Features.Users.Validators;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Shouldly;
 
 namespace Crm.Application.Tests.Features.Users.Validators;

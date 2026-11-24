@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
-using Crm.Api.Consts;
 using Crm.Api.DemoMode.Sandbox;
 using Crm.Application.Interfaces;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
 namespace Crm.Api.DemoMode;
@@ -129,21 +129,17 @@ public sealed partial class DemoModeMiddleware(
     {
         context.Response.StatusCode = statusCode;
 
-        await context.Response.WriteAsJsonAsync(
-            new
+        // The same writer as GlobalExceptionHandler, so these answers look like every other API error.
+        await context.RequestServices.GetRequiredService<IProblemDetailsService>().TryWriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = context,
+            ProblemDetails = new ProblemDetails
             {
-                type = ProblemDetailsDefaults.GetTypeUrl(statusCode),
-                title = statusCode < StatusCodes.Status500InternalServerError
-                    ? ProblemDetailsDefaults.ClientErrorTitle
-                    : ProblemDetailsDefaults.ServerErrorTitle,
-                status = statusCode,
-                detail,
-                instance = context.Request.Path.Value,
-                errorCode,
+                Status = statusCode,
+                Detail = detail,
+                Extensions = { [DemoErrorCodes.ExtensionKey] = errorCode },
             },
-            options: null,
-            contentType: "application/problem+json",
-            cancellationToken: context.RequestAborted);
+        });
     }
 
     private static void WriteSandboxCookie(HttpContext context, DemoSandbox sandbox, DemoSandboxOptions options) =>

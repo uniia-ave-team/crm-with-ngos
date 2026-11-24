@@ -1,4 +1,3 @@
-using Crm.Application.Dtos.User.Commands;
 using Crm.Application.Features.Users.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
@@ -20,6 +19,8 @@ public class UserProjectManagerProtectionTests
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IAuthRoleRepository _roleRepository = Substitute.For<IAuthRoleRepository>();
     private readonly IProjectRepository _projectRepository = Substitute.For<IProjectRepository>();
+    private readonly IUserRefreshTokenRepository _refreshTokenRepository = Substitute.For<IUserRefreshTokenRepository>();
+    private readonly IRevokedUsersCache _revokedUsersCache = Substitute.For<IRevokedUsersCache>();
     private readonly IIdentityService _identityService = Substitute.For<IIdentityService>();
     private readonly IFileTransactionTracker _fileTracker = Substitute.For<IFileTransactionTracker>();
 
@@ -30,8 +31,8 @@ public class UserProjectManagerProtectionTests
         var actingAdminId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
 
-        _userRepository.GetAsync(userId, Arg.Any<CancellationToken>())
-            .Returns(new User { Id = userId, IsActive = true });
+        _userRepository.IsActiveAsync(userId, Arg.Any<CancellationToken>())
+            .Returns(true);
         _roleRepository.IsUserLastAdminAsync(userId, Arg.Any<CancellationToken>())
             .Returns(false);
         _projectRepository.GetSoleManagedProjectIdsForUpdateAsync(userId, Arg.Any<CancellationToken>())
@@ -41,6 +42,8 @@ public class UserProjectManagerProtectionTests
             _userRepository,
             _roleRepository,
             _projectRepository,
+            _refreshTokenRepository,
+            _revokedUsersCache,
             Substitute.For<ILogger<DeactivateUserCommandHandler>>());
 
         await handler.Handle(new DeactivateUserCommand(userId, actingAdminId), CancellationToken.None);
@@ -50,6 +53,8 @@ public class UserProjectManagerProtectionTests
             actingAdminId,
             Arg.Any<CancellationToken>());
         await _userRepository.Received(1).SetUserActivationStatusAsync(userId, false, Arg.Any<CancellationToken>());
+        await _refreshTokenRepository.Received(1).RevokeAllUserTokensAsync(userId, Arg.Any<CancellationToken>());
+        await _revokedUsersCache.Received(1).RevokeUserAsync(userId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -58,8 +63,8 @@ public class UserProjectManagerProtectionTests
         var userId = Guid.NewGuid();
         var actingAdminId = Guid.NewGuid();
 
-        _userRepository.GetAsync(userId, Arg.Any<CancellationToken>())
-            .Returns(new User { Id = userId, IsActive = true });
+        _userRepository.IsActiveAsync(userId, Arg.Any<CancellationToken>())
+            .Returns(true);
         _roleRepository.IsUserLastAdminAsync(userId, Arg.Any<CancellationToken>())
             .Returns(false);
         _projectRepository.GetSoleManagedProjectIdsForUpdateAsync(userId, Arg.Any<CancellationToken>())
@@ -69,6 +74,8 @@ public class UserProjectManagerProtectionTests
             _userRepository,
             _roleRepository,
             _projectRepository,
+            _refreshTokenRepository,
+            _revokedUsersCache,
             Substitute.For<ILogger<DeactivateUserCommandHandler>>());
 
         await handler.Handle(new DeactivateUserCommand(userId, actingAdminId), CancellationToken.None);
@@ -78,6 +85,28 @@ public class UserProjectManagerProtectionTests
             Arg.Any<Guid>(),
             Arg.Any<CancellationToken>());
         await _userRepository.Received(1).SetUserActivationStatusAsync(userId, false, Arg.Any<CancellationToken>());
+        await _refreshTokenRepository.Received(1).RevokeAllUserTokensAsync(userId, Arg.Any<CancellationToken>());
+        await _revokedUsersCache.Received(1).RevokeUserAsync(userId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ActivateUserShouldRestoreStatusAndUnrevokeUserFromCache()
+    {
+        var userId = Guid.NewGuid();
+        var actingAdminId = Guid.NewGuid();
+
+        _userRepository.IsActiveAsync(userId, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var handler = new ActivateUserCommandHandler(
+            _userRepository,
+            _revokedUsersCache,
+            Substitute.For<ILogger<ActivateUserCommandHandler>>());
+
+        await handler.Handle(new ActivateUserCommand(userId, actingAdminId), CancellationToken.None);
+
+        await _userRepository.Received(1).SetUserActivationStatusAsync(userId, true, Arg.Any<CancellationToken>());
+        await _revokedUsersCache.Received(1).UnrevokeUserAsync(userId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -100,6 +129,7 @@ public class UserProjectManagerProtectionTests
             _userRepository,
             _projectRepository,
             _fileTracker,
+            _revokedUsersCache,
             Substitute.For<ILogger<DeleteUserCommandHandler>>());
 
         await handler.Handle(new DeleteUserCommand(userId, actingAdminId), CancellationToken.None);
@@ -109,6 +139,7 @@ public class UserProjectManagerProtectionTests
             actingAdminId,
             Arg.Any<CancellationToken>());
         await _identityService.Received(1).DeleteUserAsync(userId, Arg.Any<CancellationToken>());
+        await _revokedUsersCache.Received(1).RevokeUserAsync(userId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -128,6 +159,7 @@ public class UserProjectManagerProtectionTests
             _userRepository,
             _projectRepository,
             _fileTracker,
+            _revokedUsersCache,
             Substitute.For<ILogger<DeleteUserCommandHandler>>());
 
         await Should.ThrowAsync<CannotRemoveLastProjectManagerException>(() =>
@@ -138,6 +170,7 @@ public class UserProjectManagerProtectionTests
             Arg.Any<Guid>(),
             Arg.Any<CancellationToken>());
         await _identityService.DidNotReceive().DeleteUserAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _revokedUsersCache.DidNotReceive().RevokeUserAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -158,6 +191,7 @@ public class UserProjectManagerProtectionTests
             _userRepository,
             _projectRepository,
             _fileTracker,
+            _revokedUsersCache,
             Substitute.For<ILogger<DeleteUserCommandHandler>>());
 
         await handler.Handle(new DeleteUserCommand(userId), CancellationToken.None);
@@ -167,5 +201,6 @@ public class UserProjectManagerProtectionTests
             Arg.Any<Guid>(),
             Arg.Any<CancellationToken>());
         await _identityService.Received(1).DeleteUserAsync(userId, Arg.Any<CancellationToken>());
+        await _revokedUsersCache.Received(1).RevokeUserAsync(userId, Arg.Any<CancellationToken>());
     }
 }

@@ -1,7 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Ngo.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -16,21 +15,21 @@ namespace Crm.Application.Features.Ngos.Commands;
 /// <param name="fileStorageService">The service responsible for physical file I/O operations.</param>
 /// <param name="fileTransactionTracker">The service responsible for tracking file transactions to ensure consistency and rollback in case of failures.</param>
 /// <param name="logger">The logger instance for tracking command execution.</param>
-public partial class UploadNgoLogoCommandHandler(
+public sealed partial class UploadNgoLogoCommandHandler(
     INgoRepository ngoRepository,
     IFileStorageService fileStorageService,
     IFileTransactionTracker fileTransactionTracker,
-    ILogger<UploadNgoLogoCommandHandler> logger) : IRequestHandler<UploadNgoLogoCommand>
+    ILogger<UploadNgoLogoCommandHandler> logger) : ICommandHandler<UploadNgoLogoCommand>
 {
-    public async ValueTask<Unit> Handle(UploadNgoLogoCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UploadNgoLogoCommand command, CancellationToken cancellationToken)
     {
-        LogUploadingLogo(logger, request.OriginalFileName);
+        LogUploadingLogo(logger, command.OriginalFileName);
 
         var ngo = await ngoRepository.GetForUpdateAsync(cancellationToken);
 
         string newFileName = await fileStorageService.SaveImageAsync(
-            request.ContentStream,
-            request.OriginalFileName,
+            command.ContentStream,
+            command.OriginalFileName,
             FileStorageConstants.NgosFolder,
             cancellationToken);
 

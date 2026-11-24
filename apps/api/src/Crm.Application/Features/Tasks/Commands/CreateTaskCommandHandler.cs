@@ -1,6 +1,5 @@
 using System.Text.Json.Nodes;
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
 using Crm.Application.Features.Tasks.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
@@ -21,52 +20,52 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// <param name="assigneeValidator">The validator verifying task assignee eligibility.</param>
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class CreateTaskCommandHandler(
+public sealed partial class CreateTaskCommandHandler(
     ITopicRepository topicRepository,
     ITagRepository tagRepository,
     IProjectTaskRepository taskRepository,
     IProjectAccessService projectAccessService,
     ITaskAssigneeValidator assigneeValidator,
     TimeProvider timeProvider,
-    ILogger<CreateTaskCommandHandler> logger) : IRequestHandler<CreateTaskCommand, Guid>
+    ILogger<CreateTaskCommandHandler> logger) : ICommandHandler<CreateTaskCommand, Guid>
 {
     /// <inheritdoc />
-    public async ValueTask<Guid> Handle(CreateTaskCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateTaskCommand command, CancellationToken cancellationToken)
     {
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        LogCreatingTask(logger, request.ProjectId);
+        LogCreatingTask(logger, command.ProjectId);
 
-        var projectAccess = await projectAccessService.GetRequiredAsync(request.ProjectId, cancellationToken);
-        await topicRepository.EnsureExistsInProjectAsync(request.ProjectId, request.TopicId, cancellationToken);
+        var projectAccess = await projectAccessService.GetRequiredAsync(command.ProjectId, cancellationToken);
+        await topicRepository.EnsureExistsInProjectAsync(command.ProjectId, command.TopicId, cancellationToken);
 
-        var assigneeIds = request.AssigneeIds ?? [];
-        await assigneeValidator.ValidateAsync(assigneeIds, request.ProjectId, projectAccess, cancellationToken);
+        var assigneeIds = command.AssigneeIds ?? [];
+        await assigneeValidator.ValidateAsync(assigneeIds, command.ProjectId, projectAccess, cancellationToken);
 
-        var tagIds = request.TagIds ?? [];
-        await tagRepository.EnsureAllExistInProjectAsync(request.ProjectId, tagIds, cancellationToken);
+        var tagIds = command.TagIds ?? [];
+        await tagRepository.EnsureAllExistInProjectAsync(command.ProjectId, tagIds, cancellationToken);
 
         var task = new ProjectTask
         {
-            ProjectId = request.ProjectId,
-            TopicId = request.TopicId,
-            Title = request.Title.Trim(),
-            Description = request.Description,
-            Priority = request.Priority,
-            StartDate = request.StartDate,
-            ExternalLinks = request.ExternalLinks.NormalizeExternalLinks(),
-            Metadata = request.Metadata is null ? [] : (JsonObject)request.Metadata.DeepClone(),
+            ProjectId = command.ProjectId,
+            TopicId = command.TopicId,
+            Title = command.Title.Trim(),
+            Description = command.Description,
+            Priority = command.Priority,
+            StartDate = command.StartDate,
+            ExternalLinks = command.ExternalLinks.NormalizeExternalLinks(),
+            Metadata = command.Metadata is null ? [] : (JsonObject)command.Metadata.DeepClone(),
             CreatedAt = utcNow,
             UpdatedAt = utcNow,
         };
 
-        task.ChangeStatus(request.Status, request.EndDate, utcNow, updateEndDateWhenNull: true);
+        task.ApplyFullStatusUpdate(command.Status, command.EndDate, utcNow);
 
         await taskRepository.CreateAsync(task, cancellationToken);
         await taskRepository.AssignToTaskAsync(task.Id, assigneeIds, cancellationToken);
         await tagRepository.AddToTaskAsync(task.Id, tagIds, cancellationToken);
 
-        LogTaskCreatedSuccessfully(logger, task.Id, request.ProjectId);
+        LogTaskCreatedSuccessfully(logger, task.Id, command.ProjectId);
 
         return task.Id;
     }

@@ -1,5 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
+using Crm.Application.Features.Tasks.Commands;
 using FluentValidation;
 
 namespace Crm.Application.Features.Tasks.Validators;
@@ -7,7 +7,7 @@ namespace Crm.Application.Features.Tasks.Validators;
 /// <summary>
 /// Provides validation rules for <see cref="AssignUserToTaskCommand"/>.
 /// </summary>
-public class AssignUserToTaskCommandValidator : AbstractValidator<AssignUserToTaskCommand>
+public sealed class AssignUserToTaskCommandValidator : AbstractValidator<AssignUserToTaskCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AssignUserToTaskCommandValidator"/> class.

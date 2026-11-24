@@ -1,9 +1,9 @@
 using Asp.Versioning;
-using Crm.Api.Dtos;
+using Crm.Api.Consts;
 using Crm.Api.Security;
-using Crm.Application.Dtos.CustomTemplates;
-using Crm.Application.Dtos.CustomTemplates.Commands;
-using Crm.Application.Dtos.CustomTemplates.Queries;
+using Crm.Application.Dtos.TableTemplates;
+using Crm.Application.Features.TableTemplates.Commands;
+using Crm.Application.Features.TableTemplates.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
@@ -12,14 +12,14 @@ using Microsoft.AspNetCore.Mvc;
 namespace Crm.Api.Controllers.V1;
 
 /// <summary>
-/// Controller responsible for managing reusable custom table templates.
+/// Controller responsible for managing reusable table templates.
 /// </summary>
 [ApiController]
-[ApiVersion("1.0")]
-[Route("api/v{version:apiVersion}/[controller]")]
+[ApiVersion(ApiVersions.V1)]
+[Route(ApiRouteConstants.DefaultControllerRoute)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
-public class TableTemplatesController(IMediator mediator) : ControllerBase
+public sealed class TableTemplatesController(IMediator mediator) : ControllerBase
 {
     /// <summary>
     /// Retrieves a paginated list of available table templates.
@@ -30,6 +30,7 @@ public class TableTemplatesController(IMediator mediator) : ControllerBase
     [HttpGet]
     [HasAccessRight(AccessRight.ViewTableTemplate)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedResult<TableTemplateDto>>> GetPaged(
         [FromQuery] GetTableTemplatesPagedQuery query,
         CancellationToken cancellationToken)
@@ -47,6 +48,7 @@ public class TableTemplatesController(IMediator mediator) : ControllerBase
     [HttpGet("{id:guid}", Name = nameof(GetTemplateById))]
     [HasAccessRight(AccessRight.ViewTableTemplate)]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TableTemplateDto>> GetTemplateById(
         Guid id,
@@ -66,7 +68,7 @@ public class TableTemplatesController(IMediator mediator) : ControllerBase
     [HasAccessRight(AccessRight.CreateTableTemplate)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create(
+    public async Task<ActionResult<Guid>> Create(
         [FromBody] CreateTableTemplateCommand command,
         CancellationToken cancellationToken)
     {
@@ -75,10 +77,10 @@ public class TableTemplatesController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Updates an existing table template blueprint and synchronizes its fields.
+    /// Updates an existing table template blueprint and synchronizes its fields. System presets are protected from modification.
     /// </summary>
     /// <param name="id">The unique identifier of the table template to update.</param>
-    /// <param name="request">The request containing the updated template data and field collection.</param>
+    /// <param name="command">The command containing the updated template data and field collection.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status code indicating successful update.</returns>
     [HttpPut("{id:guid}")]
@@ -86,17 +88,18 @@ public class TableTemplatesController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(
         Guid id,
-        [FromBody] UpdateTableTemplateRequest request,
+        [FromBody] UpdateTableTemplateCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(request.ToCommand(id), cancellationToken);
+        await mediator.Send(command with { Id = id }, cancellationToken);
         return NoContent();
     }
 
     /// <summary>
-    /// Deletes a custom table template from the system. System presets are protected from deletion.
+    /// Deletes a table template from the system. System presets are protected from deletion.
     /// </summary>
     /// <param name="id">The unique identifier of the table template to delete.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

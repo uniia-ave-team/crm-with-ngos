@@ -1,10 +1,13 @@
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
 
 namespace Crm.Domain.Interfaces.Repositories;
 
+/// <summary>
+/// Provides data access operations and queries for managing application roles and their permission claims.
+/// </summary>
 public interface IAuthRoleRepository :
     IProjectingRepository,
     IExistenceChecker
@@ -29,10 +32,18 @@ public interface IAuthRoleRepository :
     Task<Guid> GetRoleIdByNameAsync(string roleName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Asynchronously retrieves all roles assigned to a specific user by their unique identifier,
-    /// projected to the target type <typeparamref name="TRole"/> using compile-time projection.
+    /// Asynchronously attempts to find the unique identifier of an application role by its name without throwing if missing.
     /// </summary>
-    /// <typeparam name="TRole">The type of the role DTO/model to project into via Mapperly.</typeparam>
+    /// <param name="roleName">The name of the role to find.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The role's <see cref="Guid"/> identifier if found; otherwise, <see langword="null"/>.</returns>
+    Task<Guid?> FindRoleIdByNameAsync(string roleName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously retrieves all roles assigned to a specific user by their unique identifier,
+    /// projected to the target type <typeparamref name="TRole"/>.
+    /// </summary>
+    /// <typeparam name="TRole">The target role projection type.</typeparam>
     /// <param name="userId">The unique identifier of the user.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A list of projected roles assigned to the user.</returns>

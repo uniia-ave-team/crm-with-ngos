@@ -1,11 +1,12 @@
 using System.Security.Claims;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Auth;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Dtos.Users;
+using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using Mediator;
@@ -17,62 +18,78 @@ namespace Crm.Application.Features.Users.Commands;
 /// Handles the <see cref="CompleteRegistrationCommand"/> to register a new user based on an invitation token.
 /// Extracts secured claims from the token and links the user to the active NGO instance.
 /// </summary>
-public partial class CompleteRegistrationCommandHandler(
+public sealed partial class CompleteRegistrationCommandHandler(
     ITokenService tokenService,
     INgoRepository ngoRepository,
     IAuthUserRepository userRepository,
     IAuthRoleRepository roleRepository,
     IIdentityService identityService,
     TimeProvider timeProvider,
-    ILogger<CompleteRegistrationCommandHandler> logger) : IRequestHandler<CompleteRegistrationCommand, AuthTokensDto>
+    ILogger<CompleteRegistrationCommandHandler> logger) : ICommandHandler<CompleteRegistrationCommand, AuthTokensDto>
 {
-    public async ValueTask<AuthTokensDto> Handle(CompleteRegistrationCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<AuthTokensDto> Handle(CompleteRegistrationCommand command, CancellationToken cancellationToken)
     {
         LogCompletingRegistration(logger);
 
-        var principal = await ValidateTokenAsync(request.Token);
+        var principal = await ValidateTokenAsync(command.Token, cancellationToken);
         var email = ExtractEmail(principal);
         var roleIds = ExtractRoleIds(principal);
 
-        await userRepository.EnsureNotExistsAsync(email, cancellationToken);
+        await userRepository.EnsureDoesNotExistAsync(email, cancellationToken);
 
-        var ngo = await ngoRepository.GetAsync(cancellationToken);
+        var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
+
+        var ngoClaim = principal.FindFirst(CustomClaimTypes.NgoId)?.Value;
+        if (ngoClaim is not null && (!Guid.TryParse(ngoClaim, out var tokenNgoId) || tokenNgoId != ngoId))
+        {
+            throw new DomainValidationException("Invitation token NGO identifier does not match the active organization.");
+        }
+
         var roleNames = await roleRepository.GetRoleNamesByIdsAsync(roleIds, cancellationToken);
 
-        var userBasic = await CreateUserAsync(request, email, ngo.Id, cancellationToken);
+        var userBasic = await CreateUserAsync(command, email, ngoId, cancellationToken);
 
         await identityService.AddToRolesAsync(userBasic.Id, roleNames, cancellationToken);
 
         var authTokens = await GenerateAndSaveTokensAsync(userBasic, roleIds, cancellationToken);
 
-        LogUserRegisteredSuccessfully(logger, email, userBasic.Id, roleNames);
+        string maskedEmailForLog = email.MaskEmail();
+
+        LogUserRegisteredSuccessfully(logger, maskedEmailForLog, userBasic.Id, roleNames);
 
         return authTokens;
     }
 
-    private async Task<ClaimsPrincipal> ValidateTokenAsync(string token)
+    private async Task<ClaimsPrincipal> ValidateTokenAsync(string token, CancellationToken cancellationToken)
     {
-        return await tokenService.ValidateInvitationTokenAsync(token)
-            ?? throw new InvalidOperationException("Invalid or expired invitation token.");
+        return await tokenService.ValidateInvitationTokenAsync(token, cancellationToken)
+            ?? throw new DomainValidationException("Invalid or expired invitation token.");
     }
 
     private static string ExtractEmail(ClaimsPrincipal principal)
     {
-        return principal.FindFirst(ClaimTypes.Email)?.Value
-            ?? throw new InvalidOperationException("Email claim is missing from the token.");
+        var email = principal.FindFirst(ClaimTypes.Email)?.Value;
+        return !string.IsNullOrWhiteSpace(email)
+            ? email
+            : throw new DomainValidationException("Email claim is missing from the token.");
     }
 
     private static List<Guid> ExtractRoleIds(ClaimsPrincipal principal)
     {
         var roleClaims = principal.FindAll(CustomClaimTypes.RoleId).ToList();
+        if (roleClaims.Count == 0)
+        {
+            throw new DomainValidationException("Role claims are missing from the token.");
+        }
 
         var roleIds = new List<Guid>(roleClaims.Count);
 
         foreach (var value in roleClaims.Select(claim => claim.Value))
         {
-            if (!Guid.TryParse(value, out var roleId))
+            if (!Guid.TryParse(value, out var roleId) || roleId == Guid.Empty)
             {
-                throw new InvalidOperationException($"Invalid role claim value: '{value}'.");
+                throw new DomainValidationException($"Invalid role claim value: '{value}'.");
             }
 
             roleIds.Add(roleId);
@@ -81,15 +98,15 @@ public partial class CompleteRegistrationCommandHandler(
         return roleIds;
     }
 
-    private async Task<UserBasicDto> CreateUserAsync(CompleteRegistrationCommand request, string email, Guid ngoId, CancellationToken cancellationToken = default)
+    private async Task<UserBasicDto> CreateUserAsync(CompleteRegistrationCommand command, string email, Guid ngoId, CancellationToken cancellationToken = default)
     {
-        var user = request.Adapt<User>();
+        var user = command.Adapt<User>();
 
         user.NgoId = ngoId;
         user.IsActive = true;
         user.CreatedAt = timeProvider.GetUtcNow().UtcDateTime;
 
-        return await identityService.CreateUserAsync(email, request.Password, user, cancellationToken);
+        return await identityService.CreateUserAsync(email, command.Password, user, cancellationToken);
     }
 
     private async Task<AuthTokensDto> GenerateAndSaveTokensAsync(UserBasicDto user, List<Guid> roleIds, CancellationToken cancellationToken = default)

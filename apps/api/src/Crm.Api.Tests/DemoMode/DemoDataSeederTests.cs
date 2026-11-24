@@ -4,17 +4,18 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Crm.Api.DemoMode;
 using Crm.Api.DemoMode.DemoData;
-using Crm.Application.Dtos.CustomTemplates;
-using Crm.Application.Dtos.System.Queries;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Api.Services;
+using Crm.Application.Dtos.TableTemplates;
 using Crm.Application.Extensions;
+using Crm.Application.Features.System.Queries;
+using Crm.Application.Features.Users.Commands;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
+using Crm.Infrastructure.DependencyInjection;
 using Crm.Infrastructure.Entities;
-using Crm.Infrastructure.Extensions;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Extensions;
 using Crm.Infrastructure.Persistence.Seeders.SystemPresets;
@@ -131,7 +132,7 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
         var ct = TestContext.Current.CancellationToken;
         await using var scope = fixture.Services.CreateAsyncScope();
 
-        var adminRights = await GetRolePermissionsAsync(scope.ServiceProvider, RoleConsts.Admin, ct);
+        var adminRights = await GetRolePermissionsAsync(scope.ServiceProvider, RoleConstants.Admin, ct);
         var coordinatorRights = await GetRolePermissionsAsync(scope.ServiceProvider, DemoAccountOptions.CoordinatorRole, ct);
         var volunteerRights = await GetRolePermissionsAsync(scope.ServiceProvider, DemoAccountOptions.VolunteerRole, ct);
 
@@ -296,7 +297,7 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
     {
         var accounts = DemoAccountOptions.Defaults;
 
-        accounts.Select(a => a.Role).ShouldBe([RoleConsts.Admin, DemoAccountOptions.CoordinatorRole, DemoAccountOptions.VolunteerRole]);
+        accounts.Select(a => a.Role).ShouldBe([RoleConstants.Admin, DemoAccountOptions.CoordinatorRole, DemoAccountOptions.VolunteerRole]);
         accounts.Select(a => a.Email).Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(accounts.Count);
 
         foreach (var account in accounts)
@@ -495,8 +496,9 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
             });
 
             // The same registrations as HostingExtensions.ConfigureServices, minus the HTTP pipeline and demo mode wiring.
-            builder.Services.AddInfrastructureServices(builder.Configuration, builder.Environment);
+            builder.Services.AddInfrastructureServices(builder.Configuration);
             builder.Services.AddApplicationServices();
+            builder.Services.AddSingleton<IAppVersionProvider, AssemblyAppVersionProvider>();
             builder.Services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
             builder.Services.AddScoped<DemoDataSeeder>();
 

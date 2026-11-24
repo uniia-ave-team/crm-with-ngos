@@ -15,11 +15,14 @@ RUN dotnet restore apps/api/src/Crm.Api/Crm.Api.csproj \
     && dotnet restore apps/api/src/Crm.Cli/Crm.Cli.csproj
 
 COPY apps/api/ apps/api/
+ARG APP_VERSION=dev
 RUN dotnet publish apps/api/src/Crm.Api/Crm.Api.csproj \
-    --configuration Release --no-restore --output /app -p:UseAppHost=false
+    --configuration Release --no-restore --output /app -p:UseAppHost=false \
+    -p:InformationalVersion="${APP_VERSION:-dev}"
 # Separate folder: both projects ship their own appsettings.json.
 RUN dotnet publish apps/api/src/Crm.Cli/Crm.Cli.csproj \
-    --configuration Release --no-restore --output /app/cli -p:UseAppHost=false
+    --configuration Release --no-restore --output /app/cli -p:UseAppHost=false \
+    -p:InformationalVersion="${APP_VERSION:-dev}"
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 

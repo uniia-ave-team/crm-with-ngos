@@ -1,10 +1,10 @@
 using Crm.Domain.Common;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using Crm.Infrastructure.Helpers;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Expressions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -13,7 +13,7 @@ namespace Crm.Infrastructure.Repositories;
 /// Provides SQL-projected repository operations for managing project-scoped <see cref="Tag"/> entities.
 /// </summary>
 /// <param name="appDbContext">The application database context.</param>
-public class TagRepository(ApplicationDbContext appDbContext)
+public sealed class TagRepository(ApplicationDbContext appDbContext)
     : GenericRepository<Tag>(appDbContext),
     ITagRepository
 {

@@ -1,5 +1,6 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Interfaces;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -7,38 +8,44 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Users.Commands;
 
 /// <summary>
-/// Handles the <see cref="DeactivateUserCommand"/> to soft-delete the business user and lock the identity account.
+/// Handles the <see cref="DeactivateUserCommand"/> to soft-delete the business user,
+/// revoke active refresh tokens, and add the user to the revoked users cache.
 /// </summary>
-public partial class DeactivateUserCommandHandler(
+public sealed partial class DeactivateUserCommandHandler(
     IUserRepository userRepository,
     IAuthRoleRepository roleRepository,
     IProjectRepository projectRepository,
-    ILogger<DeactivateUserCommandHandler> logger) : IRequestHandler<DeactivateUserCommand>
+    IUserRefreshTokenRepository userRefreshTokenRepository,
+    IRevokedUsersCache revokedUsersCache,
+    ILogger<DeactivateUserCommandHandler> logger) : ICommandHandler<DeactivateUserCommand>
 {
-    public async ValueTask<Unit> Handle(DeactivateUserCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<Unit> Handle(DeactivateUserCommand command, CancellationToken cancellationToken)
     {
-        if (request.UserId == request.CurrentUserId)
+        if (command.UserId == command.CurrentUserId)
         {
-            LogCannotDeactivateSelf(logger, request.UserId);
-            throw new InvalidOperationException("A user cannot deactivate their own account.");
+            LogCannotDeactivateSelf(logger, command.UserId);
+            throw new DomainValidationException("A user cannot deactivate their own account.");
         }
 
-        LogDeactivatingUser(logger, request.UserId);
+        LogDeactivatingUser(logger, command.UserId);
 
-        var user = await userRepository.GetAsync(request.UserId, cancellationToken);
+        bool isActive = await userRepository.IsActiveAsync(command.UserId, cancellationToken);
 
-        if (!user.IsActive)
+        if (!isActive)
         {
-            LogUserAlreadyDeactivated(logger, request.UserId);
+            LogUserAlreadyDeactivated(logger, command.UserId);
             return Unit.Value;
         }
 
-        await EnsureUserIsNotLastAdminAsync(request.UserId, cancellationToken);
-        await TransferSoleManagedProjectsAsync(request.UserId, request.CurrentUserId, cancellationToken);
+        await EnsureUserIsNotLastAdminAsync(command.UserId, cancellationToken);
+        await TransferSoleManagedProjectsAsync(command.UserId, command.CurrentUserId, cancellationToken);
 
-        await userRepository.SetUserActivationStatusAsync(user.Id, isActive: false, cancellationToken);
+        await userRepository.SetUserActivationStatusAsync(command.UserId, isActive: false, cancellationToken);
+        await userRefreshTokenRepository.RevokeAllUserTokensAsync(command.UserId, cancellationToken);
+        await revokedUsersCache.RevokeUserAsync(command.UserId, cancellationToken);
 
-        LogUserDeactivatedSuccessfully(logger, request.UserId);
+        LogUserDeactivatedSuccessfully(logger, command.UserId);
 
         return Unit.Value;
     }
@@ -51,7 +58,7 @@ public partial class DeactivateUserCommandHandler(
         if (await roleRepository.IsUserLastAdminAsync(userId, cancellationToken))
         {
             LogCannotDeactivateLastAdmin(logger, userId);
-            throw new InvalidOperationException("Cannot deactivate the user because they are the last system administrator.");
+            throw new DomainValidationException("Cannot deactivate the user because they are the last system administrator.");
         }
     }
 

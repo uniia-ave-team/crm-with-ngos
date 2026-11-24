@@ -1,5 +1,5 @@
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.User;
+using Crm.Application.Dtos.Roles;
+using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Roles.Extensions;
 using Crm.Application.Interfaces;
 
@@ -77,6 +77,7 @@ public static class UserDtoExtensions
                 hasGlobalEmergencyContactAccess),
             user.PreferredLanguage,
             user.Pronouns,
+            user.PronounCategory,
             fileUrlProvider.ResolveUserAvatarUrl(user.AvatarUrl, user.Id, isSelf),
             user.IsActive,
             [.. roles.ToRoleUserDtos(user.PronounCategory)],

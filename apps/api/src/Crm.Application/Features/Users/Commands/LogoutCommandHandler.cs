@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -10,17 +9,17 @@ namespace Crm.Application.Features.Users.Commands;
 /// Handles the <see cref="LogoutCommand"/> to securely log out a user
 /// by revoking their active refresh token in the database.
 /// </summary>
-public partial class LogoutCommandHandler(
+public sealed partial class LogoutCommandHandler(
     IUserRefreshTokenRepository userRefreshTokenRepository,
-    ILogger<LogoutCommandHandler> logger) : IRequestHandler<LogoutCommand>
+    ILogger<LogoutCommandHandler> logger) : ICommandHandler<LogoutCommand>
 {
-    public async ValueTask<Unit> Handle(LogoutCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(LogoutCommand command, CancellationToken cancellationToken)
     {
-        LogInitiatingLogout(logger, request.UserId);
+        LogInitiatingLogout(logger, command.UserId);
 
-        await userRefreshTokenRepository.RemoveTokenAsync(request.RefreshToken, cancellationToken);
+        await userRefreshTokenRepository.RemoveTokenAsync(command.RefreshToken, cancellationToken);
 
-        LogLogoutSuccessful(logger, request.UserId);
+        LogLogoutSuccessful(logger, command.UserId);
 
         return Unit.Value;
     }

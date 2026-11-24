@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Signal, computed, inject, signal } from '@angular/core';
 import { Observable, Subscription, catchError, firstValueFrom, map, of, timeout } from 'rxjs';
 
-import { DemoAccountDto, DemoModeInfoDto, SystemSetupStatusDto } from '../../api/generated/models';
+import { DemoAccountDto, DemoModeInfoDto, MaintenanceNoticeDto, SystemStatusDto } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
 import { Untrusted } from '../http/api-contract';
 
@@ -45,7 +45,7 @@ export interface DemoInfo extends Omit<DemoModeInfoDto, 'sessionMinutes'> {
  * вирішує, чи показувати майстер початкового налаштування. `demo` є лише тоді,
  * коли на сервері ввімкнено демо-режим.
  */
-export interface SystemStatus extends Omit<SystemSetupStatusDto, 'demo'> {
+export interface SystemStatus extends Omit<SystemStatusDto, 'demo'> {
   readonly demo?: DemoInfo;
 }
 
@@ -359,8 +359,7 @@ export class ConnectionService {
    * результат — в `systemStatus` і `demo` (невдача ще й у консолі). Після вдалої перевірки
    * підключення сервіс робить це сам; ще раз — коли статус міг змінитися (наприклад, щойно
    * створено адміністратора). Повертає статус або `null`, якщо запит не вдався чи відповідь не
-   * відповідає контракту (не всі три поля булеві): за такою відповіддю не можна вирішувати, що
-   * показувати.
+   * відповідає контракту `SystemStatusDto`: за такою відповіддю не можна вирішувати, що показувати.
    *
    * Новий запит скасовує попередній, і той, хто чекав на скасований, отримує результат
    * нового. Запит, скасований новою перевіркою підключення (`checkApi`), дає `null`: ціль
@@ -385,7 +384,7 @@ export class ConnectionService {
         resolve(status);
       };
       const subscription = this.http
-        .get<Untrusted<SystemSetupStatusDto>>(url)
+        .get<Untrusted<SystemStatusDto>>(url)
         .pipe(timeout(API_CHECK_TIMEOUT_MS))
         .subscribe({
           next: (body) => {
@@ -557,21 +556,45 @@ function apiStatusOf(result: ProbeResult): ApiStatus {
   }
 }
 
+/** Повідомлення про планові роботи з відповіді сервера; `null` — не обʼєкт контракту. */
+function toMaintenanceNotice(raw: Untrusted<MaintenanceNoticeDto>): MaintenanceNoticeDto | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const { message, startsAt, endsAt } = raw;
+  return typeof message === 'string' && typeof startsAt === 'string' && typeof endsAt === 'string'
+    ? { message, startsAt, endsAt }
+    : null;
+}
+
 /**
- * Статус системи з відповіді сервера; `null` — це не він (хоч одне з трьох полів не булеве).
+ * Статус системи з відповіді сервера; `null` — відповідь не відповідає контракту `SystemStatusDto`.
  * Демо-режим, що не відповідає контракту, відкидається (з попередженням у консолі): статус
  * лишається, а сервер вважається звичайним.
  */
-function toSystemStatus(body: Untrusted<SystemSetupStatusDto>): SystemStatus | null {
-  const { hasAdmin, hasNgo, isSetupComplete, demo } = body ?? {};
-  if (typeof hasAdmin !== 'boolean' || typeof hasNgo !== 'boolean' || typeof isSetupComplete !== 'boolean') {
+function toSystemStatus(body: Untrusted<SystemStatusDto>): SystemStatus | null {
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+  const { hasAdmin, hasNgo, isSetupComplete, version, notice, demo } = body;
+  if (
+    typeof hasAdmin !== 'boolean' ||
+    typeof hasNgo !== 'boolean' ||
+    typeof isSetupComplete !== 'boolean' ||
+    typeof version !== 'string'
+  ) {
+    return null;
+  }
+  const parsedNotice = notice === null ? null : toMaintenanceNotice(notice as Untrusted<MaintenanceNoticeDto>);
+  if (notice !== null && !parsedNotice) {
     return null;
   }
   const info = demo === null || demo === undefined ? null : toDemoInfo(demo as Untrusted<DemoModeInfoDto>);
   if (demo !== null && demo !== undefined && !info) {
     console.warn('[ConnectionService] Демо-режим у статусі системи не відповідає контракту', demo);
   }
-  return info ? { hasAdmin, hasNgo, isSetupComplete, demo: info } : { hasAdmin, hasNgo, isSetupComplete };
+  const status = { hasAdmin, hasNgo, isSetupComplete, version, notice: parsedNotice };
+  return info ? { ...status, demo: info } : status;
 }
 
 /**

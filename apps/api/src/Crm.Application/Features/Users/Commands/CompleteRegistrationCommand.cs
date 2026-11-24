@@ -1,0 +1,17 @@
+using Crm.Application.Common.Interfaces;
+using Crm.Application.Dtos.Auth;
+using Mediator;
+
+namespace Crm.Application.Features.Users.Commands;
+
+/// <summary>
+/// Command to complete user registration using a valid invitation token.
+/// Acts as the DTO for the final registration form submission.
+/// </summary>
+public record CompleteRegistrationCommand(
+    string Token,
+    string FirstName,
+    string LastName,
+    string? Patronymic,
+    string Password,
+    string ConfirmPassword) : ICommand<AuthTokensDto>, ITransactionalCommand;

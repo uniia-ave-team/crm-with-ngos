@@ -12,10 +12,10 @@ public class AuthUserRole : IdentityUserRole<Guid>
     /// <summary>
     /// Gets or sets the associated authenticated user navigation property.
     /// </summary>
-    public virtual AuthUser User { get; set; }
+    public virtual AuthUser User { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the associated application role navigation property.
     /// </summary>
-    public virtual AuthRole Role { get; set; }
+    public virtual AuthRole Role { get; set; } = null!;
 }

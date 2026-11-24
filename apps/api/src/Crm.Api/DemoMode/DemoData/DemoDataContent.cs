@@ -213,7 +213,7 @@ internal static class DemoDataContent
             PronounCategory.Masculine => "він/його",
             PronounCategory.Feminine => "вона/її",
             PronounCategory.Neutral => "вони/їх",
-            _ => null,
+            PronounCategory.None or _ => null,
         },
         PronounCategory = person.PronounCategory,
         IsActive = person.IsActive,

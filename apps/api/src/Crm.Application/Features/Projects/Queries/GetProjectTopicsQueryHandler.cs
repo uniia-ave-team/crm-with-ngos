@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project;
-using Crm.Application.Dtos.Project.Queries;
+using Crm.Application.Dtos.Projects;
 using Crm.Domain.Common;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -13,25 +12,25 @@ namespace Crm.Application.Features.Projects.Queries;
 /// </summary>
 /// <param name="topicRepository">The repository for querying project board topics.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class GetProjectTopicsQueryHandler(
+public sealed partial class GetProjectTopicsQueryHandler(
     ITopicRepository topicRepository,
-    ILogger<GetProjectTopicsQueryHandler> logger) : IRequestHandler<GetProjectTopicsQuery, PagedResult<TopicDto>>
+    ILogger<GetProjectTopicsQueryHandler> logger) : IQueryHandler<GetProjectTopicsQuery, PagedResult<TopicDto>>
 {
     /// <inheritdoc />
-    public async ValueTask<PagedResult<TopicDto>> Handle(GetProjectTopicsQuery request, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<TopicDto>> Handle(GetProjectTopicsQuery query, CancellationToken cancellationToken)
     {
-        LogFetchingTopics(logger, request.ProjectId, request.PageNumber, request.PageSize);
+        LogFetchingTopics(logger, query.ProjectId, query.PageNumber, query.PageSize);
 
         var result = await topicRepository.GetPagedAsync<TopicDto>(
-            projectId: request.ProjectId,
-            searchTerm: request.SearchTerm,
-            orderBy: request.OrderBy,
-            sortOrder: request.SortOrder,
-            pageNumber: request.PageNumber,
-            pageSize: request.PageSize,
+            projectId: query.ProjectId,
+            searchTerm: query.SearchTerm,
+            orderBy: query.OrderBy,
+            sortOrder: query.SortOrder,
+            pageNumber: query.PageNumber,
+            pageSize: query.PageSize,
             cancellationToken: cancellationToken);
 
-        LogTopicsFetched(logger, result.Items.Count, result.TotalCount, request.ProjectId);
+        LogTopicsFetched(logger, result.Items.Count, result.TotalCount, query.ProjectId);
 
         return result;
     }

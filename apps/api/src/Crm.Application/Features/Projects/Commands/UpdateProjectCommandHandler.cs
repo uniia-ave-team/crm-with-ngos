@@ -1,7 +1,7 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Enums;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using Mediator;
@@ -15,33 +15,32 @@ namespace Crm.Application.Features.Projects.Commands;
 /// <param name="projectRepository">The repository for retrieving and updating project entities.</param>
 /// <param name="taskRepository">The repository for cleaning up inaccessible task assignments and read states when restricting visibility.</param>
 /// <param name="projectAccessService">The scoped service resolving cached project access metadata.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class UpdateProjectCommandHandler(
+public sealed partial class UpdateProjectCommandHandler(
     IProjectRepository projectRepository,
     IProjectTaskRepository taskRepository,
     IProjectAccessService projectAccessService,
-    ICurrentUserService currentUserService,
-    ILogger<UpdateProjectCommandHandler> logger) : IRequestHandler<UpdateProjectCommand>
+    ILogger<UpdateProjectCommandHandler> logger) : ICommandHandler<UpdateProjectCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(UpdateProjectCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateProjectCommand command, CancellationToken cancellationToken)
     {
-        var userId = currentUserService.GetUserId();
-        LogUpdatingProject(logger, request.Id, userId);
+        LogUpdatingProject(logger, command.Id, command.CurrentUserId);
 
-        var project = await projectRepository.GetForUpdateAsync(request.Id, cancellationToken);
+        await projectRepository.LockForUpdateAsync(command.Id, cancellationToken);
+        var project = await projectRepository.GetForUpdateAsync(command.Id, cancellationToken);
         var previousVisibility = project.Visibility;
 
-        if (previousVisibility != request.Visibility)
+        if (previousVisibility != command.Visibility)
         {
             var access = await projectAccessService.GetRequiredAsync(project.Id, cancellationToken);
-            access.EnsureCanManage(project.Id);
+            access.EnsureHasClaim(project.Id, ProjectClaim.Manage);
         }
 
-        request.Adapt(project);
+        command.Adapt(project);
+        project.EnsureValidDateRange();
 
-        if (previousVisibility != ProjectVisibility.Private && request.Visibility == ProjectVisibility.Private)
+        if (previousVisibility != ProjectVisibility.Private && command.Visibility == ProjectVisibility.Private)
         {
             await taskRepository.RemoveInaccessibleUserDataAsync(project.Id, cancellationToken);
         }

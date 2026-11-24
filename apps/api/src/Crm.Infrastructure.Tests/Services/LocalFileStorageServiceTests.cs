@@ -1,10 +1,8 @@
 using System.Text;
-using Crm.Application.Dtos.Common;
-using Crm.Application.Interfaces;
 using Crm.Domain.Exceptions;
 using Crm.Infrastructure.Options;
-using Crm.Infrastructure.Services;
-using Crm.Infrastructure.Services.FileValidators;
+using Crm.Infrastructure.Services.Storage;
+using Crm.Infrastructure.Services.Storage.FileValidators;
 using NSubstitute;
 using Shouldly;
 
@@ -136,12 +134,66 @@ public sealed class LocalFileStorageServiceTests : IDisposable
         File.SetLastWriteTimeUtc(freshTemp, now.AddMinutes(-5));
         File.SetLastWriteTimeUtc(realFile, now.AddDays(-5));
 
-        int deleted = LocalStorageQuotaTracker.CleanupStaleTempFiles(_tempDir, TimeSpan.FromHours(1), now);
+        var fixedClock = new FixedTimeProvider(new DateTimeOffset(now, TimeSpan.Zero));
+        var quotaTracker = new LocalStorageQuotaTracker(fixedClock);
+
+        int deleted = quotaTracker.CleanupStaleTempFiles(_tempDir, TimeSpan.FromHours(1), TestContext.Current.CancellationToken);
 
         deleted.ShouldBe(1);
         File.Exists(staleTemp).ShouldBeFalse();
         File.Exists(freshTemp).ShouldBeTrue();
         File.Exists(realFile).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task SaveImageAsyncWhenImageContentIsInvalidShouldThrowDomainValidationException()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        _imageValidator.Validate(Arg.Any<Stream>(), Arg.Any<string>())
+            .Returns(new FileValidationResult(IsValid: false, ResultStream: null));
+
+        var service = CreateService(maxTotalBytes: 1024 * 1024);
+        using var invalidStream = new MemoryStream(Encoding.UTF8.GetBytes("not-an-image"));
+
+        await Should.ThrowAsync<DomainValidationException>(() =>
+            service.SaveImageAsync(invalidStream, "fake.jpg", "users", ct));
+    }
+
+    [Fact]
+    public async Task GetFileAsyncWhenFileDoesNotExistShouldThrowStorageFileNotFoundException()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var service = CreateService(maxTotalBytes: 1024 * 1024);
+
+        await Should.ThrowAsync<StorageFileNotFoundException>(() =>
+            service.GetFileAsync("non-existent.png", "users", ct));
+    }
+
+    [Fact]
+    public async Task GetFileAsyncWhenIdentifierIsExternalUrlOrEmptyShouldThrowDomainValidationException()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var service = CreateService(maxTotalBytes: 1024 * 1024);
+
+        await Should.ThrowAsync<DomainValidationException>(() =>
+            service.GetFileAsync("https://cdn.example.org/avatar.png", "users", ct));
+        await Should.ThrowAsync<DomainValidationException>(() =>
+            service.GetFileAsync("   ", "users", ct));
+    }
+
+    [Fact]
+    public async Task SaveFileAsyncWhenStreamIsEmptyOrFileNameMissingShouldThrowDomainValidationException()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var service = CreateService(maxTotalBytes: 1024 * 1024);
+
+        using var emptyStream = new MemoryStream();
+        await Should.ThrowAsync<DomainValidationException>(() =>
+            service.SaveFileAsync(emptyStream, "empty.txt", "attachments", ct));
+
+        using var validStream = new MemoryStream(Encoding.UTF8.GetBytes("data"));
+        await Should.ThrowAsync<DomainValidationException>(() =>
+            service.SaveFileAsync(validStream, "   ", "attachments", ct));
     }
 
     public void Dispose()
@@ -161,7 +213,12 @@ public sealed class LocalFileStorageServiceTests : IDisposable
             MaxTotalBytes = maxTotalBytes,
         });
 
-        return new LocalFileStorageService(opts, validator ?? _imageValidator);
+        return new LocalFileStorageService(opts, validator ?? _imageValidator, new LocalStorageQuotaTracker(TimeProvider.System));
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
     private sealed class YieldingDisposableStream(byte[] payload) : Stream

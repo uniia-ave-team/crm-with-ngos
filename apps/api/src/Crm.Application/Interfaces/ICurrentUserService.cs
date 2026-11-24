@@ -1,5 +1,3 @@
-using System.Security.Claims;
-
 namespace Crm.Application.Interfaces;
 
 /// <summary>
@@ -8,22 +6,6 @@ namespace Crm.Application.Interfaces;
 /// </summary>
 public interface ICurrentUserService
 {
-    /// <summary>
-    /// Gets a value indicating whether the current request is executed by an authenticated user.
-    /// </summary>
-    /// <value>
-    /// <c>true</c> if the user identity is authenticated; otherwise, <c>false</c>.
-    /// </value>
-    bool IsAuthenticated { get; }
-
-    /// <summary>
-    /// Gets the claims principal representing the currently authenticated user.
-    /// </summary>
-    /// <value>
-    /// A <see cref="ClaimsPrincipal"/> instance containing all user claims if available; otherwise, <c>null</c>.
-    /// </value>
-    ClaimsPrincipal? User { get; }
-
     /// <summary>
     /// Retrieves the unique identifier of the currently authenticated user from the token claims.
     /// </summary>

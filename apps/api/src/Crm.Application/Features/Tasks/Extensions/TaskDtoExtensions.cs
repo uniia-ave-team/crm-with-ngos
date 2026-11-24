@@ -1,5 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task;
+using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Users.Extensions;
 using Crm.Application.Interfaces;
 
@@ -11,12 +11,12 @@ namespace Crm.Application.Features.Tasks.Extensions;
 public static class TaskDtoExtensions
 {
     /// <summary>
-    /// Resolves the download URL for a <see cref="TaskAttachmentDto"/> using its internal <see cref="TaskAttachmentDto.StorageKey"/>.
+    /// Resolves the download URL for a <see cref="TaskAttachmentDto"/> from its projected <see cref="TaskAttachmentDto.Url"/> key.
     /// </summary>
     /// <param name="attachment">The projected task attachment DTO to enrich.</param>
     /// <param name="projectId">The unique identifier of the parent project.</param>
     /// <param name="fileUrlProvider">The file URL provider used to resolve the download URL.</param>
-    /// <returns>A copy of <paramref name="attachment"/> with its resolved download URL and cleared <see cref="TaskAttachmentDto.StorageKey"/>.</returns>
+    /// <returns>A copy of <paramref name="attachment"/> with its resolved download URL.</returns>
     public static TaskAttachmentDto EnrichUrl(
         this TaskAttachmentDto attachment,
         Guid projectId,
@@ -25,11 +25,15 @@ public static class TaskDtoExtensions
         ArgumentNullException.ThrowIfNull(attachment);
         ArgumentNullException.ThrowIfNull(fileUrlProvider);
 
-        string route = ApiRouteConstants.TaskAttachmentFile(projectId, attachment.TaskId, attachment.Id);
+        if (string.IsNullOrWhiteSpace(attachment.Url))
+        {
+            return attachment with { Url = null };
+        }
+
+        string route = FileRouteConstants.TaskAttachmentFile(projectId, attachment.TaskId, attachment.Id);
         return attachment with
         {
-            Url = fileUrlProvider.GetFileUrl(attachment.StorageKey, route),
-            StorageKey = null,
+            Url = fileUrlProvider.GetFileUrl(attachment.Url, route),
         };
     }
 

@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Project.Commands;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -15,29 +14,29 @@ namespace Crm.Application.Features.Projects.Commands;
 /// </summary>
 /// <param name="projectRepository">The repository for retrieving and updating project member records.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class UpdateProjectMemberCommandHandler(
+public sealed partial class UpdateProjectMemberCommandHandler(
     IProjectRepository projectRepository,
-    ILogger<UpdateProjectMemberCommandHandler> logger) : IRequestHandler<UpdateProjectMemberCommand>
+    ILogger<UpdateProjectMemberCommandHandler> logger) : ICommandHandler<UpdateProjectMemberCommand>
 {
     /// <inheritdoc />
-    public async ValueTask<Unit> Handle(UpdateProjectMemberCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(UpdateProjectMemberCommand command, CancellationToken cancellationToken)
     {
-        LogUpdatingProjectMember(logger, request.UserId, request.ProjectId);
+        LogUpdatingProjectMember(logger, command.UserId, command.ProjectId);
 
-        await projectRepository.LockForUpdateAsync(request.ProjectId, cancellationToken);
+        await projectRepository.LockForUpdateAsync(command.ProjectId, cancellationToken);
 
-        var member = await projectRepository.GetMemberForUpdateAsync(request.ProjectId, request.UserId, cancellationToken);
+        var member = await projectRepository.GetMemberForUpdateAsync(command.ProjectId, command.UserId, cancellationToken);
 
         if (member.Claim >= ProjectClaim.Manage
-            && request.Claim < ProjectClaim.Manage
-            && !await projectRepository.HasAnotherManagerAsync(request.ProjectId, request.UserId, cancellationToken))
+            && command.Claim < ProjectClaim.Manage
+            && !await projectRepository.HasAnotherManagerAsync(command.ProjectId, command.UserId, cancellationToken))
         {
-            throw new CannotRemoveLastProjectManagerException(request.ProjectId);
+            throw new CannotRemoveLastProjectManagerException(command.ProjectId);
         }
 
-        request.Adapt(member);
+        command.Adapt(member);
 
-        LogProjectMemberUpdated(logger, request.UserId, request.ProjectId);
+        LogProjectMemberUpdated(logger, command.UserId, command.ProjectId);
 
         return Unit.Value;
     }

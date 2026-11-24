@@ -6,6 +6,11 @@ namespace Crm.Api.DemoMode;
 public static class DemoErrorCodes
 {
     /// <summary>
+    /// The name of the problem details extension that carries the error code.
+    /// </summary>
+    public const string ExtensionKey = "errorCode";
+
+    /// <summary>
     /// 403: the action is switched off in the demo.
     /// </summary>
     public const string Restricted = "DEMO_MODE_RESTRICTED";

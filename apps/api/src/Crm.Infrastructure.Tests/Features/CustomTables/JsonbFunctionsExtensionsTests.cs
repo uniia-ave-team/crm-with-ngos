@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
-using Crm.Infrastructure.Persistence.Extensions.FunctionExtensions;
+using Crm.Infrastructure.Persistence.Extensions;
 using Shouldly;
 
 namespace Crm.Infrastructure.Tests.Features.CustomTables;

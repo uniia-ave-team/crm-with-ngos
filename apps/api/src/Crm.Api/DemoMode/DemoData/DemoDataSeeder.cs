@@ -1,9 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
-using Crm.Application.Dtos.CustomTemplates;
+using Crm.Application.Dtos.TableTemplates;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
@@ -170,10 +170,10 @@ public sealed partial class DemoDataSeeder(
                 continue;
             }
 
-            if (string.Equals(roleName, RoleConsts.Admin, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(roleName, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
-                    $"Role '{RoleConsts.Admin}' does not exist. Run the regular database seeders before seeding demo data.");
+                    $"Role '{RoleConstants.Admin}' does not exist. Run the regular database seeders before seeding demo data.");
             }
 
             var blueprint = DemoDataContent.GetRoleBlueprint(roleName);
@@ -226,7 +226,7 @@ public sealed partial class DemoDataSeeder(
         var accountEmails = accounts.Select(a => a.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var colleagueRoles = accounts
             .Select(a => a.Role)
-            .Where(role => !string.Equals(role, RoleConsts.Admin, StringComparison.OrdinalIgnoreCase))
+            .Where(role => !string.Equals(role, RoleConstants.Admin, StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 

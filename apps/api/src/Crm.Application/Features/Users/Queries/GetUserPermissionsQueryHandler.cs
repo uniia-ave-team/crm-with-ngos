@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.User.Queries;
 using Crm.Application.Interfaces;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -10,21 +9,21 @@ namespace Crm.Application.Features.Users.Queries;
 /// Handles the <see cref="GetUserPermissionsQuery"/> to retrieve all unique access rights
 /// from the high-performance cache based on the provided list of Role IDs.
 /// </summary>
-public partial class GetUserPermissionsQueryHandler(
+public sealed partial class GetUserPermissionsQueryHandler(
     IRolePermissionsCache permissionsCache,
-    ILogger<GetUserPermissionsQueryHandler> logger) : IRequestHandler<GetUserPermissionsQuery, List<string>>
+    ILogger<GetUserPermissionsQueryHandler> logger) : IQueryHandler<GetUserPermissionsQuery, List<string>>
 {
-    public async ValueTask<List<string>> Handle(GetUserPermissionsQuery request, CancellationToken cancellationToken)
+    public async ValueTask<List<string>> Handle(GetUserPermissionsQuery query, CancellationToken cancellationToken)
     {
-        if (request.RoleIds == null || request.RoleIds.Count == 0)
+        if (query.RoleIds == null || query.RoleIds.Count == 0)
         {
             LogNoRoleIdsProvided(logger);
             return [];
         }
 
-        LogFetchingPermissions(logger, request.RoleIds.Count);
+        LogFetchingPermissions(logger, query.RoleIds.Count);
 
-        var tasks = request.RoleIds.Select(id => permissionsCache.GetRolePermissionsAsync(id, cancellationToken));
+        var tasks = query.RoleIds.Select(id => permissionsCache.GetRolePermissionsAsync(id, cancellationToken));
         var results = await Task.WhenAll(tasks);
 
         var permissionsList = results

@@ -132,11 +132,27 @@ jobs:
 
       - name: Smoke test the admin CLI
         run: |
-          curl -fsS -o /dev/null -X POST http://localhost:5065/api/v1/users -H 'Content-Type: application/json' \
-            -d '{"firstName":"Smoke","lastName":"Test","email":"smoke@example.org","password":"Initial-1a","confirmPassword":"Initial-1a"}'
+          printf 'Initial-1a\n' | docker compose exec -T api crm create-admin \
+            --email smoke@example.org --first-name Smoke --last-name Test --password-stdin
+          curl -fsS -o /dev/null -X POST http://localhost:5065/api/v1/auth/login -H 'Content-Type: application/json' \
+            -d '{"email":"smoke@example.org","password":"Initial-1a"}'
+          # A plain `! command` never fails the step under `bash -e`: check the exit code explicitly.
+          if printf 'Initial-1a\n' | docker compose exec -T api crm create-admin \
+            --email second@example.org --first-name Second --last-name Admin --password-stdin; then
+            echo "::error::create-admin created a second admin"
+            exit 1
+          fi
           printf 'Changed-2b\nChanged-2b\n' | docker compose exec -T api crm reset-password -e smoke@example.org
           curl -fsS -o /dev/null -X POST http://localhost:5065/api/v1/auth/login -H 'Content-Type: application/json' \
             -d '{"email":"smoke@example.org","password":"Changed-2b"}'
+          docker compose exec -T api crm notice set \
+            --message "Scheduled maintenance" \
+            --starts-at 2099-01-01T22:00:00Z \
+            --ends-at 2099-01-01T23:00:00Z
+          status=$(curl -fsS http://localhost:5065/api/v1/system/status)
+          echo "$status"
+          jq -e '.version == "dev" and .notice.message == "Scheduled maintenance"' <<<"$status" >/dev/null
+          docker compose exec -T api crm notice clear
 
       # Raster validation loads a native library, and SVG uploads must come back sanitized.
       - name: Smoke test image uploads
@@ -153,7 +169,10 @@ jobs:
           logo=$(curl -fsS -H "$auth" "$api/ngo/logo")
           echo "$logo"
           grep -q '<circle' <<<"$logo"
-          ! grep -qiE '<script|onload' <<<"$logo"
+          if grep -qiE '<script|onload' <<<"$logo"; then
+            echo "::error::the SVG logo kept a script"
+            exit 1
+          fi
 
       - name: Container logs
         if: failure()

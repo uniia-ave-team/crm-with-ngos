@@ -301,6 +301,7 @@ describe('ColleaguesPage', () => {
         pronounCategory: null,
         avatarUrl: null,
         roles,
+        isActive: true,
       });
 
       /** Сторінка, для якої сервіс віддає колег із такими ролями (так, як віддаватиме оновлений запит). */
@@ -534,6 +535,62 @@ describe('ColleaguesPage', () => {
         expect(popoverOf(fixture).isOpen()).toBe(false);
       });
 
+      describe('a disabled account (isActive: false)', () => {
+        const itemIds = (fixture: ComponentFixture<ColleaguesPage>) =>
+          (fixture.debugElement.query(By.directive(ColleagueActionsComponent)).componentInstance as ColleagueActionsComponent)
+            .items()
+            .map((item) => item.id);
+
+        /** Колеги 1 і 3 ввімкнені, 2 — вимкнений. */
+        async function renderWithDisabled(permissions: string[]) {
+          const ctx = render(permissions);
+          usersRequest().flush({ items: [user(1), user(2, { isActive: false }), user(3, { isActive: true })], hasNextPage: false });
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(ctx.element.querySelectorAll('tbody tr')).toHaveLength(3);
+          });
+          return ctx;
+        }
+
+        it('shows a grey avatar and a dimmed name with the person-remove icon before it; enabled rows have none of it', async () => {
+          const { element } = await renderWithDisabled(ROW_ACTIONS);
+          const persons = Array.from(element.querySelectorAll('tbody .person'));
+          expect(persons.map((person) => person.classList.contains('person--disabled'))).toEqual([false, true, false]);
+          expect(element.querySelectorAll('.person__disabled-icon')).toHaveLength(1);
+
+          const name = persons[1].querySelector('.person__name')!;
+          const icon = name.firstElementChild!;
+          expect(icon.classList.contains('person__disabled-icon')).toBe(true);
+          expect(icon.getAttribute('name')).toBe('person-remove');
+          expect(icon.getAttribute('aria-label')).toBe(uk.colleagues.disabled);
+          expect(name.textContent).toContain('Колега2 Перший2');
+        });
+
+        it('has "Enable" and no "Disable" for a disabled account, and the other way round for an enabled one', async () => {
+          const { fixture, element } = await renderWithDisabled(ROW_ACTIONS);
+          rowDots(element, 1).click();
+          fixture.detectChanges();
+          expect(itemIds(fixture)).toEqual(['permissions', 'edit', 'resetPassword', 'enable', 'delete']);
+
+          rowDots(element, 2).click();
+          fixture.detectChanges();
+          expect(itemIds(fixture)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'delete']);
+        });
+
+        it('does not open an empty menu: only DisableUser, and the account is already disabled', async () => {
+          const { fixture, element } = await renderWithDisabled(['Permissions.DisableUser']);
+          rowDots(element, 1).click();
+          fixture.detectChanges();
+          expect(popoverOf(fixture).isOpen()).toBe(false);
+          expect(activeRows(element)).toEqual([false, false, false]);
+
+          rowDots(element, 0).click();
+          fixture.detectChanges();
+          expect(popoverOf(fixture).isOpen()).toBe(true);
+          expect(itemIds(fixture)).toEqual(['disable']);
+        });
+      });
+
       describe('the row of the user himself', () => {
         const itemsOf = (fixture: ComponentFixture<ColleaguesPage>) =>
           (fixture.debugElement.query(By.directive(ColleagueActionsComponent)).componentInstance as ColleagueActionsComponent).items();
@@ -561,7 +618,7 @@ describe('ColleaguesPage', () => {
           asUser('user-2');
           rowDots(element, 0).click();
           fixture.detectChanges();
-          expect(itemsOf(fixture).map((item) => item.id)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'enable', 'delete']);
+          expect(itemsOf(fixture).map((item) => item.id)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'delete']);
 
           rowDots(element, 1).click();
           fixture.detectChanges();
@@ -569,7 +626,7 @@ describe('ColleaguesPage', () => {
 
           rowDots(element, 2).click();
           fixture.detectChanges();
-          expect(itemsOf(fixture)).toHaveLength(6);
+          expect(itemsOf(fixture)).toHaveLength(5);
         });
 
         it('is known by the id of the loaded profile too (it wins over the snapshot of the account)', async () => {
@@ -586,7 +643,7 @@ describe('ColleaguesPage', () => {
           asUser('');
           rowDots(element, 1).click();
           fixture.detectChanges();
-          expect(itemsOf(fixture)).toHaveLength(6);
+          expect(itemsOf(fixture)).toHaveLength(5);
         });
 
         it('goes to the settings of the profile when it is chosen: no panel and none of the actions with a colleague', async () => {
@@ -638,6 +695,186 @@ describe('ColleaguesPage', () => {
     });
   });
 
+  describe('disabling, enabling and deleting a colleague', () => {
+    const RIGHTS = [...FULL, ...ROW_ACTIONS];
+    let http: HttpTestingController;
+    beforeEach(() => {
+      http = TestBed.inject(HttpTestingController);
+    });
+    const accountRequest = (method: string, path: string) =>
+      http.expectOne((request) => request.method === method && request.url === `${usersUrl()}/${path}`);
+    /** Вікно підтвердження дії з колегою — третє `app-modal` сторінки (після запрошення й видалення ролі). */
+    const confirmModal = (fixture: ComponentFixture<ColleaguesPage>) =>
+      fixture.debugElement.queryAll(By.directive(ModalComponent))[2].componentInstance as ModalComponent;
+    type Page = {
+      onActionChosen(action: string): void;
+      colleagueConfirm(): { action: string; name: string } | null;
+      colleagueActing(): boolean;
+      enableError(): string | null;
+    };
+    const page = (fixture: ComponentFixture<ColleaguesPage>) => fixture.componentInstance as unknown as Page;
+    const panelOf = (fixture: ComponentFixture<ColleaguesPage>) =>
+      fixture.debugElement.query(By.directive(SidePanelComponent)).componentInstance as SidePanelComponent;
+
+    /** Колеги 1 і 3 ввімкнені, 2 — вимкнений. */
+    async function renderList() {
+      const ctx = render(RIGHTS);
+      usersRequest().flush({ items: [user(1), user(2, { isActive: false }), user(3)], hasNextPage: false });
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(ctx.element.querySelectorAll('tbody tr')).toHaveLength(3);
+      });
+      return ctx;
+    }
+
+    /** Вибирає дію з меню рядка `index`. */
+    function choose(ctx: { fixture: ComponentFixture<ColleaguesPage>; element: HTMLElement }, index: number, action: string) {
+      (ctx.element.querySelectorAll('tbody .data-table__menu')[index] as HTMLButtonElement).click();
+      ctx.fixture.detectChanges();
+      page(ctx.fixture).onActionChosen(action);
+      ctx.fixture.detectChanges();
+    }
+
+    const dialog = (fixture: ComponentFixture<ColleaguesPage>) =>
+      vi.waitFor(() => {
+        fixture.detectChanges();
+        const found = document.querySelector('app-confirm-dialog');
+        expect(found).not.toBeNull();
+        return found!;
+      });
+
+    const names = (element: HTMLElement) =>
+      Array.from(element.querySelectorAll('tbody .person__name')).map((name) => name.textContent?.trim());
+    const disabledRows = (element: HTMLElement) =>
+      Array.from(element.querySelectorAll('tbody .person')).map((person) => person.classList.contains('person--disabled'));
+
+    it.each([
+      ['disable', uk.colleagues.actions.disable, uk.colleagues.confirm.disable],
+      ['delete', uk.colleagues.actions.delete, uk.colleagues.confirm.delete],
+    ])('"%s" asks first in the modal in the middle of the screen with the name of the colleague, and sends nothing yet', async (action, label, question) => {
+      const ctx = await renderList();
+      choose(ctx, 0, action);
+      expect(confirmModal(ctx.fixture).isOpen()).toBe(true);
+      expect(confirmModal(ctx.fixture).label()).toBe(label);
+      expect(panelOf(ctx.fixture).isOpen()).toBe(false);
+
+      const found = await dialog(ctx.fixture);
+      expect(found.querySelector('.confirm__message')?.textContent?.trim()).toBe(question.replace('{{name}}', 'Колега1 Перший1'));
+      expect(Array.from(found.querySelectorAll('button')).map((button) => button.textContent?.trim())).toEqual([uk.common.yes, uk.common.cancel]);
+      http.expectNone((request) => request.method !== 'GET');
+    });
+
+    it('names a colleague without a name by the email in the question', async () => {
+      const ctx = render(RIGHTS);
+      usersRequest().flush({ items: [user(1, { firstName: ' ', lastName: '' })], hasNextPage: false });
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(ctx.element.querySelectorAll('tbody tr')).toHaveLength(1);
+      });
+      choose(ctx, 0, 'delete');
+      expect(page(ctx.fixture).colleagueConfirm()?.name).toBe('user1@example.org');
+    });
+
+    it('"Cancel" closes the modal and sends nothing', async () => {
+      const ctx = await renderList();
+      choose(ctx, 0, 'disable');
+      (await dialog(ctx.fixture)).querySelector<HTMLButtonElement>('.confirm__button--cancel')!.click();
+      ctx.fixture.detectChanges();
+      expect(confirmModal(ctx.fixture).isOpen()).toBe(false);
+      http.expectNone((request) => request.method !== 'GET');
+    });
+
+    it('"Yes" for "disable" sends POST /users/{id}/deactivate, closes the modal, greys the row at once and asks for the list again', async () => {
+      const ctx = await renderList();
+      choose(ctx, 2, 'disable');
+      const found = await dialog(ctx.fixture);
+      found.querySelector<HTMLButtonElement>('.confirm__button--confirm')!.click();
+      ctx.fixture.detectChanges();
+      expect(found.querySelector<HTMLButtonElement>('.confirm__button--confirm')!.disabled).toBe(true);
+
+      const request = accountRequest('POST', 'user-3/deactivate');
+      expect(request.request.body).toBeNull();
+      request.flush(null, { status: 204, statusText: 'No Content' });
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(disabledRows(ctx.element)).toEqual([false, true, true]);
+      });
+      expect(confirmModal(ctx.fixture).isOpen()).toBe(false);
+
+      // Список приходить з першої сторінки заново й замінює показаний.
+      usersRequest().flush({ items: [user(1), user(3, { isActive: false })], hasNextPage: false });
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(names(ctx.element)).toEqual(['Колега1 Перший1', 'Колега3 Перший3']);
+      });
+      expect(disabledRows(ctx.element)).toEqual([false, true]);
+    });
+
+    it('"Yes" for "delete" sends DELETE /users/{id}, takes the row off at once and asks for the list again', async () => {
+      const ctx = await renderList();
+      choose(ctx, 0, 'delete');
+      (await dialog(ctx.fixture)).querySelector<HTMLButtonElement>('.confirm__button--confirm')!.click();
+      accountRequest('DELETE', 'user-1').flush(null, { status: 204, statusText: 'No Content' });
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(names(ctx.element)).toEqual(['Колега2 Перший2', 'Колега3 Перший3']);
+      });
+      expect(confirmModal(ctx.fixture).isOpen()).toBe(false);
+      usersRequest().flush({ items: [user(2, { isActive: false }), user(3)], hasNextPage: false });
+    });
+
+    it.each([
+      ['disable', 'POST', 'user-1/deactivate', 400, 'invalid'],
+      ['disable', 'POST', 'user-1/deactivate', 403, 'forbidden'],
+      ['delete', 'DELETE', 'user-1', 400, 'invalid'],
+      ['delete', 'DELETE', 'user-1', 500, 'error'],
+    ] as const)('"%s" that failed keeps the modal with the reason (%s %s → HTTP %i) and changes nothing', async (action, method, path, status, failure) => {
+      const ctx = await renderList();
+      choose(ctx, 0, action);
+      const found = await dialog(ctx.fixture);
+      found.querySelector<HTMLButtonElement>('.confirm__button--confirm')!.click();
+      accountRequest(method, path).flush(null, { status, statusText: 'x' });
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(found.querySelector('.confirm__error')?.textContent?.trim()).toBe(uk.colleagues.actionError[action][failure]);
+      });
+      expect(confirmModal(ctx.fixture).isOpen()).toBe(true);
+      expect(page(ctx.fixture).colleagueActing()).toBe(false);
+      expect(disabledRows(ctx.element)).toEqual([false, true, false]);
+      http.expectNone((request) => request.url === usersUrl());
+    });
+
+    it('"Enable" sends POST /users/{id}/activate at once (no question), shows the row enabled and asks for the list again', async () => {
+      const ctx = await renderList();
+      choose(ctx, 1, 'enable');
+      expect(confirmModal(ctx.fixture).isOpen()).toBe(false);
+      expect(panelOf(ctx.fixture).isOpen()).toBe(false);
+
+      accountRequest('POST', 'user-2/activate').flush(null, { status: 204, statusText: 'No Content' });
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(disabledRows(ctx.element)).toEqual([false, false, false]);
+      });
+      usersRequest().flush({ items: [user(1), user(2), user(3)], hasNextPage: false });
+    });
+
+    it('"Enable" that failed shows the reason in a toast at the bottom and changes nothing', async () => {
+      const ctx = await renderList();
+      choose(ctx, 1, 'enable');
+      accountRequest('POST', 'user-2/activate').error(new ProgressEvent('error'));
+      await vi.waitFor(() => {
+        ctx.fixture.detectChanges();
+        expect(page(ctx.fixture).enableError()).toBe('colleagues.actionError.enable.unreachable');
+      });
+      // Показане повідомлення Ionic переносить з розмітки сторінки в кінець документа.
+      const toast = document.querySelector('ion-toast.colleagues__toast') as unknown as Record<string, unknown>;
+      expect(toast['isOpen']).toBe(true);
+      expect(toast['message']).toBe(uk.colleagues.actionError.enable.unreachable);
+      expect(disabledRows(ctx.element)).toEqual([false, true, false]);
+      http.expectNone((request) => request.url === usersUrl());
+    });
+  });
+
   describe('the side panel', () => {
     const panelOf = (fixture: ComponentFixture<ColleaguesPage>) =>
       fixture.debugElement.query(By.directive(SidePanelComponent)).componentInstance as SidePanelComponent;
@@ -672,10 +909,7 @@ describe('ColleaguesPage', () => {
       ['permissions', 'changePermissions'],
       ['edit', 'editColleague'],
       ['resetPassword', 'resetPassword'],
-      ['disable', 'disableColleague'],
-      ['enable', 'enableColleague'],
-      ['delete', 'deleteColleague'],
-    ])('is called by every action of the menu: "%s" opens it for the colleague of that row', async (action, method) => {
+    ])('is called by the actions of the menu that are not done yet: "%s" opens it for the colleague of that row', async (action, method) => {
       const { fixture, element } = await renderLoaded(FULL_RIGHTS);
       (element.querySelectorAll('tbody .data-table__menu')[3] as HTMLButtonElement).click();
       fixture.detectChanges();
@@ -693,8 +927,8 @@ describe('ColleaguesPage', () => {
     it('gives the name of the colleague from the request to the panel with the id, and null when the colleague has no name', async () => {
       vi.spyOn(UsersService.prototype, 'list').mockResolvedValue({
         items: [
-          { id: 'user-1', email: '', firstName: ' ', lastName: '', patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] },
-          { id: 'user-2', email: '', firstName: 'Перший', lastName: 'Колега', patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [] },
+          { id: 'user-1', email: '', firstName: ' ', lastName: '', patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [], isActive: true },
+          { id: 'user-2', email: '', firstName: 'Перший', lastName: 'Колега', patronymic: null, phoneNumber: null, country: null, emergencyContact: null, pronouns: null, pronounCategory: null, avatarUrl: null, roles: [], isActive: true },
         ],
         hasNextPage: false,
       });
@@ -717,16 +951,13 @@ describe('ColleaguesPage', () => {
       }
     });
 
-    it('opens by each of the six stubs themselves, with the id that was given to them', () => {
+    it('opens by each of the three stubs themselves, with the id that was given to them', () => {
       const { fixture } = render(FULL_RIGHTS);
       const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
       const cases: [string, string][] = [
         ['changePermissions', 'permissions'],
         ['editColleague', 'edit'],
         ['resetPassword', 'resetPassword'],
-        ['disableColleague', 'disable'],
-        ['enableColleague', 'enable'],
-        ['deleteColleague', 'delete'],
       ];
       for (const [method, kind] of cases) {
         page[method]({ id: 'user-1', name: 'Перший' });
@@ -758,6 +989,23 @@ describe('ColleaguesPage', () => {
       const request = usersRequest(1);
       expect(request.request.method).toBe('GET');
       expect(request.request.params.get('PageSize')).toBe('20');
+    });
+
+    it('asks for the list again each time the tab is entered again, keeping the rows until the answer replaces them', async () => {
+      const { fixture, element } = await renderLoaded();
+      const page = fixture.componentInstance as unknown as { ionViewWillEnter(): void };
+      // Перший вхід (Ionic викликає його й при першому відкритті) не дублює запит з ngOnInit.
+      page.ionViewWillEnter();
+      TestBed.inject(HttpTestingController).expectNone((request) => request.url === usersUrl());
+
+      page.ionViewWillEnter();
+      fixture.detectChanges();
+      expect(rowsCount(element)).toBe(4);
+      usersRequest(1).flush({ items: [user(1), user(5)], hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(rowsCount(element)).toBe(2);
+      });
     });
 
     it('says that the colleagues are loading while it waits, and shows no rows', () => {
@@ -2225,14 +2473,15 @@ describe('ColleaguesPage', () => {
           expect(found).not.toBeNull();
           return found!;
         });
-        expect(dialog.querySelector('.confirm__message')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.deleteQuestion.replace('{{role}}', 'Член'));
+        expect(dialog.querySelector('.confirm__message')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.deleteConfirm.replace('{{role}}', 'Член'));
         expect(Array.from(dialog.querySelectorAll('button')).map((button) => button.textContent?.trim())).toEqual([uk.common.yes, uk.common.cancel]);
 
         // Кнопки вікна ведуть до дій сторінки: «Так» — запит видалення цієї ролі, «Скасувати» — закриття.
         (dialog.querySelector('.confirm__button--confirm') as HTMLButtonElement).click();
         fixture.detectChanges();
         expect((dialog.querySelector('.confirm__button--confirm') as HTMLButtonElement).disabled).toBe(true);
-        deleteRequest('r1').flush(null, { status: 400, statusText: 'Bad Request' });
+        // Так сервер відмовляє, коли роль має хтось із колег.
+        deleteRequest('r1').flush(null, { status: 409, statusText: 'Conflict' });
         await vi.waitFor(() => {
           fixture.detectChanges();
           expect(dialog.querySelector('.confirm__error')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.deleteError.invalid);

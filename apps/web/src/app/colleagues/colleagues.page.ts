@@ -1,7 +1,7 @@
 import { Component, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService, TranslatePipe } from '@ngx-translate/core';
-import { IonButtons, IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonTitle, IonToolbar } from '@ionic/angular';
+import { IonButtons, IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonTitle, IonToast, IonToolbar } from '@ionic/angular';
 
 import { AccountsService } from '../core/accounts/accounts.service';
 import { ConnectionService } from '../core/connection/connection.service';
@@ -60,6 +60,9 @@ export interface ColleaguesView {
 
 /** Що відкрито в бічному вікні: кнопки шапки або дія з колегою. */
 export type ColleaguesPanelKind = 'roles' | 'add' | ColleagueAction;
+
+/** Дії з колегою, які спершу підтверджують у вікні по центру екрана. */
+type ConfirmedColleagueAction = 'disable' | 'delete';
 
 /** Колега, якого стосується дія: `id` й імʼя з запиту (`null` — імені нема). */
 export interface ColleagueRef {
@@ -135,12 +138,14 @@ interface ColleagueRow extends DataTableRow {
   readonly name: string;
   readonly email: string;
   readonly phone: string;
+  /** Акаунт увімкнено; вимкнений — сірий аватар, приглушене імʼя й іконка перед ним. */
+  readonly isActive: boolean;
 }
 
 /**
  * Вкладка «Колеги» (`/colleagues`): шапка з кнопками «Ролі», «Додати» і пошуку та
  * таблиця (`app-data-table`). «Ролі» й «Додати» працюють (список і форми ролей, запрошення
- * колеги); пошук і дії з колегою в меню біля трьох крапок поки не зроблено. Колонки
+ * колеги); пошук і частина дій з колегою в меню біля трьох крапок поки не зроблені. Колонки
  * (`columns`) і рядки (`rows`) задаються кодом, тож їх можна змінити, не чіпаючи розмітки;
  * вигляд складних комірок — шаблони внизу розмітки сторінки.
  *
@@ -156,13 +161,15 @@ interface ColleagueRow extends DataTableRow {
  * всім). Саму вкладку в бічному меню показують лише з `Permissions.ViewUser`
  * (`PrimaryNavComponent`).
  *
- * Бічне вікно (`app-side-panel`) відкривають кнопки «Ролі» й «Додати» та кожна дія
- * з меню біля трьох крапок. Для «Ролі» й «Додати» в ньому список ролей, форми ролі й
- * форма колеги; для дій (функції-заглушки нижче) вікно поки порожнє, а `panel` каже, що
- * саме його відкрило й для якого колеги.
+ * Бічне вікно (`app-side-panel`) відкривають кнопки «Ролі» й «Додати» та дії «Змінити
+ * ролі», «Редагувати» й «Скинути пароль» з меню біля трьох крапок. Для «Ролі» й «Додати» в
+ * ньому список ролей, форми ролі й форма колеги; для цих дій (функції-заглушки нижче) вікно
+ * поки порожнє, а `panel` каже, що саме його відкрило й для якого колеги. «Вимкнути акаунт»
+ * і «Видалити» питають підтвердження у вікні по центру екрана й тоді шлють запит,
+ * «Ввімкнути акаунт» шле його одразу; після кожної список оновлюється.
  *
- * Колеги приходять із `GET /api/v1/users` по 20 (перша сторінка при відкритті,
- * далі підвантаження при прокрутці до кінця таблиці, `ion-infinite-scroll`). У рядках —
+ * Колеги приходять із `GET /api/v1/users` по 20 (перша сторінка при кожному відкритті
+ * вкладки, далі підвантаження при прокрутці до кінця таблиці, `ion-infinite-scroll`). У рядках —
  * ПІБ, аватар, займенники, ролі, пошта й телефон з відповіді; чого нема — прочерк. Рядки
  * «проєкт — роль» під ролями поки зразкові (`colleagues.sample.line`): проєктів сервер ще
  * не віддає.
@@ -179,6 +186,7 @@ interface ColleagueRow extends DataTableRow {
     IonInfiniteScroll,
     IonInfiniteScrollContent,
     IonTitle,
+    IonToast,
     IonToolbar,
     DataTableComponent,
     PopoverComponent,
@@ -229,6 +237,24 @@ export class ColleaguesPage implements OnInit {
   private readonly sidePanel = viewChild(SidePanelComponent);
   private readonly invitationModal = viewChild<ModalComponent>('invitationDialog');
   private readonly roleDeleteModal = viewChild<ModalComponent>('roleDeleteDialog');
+  private readonly colleagueConfirmModal = viewChild<ModalComponent>('colleagueConfirmDialog');
+  /**
+   * Дія з колегою, що чекає підтвердження у вікні по центру екрана: вимкнення чи видалення
+   * (`name` — як назвати колегу в питанні). Лишається, поки вікно закривається.
+   */
+  protected readonly colleagueConfirm = signal<{
+    readonly action: ConfirmedColleagueAction;
+    readonly colleague: ColleagueRef;
+    readonly name: string;
+  } | null>(null);
+  /** Іде підтверджений запит (вимкнення чи видалення): кнопка «Так» вимкнена. */
+  protected readonly colleagueActing = signal(false);
+  /** Ключ помилки у вікні підтвердження (`null` — нема). */
+  protected readonly colleagueConfirmError = signal<string | null>(null);
+  /** Ключ помилки ввімкнення акаунта для спливаючого повідомлення внизу (`null` — нема). */
+  protected readonly enableError = signal<string | null>(null);
+  /** Колеги, чиї акаунти зараз вмикаються: повторний вибір того самого не дублює запит. */
+  private readonly enabling = new Set<string>();
   /** Роль у вікні підтвердження видалення (лишається, поки вікно закривається). */
   protected readonly roleToDelete = signal<Role | null>(null);
   /** Іде видалення ролі: кнопка «Так» вимкнена. */
@@ -277,9 +303,17 @@ export class ColleaguesPage implements OnInit {
   private roleRequest = 0;
   /** Меню відкрите для рядка самого користувача: у ньому лише «Налаштування профілю». */
   protected readonly menuForSelf = signal(false);
-  /** Пункти відкритого меню: для себе — лише налаштування профілю, для інших — дії за правами. */
+  /**
+   * Акаунт колеги, чиє меню відкрито, увімкнено. Лишається й після закриття меню: інакше
+   * пункти мінялися б, поки воно ще зникає.
+   */
+  private readonly menuRowActive = signal(true);
+  /**
+   * Пункти відкритого меню: для себе — лише налаштування профілю, для інших — дії за правами,
+   * з яких «Вимкнути» лише для ввімкненого акаунта, а «Ввімкнути» — лише для вимкненого.
+   */
   protected readonly menuItems = computed<readonly ColleagueActionItem[]>(() =>
-    this.menuForSelf() ? [PROFILE_SETTINGS_ITEM] : this.actions(),
+    this.itemsFor(this.menuForSelf(), this.menuRowActive()),
   );
   /** Рядок, для якого відкрите меню дій (лишається виділеним, поки меню відкрите); `null` — меню закрите. */
   protected readonly menuRowId = signal<string | null>(null);
@@ -321,6 +355,8 @@ export class ColleaguesPage implements OnInit {
   private sort: UsersSort = DEFAULT_SORT;
   /** Номер «покоління» списку: зростає при кожному новому сортуванні, відповідь на давніший запит ігнорується. */
   private colleaguesGeneration = 0;
+  /** Вкладку вже відкривали: наступні входи на неї оновлюють список (`ionViewWillEnter`). */
+  private entered = false;
 
   /**
    * Рядки з полів колеги (`UserSummary`): ПІБ («Прізвище Імʼя По батькові», як на плитках
@@ -343,6 +379,7 @@ export class ColleaguesPage implements OnInit {
       lastName: user.lastName,
       roles: user.roles,
       lines: SAMPLE_LINES.map((color) => ({ text: lineText, color })),
+      isActive: user.isActive,
     }));
   });
 
@@ -351,17 +388,44 @@ export class ColleaguesPage implements OnInit {
   }
 
   /**
-   * Підвантажує наступну сторінку колег (`GET /api/v1/users`, по `COLLEAGUES_PAGE_SIZE`)
-   * і додає її до вже показаних. Невдача лишає, що вже є, і показує причину; той
-   * самий виклик повторює запит. Запит, що ще триває, не дублюється.
+   * Ionic тримає сторінку в стеку, тож `ngOnInit` спрацьовує лише при першому відкритті вкладки.
+   * При кожному наступному поверненні на неї список запитується заново (`reloadColleagues`), щоб
+   * показувати зміни, зроблені деінде.
    */
-  protected async loadColleagues(): Promise<void> {
+  ionViewWillEnter(): void {
+    if (this.entered) {
+      this.reloadColleagues();
+    }
+    this.entered = true;
+  }
+
+  /**
+   * Запитує список з першої сторінки заново з тим самим сортуванням: показані рядки лишаються,
+   * поки не прийде відповідь, а тоді замінюються нею. Запит, що ще йде, скасовується.
+   */
+  private reloadColleagues(): void {
+    this.colleaguesGeneration++;
+    this.colleaguesLoading = false;
+    this.nextPage = 1;
+    void this.loadColleagues(true);
+  }
+
+  /**
+   * Підвантажує наступну сторінку колег (`GET /api/v1/users`, по `COLLEAGUES_PAGE_SIZE`)
+   * і додає її до вже показаних (`fresh` — замінює ними показані: оновлення після дії з
+   * колегою). Невдача лишає, що вже є, і показує причину; той самий виклик повторює запит.
+   * Запит, що ще триває, не дублюється.
+   */
+  protected async loadColleagues(fresh = false): Promise<void> {
     if (this.colleaguesLoading) {
       return;
     }
     this.colleaguesLoading = true;
     const generation = this.colleaguesGeneration;
     const before = this.colleagues();
+    // Оновлення з першої сторінки (`fresh`): таблиця показує старі рядки, поки не прийде відповідь,
+    // а тоді замінюється нею, а не доповнюється.
+    const kept = fresh ? [] : before.users;
     this.colleagues.set({ ...before, status: 'loading', failure: null });
     try {
       const result = await this.users.list(this.nextPage, COLLEAGUES_PAGE_SIZE, this.sort);
@@ -373,10 +437,10 @@ export class ColleaguesPage implements OnInit {
         return;
       }
       this.nextPage++;
-      const known = new Set(before.users.map((user) => user.id));
+      const known = new Set(kept.map((user) => user.id));
       this.colleagues.set({
         status: 'ready',
-        users: [...before.users, ...result.items.filter((user) => !known.has(user.id))],
+        users: [...kept, ...result.items.filter((user) => !known.has(user.id))],
         failure: null,
         hasMore: result.hasNextPage,
       });
@@ -431,9 +495,26 @@ export class ColleaguesPage implements OnInit {
 
   /** Три крапки в рядку: відкриваємо меню дій біля кнопки. */
   protected openRowMenu(event: DataTableRowMenuEvent): void {
+    const self = this.isCurrentUser(event.row.id);
+    const active = this.asColleague(event.row).isActive;
+    // Порожнє меню не відкриваємо: так буває, коли з прав є лише те, що не стосується цього
+    // акаунта (наприклад, лише `DisableUser`, а акаунт уже вимкнено).
+    if (this.itemsFor(self, active).length === 0) {
+      return;
+    }
+    this.menuForSelf.set(self);
+    this.menuRowActive.set(active);
     this.menuRowId.set(event.row.id);
-    this.menuForSelf.set(this.isCurrentUser(event.row.id));
     this.rowMenu()?.open(event.anchor);
+  }
+
+  /** Пункти меню рядка: див. `menuItems`. */
+  private itemsFor(self: boolean, active: boolean): readonly ColleagueActionItem[] {
+    if (self) {
+      return [PROFILE_SETTINGS_ITEM];
+    }
+    const hidden: ColleagueAction = active ? 'enable' : 'disable';
+    return this.actions().filter((item) => item.id !== hidden);
   }
 
   /** `id` колеги — це сам користувач (за профілем, а поки його нема, за знімком акаунта). */
@@ -660,7 +741,7 @@ export class ColleaguesPage implements OnInit {
   /**
    * «Так» у вікні підтвердження: `DELETE /api/v1/roles/{id}`. Поки йде запит, кнопка вимкнена.
    * Успіх закриває вікно, прибирає роль зі списку й оновлює його з сервера; невдача лишає вікно
-   * з помилкою за причиною (зокрема 400: роль має хтось із колег або вона системна).
+   * з помилкою за причиною (зокрема `invalid`: роль має хтось із колег або вона системна).
    */
   protected async confirmRoleDelete(role: Role): Promise<void> {
     if (this.roleDeleting()) {
@@ -736,19 +817,97 @@ export class ColleaguesPage implements OnInit {
     this.openPanel('resetPassword', colleague);
   }
 
-  /** «Вимкнути акаунт» (`DisableUser`). Заглушка. */
+  /** «Вимкнути акаунт» (`DisableUser`): спершу питаємо підтвердження. */
   protected disableColleague(colleague: ColleagueRef): void {
-    this.openPanel('disable', colleague);
+    this.askToConfirm('disable', colleague);
   }
 
-  /** «Ввімкнути акаунт» (`UpdateUser`). Заглушка. */
-  protected enableColleague(colleague: ColleagueRef): void {
-    this.openPanel('enable', colleague);
+  /**
+   * «Ввімкнути акаунт» (`UpdateUser`): одразу `POST /api/v1/users/{id}/activate`. Успіх вмикає
+   * колегу в таблиці й оновлює список з сервера; невдача — спливаюче повідомлення з причиною.
+   */
+  protected async enableColleague(colleague: ColleagueRef): Promise<void> {
+    if (this.enabling.has(colleague.id)) {
+      return;
+    }
+    this.enabling.add(colleague.id);
+    this.enableError.set(null);
+    const result = await this.users.activate(colleague.id);
+    this.enabling.delete(colleague.id);
+    if (result !== 'done') {
+      this.enableError.set(`colleagues.actionError.enable.${result}`);
+      return;
+    }
+    this.applyColleagueChange('enable', colleague.id);
   }
 
-  /** «Видалити» (`DeleteUser`). Заглушка. */
+  /** «Видалити» (`DeleteUser`): спершу питаємо підтвердження. */
   protected deleteColleague(colleague: ColleagueRef): void {
-    this.openPanel('delete', colleague);
+    this.askToConfirm('delete', colleague);
+  }
+
+  /** Відкриває вікно підтвердження дії з колегою (як видалення ролі); без імені колегу називаємо поштою. */
+  private askToConfirm(action: ConfirmedColleagueAction, colleague: ColleagueRef): void {
+    if (this.colleagueActing()) {
+      return;
+    }
+    const email = this.colleagues().users.find((user) => user.id === colleague.id)?.email.trim() ?? '';
+    this.colleagueConfirm.set({ action, colleague, name: colleague.name ?? email });
+    this.colleagueConfirmError.set(null);
+    this.colleagueConfirmModal()?.open();
+  }
+
+  /**
+   * «Так» у вікні підтвердження: `POST /api/v1/users/{id}/deactivate` чи `DELETE /api/v1/users/{id}`.
+   * Поки йде запит, кнопка вимкнена. Успіх закриває вікно, змінює таблицю (вимкнений — сірий,
+   * видалений зникає) й оновлює список з сервера; невдача лишає вікно з помилкою за причиною
+   * (зокрема 400: останній адміністратор чи власний акаунт).
+   */
+  protected async confirmColleagueAction(): Promise<void> {
+    const pending = this.colleagueConfirm();
+    if (!pending || this.colleagueActing()) {
+      return;
+    }
+    this.colleagueActing.set(true);
+    this.colleagueConfirmError.set(null);
+    const id = pending.colleague.id;
+    const result = pending.action === 'disable' ? await this.users.deactivate(id) : await this.users.delete(id);
+    this.colleagueActing.set(false);
+    if (result !== 'done') {
+      this.colleagueConfirmError.set(`colleagues.actionError.${pending.action}.${result}`);
+      return;
+    }
+    void this.colleagueConfirmModal()?.close();
+    this.applyColleagueChange(pending.action, id);
+  }
+
+  /** «Скасувати» у вікні підтвердження дії з колегою. */
+  protected cancelColleagueAction(): void {
+    void this.colleagueConfirmModal()?.close();
+  }
+
+  /** Вікно підтвердження закрито будь-яким способом: забуваємо дію й помилку (якщо запит не йде). */
+  protected onColleagueConfirmClosed(): void {
+    if (this.colleagueActing()) {
+      return;
+    }
+    this.colleagueConfirm.set(null);
+    this.colleagueConfirmError.set(null);
+  }
+
+  /**
+   * Дія вдалася: таблиця одразу показує результат (вимкнений чи ввімкнений акаунт, видалений
+   * колега зникає), а тоді список запитується з першої сторінки заново з тим самим сортуванням.
+   */
+  private applyColleagueChange(action: 'disable' | 'enable' | 'delete', id: string): void {
+    this.colleagues.update((view) => ({
+      ...view,
+      users:
+        action === 'delete'
+          ? view.users.filter((user) => user.id !== id)
+          : view.users.map((user) => (user.id === id ? { ...user, isActive: action === 'enable' } : user)),
+    }));
+    this.reloadColleagues();
   }
 
   /** Рядок із шаблону комірки: типізація для `let-row`. */

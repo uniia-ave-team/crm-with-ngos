@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using Crm.Application.Dtos.User;
+using Crm.Application.Dtos.Users;
 
 namespace Crm.Application.Interfaces;
 

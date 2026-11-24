@@ -97,12 +97,19 @@ public sealed class DemoModeOptions
     /// </summary>
     public void NormalizePaths()
     {
-        DemoBlockedPaths = DemoBlockedPaths is null
-            ? []
-            : [.. DemoBlockedPaths
+        if (DemoBlockedPaths is null)
+        {
+            DemoBlockedPaths = [];
+            return;
+        }
+
+        DemoBlockedPaths =
+        [
+            .. DemoBlockedPaths
                 .Select(NormalizePathPrefix)
                 .Where(static p => p is not null)
                 .Select(static p => p!)
-                .Distinct(StringComparer.OrdinalIgnoreCase)];
+                .Distinct(StringComparer.OrdinalIgnoreCase),
+        ];
     }
 }

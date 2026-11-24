@@ -1,5 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.CustomRecords.Commands;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -11,17 +10,18 @@ namespace Crm.Application.Features.CustomRecords.Commands;
 /// </summary>
 /// <param name="customRecordRepository">The repository used for fetching and deleting custom record entities.</param>
 /// <param name="logger">The logger instance for tracking execution flow.</param>
-public partial class DeleteCustomRecordCommandHandler(
+public sealed partial class DeleteCustomRecordCommandHandler(
     ICustomRecordRepository customRecordRepository,
-    ILogger<DeleteCustomRecordCommandHandler> logger) : IRequestHandler<DeleteCustomRecordCommand>
+    ILogger<DeleteCustomRecordCommandHandler> logger) : ICommandHandler<DeleteCustomRecordCommand>
 {
-    public async ValueTask<Unit> Handle(DeleteCustomRecordCommand request, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async ValueTask<Unit> Handle(DeleteCustomRecordCommand command, CancellationToken cancellationToken)
     {
-        LogDeletingCustomRecord(logger, request.Id);
+        LogDeletingCustomRecord(logger, command.Id);
 
-        await customRecordRepository.DeleteAsync(request.Id, cancellationToken);
+        await customRecordRepository.DeleteAsync(command.Id, cancellationToken);
 
-        LogCustomRecordDeletedSuccessfully(logger, request.Id);
+        LogCustomRecordDeletedSuccessfully(logger, command.Id);
 
         return Unit.Value;
     }

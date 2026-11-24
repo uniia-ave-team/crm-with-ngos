@@ -1,6 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Role;
-using Crm.Application.Dtos.User.Commands;
+using Crm.Application.Dtos.Roles;
 using Crm.Application.Interfaces;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -14,20 +13,20 @@ namespace Crm.Application.Features.Users.Commands;
 /// <param name="roleRepository">The repository used to retrieve role details, such as the role name required for assignment.</param>
 /// <param name="identityService">The service used to manage user identities and execute the role assignment.</param>
 /// <param name="logger">The logger used to record the lifecycle and outcome of the role assignment process.</param>
-public partial class AssignUserRoleCommandHandler(
+public sealed partial class AssignUserRoleCommandHandler(
     IAuthRoleRepository roleRepository,
     IIdentityService identityService,
-    ILogger<AssignUserRoleCommandHandler> logger) : IRequestHandler<AssignUserRoleCommand>
+    ILogger<AssignUserRoleCommandHandler> logger) : ICommandHandler<AssignUserRoleCommand>
 {
-    public async ValueTask<Unit> Handle(AssignUserRoleCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Unit> Handle(AssignUserRoleCommand command, CancellationToken cancellationToken)
     {
-        LogAssigningRole(logger, request.RoleId, request.UserId);
+        LogAssigningRole(logger, command.RoleId, command.UserId);
 
-        var role = await roleRepository.GetAsync<RoleUserDto>(request.RoleId, cancellationToken);
+        var role = await roleRepository.GetAsync<RoleUserDto>(command.RoleId, cancellationToken);
 
-        await identityService.AddToRoleAsync(request.UserId, role.Name, cancellationToken);
+        await identityService.AddToRoleAsync(command.UserId, role.Name, cancellationToken);
 
-        LogRoleAssignedSuccessfully(logger, request.RoleId, request.UserId);
+        LogRoleAssignedSuccessfully(logger, command.RoleId, command.UserId);
 
         return Unit.Value;
     }

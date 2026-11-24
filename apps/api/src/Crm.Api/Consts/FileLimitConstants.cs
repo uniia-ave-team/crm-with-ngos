@@ -1,5 +1,5 @@
-using Crm.Domain.Consts;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Domain.Constants;
+using Crm.Domain.Constants.Validation;
 
 namespace Crm.Api.Consts;
 

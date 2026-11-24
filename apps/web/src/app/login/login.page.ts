@@ -117,6 +117,8 @@ export class LoginPage implements OnDestroy {
    * «Перевіряємо підключення…».
    */
   private readonly restoreDone = signal(false);
+  /** Пошук чинного акаунта (`restoreAccounts`) зараз триває. */
+  private restoring = false;
 
   /**
    * Зображення збоку форми входу: випадкове з тих, що завантажені в системі
@@ -323,14 +325,7 @@ export class LoginPage implements OnDestroy {
   });
 
   constructor() {
-    // Спершу шукаємо чинний акаунт серед збережених: знайшли — на «Планер»,
-    // ні — показуємо вхід, реєстрацію тощо. Акаунтів нема — шукати нічого,
-    // форми одразу.
-    if (this.accounts.accounts().length === 0) {
-      this.restoreDone.set(true);
-    } else {
-      void this.restoreAccounts();
-    }
+    this.startRestore();
 
     // Стан первинного налаштування системи (від нього залежить, що показати: форму адміна,
     // організації чи входу) запитує сам `ConnectionService`, щойно підключення є.
@@ -376,11 +371,36 @@ export class LoginPage implements OnDestroy {
   }
 
   /**
+   * Ionic тримає сторінку в стеку, і повернення на /login бере той самий екземпляр, без
+   * конструктора. Якщо пошук тоді закінчився переходом геть (на /relogin чи «Планер»),
+   * `restoreDone` лишився `false`, і без нового пошуку сторінка вічно «перевіряла б
+   * підключення». Так буває, коли на /relogin видалили останній акаунт.
+   */
+  ionViewWillEnter(): void {
+    if (!this.restoreDone() && !this.restoring) {
+      this.startRestore();
+    }
+  }
+
+  /**
+   * Спершу шукаємо чинний акаунт серед збережених: знайшли — на «Планер», ні — показуємо
+   * вхід, реєстрацію тощо. Акаунтів нема — шукати нічого, форми одразу.
+   */
+  private startRestore(): void {
+    if (this.accounts.accounts().length === 0) {
+      this.restoreDone.set(true);
+    } else {
+      void this.restoreAccounts();
+    }
+  }
+
+  /**
    * Шукає чинний акаунт серед збережених (`AccountRestoreService`; застарілі
    * чистить). Знайшовся — переходимо на `REDIRECT_URL`; ні — на повторний вхід (збережені акаунти лишились) або відкриваємо форми.
    */
   private async restoreAccounts(): Promise<void> {
-    const result = await this.restoreService.restore();
+    this.restoring = true;
+    const result = await this.restoreService.restore().finally(() => (this.restoring = false));
     if (result === 'restored') {
       // `restoreDone` лишається `false`: до переходу сторінка показує «завантаження».
       void this.router.navigateByUrl(REDIRECT_URL);

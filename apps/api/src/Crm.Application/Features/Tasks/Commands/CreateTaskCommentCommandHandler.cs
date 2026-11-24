@@ -1,6 +1,4 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
@@ -13,32 +11,29 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// Handles the <see cref="CreateTaskCommentCommand"/> to add a comment to a task.
 /// </summary>
 /// <param name="commentRepository">The repository for persisting task comment entities.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 /// <param name="timeProvider">The time provider for resolving the current UTC timestamp.</param>
 /// <param name="logger">The logger instance for recording handler events.</param>
-public partial class CreateTaskCommentCommandHandler(
+public sealed partial class CreateTaskCommentCommandHandler(
     ITaskCommentRepository commentRepository,
-    ICurrentUserService currentUserService,
     TimeProvider timeProvider,
-    ILogger<CreateTaskCommentCommandHandler> logger) : IRequestHandler<CreateTaskCommentCommand, Guid>
+    ILogger<CreateTaskCommentCommandHandler> logger) : ICommandHandler<CreateTaskCommentCommand, Guid>
 {
     /// <inheritdoc />
-    public async ValueTask<Guid> Handle(CreateTaskCommentCommand request, CancellationToken cancellationToken)
+    public async ValueTask<Guid> Handle(CreateTaskCommentCommand command, CancellationToken cancellationToken)
     {
-        var currentUserId = currentUserService.GetUserId();
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        LogCreatingTaskComment(logger, request.TaskId, currentUserId);
+        LogCreatingTaskComment(logger, command.TaskId, command.CurrentUserId);
 
-        var comment = request.Adapt<TaskComment>();
-        comment.UserId = currentUserId;
+        var comment = command.Adapt<TaskComment>();
+        comment.UserId = command.CurrentUserId;
         comment.CreatedAt = utcNow;
         comment.UpdatedAt = utcNow;
 
         await commentRepository.CreateAsync(comment, cancellationToken);
-        await commentRepository.MarkUnreadForOtherUsersAsync(comment, currentUserId, cancellationToken);
+        await commentRepository.MarkUnreadForOtherUsersAsync(comment, command.CurrentUserId, cancellationToken);
 
-        LogTaskCommentCreatedSuccessfully(logger, comment.Id, request.TaskId);
+        LogTaskCommentCreatedSuccessfully(logger, comment.Id, command.TaskId);
 
         return comment.Id;
     }

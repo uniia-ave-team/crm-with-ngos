@@ -23,10 +23,9 @@ public class ProjectAccessTests
         access.CanEdit.ShouldBeFalse();
         access.CanManage.ShouldBeFalse();
 
-        Should.Throw<EntityNotFoundException<Project>>(() => access.EnsureCanView(projectId));
-        Should.Throw<EntityNotFoundException<Project>>(() => access.EnsureCanEdit(projectId));
-        Should.Throw<EntityNotFoundException<Project>>(() => access.EnsureCanManage(projectId));
         Should.Throw<EntityNotFoundException<Project>>(() => access.EnsureHasClaim(projectId, ProjectClaim.View));
+        Should.Throw<EntityNotFoundException<Project>>(() => access.EnsureHasClaim(projectId, ProjectClaim.Edit));
+        Should.Throw<EntityNotFoundException<Project>>(() => access.EnsureHasClaim(projectId, ProjectClaim.Manage));
     }
 
     [Fact]
@@ -40,9 +39,9 @@ public class ProjectAccessTests
         access.CanEdit.ShouldBeTrue();
         access.CanManage.ShouldBeFalse();
 
-        Should.NotThrow(() => access.EnsureCanView(projectId));
-        Should.NotThrow(() => access.EnsureCanEdit(projectId));
-        Should.Throw<UnauthorizedAccessException>(() => access.EnsureCanManage(projectId));
+        Should.NotThrow(() => access.EnsureHasClaim(projectId, ProjectClaim.View));
+        Should.NotThrow(() => access.EnsureHasClaim(projectId, ProjectClaim.Edit));
+        Should.Throw<UnauthorizedAccessException>(() => access.EnsureHasClaim(projectId, ProjectClaim.Manage));
     }
 
     [Fact]
@@ -55,13 +54,13 @@ public class ProjectAccessTests
         viewer.CanView.ShouldBeTrue();
         viewer.CanEdit.ShouldBeFalse();
         viewer.CanManage.ShouldBeFalse();
-        Should.Throw<UnauthorizedAccessException>(() => viewer.EnsureCanEdit(projectId));
+        Should.Throw<UnauthorizedAccessException>(() => viewer.EnsureHasClaim(projectId, ProjectClaim.Edit));
 
         var editor = new ProjectAccess(ProjectVisibility.Private, ProjectClaim.Edit, userId);
         editor.CanView.ShouldBeTrue();
         editor.CanEdit.ShouldBeTrue();
         editor.CanManage.ShouldBeFalse();
-        Should.Throw<UnauthorizedAccessException>(() => editor.EnsureCanManage(projectId));
+        Should.Throw<UnauthorizedAccessException>(() => editor.EnsureHasClaim(projectId, ProjectClaim.Manage));
 
         var manager = new ProjectAccess(ProjectVisibility.Private, ProjectClaim.Manage, userId);
         manager.CanView.ShouldBeTrue();

@@ -1,7 +1,7 @@
 using Crm.Application.Common.Validators;
-using Crm.Application.Dtos.User;
-using Crm.Application.Dtos.User.Queries;
-using Crm.Domain.Consts.Entities.GeneralConstants;
+using Crm.Application.Dtos.Users;
+using Crm.Application.Features.Users.Queries;
+using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using FluentValidation;
 
@@ -10,7 +10,7 @@ namespace Crm.Application.Features.Users.Validators;
 /// <summary>
 /// Provides validation rules for the <see cref="GetUsersQuery"/>.
 /// </summary>
-public class GetUsersQueryValidator : AbstractValidator<GetUsersQuery>
+public sealed class GetUsersQueryValidator : AbstractValidator<GetUsersQuery>
 {
     // TODO: Support dynamic sorting by custom field keys with DataType resolution (Date, Number, Text) once UserCustomField has DataType support.
     private static readonly HashSet<string> AllowedSortFields = new(StringComparer.OrdinalIgnoreCase)

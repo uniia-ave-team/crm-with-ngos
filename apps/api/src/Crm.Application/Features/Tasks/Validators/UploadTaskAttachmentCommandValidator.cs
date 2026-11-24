@@ -1,8 +1,8 @@
 using System.Collections.Frozen;
 using System.Net.Mime;
 using Crm.Application.Common.Consts;
-using Crm.Application.Dtos.Task.Commands;
-using Crm.Domain.Consts.Entities.ValidationConstants;
+using Crm.Application.Features.Tasks.Commands;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Extensions;
 using FluentValidation;
 
@@ -12,7 +12,7 @@ namespace Crm.Application.Features.Tasks.Validators;
 /// Provides validation rules for <see cref="UploadTaskAttachmentCommand"/>,
 /// enforcing file size limits, allow-listed extensions, and MIME content-type consistency.
 /// </summary>
-public class UploadTaskAttachmentCommandValidator : AbstractValidator<UploadTaskAttachmentCommand>
+public sealed class UploadTaskAttachmentCommandValidator : AbstractValidator<UploadTaskAttachmentCommand>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="UploadTaskAttachmentCommandValidator"/> class.
@@ -35,6 +35,12 @@ public class UploadTaskAttachmentCommandValidator : AbstractValidator<UploadTask
             .Must(HasAllowedExtension)
             .WithMessage(ValidationMessages.UnsupportedAttachmentExtension);
 
+        RuleFor(x => x.ContentType)
+            .MaximumLength(TaskValidationConstants.MaxAttachmentContentTypeLength)
+            .Must(ct => ct is null || !ct.Contains('\0', StringComparison.Ordinal))
+            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
+            .When(x => !string.IsNullOrEmpty(x.ContentType));
+
         RuleFor(x => x)
             .Must(HasConsistentContentType)
             .WithName(nameof(UploadTaskAttachmentCommand.ContentType))
@@ -44,7 +50,7 @@ public class UploadTaskAttachmentCommandValidator : AbstractValidator<UploadTask
         RuleFor(x => x.ContentStream)
             .Cascade(CascadeMode.Stop)
             .NotNull().WithMessage(ValidationMessages.AttachmentStreamNull)
-            .Must(stream => stream.CanRead && stream.Length > 0)
+            .Must(stream => stream is not null && stream.CanRead && stream.CanSeek && stream.Length > 0)
             .WithMessage(ValidationMessages.AttachmentStreamEmpty);
 
         RuleFor(x => x.FileSize)

@@ -13,7 +13,7 @@ public class TaskUser
     /// <summary>
     /// Gets or sets the navigation property pointing to the <see cref="ProjectTask"/>.
     /// </summary>
-    public ProjectTask Task { get; set; }
+    public ProjectTask Task { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the foreign key identifier of the assigned <see cref="Entities.User"/>.
@@ -23,5 +23,5 @@ public class TaskUser
     /// <summary>
     /// Gets or sets the navigation property pointing to the assigned <see cref="Entities.User"/>.
     /// </summary>
-    public User User { get; set; }
+    public User User { get; set; } = null!;
 }

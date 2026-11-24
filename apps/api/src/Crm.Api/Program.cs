@@ -1,7 +1,7 @@
 using System.Reflection;
 using Crm.Api.DemoMode;
 using Crm.Api.Extensions;
-using Crm.Infrastructure.Extensions;
+using Crm.Infrastructure.DependencyInjection;
 using Crm.Infrastructure.Persistence.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);

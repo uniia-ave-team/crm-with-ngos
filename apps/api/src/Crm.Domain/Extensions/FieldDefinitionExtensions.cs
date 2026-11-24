@@ -1,5 +1,5 @@
 using Crm.Domain.Exceptions;
-using Crm.Domain.Interfaces;
+using Crm.Domain.Interfaces.Entities;
 
 namespace Crm.Domain.Extensions;
 
@@ -34,27 +34,16 @@ public static class FieldDefinitionExtensions
         }
 
         var keys = new HashSet<string>(count, StringComparer.Ordinal);
-        var seenOrders = new bool[count];
-
         foreach (var field in list)
         {
             if (!keys.Add(field.Key))
             {
                 throw new DuplicateFieldKeyException();
             }
-
-            var order = field.Order;
-            if (order >= count)
-            {
-                throw new NonSequentialFieldOrderException();
-            }
-
-            if (seenOrders[order])
-            {
-                throw new DuplicateFieldOrderException();
-            }
-
-            seenOrders[order] = true;
         }
+
+        list.EnsureSequentialOrders(
+            onNonSequential: static () => new NonSequentialFieldOrderException(),
+            onDuplicate: static () => new DuplicateFieldOrderException());
     }
 }

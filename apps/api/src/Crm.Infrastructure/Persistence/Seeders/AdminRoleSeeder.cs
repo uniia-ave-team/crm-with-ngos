@@ -1,10 +1,8 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Interfaces;
-using Crm.Domain.Consts;
-using Crm.Domain.Exceptions;
+using Crm.Domain.Constants;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using Crm.Infrastructure.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Infrastructure.Persistence.Seeders;
@@ -16,81 +14,52 @@ namespace Crm.Infrastructure.Persistence.Seeders;
 /// This seeder is designed to be idempotent. It safely checks for the existence of the role and its claims
 /// before applying any modifications, ensuring no duplicate data is created during repeated application startups.
 /// </remarks>
-public partial class AdminRoleSeeder(
+/// <param name="roleRepository">The role repository used to look up the default Administrator role.</param>
+/// <param name="roleIdentityService">The role identity service used to create roles and synchronize permission claims.</param>
+/// <param name="logger">The logger instance.</param>
+public sealed partial class AdminRoleSeeder(
     IAuthRoleRepository roleRepository,
     IRoleIdentityService roleIdentityService,
     ILogger<AdminRoleSeeder> logger) : IDatabaseSeeder
 {
-    /// <summary>
-    /// Executes the seeding process to orchestrate the creation of the Administrator role and assignment of permissions.
-    /// </summary>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that represents the asynchronous seeding operation.</returns>
+    /// <inheritdoc />
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        LogCheckingAdminRole(logger, RoleConsts.Admin);
+        LogCheckingAdminRole(logger, RoleConstants.Admin);
 
-        var adminRole = await EnsureAdminRoleExistsAsync(cancellationToken);
+        Guid adminRoleId = await EnsureAdminRoleExistsAsync(cancellationToken);
 
-        await EnsureAdminPermissionsAsync(adminRole, cancellationToken);
+        await EnsureAdminPermissionsAsync(adminRoleId, cancellationToken);
     }
 
-    /// <summary>
-    /// Ensures the default administrative role exists in the identity database.
-    /// </summary>
-    /// <returns>The existing or newly created <see cref="AuthRole"/>.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when the role creation process fails due to validation errors.</exception>
-    private async Task<Guid> EnsureAdminRoleExistsAsync(CancellationToken cancellationToken = default)
+    private async Task<Guid> EnsureAdminRoleExistsAsync(CancellationToken cancellationToken)
     {
-        Guid roleId;
-
-        try
+        Guid? existingRoleId = await roleRepository.FindRoleIdByNameAsync(RoleConstants.Admin, cancellationToken);
+        if (existingRoleId is { } roleId)
         {
-            roleId = await roleRepository.GetRoleIdByNameAsync(RoleConsts.Admin, cancellationToken);
-
-            LogAdminRoleAlreadyExists(logger, RoleConsts.Admin);
-        }
-        catch (NotFoundException)
-        {
-            roleId = await roleIdentityService.CreateRoleAsync(RoleConsts.Admin, cancellationToken: cancellationToken);
-
-            LogAdminRoleCreatedSuccessfully(logger, RoleConsts.Admin, roleId);
+            LogAdminRoleAlreadyExists(logger, RoleConstants.Admin);
+            return roleId;
         }
 
-        return roleId;
+        Guid createdRoleId = await roleIdentityService.CreateRoleAsync(RoleConstants.Admin, cancellationToken: cancellationToken);
+        LogAdminRoleCreatedSuccessfully(logger, RoleConstants.Admin, createdRoleId);
+        return createdRoleId;
     }
 
-    /// <summary>
-    /// Synchronizes the claims of the provided role with the complete set of system permissions.
-    /// </summary>
-    /// <param name="roleId">The ID of the role to which missing permissions will be assigned.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     private async Task EnsureAdminPermissionsAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        var existingPermissions = await roleIdentityService.GetRolePermissionsAsync(roleId, cancellationToken);
+        int addedCount = await roleIdentityService.AddPermissionsToRoleAsync(
+            roleId,
+            PermissionExtensions.GetAllStringValues(),
+            cancellationToken);
 
-        var missingPermissions = PermissionExtensions.GetAllStringValues()
-            .Where(permissionValue => !existingPermissions.Contains(permissionValue))
-            .ToList();
-
-        if (missingPermissions.Count == 0)
+        if (addedCount == 0)
         {
-            LogAllClaimsAlreadyAssigned(logger, RoleConsts.Admin);
+            LogAllClaimsAlreadyAssigned(logger, RoleConstants.Admin);
             return;
         }
 
-        int addedCount = 0;
-
-        foreach (string permissionValue in missingPermissions)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            await roleIdentityService.AddPermissionToRoleAsync(roleId, permissionValue, cancellationToken);
-
-            addedCount++;
-        }
-
-        LogClaimsAddedSuccessfully(logger, addedCount, RoleConsts.Admin);
+        LogClaimsAddedSuccessfully(logger, addedCount, RoleConstants.Admin);
     }
 
     [LoggerMessage(EventId = LogEventIds.CheckingAdminRole, Level = LogLevel.Information, Message = "Checking if default admin role '{RoleName}' exists.")]

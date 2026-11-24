@@ -8,13 +8,15 @@ namespace Crm.Api.ModelBinding;
 /// </summary>
 public sealed class UtcDateTimeModelBinderProvider : IModelBinderProvider
 {
+    private static readonly UtcDateTimeModelBinder Binder = new();
+
     /// <inheritdoc />
     public IModelBinder? GetBinder(ModelBinderProviderContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         return context.Metadata.UnderlyingOrModelType == typeof(DateTime)
-            ? new UtcDateTimeModelBinder()
+            ? Binder
             : null;
     }
 }
