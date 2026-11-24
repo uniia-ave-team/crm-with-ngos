@@ -3,6 +3,7 @@ using Asp.Versioning;
 using Crm.Api.Consts;
 using Crm.Api.Extensions;
 using Crm.Api.Security;
+using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Commands;
 using Crm.Application.Features.Users.Queries;
@@ -270,23 +271,25 @@ public sealed class UsersController(
 
     /// <summary>
     /// Securely changes the password for the currently authenticated user.
+    /// The change signs the user out of all other sessions (their refresh tokens are revoked);
+    /// the calling session must switch to the returned token pair to stay signed in.
     /// </summary>
     /// <param name="command">The current and new password details.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A status indicating the outcome of the operation.</returns>
+    /// <returns>A DTO containing a fresh JWT access token and refresh token for the calling session.</returns>
     [HttpPost("me/password")]
     [Authorize]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UpdateMyPassword(
+    public async Task<ActionResult<AuthTokensDto>> UpdateMyPassword(
         [FromBody] UpdatePasswordCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command with { UserId = currentUserService.GetUserId() }, cancellationToken);
+        var tokens = await mediator.Send(command with { UserId = currentUserService.GetUserId() }, cancellationToken);
 
-        return NoContent();
+        return Ok(tokens);
     }
 
     /// <summary>

@@ -619,6 +619,69 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         }
     }
 
+    [Fact]
+    public async Task UpdateMyPasswordShouldKeepTheCallingSessionAndEndAllOthers()
+    {
+        if (!fixture.IsDockerAvailable)
+        {
+            Assert.Skip("Docker is not running on host machine.");
+            return;
+        }
+
+        var ct = TestContext.Current.CancellationToken;
+        using var factory = fixture.CreateFactory($"crm_password_{Guid.NewGuid():N}");
+        var anonClient = factory.CreateClient();
+
+        (await anonClient.PostAsJsonAsync(
+                "/api/v1/users",
+                new CreateUserCommand("Pass", "Owner", null, "password-owner@ngo.org", "StrongPass1!", "StrongPass1!"),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var callingSession = await LoginAsync(anonClient, "password-owner@ngo.org", "StrongPass1!", ct);
+        var otherSession = await LoginAsync(anonClient, "password-owner@ngo.org", "StrongPass1!", ct);
+
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", callingSession.AccessToken);
+        var changeResp = await client.PostAsJsonAsync(
+            "/api/v1/users/me/password",
+            new UpdatePasswordCommand("StrongPass1!", "NewStrongPass2!"),
+            ct);
+        changeResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var renewed = (await changeResp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
+
+        // The calling session stays signed in with the renewed pair...
+        (await anonClient.PostAsJsonAsync(
+                "/api/v1/auth/refresh-token",
+                new RefreshTokensCommand(renewed.AccessToken, renewed.RefreshToken),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // ...while every refresh token issued before the change is revoked, the caller's old one included.
+        (await anonClient.PostAsJsonAsync(
+                "/api/v1/auth/refresh-token",
+                new RefreshTokensCommand(callingSession.AccessToken, callingSession.RefreshToken),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await anonClient.PostAsJsonAsync(
+                "/api/v1/auth/refresh-token",
+                new RefreshTokensCommand(otherSession.AccessToken, otherSession.RefreshToken),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // Only the new password signs in.
+        (await anonClient.PostAsJsonAsync("/api/v1/auth/login", new AuthenticateUserCommand("password-owner@ngo.org", "StrongPass1!"), ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        await LoginAsync(anonClient, "password-owner@ngo.org", "NewStrongPass2!", ct);
+    }
+
+    private static async Task<AuthTokensDto> LoginAsync(HttpClient client, string email, string password, CancellationToken ct)
+    {
+        var resp = await client.PostAsJsonAsync("/api/v1/auth/login", new AuthenticateUserCommand(email, password), ct);
+        resp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await resp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
+    }
+
     private static MultipartFormDataContent CreateMultipartFile(
         string fieldName,
         string fileName,

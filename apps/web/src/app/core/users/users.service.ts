@@ -3,6 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
 import { CreateUserCommand, PagedResultOfUserDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto } from '../../api/generated/models';
+import { AccountsService } from '../accounts/accounts.service';
+import { AuthService, AuthTokens, toAuthTokens } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
@@ -69,6 +71,8 @@ export type ProfileUpdate = UpdateUserProfileCommand;
 export class UsersService {
   private readonly http = inject(HttpClient);
   private readonly connection = inject(ConnectionService);
+  private readonly accounts = inject(AccountsService);
+  private readonly auth = inject(AuthService);
 
   /** `POST <сервер>/api/v1/users` — створення користувача (першого адміна). */
   async create(user: NewUser): Promise<CreateUserResult> {
@@ -181,15 +185,28 @@ export class UsersService {
   }
 
   /**
-   * `POST <сервер>/api/v1/users/me/password` — зміна пароля поточного
-   * користувача (204 без тіла). Токен додає `authInterceptor`. Паролі не
-   * потрапляють у консоль ні в тілі, ні в помилці.
+   * `POST <сервер>/api/v1/users/me/password` — зміна пароля поточного користувача. Токен додає
+   * `authInterceptor`. Паролі не потрапляють у консоль ні в тілі, ні в помилці.
+   *
+   * Сервер, змінивши пароль, відкликає всі refresh-токени користувача (інші сесії завершуються),
+   * а цій сесії віддає нову пару (200). Її записуємо акаунту, від імені якого йшов запит: зі
+   * старою парою наступне оновлення токенів відправило б користувача на повторний вхід.
+   * Старші версії API відповідають 204 без тіла й нічого не відкликають — тоді пара лишається.
    */
   async changePassword(currentPassword: string, newPassword: string): Promise<ChangePasswordResult> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/password`;
+    const accountId = this.accounts.activeId();
 
     try {
-      await firstValueFrom(this.http.post(url, { currentPassword, newPassword } satisfies UpdatePasswordCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      const body = await firstValueFrom(
+        this.http
+          .post<Untrusted<AuthTokens>>(url, { currentPassword, newPassword } satisfies UpdatePasswordCommand)
+          .pipe(timeout(REQUEST_TIMEOUT_MS)),
+      );
+      const tokens = toAuthTokens(body);
+      if (tokens && accountId) {
+        this.auth.adoptRenewedTokens(accountId, tokens);
+      }
       return 'changed';
     } catch (error) {
       const failure = toRequestFailure(error);

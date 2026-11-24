@@ -304,6 +304,22 @@ export class AuthService {
   }
 
   /**
+   * Записує акаунту нову пару токенів, яку сервер видав сам, без обміну (`refresh`). Так буває
+   * після зміни пароля: сервер відкликає всі refresh-токени користувача, щоб завершити інші
+   * сесії, а сесії, що змінила пароль, віддає нову пару. Сервер щойно її видав, тож акаунт уже
+   * не застарілий і не недоступний. Невідомий `accountId` ігнорується.
+   */
+  adoptRenewedTokens(accountId: string, tokens: AuthTokens): void {
+    this.accounts.update(accountId, {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokensIssuedAt: Date.now(),
+      outdated: false,
+      unavailable: false,
+    });
+  }
+
+  /**
    * Оновлює токени **неактивного** акаунта, якщо минула половина терміну refresh-токена (див.
    * `REFRESH_TOKEN_LIFETIME_MS`). Так акаунт, що давно не був активним, не застаріває сам по
    * собі. Той самий обмін, що й для активного (`refresh`), тож:

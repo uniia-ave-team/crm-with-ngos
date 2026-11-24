@@ -7384,7 +7384,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "Securely changes the password for the currently authenticated user.",
+        "summary": "Securely changes the password for the currently authenticated user.\nThe change signs the user out of all other sessions (their refresh tokens are revoked);\nthe calling session must switch to the returned token pair to stay signed in.",
         "operationId": "UsersUpdateMyPassword",
         "requestBody": {
           "content": {
@@ -7397,8 +7397,15 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No Content"
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensDto"
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request",
