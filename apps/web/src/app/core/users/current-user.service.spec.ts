@@ -156,7 +156,7 @@ describe('CurrentUserService', () => {
 
   it.each([
     ['a server error', 500],
-    ['a missing profile', 404],
+    ['a 404 that is not from the API (no ProblemDetails)', 404],
   ])('reports unavailable (not unauthorized) for %s, and asks again next time', async (_name, status) => {
     const result = service.ensure();
     http.expectOne(url).flush({}, { status, statusText: 'x' });
@@ -165,6 +165,20 @@ describe('CurrentUserService', () => {
     const again = service.ensure();
     http.expectOne(url).flush(profile);
     expect(await again).toBe('ok');
+  });
+
+  it('ends the session of the account when the API answers 404: the user is gone (the account was deleted)', async () => {
+    const accounts = TestBed.inject(AccountsService);
+    const id = accounts.activeId()!;
+    const result = service.ensure();
+    http
+      .expectOne(url)
+      .flush({ title: 'Client Error', status: 404, detail: 'not found', instance: '/api/v1/users/me' }, { status: 404, statusText: 'Not Found' });
+    expect(await result).toBe('unauthorized');
+    // Акаунт лишається з позначкою «Сеанс закінчився» й перестає бути активним.
+    expect(accounts.accounts().find((account) => account.id === id)).toMatchObject({ outdated: true });
+    expect(accounts.activeId()).toBeNull();
+    expect(service.user()).toBeNull();
   });
 
   it('reports unavailable when the server does not answer', async () => {
@@ -374,7 +388,7 @@ describe('CurrentUserService', () => {
       expect(await second).toBe('ok');
     });
 
-    it.each([500, 404])('keeps the profile when the server answers %i', async (status) => {
+    it.each([500, 404])('keeps the profile when the server answers %i (a 404 without ProblemDetails)', async (status) => {
       await loaded();
       const result = service.reload();
       http.expectOne(url).flush({}, { status, statusText: 'x' });

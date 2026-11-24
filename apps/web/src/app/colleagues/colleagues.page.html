@@ -117,7 +117,7 @@
   @if (roleToDelete(); as role) {
     @let deleteError = roleDeleteError();
     <app-confirm-dialog
-      [message]="'colleagues.rolesPanel.deleteQuestion' | translate: { role: role.name }"
+      [message]="'colleagues.rolesPanel.deleteConfirm' | translate: { role: role.name }"
       [confirmLabel]="'common.yes' | translate"
       [cancelLabel]="'common.cancel' | translate"
       [busy]="roleDeleting()"
@@ -128,13 +128,57 @@
   }
 </app-modal>
 
+<!-- Підтвердження вимкнення чи видалення колеги (меню біля трьох крапок): як і для ролі, по центру екрана. -->
+<app-modal
+  #colleagueConfirmDialog
+  width="min(356px, calc(100vw - 32px))"
+  [label]="'colleagues.actions.' + (colleagueConfirm()?.action ?? 'disable') | translate"
+  (closed)="onColleagueConfirmClosed()"
+>
+  @if (colleagueConfirm(); as pending) {
+    @let confirmError = colleagueConfirmError();
+    <app-confirm-dialog
+      [message]="'colleagues.confirm.' + pending.action | translate: { name: pending.name }"
+      [confirmLabel]="'common.yes' | translate"
+      [cancelLabel]="'common.cancel' | translate"
+      [busy]="colleagueActing()"
+      [error]="confirmError ? (confirmError | translate) : null"
+      (confirm)="confirmColleagueAction()"
+      (dismiss)="cancelColleagueAction()"
+    />
+  }
+</app-modal>
+
+<!-- Ввімкнення акаунта не вдалося: повідомлення внизу (у цієї дії нема вікна, де його показати). -->
+<ion-toast
+  class="colleagues__toast"
+  color="danger"
+  position="bottom"
+  [duration]="6000"
+  [isOpen]="enableError() !== null"
+  [message]="(enableError() ?? '') | translate"
+  [buttons]="[{ text: 'common.close' | translate, role: 'cancel' }]"
+  (didDismiss)="enableError.set(null)"
+></ion-toast>
+
 <!-- ПІБ: аватар, імʼя й займенники. -->
 <ng-template #personCell let-row>
   @let colleague = asColleague(row);
-  <div class="person">
+  <div class="person" [class.person--disabled]="!colleague.isActive">
     <app-avatar class="person__avatar" [firstName]="colleague.firstName" [lastName]="colleague.lastName" [avatarUrl]="colleague.avatarUrl" [ngoName]="ngoName()" />
     <div class="person__text">
-      <span class="person__name">{{ colleague.name }}</span>
+      <span class="person__name">
+        @if (!colleague.isActive) {
+          <ion-icon
+            class="person__disabled-icon"
+            name="person-remove"
+            role="img"
+            [attr.aria-label]="'colleagues.disabled' | translate"
+            [title]="'colleagues.disabled' | translate"
+          ></ion-icon>
+        }
+        {{ colleague.name }}
+      </span>
       <span class="person__pronouns">{{ colleague.pronouns }}</span>
     </div>
   </div>
