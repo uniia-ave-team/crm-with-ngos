@@ -1,5 +1,6 @@
 using Crm.Api.DemoMode;
 using Crm.Api.DemoMode.Sandbox;
+using Crm.Application.Dtos.System;
 using Crm.Application.Interfaces;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
@@ -167,6 +168,77 @@ public sealed class DemoSandboxDecoratorsTests
             .GetRolePermissionsAsync(roleId, TestContext.Current.CancellationToken);
 
         result.ShouldBeSameAs(rights);
+    }
+
+    [Fact]
+    public async Task RevokedUsersInSandboxShouldStayInThatSandbox()
+    {
+        var other = new DemoSandbox("def456", "crm_demo_def456", "Host=localhost;Database=crm_demo_def456", DateTimeOffset.UtcNow);
+        var inner = Substitute.For<IRevokedUsersCache>();
+        var cache = new DemoSandboxRevokedUsersCache(inner, _accessor);
+        var userId = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+
+        UseSandbox();
+        await cache.RevokeUserAsync(userId, ct);
+        bool revokedHere = await cache.IsUserRevokedAsync(userId, ct);
+        _accessor.Current.Returns(other);
+        bool revokedInOther = await cache.IsUserRevokedAsync(userId, ct);
+        UseSandbox();
+        await cache.UnrevokeUserAsync(userId, ct);
+
+        revokedHere.ShouldBeTrue();
+        revokedInOther.ShouldBeFalse();
+        (await cache.IsUserRevokedAsync(userId, ct)).ShouldBeFalse();
+        await inner.DidNotReceiveWithAnyArgs().RevokeUserAsync(default, ct);
+        await inner.DidNotReceiveWithAnyArgs().UnrevokeUserAsync(default, ct);
+        await inner.DidNotReceiveWithAnyArgs().IsUserRevokedAsync(default, ct);
+    }
+
+    [Fact]
+    public async Task RevokedUsersWithoutSandboxShouldUseTheRegularCache()
+    {
+        var inner = Substitute.For<IRevokedUsersCache>();
+        var cache = new DemoSandboxRevokedUsersCache(inner, _accessor);
+        var userId = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+        inner.IsUserRevokedAsync(userId, Arg.Any<CancellationToken>()).Returns(true);
+
+        await cache.RevokeUserAsync(userId, ct);
+        await cache.UnrevokeUserAsync(userId, ct);
+
+        (await cache.IsUserRevokedAsync(userId, ct)).ShouldBeTrue();
+        await inner.Received(1).RevokeUserAsync(userId, Arg.Any<CancellationToken>());
+        await inner.Received(1).UnrevokeUserAsync(userId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task MaintenanceNoticeShouldBeReadFromTheSharedDatabaseInsideASandboxRequest()
+    {
+        var httpContext = new DefaultHttpContext();
+        var httpContextAccessor = Substitute.For<IHttpContextAccessor>();
+        httpContextAccessor.HttpContext.Returns(httpContext);
+        var accessor = new DemoSandboxAccessor(httpContextAccessor);
+        DemoSandboxAccessor.SetSandbox(httpContext, _sandbox);
+        var notice = new MaintenanceNoticeDto("Restart at 18:00", DateTime.UtcNow, DateTime.UtcNow.AddHours(1));
+        DemoSandbox? sandboxSeenByInner = _sandbox;
+        var inner = Substitute.For<IMaintenanceNoticeCache>();
+        inner.GetActiveNoticeAsync(Arg.Any<CancellationToken>()).Returns(_ => ReadNoticeAsync());
+
+        var result = await new DemoSharedMaintenanceNoticeCache(inner).GetActiveNoticeAsync(TestContext.Current.CancellationToken);
+
+        result.ShouldBeSameAs(notice);
+        sandboxSeenByInner.ShouldBeNull();
+        accessor.Current.ShouldBeSameAs(_sandbox);
+        accessor.IsHttpRequest.ShouldBeTrue();
+
+        async Task<MaintenanceNoticeDto?> ReadNoticeAsync()
+        {
+            // The real cache reads the database in a scope of its own, after an await.
+            await Task.Yield();
+            sandboxSeenByInner = accessor.Current;
+            return notice;
+        }
     }
 
     [Fact]

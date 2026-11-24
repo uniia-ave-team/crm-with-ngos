@@ -8,12 +8,27 @@ namespace Crm.Api.DemoMode.Sandbox;
 public sealed class DemoSandboxAccessor(IHttpContextAccessor httpContextAccessor) : IDemoSandboxAccessor
 {
     private static readonly object ItemKey = new();
+    private static readonly AsyncLocal<bool> SharedDatabaseScope = new();
 
     /// <inheritdoc />
     public bool IsHttpRequest => httpContextAccessor.HttpContext is not null;
 
     /// <inheritdoc />
-    public DemoSandbox? Current => GetSandbox(httpContextAccessor.HttpContext);
+    public DemoSandbox? Current => SharedDatabaseScope.Value ? null : GetSandbox(httpContextAccessor.HttpContext);
+
+    /// <summary>
+    /// Makes the code inside the returned scope work with the shared demo database, even during a request of a
+    /// visitor with a sandbox: <see cref="Current"/> is <c>null</c> there. Inside a request the shared database
+    /// stays read-only (<see cref="DemoDbWriteGuardInterceptor"/>).
+    /// </summary>
+    /// <returns>The scope; disposing it returns to the request's sandbox.</returns>
+    public static IDisposable UseSharedDatabase()
+    {
+        bool previous = SharedDatabaseScope.Value;
+        SharedDatabaseScope.Value = true;
+
+        return new SharedDatabaseScopeHandle(previous);
+    }
 
     /// <summary>
     /// Reads the sandbox assigned to a request.
@@ -33,5 +48,10 @@ public sealed class DemoSandboxAccessor(IHttpContextAccessor httpContextAccessor
         ArgumentNullException.ThrowIfNull(context);
 
         context.Items[ItemKey] = sandbox;
+    }
+
+    private sealed class SharedDatabaseScopeHandle(bool previous) : IDisposable
+    {
+        public void Dispose() => SharedDatabaseScope.Value = previous;
     }
 }

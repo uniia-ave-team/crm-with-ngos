@@ -12,6 +12,7 @@ namespace Crm.Api.DemoMode.Sandbox;
 public sealed class DemoSandbox(string id, string databaseName, string connectionString, DateTimeOffset createdAt)
 {
     private readonly Lock _uploadLock = new();
+    private readonly ConcurrentDictionary<Guid, byte> _revokedUsers = new();
     private long _lastAccessTicks = createdAt.UtcTicks;
     private long _uploadedBytes;
     private int _uploadedFiles;
@@ -52,6 +53,26 @@ public sealed class DemoSandbox(string id, string databaseName, string connectio
     /// Gets a value indicating whether <see cref="RolePermissions"/> was filled from the sandbox database.
     /// </summary>
     public bool RolePermissionsLoaded => Volatile.Read(ref _rolePermissionsLoaded) == 1;
+
+    /// <summary>
+    /// Rejects the access tokens a user already holds in this sandbox (the user was deactivated or deleted here).
+    /// User ids are copied from the template, so the same id exists in every other sandbox, where nothing changes.
+    /// </summary>
+    /// <param name="userId">The user identifier.</param>
+    public void RevokeUser(Guid userId) => _revokedUsers[userId] = 0;
+
+    /// <summary>
+    /// Accepts the access tokens of a user again (the user was activated in this sandbox).
+    /// </summary>
+    /// <param name="userId">The user identifier.</param>
+    public void UnrevokeUser(Guid userId) => _revokedUsers.TryRemove(userId, out _);
+
+    /// <summary>
+    /// Checks whether the access tokens of a user are rejected in this sandbox.
+    /// </summary>
+    /// <param name="userId">The user identifier.</param>
+    /// <returns><c>true</c> when the user was deactivated or deleted in this sandbox.</returns>
+    public bool IsUserRevoked(Guid userId) => _revokedUsers.ContainsKey(userId);
 
     /// <summary>
     /// Records a request served from this sandbox.

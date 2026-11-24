@@ -19,4 +19,5 @@ internal static class DemoLogEventIds
     public const int SandboxTemplateRetry = 99019;
     public const int SandboxUploadQuotaExceeded = 99020;
     public const int DemoDataSeeded = 99021;
+    public const int SandboxRevokedUserRejected = 99022;
 }

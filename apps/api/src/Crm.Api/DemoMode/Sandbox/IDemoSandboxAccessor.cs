@@ -13,7 +13,7 @@ public interface IDemoSandboxAccessor
 
     /// <summary>
     /// Gets the sandbox of the current request, or <c>null</c> when the request has none
-    /// (anonymous requests, startup, background services).
+    /// (anonymous requests, startup, background services, code inside <see cref="DemoSandboxAccessor.UseSharedDatabase"/>).
     /// </summary>
     DemoSandbox? Current { get; }
 }

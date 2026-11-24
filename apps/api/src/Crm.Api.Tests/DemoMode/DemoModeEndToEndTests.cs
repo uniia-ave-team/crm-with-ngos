@@ -5,7 +5,10 @@ using System.Text.Json;
 using Crm.Api.DemoMode;
 using Crm.Api.DemoMode.Sandbox;
 using Crm.Application.Dtos.Auth;
+using Crm.Application.Interfaces;
+using Crm.Domain.Interfaces.Repositories;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Shouldly;
@@ -123,6 +126,81 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
     }
 
     [Fact]
+    public async Task DisablingOrDeletingAColleagueShouldSignThemOutOnlyInThatSandbox()
+    {
+        SkipWithoutDocker();
+        var ct = TestContext.Current.CancellationToken;
+        var coordinator = DemoAccountOptions.Defaults[1];
+
+        // Visitor A signs in as the coordinator and then, in the same browser, as the administrator.
+        using var visitorA = fixture.CreateClient();
+        var coordinatorTokensA = await SignInAsync(visitorA, coordinator);
+        await SignInAsync(visitorA, Admin);
+        Guid coordinatorId = ReadUserId(coordinatorTokensA.AccessToken);
+        using var coordinatorA = fixture.CreateClient();
+        coordinatorA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", coordinatorTokensA.AccessToken);
+
+        // Visitor B works as the same coordinator (the same user id) in a sandbox of their own.
+        using var visitorB = fixture.CreateClient();
+        await SignInAsync(visitorB, coordinator);
+
+        (await visitorA.PostAsync($"/api/v1/users/{coordinatorId}/deactivate", content: null, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await coordinatorA.GetAsync("/api/v1/users/me", ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await visitorB.GetAsync("/api/v1/users/me", ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await visitorA.PostAsync($"/api/v1/users/{coordinatorId}/activate", content: null, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await coordinatorA.GetAsync("/api/v1/users/me", ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await visitorA.DeleteAsync($"/api/v1/users/{coordinatorId}", ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await coordinatorA.GetAsync("/api/v1/users/me", ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await visitorB.GetAsync("/api/v1/users/me", ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task MaintenanceNoticeShouldReachVisitorsFromTheSharedDatabase()
+    {
+        SkipWithoutDocker();
+        var ct = TestContext.Current.CancellationToken;
+        using var visitor = fixture.CreateClient();
+        await SignInAsync(visitor, Admin);
+        string message = "Демо оновиться о 18:00 " + Guid.NewGuid().ToString("N")[..8];
+
+        // `crm notice` writes to the shared database; the visitor's sandbox was copied before that.
+        await fixture.SetMaintenanceNoticeAsync(message);
+
+        try
+        {
+            using var status = await ReadJsonAsync(await visitor.GetAsync("/api/v1/system/status", ct));
+            status.RootElement.GetProperty("notice").GetProperty("message").GetString().ShouldBe(message);
+
+            using var anonymousClient = fixture.CreateClient();
+            using var anonymousStatus = await ReadJsonAsync(await anonymousClient.GetAsync("/api/v1/system/status", ct));
+            anonymousStatus.RootElement.GetProperty("notice").GetProperty("message").GetString().ShouldBe(message);
+        }
+        finally
+        {
+            await fixture.ClearMaintenanceNoticeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task VisitorChangesShouldLeaveNoAuditLogInTheSharedDatabase()
+    {
+        SkipWithoutDocker();
+        var ct = TestContext.Current.CancellationToken;
+        using var visitor = fixture.CreateClient();
+        await SignInAsync(visitor, Admin);
+
+        var created = await visitor.PostAsJsonAsync("/api/v1/roles", new { name = "Аудит " + Guid.NewGuid().ToString("N")[..8] }, ct);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // The audit log is written by a background service; the fixture makes it flush every 50 ms.
+        await Task.Delay(TimeSpan.FromSeconds(1), ct);
+
+        (await fixture.CountAuditLogsInSharedDatabaseAsync()).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task FailedSignInShouldNotCreateASandbox()
     {
         SkipWithoutDocker();
@@ -157,6 +235,11 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
             new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler()
                 .ReadJwtToken(accessToken).Claims.Single(c => c.Type == DemoClaimTypes.SandboxExpiresAt).Value,
             System.Globalization.CultureInfo.InvariantCulture);
+
+    private static Guid ReadUserId(string accessToken) =>
+        Guid.Parse(
+            new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler()
+                .ReadJwtToken(accessToken).Subject);
 
     private static string CurrentSandboxId(HttpClient client) =>
         client.DefaultRequestHeaders.GetValues(DemoApiFixture.SandboxHeader).Single();
@@ -250,7 +333,8 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
                 .UseSetting("JwtOptions:Secret", "demo-e2e-tests-jwt-secret-0123456789-0123456789")
                 .UseSetting("DemoMode:Enabled", "true")
                 .UseSetting("DemoMode:Sandbox:NewSandboxesPerAddress", "1000")
-                .UseSetting("FileStorage:UploadDirectory", _uploadDirectory));
+                .UseSetting("FileStorage:UploadDirectory", _uploadDirectory)
+                .UseSetting("Auditing:FlushIntervalMilliseconds", "50"));
 
             // Starts the host: migrations, seeding and the sandbox template.
             _ = _factory.Server;
@@ -301,6 +385,56 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
         }
 
         /// <summary>
+        /// Sets the maintenance notice the way <c>crm notice</c> does: in the shared database, outside any request.
+        /// Also empties the API's memory cache, which keeps the notice for 30 seconds.
+        /// </summary>
+        /// <param name="message">The notice text.</param>
+        /// <returns>A task that completes when the notice is stored.</returns>
+        public async Task SetMaintenanceNoticeAsync(string message)
+        {
+            var services = (_factory ?? throw new InvalidOperationException("The API is not running.")).Services;
+            var now = DateTime.UtcNow;
+
+            await using (var scope = services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<IMaintenanceNoticeRepository>()
+                    .UpsertAsync(message, now, now.AddHours(1), now);
+                await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+            }
+
+            ClearMemoryCache(services);
+        }
+
+        /// <summary>
+        /// Removes the maintenance notice from the shared database and the API's memory cache.
+        /// </summary>
+        /// <returns>A task that completes when the notice is gone.</returns>
+        public async Task ClearMaintenanceNoticeAsync()
+        {
+            var services = (_factory ?? throw new InvalidOperationException("The API is not running.")).Services;
+
+            await using (var scope = services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<IMaintenanceNoticeRepository>().ClearAsync();
+            }
+
+            ClearMemoryCache(services);
+        }
+
+        /// <summary>
+        /// Counts the audit log records in the shared database every sandbox is copied from.
+        /// </summary>
+        /// <returns>The number of audit log records.</returns>
+        public async Task<long> CountAuditLogsInSharedDatabaseAsync()
+        {
+            await using var connection = new NpgsqlConnection(_container!.GetConnectionString());
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand("SELECT COUNT(*) FROM \"AuditLogs\"", connection);
+
+            return (long)(await command.ExecuteScalarAsync())!;
+        }
+
+        /// <summary>
         /// Checks whether a database exists on the server.
         /// </summary>
         /// <param name="databaseName">The database name.</param>
@@ -313,6 +447,14 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
             command.Parameters.AddWithValue("name", databaseName);
 
             return (long)(await command.ExecuteScalarAsync())! > 0;
+        }
+
+        private static void ClearMemoryCache(IServiceProvider services)
+        {
+            if (services.GetRequiredService<IMemoryCache>() is MemoryCache memoryCache)
+            {
+                memoryCache.Clear();
+            }
         }
     }
 }

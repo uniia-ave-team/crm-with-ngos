@@ -2,7 +2,10 @@ using System.ComponentModel.DataAnnotations;
 using Crm.Api.DemoMode.DemoData;
 using Crm.Api.DemoMode.Sandbox;
 using Crm.Application.Interfaces;
+using Crm.Infrastructure.Options;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Services.Identity;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -76,6 +79,28 @@ public static class DemoModeExtensions
                 inner,
                 sp.GetRequiredService<IDemoSandboxAccessor>(),
                 sp.GetRequiredService<IHttpContextAccessor>()));
+
+        // Deactivating or deleting a user revokes their tokens only inside the visitor's own sandbox.
+        services.Decorate<IRevokedUsersCache>((sp, inner) =>
+            new DemoSandboxRevokedUsersCache(inner, sp.GetRequiredService<IDemoSandboxAccessor>()));
+
+        services.TryAddScoped<DemoSandboxJwtBearerEvents>();
+        services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+        {
+            if (options.EventsType != typeof(JwtBearerEventsHandler))
+            {
+                throw new InvalidOperationException(
+                    $"Demo Mode wraps {nameof(JwtBearerEventsHandler)}, but the JWT bearer events are {options.EventsType?.FullName ?? "not set"}.");
+            }
+
+            options.EventsType = typeof(DemoSandboxJwtBearerEvents);
+        });
+
+        services.Decorate<IMaintenanceNoticeCache>((_, inner) => new DemoSharedMaintenanceNoticeCache(inner));
+
+        // The audit log is written in the background, outside any sandbox, so it would keep every visitor's
+        // changes in the shared database after their sandbox is gone.
+        services.PostConfigure<AuditOptions>(options => options.Enabled = false);
 
         services.Decorate<IFileStorageService>((sp, inner) =>
             new DemoSandboxFileStorageService(
