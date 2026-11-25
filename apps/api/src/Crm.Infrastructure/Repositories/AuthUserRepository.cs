@@ -8,6 +8,8 @@ using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
+using Crm.Infrastructure.Persistence.Sorting;
+using LinqKit;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 
@@ -84,7 +86,7 @@ public class AuthUserRepository(
         string orderBy,
         string? sortOrder)
     {
-        bool isDescending = string.Equals(sortOrder?.Trim(), SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
+        bool isDescending = sortOrder.IsDescending();
         string normalizedOrderBy = orderBy.Trim();
 
         return normalizedOrderBy switch
@@ -138,6 +140,6 @@ public class AuthUserRepository(
 
         return activeFilter is null
             ? searchFilter
-            : ProjectVisibilityExpressions.CombineAnd(activeFilter, searchFilter);
+            : activeFilter.And(searchFilter).Expand();
     }
 }

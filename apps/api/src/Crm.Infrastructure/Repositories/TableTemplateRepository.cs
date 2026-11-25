@@ -7,6 +7,7 @@ using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
 using Crm.Infrastructure.Persistence.Extensions;
+using LinqKit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -78,6 +79,6 @@ public sealed class TableTemplateRepository(
 
         return presetFilter is null
             ? searchFilter
-            : ProjectVisibilityExpressions.CombineAnd(presetFilter, searchFilter);
+            : presetFilter.And(searchFilter).Expand();
     }
 }

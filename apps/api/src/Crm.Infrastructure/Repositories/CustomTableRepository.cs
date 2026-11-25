@@ -7,6 +7,7 @@ using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
 using Crm.Infrastructure.Persistence.Extensions;
+using LinqKit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -58,8 +59,8 @@ public sealed class CustomTableRepository(
 
         return string.IsNullOrWhiteSpace(searchTerm)
             ? ngoFilter
-            : ProjectVisibilityExpressions.CombineAnd(
-                ngoFilter,
-                QueryFilterExpressions.ContainsIgnoreCase<CustomTable>(searchTerm, t => t.Name, t => t.Description));
+            : ngoFilter.And(
+                QueryFilterExpressions.ContainsIgnoreCase<CustomTable>(searchTerm, t => t.Name, t => t.Description))
+                .Expand();
     }
 }

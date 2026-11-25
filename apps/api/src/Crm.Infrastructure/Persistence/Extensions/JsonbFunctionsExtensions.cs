@@ -45,42 +45,6 @@ public static class JsonbFunctionsExtensions
         => throw new NotSupportedException(ExceptionMessage);
 
     /// <summary>
-    /// Extracts a numeric value from a JSONB document and casts it to <c>numeric</c> in SQL queries.
-    /// </summary>
-    /// <param name="json">The target JSONB document column.</param>
-    /// <param name="key">The top-level JSON property key.</param>
-    /// <returns>The extracted numeric value (SQL translation only).</returns>
-    public static decimal? JsonbExtractPathNumber(JsonObject json, string key)
-        => throw new NotSupportedException(ExceptionMessage);
-
-    /// <summary>
-    /// Extracts a boolean value from a JSONB document and casts it to <c>boolean</c> in SQL queries.
-    /// </summary>
-    /// <param name="json">The target JSONB document column.</param>
-    /// <param name="key">The top-level JSON property key.</param>
-    /// <returns>The extracted boolean value (SQL translation only).</returns>
-    public static bool? JsonbExtractPathBoolean(JsonObject json, string key)
-        => throw new NotSupportedException(ExceptionMessage);
-
-    /// <summary>
-    /// Extracts a date value (<c>YYYY-MM-DD</c>) from a JSONB document and casts it to <c>date</c> in SQL queries.
-    /// </summary>
-    /// <param name="json">The target JSONB document column.</param>
-    /// <param name="key">The top-level JSON property key.</param>
-    /// <returns>The extracted date value (SQL translation only).</returns>
-    public static DateOnly? JsonbExtractPathDate(JsonObject json, string key)
-        => throw new NotSupportedException(ExceptionMessage);
-
-    /// <summary>
-    /// Extracts a date/time value from a JSONB document and casts it to <c>timestamp with time zone</c> in SQL queries.
-    /// </summary>
-    /// <param name="json">The target JSONB document column.</param>
-    /// <param name="key">The top-level JSON property key.</param>
-    /// <returns>The extracted UTC timestamp value (SQL translation only).</returns>
-    public static DateTime? JsonbExtractPathDateTime(JsonObject json, string key)
-        => throw new NotSupportedException(ExceptionMessage);
-
-    /// <summary>
     /// Builds an EF Core compatible update expression from <see cref="SchemaDiffResult"/>.
     /// Returns <see langword="null"/> if no schema changes are present in <paramref name="diff"/>.
     /// </summary>

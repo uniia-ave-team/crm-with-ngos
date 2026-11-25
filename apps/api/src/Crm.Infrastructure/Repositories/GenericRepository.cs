@@ -205,9 +205,7 @@ public abstract class GenericRepository<T>(ApplicationDbContext context)
 
         if (sortMapping.TryGetValue(normalizedOrderBy, out string? resolvedEntityPath))
         {
-            bool isDescending = string.Equals(sortOrder?.Trim(), SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
-
-            if (TypedPropertyOrderBuilder.TryApplyOrdering(query, resolvedEntityPath, isDescending, out IQueryable<T> orderedQuery))
+            if (TypedPropertyOrderBuilder.TryApplyOrdering(query, resolvedEntityPath, sortOrder.IsDescending(), out IQueryable<T> orderedQuery))
             {
                 return orderedQuery;
             }

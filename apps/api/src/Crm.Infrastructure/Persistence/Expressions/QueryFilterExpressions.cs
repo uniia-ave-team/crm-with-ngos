@@ -1,20 +1,30 @@
 using System.Linq.Expressions;
-using System.Reflection;
 using Crm.Infrastructure.Persistence.Extensions;
+using LinqKit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Persistence.Expressions;
 
 /// <summary>
-/// Provides reusable SQL-translatable LINQ expression helpers for parameterized, case-insensitive <c>ILIKE</c> filtering.
+/// Provides reusable SQL-translatable LINQ expression helpers for parameterized, case-insensitive <c>ILIKE</c> filtering
+/// powered by <c>LinqKit</c> expression composition.
 /// </summary>
 internal static class QueryFilterExpressions
 {
-    private const string LikeEscapeChar = "\\";
+    private const string LikeEscapeChar = PostgresSearchStringExtensions.DefaultLikeEscapeChar;
 
-    private static readonly MethodInfo ILikeMethod = typeof(NpgsqlDbFunctionsExtensions).GetMethod(
-        nameof(NpgsqlDbFunctionsExtensions.ILike),
-        [typeof(DbFunctions), typeof(string), typeof(string), typeof(string)])!;
+    /// <summary>
+    /// Builds a parameterized SQL-translatable <c>ILIKE</c> predicate checking whether <paramref name="propertySelector"/>
+    /// equals <paramref name="value"/> (case-insensitive, escaped).
+    /// </summary>
+    /// <typeparam name="T">The entity type being filtered.</typeparam>
+    /// <param name="propertySelector">An expression selecting the string property to match.</param>
+    /// <param name="value">The exact value to match case-insensitively.</param>
+    /// <returns>An expression translating to parameterized PostgreSQL exact <c>ILIKE</c>.</returns>
+    public static Expression<Func<T, bool>> EqualsIgnoreCase<T>(
+        Expression<Func<T, string?>> propertySelector,
+        string value)
+        => BuildILikePredicate(propertySelector, value.ToExactLikePattern(LikeEscapeChar));
 
     /// <summary>
     /// Builds a parameterized SQL-translatable <c>ILIKE</c> predicate checking whether <paramref name="propertySelector"/>
@@ -27,14 +37,7 @@ internal static class QueryFilterExpressions
     public static Expression<Func<T, bool>> ContainsIgnoreCase<T>(
         Expression<Func<T, string?>> propertySelector,
         string searchTerm)
-    {
-        ArgumentNullException.ThrowIfNull(propertySelector);
-
-        Expression patternExpression = CreateParameterizedPattern(searchTerm);
-        Expression match = BuildNullSafeILikeCall(propertySelector.Body, patternExpression);
-
-        return Expression.Lambda<Func<T, bool>>(match, propertySelector.Parameters);
-    }
+        => BuildILikePredicate(propertySelector, searchTerm.ToContainsLikePattern(LikeEscapeChar));
 
     /// <summary>
     /// Builds a parameterized SQL-translatable <c>ILIKE</c> predicate checking whether any of the provided
@@ -55,43 +58,40 @@ internal static class QueryFilterExpressions
             throw new ArgumentException("At least one property selector must be provided.", nameof(propertySelectors));
         }
 
-        Expression patternExpression = CreateParameterizedPattern(searchTerm);
-        ParameterExpression parameter = propertySelectors[0].Parameters[0];
+        string pattern = searchTerm.ToContainsLikePattern(LikeEscapeChar);
+        Expression<Func<T, string?>> firstSelector = propertySelectors[0];
+        ArgumentNullException.ThrowIfNull(firstSelector);
 
-        Expression combined = BuildNullSafeILikeCall(propertySelectors[0].Body, patternExpression);
+        // Capturing pattern in a single outer closure makes EF Core reuse ONE @pattern SQL parameter across all OR branches.
+        Expression<Func<T, bool>> combined = x =>
+            firstSelector.Invoke(x) != null
+            && EF.Functions.ILike(firstSelector.Invoke(x)!, pattern, LikeEscapeChar);
 
         for (int i = 1; i < propertySelectors.Length; i++)
         {
-            Expression reboundBody = new ParameterReplacer(propertySelectors[i].Parameters[0], parameter)
-                .Visit(propertySelectors[i].Body);
+            Expression<Func<T, string?>> selector = propertySelectors[i];
+            ArgumentNullException.ThrowIfNull(selector);
 
-            Expression match = BuildNullSafeILikeCall(reboundBody, patternExpression);
-            combined = Expression.OrElse(combined, match);
+            combined = combined.Or(x =>
+                selector.Invoke(x) != null
+                && EF.Functions.ILike(selector.Invoke(x)!, pattern, LikeEscapeChar));
         }
 
-        return Expression.Lambda<Func<T, bool>>(combined, parameter);
+        return combined.Expand();
     }
 
-    private static Expression CreateParameterizedPattern(string searchTerm)
+    private static Expression<Func<T, bool>> BuildILikePredicate<T>(
+        Expression<Func<T, string?>> propertySelector,
+        string pattern)
     {
-        string pattern = searchTerm.ToContainsLikePattern(LikeEscapeChar);
+        ArgumentNullException.ThrowIfNull(propertySelector);
 
-        // Wrapping the pattern in a closure forces EF Core to bind it as a SQL parameter (@pattern)
+        // Capturing pattern in the lambda forces EF Core to bind it as a SQL parameter (@pattern)
         // instead of baking a constant literal into the compiled query cache key.
-        Expression<Func<string>> patternClosure = () => pattern;
-        return patternClosure.Body;
-    }
+        Expression<Func<T, bool>> predicate = x =>
+            propertySelector.Invoke(x) != null
+            && EF.Functions.ILike(propertySelector.Invoke(x)!, pattern, LikeEscapeChar);
 
-    private static BinaryExpression BuildNullSafeILikeCall(Expression target, Expression patternExpression)
-    {
-        Expression notNull = Expression.NotEqual(target, Expression.Constant(null, typeof(string)));
-        MethodCallExpression ilikeCall = Expression.Call(
-            ILikeMethod,
-            Expression.Constant(EF.Functions),
-            target,
-            patternExpression,
-            Expression.Constant(LikeEscapeChar));
-
-        return Expression.AndAlso(notNull, ilikeCall);
+        return predicate.Expand();
     }
 }

@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
+using LinqKit;
 
 namespace Crm.Infrastructure.Persistence.Expressions;
 
@@ -19,8 +20,8 @@ public static class ProjectVisibilityExpressions
                 || p.Members.Any(m => m.UserId == userId);
 
     /// <summary>
-    /// Composes <see cref="IsVisibleTo"/> with a navigation selector to produce a SQL-translatable visibility predicate
-    /// for entities referencing a parent <see cref="Project"/> (e.g., <see cref="ProjectTask"/>).
+    /// Composes <see cref="IsVisibleTo"/> with a navigation selector via <c>LinqKit</c> to produce a
+    /// SQL-translatable visibility predicate for entities referencing a parent <see cref="Project"/>.
     /// </summary>
     /// <typeparam name="TSource">The entity type referencing a <see cref="Project"/>.</typeparam>
     /// <param name="projectSelector">An expression selecting the parent <see cref="Project"/> from <typeparamref name="TSource"/>.</param>
@@ -32,32 +33,9 @@ public static class ProjectVisibilityExpressions
     {
         ArgumentNullException.ThrowIfNull(projectSelector);
 
-        Expression<Func<Project, bool>> visibilityPredicate = IsVisibleTo(userId);
-        ParameterExpression parameter = projectSelector.Parameters[0];
-        Expression body = new ParameterReplacer(visibilityPredicate.Parameters[0], projectSelector.Body)
-            .Visit(visibilityPredicate.Body);
+        Expression<Func<Project, bool>> visibility = IsVisibleTo(userId);
+        Expression<Func<TSource, bool>> composed = entity => visibility.Invoke(projectSelector.Invoke(entity));
 
-        return Expression.Lambda<Func<TSource, bool>>(body, parameter);
-    }
-
-    /// <summary>
-    /// Combines two predicates over the same entity type with a logical AND into a single SQL-translatable expression.
-    /// </summary>
-    /// <typeparam name="T">The entity type.</typeparam>
-    /// <param name="left">The left-hand predicate.</param>
-    /// <param name="right">The right-hand predicate.</param>
-    /// <returns>A combined predicate representing <paramref name="left"/> AND <paramref name="right"/>.</returns>
-    public static Expression<Func<T, bool>> CombineAnd<T>(
-        Expression<Func<T, bool>> left,
-        Expression<Func<T, bool>> right)
-    {
-        ArgumentNullException.ThrowIfNull(left);
-        ArgumentNullException.ThrowIfNull(right);
-
-        ParameterExpression parameter = left.Parameters[0];
-        Expression rightBody = new ParameterReplacer(right.Parameters[0], parameter).Visit(right.Body);
-        BinaryExpression combined = Expression.AndAlso(left.Body, rightBody);
-
-        return Expression.Lambda<Func<T, bool>>(combined, parameter);
+        return composed.Expand();
     }
 }

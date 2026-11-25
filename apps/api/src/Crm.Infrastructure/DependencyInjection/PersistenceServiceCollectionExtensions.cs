@@ -8,6 +8,7 @@ using Crm.Infrastructure.Persistence.Interceptors;
 using Crm.Infrastructure.Persistence.Seeders;
 using Crm.Infrastructure.Persistence.Seeders.SystemPresets;
 using Crm.Infrastructure.Repositories;
+using LinqKit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -61,6 +62,7 @@ public static class PersistenceServiceCollectionExtensions
             interceptors.Add(sp.GetRequiredService<DbExceptionTranslationInterceptor>());
 
             options.UseNpgsql(configuration.GetConnectionString(ConfigurationKeys.PostgreSqlConnection))
+                .WithExpressionExpanding()
                 .AddInterceptors(interceptors);
         });
 

@@ -34,33 +34,44 @@ public static class ModelBuilderDbFunctionsExtensions
     public static ModelBuilder AddCustomDbFunctions(this ModelBuilder modelBuilder)
     {
         RegisterJsonbApplyPatch(modelBuilder);
+        RegisterJsonbExtractPathText(modelBuilder);
 
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathText), PostgresConstants.Text, typeof(string));
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathNumber), PostgresConstants.Numeric, typeof(decimal?));
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathBoolean), PostgresConstants.Boolean, typeof(bool?));
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDate), PostgresConstants.Date, typeof(DateOnly?));
-        RegisterJsonbExtractPath(modelBuilder, nameof(JsonbFunctionsExtensions.JsonbExtractPathDateTime), PostgresConstants.TimestampWithTimeZone, typeof(DateTime?));
+        RegisterTextSafeCast(modelBuilder, nameof(PostgresCastFunctions.SafeCastNumber), PostgresConstants.Numeric, typeof(decimal?));
+        RegisterTextSafeCast(modelBuilder, nameof(PostgresCastFunctions.SafeCastBoolean), PostgresConstants.Boolean, typeof(bool?));
+        RegisterTextSafeCast(modelBuilder, nameof(PostgresCastFunctions.SafeCastDate), PostgresConstants.Date, typeof(DateOnly?));
+        RegisterTextSafeCast(modelBuilder, nameof(PostgresCastFunctions.SafeCastDateTime), PostgresConstants.TimestampWithTimeZone, typeof(DateTime?));
 
         return modelBuilder;
     }
 
-    private static void RegisterJsonbExtractPath(
+    private static void RegisterTextSafeCast(
         ModelBuilder modelBuilder,
         string methodName,
         string targetStoreType,
         Type returnType)
     {
-        var method = typeof(JsonbFunctionsExtensions).GetMethod(
-            methodName,
-            [typeof(JsonObject), typeof(string)])
+        var method = typeof(PostgresCastFunctions).GetMethod(methodName, [typeof(string)])
             ?? throw new InvalidOperationException($"{methodName} registration failed.");
-
-        Type nonNullableType = Nullable.GetUnderlyingType(returnType) ?? returnType;
-        bool isText = returnType == typeof(string);
-        var targetMapping = isText ? TextMapping : new GenericTypeMapping(targetStoreType, returnType);
 
         modelBuilder.HasDbFunction(method)
             .HasStoreType(targetStoreType)
+            .HasParameter("value", p => p.HasStoreType(PostgresConstants.Text))
+            .HasTranslation(args =>
+            {
+                var typedText = EnsureTypeMapping(args[0], TextMapping);
+                return BuildSafeCastExpression(typedText, targetStoreType, returnType);
+            });
+    }
+
+    private static void RegisterJsonbExtractPathText(ModelBuilder modelBuilder)
+    {
+        var method = typeof(JsonbFunctionsExtensions).GetMethod(
+            nameof(JsonbFunctionsExtensions.JsonbExtractPathText),
+            [typeof(JsonObject), typeof(string)])
+            ?? throw new InvalidOperationException($"{nameof(JsonbFunctionsExtensions.JsonbExtractPathText)} registration failed.");
+
+        modelBuilder.HasDbFunction(method)
+            .HasStoreType(PostgresConstants.Text)
             .HasParameter("json", p => p.HasStoreType(PostgresConstants.Jsonb))
             .HasParameter("key", p => p.HasStoreType(PostgresConstants.Text))
             .HasTranslation(args =>
@@ -68,104 +79,108 @@ public static class ModelBuilderDbFunctionsExtensions
                 var typedJson = EnsureTypeMapping(args[0], JsonbMapping);
                 var typedKey = EnsureTypeMapping(args[1], TextMapping);
 
-                var textExtractFunc = new SqlFunctionExpression(
+                return new SqlFunctionExpression(
                     functionName: JsonbExtractPathTextFunction,
                     arguments: [typedJson, typedKey],
                     nullable: true,
                     argumentsPropagateNullability: [true, true],
                     type: typeof(string),
                     typeMapping: TextMapping);
-
-                if (isText)
-                {
-                    return textExtractFunc;
-                }
-
-                bool isDate = string.Equals(targetStoreType, PostgresConstants.Date, StringComparison.OrdinalIgnoreCase);
-                bool isNumeric = string.Equals(targetStoreType, PostgresConstants.Numeric, StringComparison.OrdinalIgnoreCase);
-                bool isTemporal = string.Equals(targetStoreType, PostgresConstants.TimestampWithTimeZone, StringComparison.OrdinalIgnoreCase) || isDate;
-
-                string validCheckStoreType = isDate ? PostgresConstants.TimestampWithTimeZone : targetStoreType;
-
-                SqlExpression isValidFunc = new SqlFunctionExpression(
-                    functionName: "pg_input_is_valid",
-                    arguments: [textExtractFunc, new SqlConstantExpression(validCheckStoreType, TextMapping)],
-                    nullable: true,
-                    argumentsPropagateNullability: [true, true],
-                    type: typeof(bool),
-                    typeMapping: BoolMapping);
-
-                if (isNumeric || isTemporal)
-                {
-                    string exclusionPattern = isNumeric
-                        ? @"^\s*(NaN|[-+]?Infinity|[-+]?inf)\s*$"
-                        : @"^\s*[-+]?Infinity\s*$";
-
-                    var isSpecialValue = new SqlFunctionExpression(
-                        functionName: "regexp_like",
-                        arguments:
-                        [
-                            textExtractFunc,
-                            new SqlConstantExpression(exclusionPattern, TextMapping),
-                            new SqlConstantExpression("i", TextMapping),
-                        ],
-                        nullable: true,
-                        argumentsPropagateNullability: [true, true, true],
-                        type: typeof(bool),
-                        typeMapping: BoolMapping);
-
-                    var isNotSpecialValue = new SqlUnaryExpression(
-                        ExpressionType.Not,
-                        isSpecialValue,
-                        typeof(bool),
-                        BoolMapping);
-
-                    isValidFunc = new SqlBinaryExpression(
-                        ExpressionType.AndAlso,
-                        isValidFunc,
-                        isNotSpecialValue,
-                        typeof(bool),
-                        BoolMapping);
-                }
-
-                SqlExpression castExpr;
-                if (isDate)
-                {
-                    var timestamptzCast = new SqlUnaryExpression(
-                        ExpressionType.Convert,
-                        textExtractFunc,
-                        typeof(DateTime),
-                        TimestamptzMapping);
-
-                    // Normalize to UTC before extracting the calendar date so ordering is independent of DB session TimeZone.
-                    var utcTimestamp = new SqlFunctionExpression(
-                        functionName: "timezone",
-                        arguments: [new SqlConstantExpression("UTC", TextMapping), timestamptzCast],
-                        nullable: true,
-                        argumentsPropagateNullability: [false, true],
-                        type: typeof(DateTime),
-                        typeMapping: TimestampWithoutTimeZoneMapping);
-
-                    castExpr = new SqlUnaryExpression(
-                        ExpressionType.Convert,
-                        utcTimestamp,
-                        nonNullableType,
-                        targetMapping);
-                }
-                else
-                {
-                    castExpr = new SqlUnaryExpression(
-                        ExpressionType.Convert,
-                        textExtractFunc,
-                        nonNullableType,
-                        targetMapping);
-                }
-
-                return new CaseExpression(
-                    operand: null,
-                    whenClauses: [new CaseWhenClause(isValidFunc, castExpr)],
-                    elseResult: new SqlConstantExpression(null, returnType, targetMapping));
             });
+    }
+
+    private static CaseExpression BuildSafeCastExpression(
+        SqlExpression textExpr,
+        string targetStoreType,
+        Type returnType)
+    {
+        Type nonNullableType = Nullable.GetUnderlyingType(returnType) ?? returnType;
+        var targetMapping = new GenericTypeMapping(targetStoreType, returnType);
+
+        bool isDate = string.Equals(targetStoreType, PostgresConstants.Date, StringComparison.OrdinalIgnoreCase);
+        bool isNumeric = string.Equals(targetStoreType, PostgresConstants.Numeric, StringComparison.OrdinalIgnoreCase);
+        bool isTemporal = string.Equals(targetStoreType, PostgresConstants.TimestampWithTimeZone, StringComparison.OrdinalIgnoreCase) || isDate;
+
+        string validCheckStoreType = isDate ? PostgresConstants.TimestampWithTimeZone : targetStoreType;
+
+        SqlExpression isValidFunc = new SqlFunctionExpression(
+            functionName: "pg_input_is_valid",
+            arguments: [textExpr, new SqlConstantExpression(validCheckStoreType, TextMapping)],
+            nullable: true,
+            argumentsPropagateNullability: [true, true],
+            type: typeof(bool),
+            typeMapping: BoolMapping);
+
+        if (isNumeric || isTemporal)
+        {
+            string exclusionPattern = isNumeric
+                ? @"^\s*(NaN|[-+]?Infinity|[-+]?inf)\s*$"
+                : @"^\s*[-+]?Infinity\s*$";
+
+            var isSpecialValue = new SqlFunctionExpression(
+                functionName: "regexp_like",
+                arguments:
+                [
+                    textExpr,
+                    new SqlConstantExpression(exclusionPattern, TextMapping),
+                    new SqlConstantExpression("i", TextMapping),
+                ],
+                nullable: true,
+                argumentsPropagateNullability: [true, true, true],
+                type: typeof(bool),
+                typeMapping: BoolMapping);
+
+            var isNotSpecialValue = new SqlUnaryExpression(
+                ExpressionType.Not,
+                isSpecialValue,
+                typeof(bool),
+                BoolMapping);
+
+            isValidFunc = new SqlBinaryExpression(
+                ExpressionType.AndAlso,
+                isValidFunc,
+                isNotSpecialValue,
+                typeof(bool),
+                BoolMapping);
+        }
+
+        SqlExpression castExpr;
+        if (isDate)
+        {
+            var timestamptzCast = new SqlUnaryExpression(
+                ExpressionType.Convert,
+                textExpr,
+                typeof(DateTime),
+                TimestamptzMapping);
+
+            // Normalize to UTC before extracting the calendar date so ordering is independent of DB session TimeZone.
+            var utcTimestamp = new SqlFunctionExpression(
+                functionName: "timezone",
+                arguments: [new SqlConstantExpression("UTC", TextMapping), timestamptzCast],
+                nullable: true,
+                argumentsPropagateNullability: [false, true],
+                type: typeof(DateTime),
+                typeMapping: TimestampWithoutTimeZoneMapping);
+
+            castExpr = new SqlUnaryExpression(
+                ExpressionType.Convert,
+                utcTimestamp,
+                nonNullableType,
+                targetMapping);
+        }
+        else
+        {
+            castExpr = new SqlUnaryExpression(
+                ExpressionType.Convert,
+                textExpr,
+                nonNullableType,
+                targetMapping);
+        }
+
+        return new CaseExpression(
+            operand: null,
+            whenClauses: [new CaseWhenClause(isValidFunc, castExpr)],
+            elseResult: new SqlConstantExpression(null, returnType, targetMapping));
     }
 
     private static void RegisterJsonbApplyPatch(ModelBuilder modelBuilder)
@@ -173,7 +188,7 @@ public static class ModelBuilderDbFunctionsExtensions
         var method = typeof(JsonbFunctionsExtensions).GetMethod(
             nameof(JsonbFunctionsExtensions.JsonbApplyPatch),
             [typeof(JsonObject), typeof(string[]), typeof(string[]), typeof(string[]), typeof(string[])])
-            ?? throw new InvalidOperationException("JsonbApplyPatch registration failed.");
+            ?? throw new InvalidOperationException($"{nameof(JsonbFunctionsExtensions.JsonbApplyPatch)} registration failed.");
 
         var parameters = method.GetParameters().ToDictionary(p => p.Name!, StringComparer.OrdinalIgnoreCase);
 

@@ -9,6 +9,8 @@ using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Auditing;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
+using Crm.Infrastructure.Persistence.Sorting;
+using LinqKit;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 
@@ -227,9 +229,9 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
         Expression<Func<Project, bool>> visibilityFilter = ProjectVisibilityExpressions.IsVisibleTo(userId);
         return string.IsNullOrWhiteSpace(searchTerm)
             ? visibilityFilter
-            : ProjectVisibilityExpressions.CombineAnd(
-                visibilityFilter,
-                QueryFilterExpressions.ContainsIgnoreCase<Project>(searchTerm, p => p.Title, p => p.Description));
+            : visibilityFilter.And(
+                QueryFilterExpressions.ContainsIgnoreCase<Project>(searchTerm, p => p.Title, p => p.Description))
+                .Expand();
     }
 
     /// <summary>
@@ -248,10 +250,7 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
     {
         string normalized = orderBy.Trim();
         return string.Equals(normalized, nameof(ProjectSummaryDto.EndDate), StringComparison.OrdinalIgnoreCase)
-            ? (IsDescending(sortOrder)
-                    ? query.OrderBy(p => p.EndDate == null).ThenByDescending(p => p.EndDate)
-                    : query.OrderBy(p => p.EndDate == null).ThenBy(p => p.EndDate))
-                .ThenBy(p => p.Id)
+            ? query.ApplyNullsLastOrdering(p => p.EndDate, p => p.Id, sortOrder.IsDescending(), nullsLastInAscending: true)
             : base.ApplyOrdering<TResult>(query, normalized, sortOrder);
     }
 
@@ -272,7 +271,4 @@ public class ProjectRepository(ApplicationDbContext appDbContext)
                     .Select(m => (ProjectClaim?)m.Claim)
                     .FirstOrDefault(),
                 userId));
-
-    private static bool IsDescending(string? sortOrder)
-        => string.Equals(sortOrder?.Trim(), SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
 }
