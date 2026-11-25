@@ -1,6 +1,7 @@
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Users;
 using Crm.Application.Interfaces;
+using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -8,14 +9,14 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Users.Commands;
 
 /// <summary>
-/// Handles the <see cref="GenerateRestorePasswordTokenCommand"/> to generate a secure password restore token for a user.
+/// Handles the <see cref="GenerateRestorePasswordTokenCommand"/> to generate and persist a short opaque password reset token for a user.
 /// </summary>
-/// <param name="identityService">The service used to manage user identities and generate identity reset tokens.</param>
-/// <param name="tokenService">The service responsible for generating JWT tokens.</param>
+/// <param name="identityService">The service used to load the user and generate the ASP.NET Identity password reset token in a single query.</param>
+/// <param name="actionTokenService">The service responsible for issuing encrypted opaque action tokens.</param>
 /// <param name="logger">The logger used to record the password restore token generation process.</param>
 public sealed partial class GenerateRestorePasswordTokenCommandHandler(
     IIdentityService identityService,
-    ITokenService tokenService,
+    IUserActionTokenService actionTokenService,
     ILogger<GenerateRestorePasswordTokenCommandHandler> logger) : ICommandHandler<GenerateRestorePasswordTokenCommand, TokenResultDto>
 {
     /// <summary>
@@ -23,15 +24,21 @@ public sealed partial class GenerateRestorePasswordTokenCommandHandler(
     /// </summary>
     /// <param name="command">The command containing the user identifier for whom the reset token is requested.</param>
     /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
-    /// <returns>A task returning the generated JWT password restore token result.</returns>
+    /// <returns>A task returning the generated opaque password restore token and its expiration timestamp.</returns>
     /// <exception cref="NotFoundException">Thrown when the user with the specified ID does not exist.</exception>
     public async ValueTask<TokenResultDto> Handle(GenerateRestorePasswordTokenCommand command, CancellationToken cancellationToken)
     {
         LogGeneratingPasswordResetToken(logger, command.UserId);
 
-        var rawResetToken = await identityService.GetResetTokenAsync(command.UserId, cancellationToken);
+        IdentityPasswordResetTokenResult resetIdentity = await identityService.GetResetTokenAsync(command.UserId, cancellationToken);
 
-        var tokenResult = tokenService.GenerateRestorePasswordToken(new PasswordResetTokenDto(command.UserId, rawResetToken));
+        TokenResultDto tokenResult = await actionTokenService.IssueAsync(
+            ActionTokenType.PasswordReset,
+            resetIdentity.Email,
+            new PasswordResetTokenMetadata(resetIdentity.ResetToken),
+            targetUserId: command.UserId,
+            createdBy: command.CurrentUserId,
+            cancellationToken: cancellationToken);
 
         LogPasswordResetTokenGeneratedSuccessfully(logger, command.UserId);
 

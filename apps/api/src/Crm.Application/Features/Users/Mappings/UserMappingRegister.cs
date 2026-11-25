@@ -1,12 +1,13 @@
 using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Commands;
+using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Mapster;
 
 namespace Crm.Application.Features.Users.Mappings;
 
 /// <summary>
-/// Mapster configuration for User and UserCustomField entity, DTO, and command mappings.
+/// Mapster configuration for User, UserCustomField, and UserActionToken entity, DTO, and command mappings.
 /// </summary>
 public sealed class UserMappingRegister : IRegister
 {
@@ -36,5 +37,41 @@ public sealed class UserMappingRegister : IRegister
                 src.IsActive,
                 src.Roles,
                 src.CustomFields));
+
+        config.NewConfig<UserActionToken, ActionTokenRecord>()
+            .MapWith(src => new ActionTokenRecord(
+                src.Id,
+                src.Type,
+                src.TargetEmail,
+                src.EncryptedMetadata,
+                src.CreatedAt,
+                src.ExpiresAt,
+                src.CreatedBy));
+
+        config.NewConfig<UserActionToken, UserActionTokenRecord>()
+            .MapWith(src => new UserActionTokenRecord(
+                src.Id,
+                src.Type,
+                src.TargetEmail,
+                src.TargetUserId,
+                src.TargetUser != null ? src.TargetUser.FirstName : null,
+                src.TargetUser != null ? src.TargetUser.LastName : null,
+                src.TargetUser != null ? src.TargetUser.Avatar : null,
+                src.EncryptedMetadata,
+                src.CreatedAt,
+                src.ExpiresAt,
+                src.CreatedBy));
+
+        config.NewConfig<UserActionToken, ActivePasswordResetTokenDto>()
+            .MapWith(src => new ActivePasswordResetTokenDto(
+                src.Id,
+                src.TargetUserId ?? Guid.Empty,
+                src.TargetEmail,
+                src.TargetUser != null ? src.TargetUser.FirstName : string.Empty,
+                src.TargetUser != null ? src.TargetUser.LastName : string.Empty,
+                src.TargetUser != null ? src.TargetUser.Avatar : null,
+                src.CreatedAt,
+                src.ExpiresAt,
+                src.CreatedBy));
     }
 }

@@ -102,13 +102,14 @@ public interface IIdentityService
     Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Asynchronously generates a password reset token for the specified user.
+    /// Asynchronously generates an ASP.NET Identity password reset token for the specified user
+    /// and returns it together with the user's email address in a single database lookup.
     /// </summary>
     /// <param name="userId">The unique identifier of the user.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the generated password reset token.</returns>
+    /// <returns>An <see cref="IdentityPasswordResetTokenResult"/> containing the user's email and generated reset token.</returns>
     /// <exception cref="NotFoundException">Thrown if the user with the specified ID does not exist.</exception>
-    Task<string> GetResetTokenAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<IdentityPasswordResetTokenResult> GetResetTokenAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Resets the specified user's password by generating an internal reset token and applying the new password.

@@ -85,6 +85,7 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IAuthUserRepository, AuthUserRepository>();
         services.AddScoped<IAuthRoleRepository, AuthRoleRepository>();
         services.AddScoped<IUserRefreshTokenRepository, UserRefreshTokenRepository>();
+        services.AddScoped<IUserActionTokenRepository, UserActionTokenRepository>();
         services.AddScoped<IUserCustomFieldRepository, UserCustomFieldRepository>();
         services.AddScoped<ILoginPageImageRepository, LoginPageImageRepository>();
         services.AddScoped<ITableTemplateRepository, TableTemplateRepository>();

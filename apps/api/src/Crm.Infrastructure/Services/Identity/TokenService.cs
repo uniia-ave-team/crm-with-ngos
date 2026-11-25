@@ -4,9 +4,9 @@ using System.Text;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.Users;
-using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Constants;
+using Crm.Domain.Enums;
 using Crm.Infrastructure.Consts;
 using Crm.Infrastructure.Options;
 using Microsoft.AspNetCore.WebUtilities;
@@ -18,7 +18,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace Crm.Infrastructure.Services.Identity;
 
 /// <summary>
-/// Generates and validates JWT tokens and cryptographically secure refresh tokens.
+/// Generates and validates JWT access tokens, cryptographic refresh tokens, and short opaque action tokens.
 /// </summary>
 public sealed partial class TokenService : ITokenService
 {
@@ -79,8 +79,7 @@ public sealed partial class TokenService : ITokenService
     /// <inheritdoc />
     public TokenResult GenerateRefreshToken()
     {
-        byte[] randomNumber = RandomNumberGenerator.GetBytes(TokenConstants.RefreshTokenBytesLength);
-        string token = WebEncoders.Base64UrlEncode(randomNumber);
+        string token = GenerateOpaqueToken(TokenConstants.RefreshTokenBytesLength);
         var expiresAt = _timeProvider.GetUtcNow().AddDays(_jwtOptions.RefreshTokenExpiryDays);
 
         LogRefreshTokenGenerated(_logger);
@@ -109,65 +108,25 @@ public sealed partial class TokenService : ITokenService
     }
 
     /// <inheritdoc />
-    public TokenResultDto GenerateInvitationToken(GenerateInvitationDto dto)
+    public TokenResultDto GenerateActionToken(ActionTokenType tokenType)
     {
-        var claims = new List<Claim>
+        int expiryHours = tokenType switch
         {
-            new(ClaimTypes.Email, dto.Email),
-            new(CustomClaimTypes.InviteType, CustomClaimTypes.RegistrationInviteValue),
-            new(CustomClaimTypes.NgoId, dto.NgoId.ToString()),
-            new(CustomClaimTypes.TokenType, CustomClaimTypes.InvitationTokenValue),
+            ActionTokenType.Invitation => _jwtOptions.InvitationTokenExpiryHours,
+            ActionTokenType.PasswordReset => _jwtOptions.ResetPasswordTokenExpiryHours,
+            _ => throw new ArgumentOutOfRangeException(nameof(tokenType), tokenType, "Unsupported action token type."),
         };
 
-        claims.AddRange(dto.RoleIds.Select(roleId => new Claim(CustomClaimTypes.RoleId, roleId.ToString())));
+        string token = GenerateOpaqueToken(TokenConstants.ActionTokenBytesLength);
+        DateTime expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(expiryHours);
 
-        var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(_jwtOptions.InvitationTokenExpiryHours);
-        var tokenString = GenerateTokenString(claims, expiresAt);
+        LogActionTokenGenerated(_logger, tokenType);
 
-        var maskedEmail = dto.Email.MaskEmail();
-
-        LogInvitationTokenGenerated(_logger, maskedEmail);
-
-        return new TokenResultDto(tokenString, expiresAt);
+        return new TokenResultDto(token, expiresAt);
     }
 
-    /// <inheritdoc />
-    public Task<ClaimsPrincipal?> ValidateInvitationTokenAsync(string token, CancellationToken cancellationToken = default) =>
-        ValidateCustomTokenAsync(
-            token,
-            identity => identity.HasClaim(CustomClaimTypes.InviteType, CustomClaimTypes.RegistrationInviteValue) &&
-                        (!identity.HasClaim(c => c.Type == CustomClaimTypes.TokenType) ||
-                         identity.HasClaim(CustomClaimTypes.TokenType, CustomClaimTypes.InvitationTokenValue)),
-            "Token does not contain the required registration invite claims.",
-            cancellationToken);
-
-    /// <inheritdoc />
-    public TokenResultDto GenerateRestorePasswordToken(PasswordResetTokenDto dto)
-    {
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, dto.UserId.ToString()),
-            new Claim(CustomClaimTypes.PasswordResetToken, dto.PasswordResetToken),
-            new Claim(CustomClaimTypes.TokenType, CustomClaimTypes.PasswordResetTokenValue),
-        };
-
-        var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(_jwtOptions.ResetPasswordTokenExpiryHours);
-        var tokenString = GenerateTokenString(claims, expiresAt);
-
-        LogPasswordResetTokenGenerated(_logger, dto.UserId);
-
-        return new TokenResultDto(tokenString, expiresAt);
-    }
-
-    /// <inheritdoc />
-    public Task<ClaimsPrincipal?> ValidateRestorePasswordTokenAsync(string token, CancellationToken cancellationToken = default) =>
-        ValidateCustomTokenAsync(
-            token,
-            identity => identity.HasClaim(x => x.Type == CustomClaimTypes.PasswordResetToken) &&
-                        (!identity.HasClaim(c => c.Type == CustomClaimTypes.TokenType) ||
-                         identity.HasClaim(CustomClaimTypes.TokenType, CustomClaimTypes.PasswordResetTokenValue)),
-            "Token does not contain the required password reset claim.",
-            cancellationToken);
+    private static string GenerateOpaqueToken(int byteLength)
+        => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(byteLength));
 
     private string GenerateTokenString(IEnumerable<Claim> claims, DateTime expiresAt)
     {
@@ -185,30 +144,6 @@ public sealed partial class TokenService : ITokenService
         };
 
         return TokenHandler.CreateToken(descriptor);
-    }
-
-    private Task<ClaimsPrincipal?> ValidateCustomTokenAsync(
-        string token,
-        Func<ClaimsIdentity, bool> claimRequirement,
-        string requirementFailureMessage,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var tokenValidationParameters = JwtTokenValidationHelper.CreateValidationParameters(
-            _jwtOptions,
-            _signingKey,
-            validateLifetime: true,
-            timeProvider: _timeProvider);
-
-        return ValidateTokenCoreAsync(
-            token,
-            tokenValidationParameters,
-            claimRequirement,
-            requirementFailureMessage,
-            onValidationError: _ => LogTokenValidationFailed(_logger, "Token validation failed according to validation parameters."),
-            onInvalidToken: reason => LogTokenValidationFailed(_logger, reason),
-            onException: reason => LogTokenValidationFailed(_logger, reason));
     }
 
     private static async Task<ClaimsPrincipal?> ValidateTokenCoreAsync(
@@ -258,17 +193,11 @@ public sealed partial class TokenService : ITokenService
     [LoggerMessage(EventId = LogEventIds.RefreshTokenGenerated, Level = LogLevel.Debug, Message = "Successfully generated secure refresh token.")]
     private static partial void LogRefreshTokenGenerated(ILogger logger);
 
-    [LoggerMessage(EventId = LogEventIds.InvitationTokenGenerated, Level = LogLevel.Information, Message = "Successfully generated invitation token for email '{Email}'.")]
-    private static partial void LogInvitationTokenGenerated(ILogger logger, string email);
-
-    [LoggerMessage(EventId = LogEventIds.PasswordResetTokenGenerated, Level = LogLevel.Information, Message = "Successfully generated password reset token for user ID '{UserId}'.")]
-    private static partial void LogPasswordResetTokenGenerated(ILogger logger, Guid userId);
+    [LoggerMessage(EventId = LogEventIds.ActionTokenGenerated, Level = LogLevel.Debug, Message = "Successfully generated opaque action token of type '{TokenType}'.")]
+    private static partial void LogActionTokenGenerated(ILogger logger, ActionTokenType tokenType);
 
     [LoggerMessage(EventId = LogEventIds.InvalidExpiredToken, Level = LogLevel.Warning, Message = "Expired token validation failed: {Reason}")]
     private static partial void LogInvalidExpiredToken(ILogger logger, string reason);
-
-    [LoggerMessage(EventId = LogEventIds.TokenValidationFailed, Level = LogLevel.Warning, Message = "Token validation failed. Reason: {Error}")]
-    private static partial void LogTokenValidationFailed(ILogger logger, string error);
 
     [LoggerMessage(EventId = LogEventIds.ExpiredTokenValidationFailed, Level = LogLevel.Warning, Message = "An error occurred while validating an expired token. Reason: {Error}")]
     private static partial void LogExpiredTokenValidationFailed(ILogger logger, string error);

@@ -7,11 +7,14 @@ using Crm.Application.Dtos.Users;
 using Crm.Application.Features.CustomTables.Mappings;
 using Crm.Application.Features.TableTemplates.Mappings;
 using Crm.Application.Interfaces;
+using Crm.Domain.Common;
 using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Entities;
+using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Auditing;
 using Crm.Infrastructure.DependencyInjection;
 using Crm.Infrastructure.Entities;
@@ -442,9 +445,8 @@ public class InfrastructureTests
     }
 
     [Fact]
-    public async Task TokenServiceShouldRespectTimeProviderForExpirationAndPreserveClaims()
+    public void TokenServiceShouldRespectTimeProviderForExpirationPreserveClaimsAndGenerateShortOpaqueActionTokens()
     {
-        var ct = TestContext.Current.CancellationToken;
         var startTime = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
         var clock = new MutableTimeProvider(startTime);
         var jwtOptions = MsOptions.Create(new JwtOptions
@@ -453,8 +455,8 @@ public class InfrastructureTests
             Issuer = "CrmTestIssuer",
             Audience = "CrmTestAudience",
             AccessTokenExpiryMinutes = 15,
-            InvitationTokenExpiryHours = 1,
-            ResetPasswordTokenExpiryHours = 1,
+            InvitationTokenExpiryHours = 48,
+            ResetPasswordTokenExpiryHours = 72,
         });
 
         var tokenService = new TokenService(jwtOptions, NullLogger<TokenService>.Instance, clock);
@@ -471,19 +473,136 @@ public class InfrastructureTests
         expiredPrincipal.FindFirst(ClaimTypes.Email)?.Value.ShouldBe("admin@ngo.org");
         expiredPrincipal.FindFirst(CustomClaimTypes.RoleId)?.Value.ShouldBe(roleId.ToString());
 
-        // 2. Invitation token is rejected by GetPrincipalFromExpiredToken and respects TimeProvider expiry
-        var inviteToken = tokenService.GenerateInvitationToken(
-            new GenerateInvitationDto("invitee@ngo.org", Guid.CreateVersion7(), [roleId]));
+        // 2. Action tokens are short URL-safe opaque strings with distinct configured lifetimes and cannot be parsed as JWTs
+        var inviteToken = tokenService.GenerateActionToken(ActionTokenType.Invitation);
+        var resetToken = tokenService.GenerateActionToken(ActionTokenType.PasswordReset);
 
+        inviteToken.Token.Length.ShouldBe(24);
+        resetToken.Token.Length.ShouldBe(24);
+        inviteToken.Token.ShouldNotBe(resetToken.Token);
+        inviteToken.ExpiresAt.ShouldBe(clock.GetUtcNow().UtcDateTime.AddHours(48));
+        resetToken.ExpiresAt.ShouldBe(clock.GetUtcNow().UtcDateTime.AddHours(72));
         tokenService.GetPrincipalFromExpiredToken(inviteToken.Token).ShouldBeNull();
+        tokenService.GetPrincipalFromExpiredToken(resetToken.Token).ShouldBeNull();
+    }
 
-        var validInvitePrincipal = await tokenService.ValidateInvitationTokenAsync(inviteToken.Token, ct);
-        validInvitePrincipal.ShouldNotBeNull();
-        validInvitePrincipal.FindFirst(ClaimTypes.Email)?.Value.ShouldBe("invitee@ngo.org");
+    [Fact]
+    public void AesGcmActionTokenProtectorShouldEncryptAuthenticateAndBindToTypeAndEmail()
+    {
+        var primaryOptions = MsOptions.Create(new JwtOptions
+        {
+            Secret = "super-secret-signing-key-for-tests-1234",
+            Issuer = "CrmTestIssuer",
+            Audience = "CrmTestAudience",
+        });
+        var otherKeyOptions = MsOptions.Create(new JwtOptions
+        {
+            Secret = "different-secret-signing-key-for-tests!",
+            Issuer = "CrmTestIssuer",
+            Audience = "CrmTestAudience",
+        });
 
-        clock.Advance(TimeSpan.FromHours(2));
-        var expiredInvitePrincipal = await tokenService.ValidateInvitationTokenAsync(inviteToken.Token, ct);
-        expiredInvitePrincipal.ShouldBeNull();
+        var protector = new AesGcmActionTokenProtector(primaryOptions);
+        var otherKeyProtector = new AesGcmActionTokenProtector(otherKeyOptions);
+
+        var ngoId = Guid.CreateVersion7();
+        var roleId = Guid.CreateVersion7();
+        var inviteMetadata = new InvitationTokenMetadata(ngoId, [roleId]);
+
+        string ciphertext1 = protector.Protect(inviteMetadata, ActionTokenType.Invitation, "invitee@ngo.org");
+        string ciphertext2 = protector.Protect(inviteMetadata, ActionTokenType.Invitation, "invitee@ngo.org");
+
+        // Fresh 96-bit random nonce produces distinct ciphertexts and hides plaintext metadata
+        ciphertext1.StartsWith("v1.", StringComparison.Ordinal).ShouldBeTrue();
+        ciphertext1.ShouldNotBe(ciphertext2);
+        ciphertext1.ShouldNotContain(ngoId.ToString());
+        ciphertext1.ShouldNotContain(roleId.ToString());
+
+        // Valid roundtrip (case-insensitive normalized email in AAD)
+        var decryptedInvite = protector.Unprotect<InvitationTokenMetadata>(ciphertext1, ActionTokenType.Invitation, "  INVITEE@NGO.ORG ");
+        decryptedInvite.ShouldNotBeNull();
+        decryptedInvite.NgoId.ShouldBe(ngoId);
+        decryptedInvite.RoleIds.ShouldBe([roleId]);
+
+        // Cross-type and cross-email AAD mismatches are rejected
+        protector.Unprotect<InvitationTokenMetadata>(ciphertext1, ActionTokenType.PasswordReset, "invitee@ngo.org").ShouldBeNull();
+        protector.Unprotect<InvitationTokenMetadata>(ciphertext1, ActionTokenType.Invitation, "attacker@ngo.org").ShouldBeNull();
+
+        // Tampered ciphertext and wrong key are rejected
+        string tampered = ciphertext1[..^1] + (ciphertext1[^1] == 'A' ? 'B' : 'A');
+        protector.Unprotect<InvitationTokenMetadata>(tampered, ActionTokenType.Invitation, "invitee@ngo.org").ShouldBeNull();
+        otherKeyProtector.Unprotect<InvitationTokenMetadata>(ciphertext1, ActionTokenType.Invitation, "invitee@ngo.org").ShouldBeNull();
+
+        // Password reset payload roundtrip
+        var resetMetadata = new PasswordResetTokenMetadata("CfDJ8SensitiveResetToken");
+        string resetCiphertext = protector.Protect(resetMetadata, ActionTokenType.PasswordReset, "member@ngo.org");
+        resetCiphertext.ShouldNotContain("CfDJ8SensitiveResetToken");
+        var decryptedReset = protector.Unprotect<PasswordResetTokenMetadata>(resetCiphertext, ActionTokenType.PasswordReset, "member@ngo.org");
+        decryptedReset.ShouldNotBeNull();
+        decryptedReset.IdentityResetToken.ShouldBe("CfDJ8SensitiveResetToken");
+    }
+
+    [Fact]
+    public async Task UserActionTokenServiceShouldIssueResolveAndEnforceNotFoundOnRevoke()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var jwtOptions = MsOptions.Create(new JwtOptions
+        {
+            Secret = "super-secret-signing-key-for-tests-1234",
+            Issuer = "CrmTestIssuer",
+            Audience = "CrmTestAudience",
+            InvitationTokenExpiryHours = 48,
+        });
+
+        var clock = new MutableTimeProvider(new DateTimeOffset(2026, 11, 25, 10, 0, 0, TimeSpan.Zero));
+        var tokenService = new TokenService(jwtOptions, NullLogger<TokenService>.Instance, clock);
+        var protector = new AesGcmActionTokenProtector(jwtOptions);
+        var repository = Substitute.For<IUserActionTokenRepository>();
+
+        UserActionToken? stored = null;
+        string? rawIssued = null;
+        repository
+            .CreateAsync(Arg.Do<UserActionToken>(e => stored = e), Arg.Do<string>(r => rawIssued = r), ct)
+            .Returns(Task.CompletedTask);
+
+        var service = new UserActionTokenService(repository, tokenService, protector);
+        var ngoId = Guid.CreateVersion7();
+        var roleId = Guid.CreateVersion7();
+        var adminId = Guid.CreateVersion7();
+
+        var issued = await service.IssueAsync(
+            ActionTokenType.Invitation,
+            "  member@ngo.org  ",
+            new InvitationTokenMetadata(ngoId, [roleId]),
+            createdBy: adminId,
+            cancellationToken: ct);
+
+        issued.Token.Length.ShouldBe(24);
+        rawIssued.ShouldBe(issued.Token);
+        stored.ShouldNotBeNull();
+        stored.TargetEmail.ShouldBe("member@ngo.org");
+        stored.CreatedBy.ShouldBe(adminId);
+
+        repository.GetActiveByRawTokenAsync<ActionTokenRecord>(issued.Token, ActionTokenType.Invitation, ct)
+            .Returns(new ActionTokenRecord(
+                Guid.CreateVersion7(),
+                stored.Type,
+                stored.TargetEmail,
+                stored.EncryptedMetadata,
+                stored.CreatedAt,
+                stored.ExpiresAt,
+                stored.CreatedBy));
+
+        var resolved = await service.ResolveActiveAsync<InvitationTokenMetadata>(issued.Token, ActionTokenType.Invitation, ct);
+        resolved.ShouldNotBeNull();
+        resolved.Metadata.NgoId.ShouldBe(ngoId);
+        resolved.Metadata.RoleIds.ShouldBe([roleId]);
+
+        var missingId = Guid.CreateVersion7();
+        repository.DeleteByIdAsync(missingId, ActionTokenType.Invitation, ct).Returns(false);
+
+        await Should.ThrowAsync<EntityNotFoundException<UserActionToken>>(async () =>
+            await service.RevokeByIdAsync(missingId, ActionTokenType.Invitation, ct));
     }
 
     [Fact]

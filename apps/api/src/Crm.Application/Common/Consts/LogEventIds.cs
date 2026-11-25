@@ -116,6 +116,14 @@ public static class LogEventIds
     public const int UserCustomFieldsSyncedSuccessfully = 2095;
     public const int FetchingUserCustomFields = 2100;
     public const int UserCustomFieldsFetched = 2101;
+    public const int FetchingActiveInvitations = 2102;
+    public const int ActiveInvitationsFetched = 2103;
+    public const int RevokingActionToken = 2104;
+    public const int ActionTokenRevokedSuccessfully = 2105;
+    public const int ValidatingPasswordResetToken = 2106;
+    public const int PasswordResetTokenValidatedSuccessfully = 2107;
+    public const int FetchingActivePasswordResetTokens = 2108;
+    public const int ActivePasswordResetTokensFetched = 2109;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;
@@ -145,12 +153,10 @@ public static class LogEventIds
     public const int MissingRoleIdClaim = 5001;
     public const int AccessDenied = 5002;
     public const int AccessTokenGenerated = 5003;
-    public const int InvitationTokenGenerated = 5004;
-    public const int TokenValidationFailed = 5005;
+    public const int ActionTokenGenerated = 5004;
     public const int RefreshTokenGenerated = 5006;
     public const int InvalidExpiredToken = 5007;
     public const int ExpiredTokenValidationFailed = 5008;
-    public const int PasswordResetTokenGenerated = 5009;
     public const int RevokedUserAccessTokenRejected = 5010;
 
     // 6000s: Global Errors and Middlewares

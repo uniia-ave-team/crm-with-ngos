@@ -265,25 +265,117 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         (await adminClient.DeleteAsync($"/api/v1/roles/{customRoleId}/claims/{viewUserClaim}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // 7. Users: invite secondary user, test admin role/avatar/custom-field endpoints, self custom-fields, last-admin guard, deactivated login, DELETE /me
+        // 7. Users: invite secondary user (short opaque token, list, revoke, validate, single-use accept),
+        // password-reset validate/list/revoke/single-use flow, admin role/avatar/custom-field endpoints, self custom-fields, last-admin guard, deactivated login, DELETE /me
+        var revocableInviteResp = await adminClient.PostAsJsonAsync(
+            "/api/v1/invitations",
+            new InviteUserCommand("revoked-invite@ngo.org", [customRoleId]),
+            ct);
+        revocableInviteResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var revocableInviteToken = (await revocableInviteResp.Content.ReadFromJsonAsync<TokenResultDto>(JsonOptions, ct))!;
+        revocableInviteToken.Token.Length.ShouldBe(24);
+
         var inviteResp = await adminClient.PostAsJsonAsync(
             "/api/v1/invitations",
             new InviteUserCommand("member@ngo.org", [customRoleId]),
             ct);
         inviteResp.StatusCode.ShouldBe(HttpStatusCode.OK);
         var inviteToken = (await inviteResp.Content.ReadFromJsonAsync<TokenResultDto>(JsonOptions, ct))!;
+        inviteToken.Token.Length.ShouldBe(24);
+
+        var activeInvitesPage = (await adminClient.GetFromJsonAsync<PagedResult<ActiveInvitationDto>>("/api/v1/invitations", JsonOptions, ct))!;
+        activeInvitesPage.TotalCount.ShouldBe(2);
+        var revocableInviteRecord = activeInvitesPage.Items.Single(i => i.Email == "revoked-invite@ngo.org");
+        (await adminClient.DeleteAsync($"/api/v1/invitations/{revocableInviteRecord.Id}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await adminClient.DeleteAsync($"/api/v1/invitations/{revocableInviteRecord.Id}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await anonClient.GetAsync($"/api/v1/invitations/validate?Token={Uri.EscapeDataString(revocableInviteToken.Token)}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var validInviteDetails = (await anonClient.GetFromJsonAsync<InvitationDetailsDto>(
+            $"/api/v1/invitations/validate?Token={Uri.EscapeDataString(inviteToken.Token)}",
+            JsonOptions,
+            ct))!;
+        validInviteDetails.Email.ShouldBe("member@ngo.org");
 
         var memberClient = factory.CreateClient();
         var acceptResp = await memberClient.PostAsJsonAsync(
             "/api/v1/invitations/accept",
-            new CompleteRegistrationCommand(inviteToken.Token, "Olena", "Petrenko", null, "StrongPass2!", "StrongPass2!"),
+            new CompleteRegistrationCommand(inviteToken.Token, "Olena", "Petrenko", null, "InitialPass2!", "InitialPass2!"),
             ct);
         acceptResp.StatusCode.ShouldBe(HttpStatusCode.OK);
         var memberTokens = (await acceptResp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
         memberClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberTokens.AccessToken);
 
+        // Consumed invitation token cannot be reused
+        (await anonClient.GetAsync($"/api/v1/invitations/validate?Token={Uri.EscapeDataString(inviteToken.Token)}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
         var memberProfile = (await memberClient.GetFromJsonAsync<UserProfileDto>("/api/v1/users/me", JsonOptions, ct))!;
         var memberId = memberProfile.Id;
+
+        // Password reset token lifecycle: short opaque token, validate (account identity check), paged list + search, revoke, single-use reset
+        var revocableResetResp = await adminClient.PostAsync($"/api/v1/users/{memberId}/password-reset-token", null, ct);
+        revocableResetResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var revocableResetToken = (await revocableResetResp.Content.ReadFromJsonAsync<TokenResultDto>(JsonOptions, ct))!;
+        revocableResetToken.Token.Length.ShouldBe(24);
+
+        var activeResetResp = await adminClient.PostAsync($"/api/v1/users/{memberId}/password-reset-token", null, ct);
+        activeResetResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var activeResetToken = (await activeResetResp.Content.ReadFromJsonAsync<TokenResultDto>(JsonOptions, ct))!;
+        activeResetToken.Token.Length.ShouldBe(24);
+
+        var resetTokensPage = (await adminClient.GetFromJsonAsync<PagedResult<ActivePasswordResetTokenDto>>(
+            $"/api/v1/users/password-reset-tokens?userId={memberId}&searchTerm=Olena&orderBy=CreatedAt&sortOrder=desc&pageNumber=1&pageSize=10",
+            JsonOptions,
+            ct))!;
+        resetTokensPage.TotalCount.ShouldBe(2);
+        resetTokensPage.Items.All(t => t.Email == "member@ngo.org" && t.FirstName == "Olena" && t.LastName == "Petrenko").ShouldBeTrue();
+
+        // Validate endpoint identifies the target user so two users cannot mix up reset links
+        var resetDetails = (await anonClient.GetFromJsonAsync<PasswordResetDetailsDto>(
+            $"/api/v1/users/reset-password/validate?Token={Uri.EscapeDataString(activeResetToken.Token)}",
+            JsonOptions,
+            ct))!;
+        resetDetails.Email.ShouldBe("member@ngo.org");
+        resetDetails.FirstName.ShouldBe("Olena");
+        resetDetails.LastName.ShouldBe("Petrenko");
+        (await anonClient.GetAsync("/api/v1/users/reset-password/validate?Token=not-a-valid-token", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // Revoke the older reset token and verify it is immediately invalidated
+        var olderResetId = resetTokensPage.Items.Last().Id;
+        (await adminClient.DeleteAsync($"/api/v1/users/password-reset-tokens/{olderResetId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await adminClient.DeleteAsync($"/api/v1/users/password-reset-tokens/{olderResetId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await anonClient.GetAsync($"/api/v1/users/reset-password/validate?Token={Uri.EscapeDataString(revocableResetToken.Token)}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // Complete password reset using the valid token and confirm single-use + login with new password
+        (await anonClient.PostAsJsonAsync(
+                "/api/v1/users/reset-password",
+                new ResetPasswordCommand(activeResetToken.Token, "StrongPass2!"),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await anonClient.PostAsJsonAsync(
+                "/api/v1/users/reset-password",
+                new ResetPasswordCommand(activeResetToken.Token, "AnotherPass2!"),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await adminClient.GetFromJsonAsync<PagedResult<ActivePasswordResetTokenDto>>(
+            $"/api/v1/users/password-reset-tokens?userId={memberId}",
+            JsonOptions,
+            ct))!.Items.ShouldBeEmpty();
+
+        var reLoginResp = await anonClient.PostAsJsonAsync(
+            "/api/v1/auth/login",
+            new AuthenticateUserCommand("member@ngo.org", "StrongPass2!"),
+            ct);
+        reLoginResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        memberTokens = (await reLoginResp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
+        memberClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberTokens.AccessToken);
 
         // Admin assigns & removes extra role on user
         var extraRoleResp = await adminClient.PostAsJsonAsync("/api/v1/roles", new CreateRoleCommand("Volunteer", null, null), ct);

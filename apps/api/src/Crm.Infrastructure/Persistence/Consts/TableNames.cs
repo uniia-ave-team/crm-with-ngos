@@ -20,5 +20,6 @@ internal static class TableNames
     public const string TaskReadState = "TaskReadState";
     public const string TaskTag = "TaskTag";
     public const string TaskUser = "TaskUser";
+    public const string UserActionTokens = "UserActionTokens";
     public const string UserRefreshTokens = "UserRefreshTokens";
 }

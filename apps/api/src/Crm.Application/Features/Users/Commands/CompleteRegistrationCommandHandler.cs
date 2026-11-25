@@ -1,11 +1,11 @@
-using System.Security.Claims;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.Users;
 using Crm.Application.Extensions;
+using Crm.Application.Features.Users.Extensions;
 using Crm.Application.Interfaces;
-using Crm.Domain.Constants;
 using Crm.Domain.Entities;
+using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
@@ -16,10 +16,19 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Users.Commands;
 
 /// <summary>
-/// Handles the <see cref="CompleteRegistrationCommand"/> to register a new user based on an invitation token.
-/// Extracts secured claims from the token and links the user to the active NGO instance.
+/// Handles the <see cref="CompleteRegistrationCommand"/> to register a new user based on a persisted single-use invitation token.
 /// </summary>
+/// <param name="actionTokenService">The service used to validate, consume, and revoke invitation tokens.</param>
+/// <param name="tokenService">The service responsible for issuing authentication JWT and refresh tokens.</param>
+/// <param name="ngoRepository">The repository used to verify the active NGO instance.</param>
+/// <param name="userRepository">The repository used to ensure email uniqueness.</param>
+/// <param name="roleRepository">The repository used to resolve role names from role identifiers.</param>
+/// <param name="userCustomFieldRepository">The repository used to build default custom field payloads.</param>
+/// <param name="identityService">The identity service used to create the user and assign roles.</param>
+/// <param name="timeProvider">The time provider supplying UTC timestamps.</param>
+/// <param name="logger">The logger used to record the registration process.</param>
 public sealed partial class CompleteRegistrationCommandHandler(
+    IUserActionTokenService actionTokenService,
     ITokenService tokenService,
     INgoRepository ngoRepository,
     IAuthUserRepository userRepository,
@@ -34,18 +43,23 @@ public sealed partial class CompleteRegistrationCommandHandler(
     {
         LogCompletingRegistration(logger);
 
-        var principal = await ValidateTokenAsync(command.Token, cancellationToken);
-        var email = ExtractEmail(principal);
-        var roleIds = ExtractRoleIds(principal);
+        var resolved = await actionTokenService.ResolveValidInvitationAsync(command.Token, cancellationToken);
+
+        string email = resolved.Token.TargetEmail;
+        List<Guid> roleIds = [.. resolved.Metadata.RoleIds];
 
         await userRepository.EnsureDoesNotExistAsync(email, cancellationToken);
 
-        var ngoId = await ngoRepository.GetIdAsync(cancellationToken);
+        Guid ngoId = await ngoRepository.GetIdAsync(cancellationToken);
 
-        var ngoClaim = principal.FindFirst(CustomClaimTypes.NgoId)?.Value;
-        if (ngoClaim is not null && (!Guid.TryParse(ngoClaim, out var tokenNgoId) || tokenNgoId != ngoId))
+        if (resolved.Metadata.NgoId != ngoId)
         {
             throw new DomainValidationException("Invitation token NGO identifier does not match the active organization.");
+        }
+
+        if (!await actionTokenService.TryConsumeAsync(resolved.Token.Id, ActionTokenType.Invitation, cancellationToken))
+        {
+            throw new DomainValidationException("Invalid or expired invitation token.");
         }
 
         var roleNames = await roleRepository.GetRoleNamesByIdsAsync(roleIds, cancellationToken);
@@ -57,48 +71,13 @@ public sealed partial class CompleteRegistrationCommandHandler(
 
         var authTokens = await GenerateAndSaveTokensAsync(userBasic, roleIds, cancellationToken);
 
-        string maskedEmailForLog = email.MaskEmail();
+        await actionTokenService.RevokeAllByTargetEmailAsync(email, ActionTokenType.Invitation, cancellationToken);
 
-        LogUserRegisteredSuccessfully(logger, maskedEmailForLog, userBasic.Id, roleNames);
+        string maskedEmail = email.MaskEmail();
+
+        LogUserRegisteredSuccessfully(logger, maskedEmail, userBasic.Id, roleNames);
 
         return authTokens;
-    }
-
-    private async Task<ClaimsPrincipal> ValidateTokenAsync(string token, CancellationToken cancellationToken)
-    {
-        return await tokenService.ValidateInvitationTokenAsync(token, cancellationToken)
-            ?? throw new DomainValidationException("Invalid or expired invitation token.");
-    }
-
-    private static string ExtractEmail(ClaimsPrincipal principal)
-    {
-        var email = principal.FindFirst(ClaimTypes.Email)?.Value;
-        return !string.IsNullOrWhiteSpace(email)
-            ? email
-            : throw new DomainValidationException("Email claim is missing from the token.");
-    }
-
-    private static List<Guid> ExtractRoleIds(ClaimsPrincipal principal)
-    {
-        var roleClaims = principal.FindAll(CustomClaimTypes.RoleId).ToList();
-        if (roleClaims.Count == 0)
-        {
-            throw new DomainValidationException("Role claims are missing from the token.");
-        }
-
-        var roleIds = new List<Guid>(roleClaims.Count);
-
-        foreach (var value in roleClaims.Select(claim => claim.Value))
-        {
-            if (!Guid.TryParse(value, out var roleId) || roleId == Guid.Empty)
-            {
-                throw new DomainValidationException($"Invalid role claim value: '{value}'.");
-            }
-
-            roleIds.Add(roleId);
-        }
-
-        return roleIds;
     }
 
     private async Task<UserBasicDto> CreateUserAsync(
