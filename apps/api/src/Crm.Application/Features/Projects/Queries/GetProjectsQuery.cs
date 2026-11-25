@@ -20,11 +20,11 @@ public record GetProjectsQuery(
     string? OrderBy = nameof(ProjectSummaryDto.Title),
     string? SortOrder = SortOrderConstants.Ascending,
     int PageNumber = PaginationConstants.MinPageNumber,
-    int PageSize = PaginationConstants.DefaultPageSize) : IQuery<PagedResult<ProjectSummaryDto>>, IPagedSearchQuery
+    int PageSize = PaginationConstants.DefaultPageSize) : IQuery<PagedResult<ProjectSummaryDto>>, IPagedSearchQuery, ICurrentUserAware
 {
     /// <summary>
-    /// Gets the unique identifier of the currently authenticated user, populated by the controller.
+    /// Gets or sets the unique identifier of the currently authenticated user, populated by the request pipeline.
     /// </summary>
     [JsonIgnore]
-    public Guid CurrentUserId { get; init; }
+    public Guid CurrentUserId { get; set; }
 }

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Crm.Application.Common.Interfaces;
 using Crm.Application.Dtos.Tasks;
 using Crm.Domain.Enums;
@@ -10,12 +11,16 @@ namespace Crm.Application.Features.Tasks.Queries;
 /// </summary>
 /// <param name="ProjectId">The unique identifier of the parent project.</param>
 /// <param name="TaskId">The unique identifier of the task to retrieve.</param>
-/// <param name="CurrentUserId">The unique identifier of the currently authenticated user.</param>
 public record GetTaskByIdQuery(
     Guid ProjectId,
-    Guid TaskId,
-    Guid CurrentUserId) : IQuery<TaskDto>, IProjectScoped
+    Guid TaskId) : IQuery<TaskDto>, IProjectScoped, ICurrentUserAware
 {
+    /// <summary>
+    /// Gets or sets the unique identifier of the currently authenticated user, populated by the request pipeline.
+    /// </summary>
+    [JsonIgnore]
+    public Guid CurrentUserId { get; set; }
+
     /// <inheritdoc />
     Guid? IProjectScoped.ProjectId => ProjectId;
 

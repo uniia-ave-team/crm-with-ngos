@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Crm.Application.Common.Interfaces;
 using Crm.Domain.Enums;
 using Mediator;
@@ -8,11 +9,12 @@ namespace Crm.Application.Features.Projects.Commands;
 /// Represents a command to delete a project and all its associated tasks, topics, tags, and member assignments.
 /// </summary>
 /// <param name="Id">The unique identifier of the project to delete.</param>
-/// <param name="CurrentUserId">The unique identifier of the currently authenticated user performing the deletion.</param>
-public record DeleteProjectCommand(
-    Guid Id,
-    Guid CurrentUserId) : ICommand, ITransactionalCommand, IProjectScoped
+public record DeleteProjectCommand(Guid Id) : ICommand, ITransactionalCommand, IProjectScoped, ICurrentUserAware
 {
+    /// <inheritdoc />
+    [JsonIgnore]
+    public Guid CurrentUserId { get; set; }
+
     /// <inheritdoc />
     Guid? IProjectScoped.ProjectId => Id;
 

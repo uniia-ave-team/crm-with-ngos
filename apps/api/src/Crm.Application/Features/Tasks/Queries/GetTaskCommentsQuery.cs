@@ -15,7 +15,7 @@ namespace Crm.Application.Features.Tasks.Queries;
 /// <param name="PageSize">The maximum number of comments per page.</param>
 public record GetTaskCommentsQuery(
     int PageNumber = PaginationConstants.MinPageNumber,
-    int PageSize = PaginationConstants.DefaultPageSize) : IQuery<PagedResult<TaskCommentDto>>, ITaskScoped
+    int PageSize = PaginationConstants.DefaultPageSize) : IQuery<PagedResult<TaskCommentDto>>, ITaskScoped, ICurrentUserAware
 {
     /// <summary>
     /// Gets the unique identifier of the parent project, populated from the route parameter.
@@ -30,10 +30,10 @@ public record GetTaskCommentsQuery(
     public Guid TaskId { get; init; }
 
     /// <summary>
-    /// Gets the unique identifier of the currently authenticated user, populated by the controller.
+    /// Gets or sets the unique identifier of the currently authenticated user, populated by the request pipeline.
     /// </summary>
     [JsonIgnore]
-    public Guid CurrentUserId { get; init; }
+    public Guid CurrentUserId { get; set; }
 
     /// <inheritdoc />
     Guid? IProjectScoped.ProjectId => ProjectId;
