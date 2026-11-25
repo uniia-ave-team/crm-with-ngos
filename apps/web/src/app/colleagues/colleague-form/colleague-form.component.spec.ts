@@ -53,9 +53,9 @@ describe('ColleagueFormComponent', () => {
     return { fixture, host: fixture.componentInstance, element, email, type, choices, submit };
   }
 
-  it('has the title, the email field (required, with the mark) and the roles, texts from the language file', () => {
+  it('has the email field (required, with the mark) and the roles, texts from the language file (the title is in the header of the panel)', () => {
     const { element, email } = render();
-    expect(element.querySelector('h2')?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.title);
+    expect(element.querySelector('h2')).toBeNull();
     const label = element.querySelector('label[for=colleague-form-email]') as HTMLElement;
     expect(label.textContent?.replaceAll('*', '').trim()).toBe(uk.colleagues.colleagueForm.email);
     expect(label.querySelector('.settings-field__required')?.getAttribute('title')).toBe(uk.common.required);

@@ -5,6 +5,7 @@ import { firstValueFrom, timeout } from 'rxjs';
 import { UserProfileDto } from '../../api/generated/models';
 import { AccountThumbnail, AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
+import { readJwtRoleIds } from '../auth/jwt';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
 import { ProtectedImageService } from '../http/protected-image.service';
@@ -43,7 +44,8 @@ const LOGO_THUMBNAIL_SIZE = 64;
  * (`/ngo`) — усе це йде в знімок акаунта.
  *
  * Профіль перепитується при кожній зміні сторінки (`authGuard` → `reload`), тож зміни в БД
- * потрапляють в інтерфейс без перезавантаження. Коли активним стає інший акаунт, профіль
+ * потрапляють в інтерфейс без перезавантаження. Якщо ролі користувача змінили, токени
+ * оновлюються перед запитом прав (`refreshIfRolesChanged`): інакше сервер давав би старі права. Коли активним стає інший акаунт, профіль
  * попереднього забувається; новий завантажує той, хто зробив акаунт активним (пошук чи
  * перемикання акаунта, страж сторінки після входу).
  */
@@ -176,7 +178,7 @@ export class CurrentUserService {
       this.profileSession.set(session);
       this.applyProfile(session, user);
       void this.syncNgo(session);
-      this.permissionsPromise = this.syncPermissions(session);
+      this.permissionsPromise = this.refreshIfRolesChanged(session, user).then(() => this.syncPermissions(session));
       return 'ok';
     } catch (error) {
       if (error instanceof HttpErrorResponse && error.status === 401) {
@@ -232,6 +234,25 @@ export class CurrentUserService {
       ...(user.email ? { email: user.email } : {}),
     });
     void this.syncAvatarThumbnail(session, user.avatarUrl ?? null);
+  }
+
+  /**
+   * Ролі користувача змінили (профіль `/users/me` каже одне, а токен виданий з іншими —
+   * `role_id`): сервер дає права за ролями з токена, поки його не оновлено, тож і
+   * `/users/me/permissions`, і доступ лишались би старими. Тоді токени оновлюються одразу
+   * (`AuthService.refresh`), і права далі запитуються вже з новим токеном. Ролі ті самі чи токен
+   * нечитний — нічого не робить. Невдале оновлення обробляє сам `refresh` (застарілий акаунт).
+   */
+  private async refreshIfRolesChanged(session: string, user: UserProfile): Promise<void> {
+    const tokenRoles = readJwtRoleIds(this.auth.accessTokenOf(session));
+    if (tokenRoles === null) {
+      return;
+    }
+    const profileRoles = new Set(user.roles.map((role) => role.id));
+    const same = tokenRoles.length === profileRoles.size && tokenRoles.every((id) => profileRoles.has(id));
+    if (!same) {
+      await this.auth.refresh(session);
+    }
   }
 
   /**

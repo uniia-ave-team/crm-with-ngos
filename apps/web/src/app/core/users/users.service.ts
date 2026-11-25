@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { CreateUserCommand, PagedResultOfUserDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto, UserProfileDto } from '../../api/generated/models';
+import { CreateUserCommand, PagedResultOfUserDto, ResetPasswordCommand, TokenResultDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto, UserProfileDto } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService, AuthTokens, toAuthTokens } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
@@ -65,6 +65,12 @@ export type UploadAvatarResult = 'uploaded' | UploadFailure;
 export const SEARCH_MIN_LENGTH = 3;
 export const SEARCH_MAX_LENGTH = 100;
 
+/** Посилання для скидання пароля колеги: токен і до коли він діє (ISO-дата; порожньо — сервер не віддав). */
+export interface PasswordResetToken {
+  readonly token: string;
+  readonly expiresAt: string;
+}
+
 /** Результат дії з акаунтом колеги (вимкнення, ввімкнення, видалення, зміна ролі). */
 export type ColleagueAccountResult = 'done' | RequestFailure;
 
@@ -116,6 +122,49 @@ export class UsersService {
    */
   delete(id: string): Promise<ColleagueAccountResult> {
     return this.accountAction('delete', id, '', 'видалити колегу');
+  }
+
+  /**
+   * `POST <сервер>/api/v1/users/{id}/password-reset-token` — токен для скидання пароля колеги
+   * (право `CanResetPassword`; 200 з `token` і `expiresAt`). За ним колега задає новий пароль на
+   * сторінці `/reset-password`; поточний пароль діє, доки його не змінять. Повертає токен або
+   * причину невдачі (відповідь без токена — `error`).
+   */
+  async createPasswordResetToken(id: string): Promise<PasswordResetToken | RequestFailure> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}/password-reset-token`;
+    try {
+      const body = await firstValueFrom(this.http.post<Untrusted<TokenResultDto>>(url, null).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      const token = body?.token;
+      if (typeof token !== 'string' || !token) {
+        console.warn('[UsersService] Відповідь без токена скидання пароля', body);
+        return 'error';
+      }
+      const expiresAt = body?.expiresAt;
+      return { token, expiresAt: typeof expiresAt === 'string' ? expiresAt : '' };
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося створити посилання для скидання пароля (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
+   * `POST <server>/api/v1/users/reset-password` (без авторизації) — новий пароль за токеном із
+   * посилання для скидання пароля (204). Сервер явний: колега відкриває посилання на сторінці
+   * `/reset-password`, можливо, не маючи в браузері акаунта на цьому сервері. 400 — сервер не
+   * прийняв пароль або посиланням уже скористалися, 401 — токен недійсний чи прострочений.
+   * Пароль не логується.
+   */
+  async resetPassword(server: string, token: string, newPassword: string): Promise<'reset' | RequestFailure> {
+    const url = `${server}${API_USERS_PATH}/reset-password`;
+    try {
+      await firstValueFrom(this.http.post(url, { token, newPassword } satisfies ResetPasswordCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      return 'reset';
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося задати новий пароль (${failure})`);
+      return failure;
+    }
   }
 
   /**

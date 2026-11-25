@@ -10,6 +10,7 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 import uk from '../assets/i18n/uk.json';
 
 import { AppComponent } from './app.component';
+import { SuccessNoticeService } from './core/notice/success-notice.service';
 import { AccountsService } from './core/accounts/accounts.service';
 
 describe('AppComponent', () => {
@@ -31,6 +32,32 @@ describe('AppComponent', () => {
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);
     await TestBed.inject(Router).navigateByUrl('/calendar');
+  });
+
+  describe('the notice of a success that outlives the page (SuccessNoticeService)', () => {
+    it('shows the text from the language file at the top and closes by itself or by the cross', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+      const toast = (fixture.nativeElement as HTMLElement).querySelector('ion-toast.success-notice') as HTMLElement & {
+        isOpen: boolean;
+        message: string;
+        duration: number;
+        position: string;
+      };
+      expect(toast.isOpen).toBe(false);
+
+      TestBed.inject(SuccessNoticeService).show('resetPassword.done');
+      fixture.detectChanges();
+      expect(toast.isOpen).toBe(true);
+      expect(toast.message).toBe(uk.resetPassword.done);
+      expect(toast.position).toBe('top');
+      expect(toast.duration).toBeGreaterThan(0);
+
+      toast.dispatchEvent(new CustomEvent('didDismiss'));
+      fixture.detectChanges();
+      expect(TestBed.inject(SuccessNoticeService).key()).toBeNull();
+      expect(toast.isOpen).toBe(false);
+    });
   });
 
   describe('the warning that the storage of the browser is full', () => {

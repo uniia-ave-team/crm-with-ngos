@@ -27,9 +27,10 @@ describe('app routes', () => {
     }
   });
 
-  it('has no guards on the login page, on the page of the invitation and on the page of the repeated login', () => {
+  it('has no guards on the login page, on the pages of the invitation and of the new password and on the page of the repeated login', () => {
     expect(guards('login')).toBe(0);
     expect(guards('join')).toBe(0);
+    expect(guards('reset-password')).toBe(0);
     expect(guards('relogin')).toBe(0);
   });
 

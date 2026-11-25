@@ -264,6 +264,48 @@ describe('UsersService', () => {
     });
   });
 
+  describe('createPasswordResetToken (POST /users/{id}/password-reset-token)', () => {
+    it('posts without a body and gives the token and its date', async () => {
+      const result = service.createPasswordResetToken('u 2');
+      const request = http.expectOne(`${url}/u%202/password-reset-token`);
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toBeNull();
+      request.flush({ token: 't', expiresAt: '2026-11-20T10:00:00Z' });
+      expect(await result).toEqual({ token: 't', expiresAt: '2026-11-20T10:00:00Z' });
+    });
+
+    it.each([
+      ['an answer without the token', { expiresAt: 'x' }, 200, 'error'],
+      ['403', {}, 403, 'forbidden'],
+      ['404', {}, 404, 'error'],
+    ])('gives the failure on %s', async (_name, body, status, failure) => {
+      const result = service.createPasswordResetToken('u2');
+      http.expectOne(`${url}/u2/password-reset-token`).flush(body, { status, statusText: String(status) });
+      expect(await result).toBe(failure);
+    });
+  });
+
+  describe('resetPassword (POST /users/reset-password on the given server)', () => {
+    it('posts the token and the new password and gives reset on 204', async () => {
+      const result = service.resetPassword('https://other.example:5065', 't', 'Abcde1!x');
+      const request = http.expectOne('https://other.example:5065/api/v1/users/reset-password');
+      expect(request.request.method).toBe('POST');
+      expect(request.request.body).toEqual({ token: 't', newPassword: 'Abcde1!x' });
+      request.flush(null, { status: 204, statusText: 'No Content' });
+      expect(await result).toBe('reset');
+    });
+
+    it.each([
+      [400, 'invalid'],
+      [401, 'unauthorized'],
+      [404, 'error'],
+    ])('maps HTTP %i to %s', async (status, failure) => {
+      const result = service.resetPassword('https://other.example:5065', 't', 'p');
+      http.expectOne('https://other.example:5065/api/v1/users/reset-password').flush({}, { status, statusText: 'x' });
+      expect(await result).toBe(failure);
+    });
+  });
+
   describe('getMyPermissions', () => {
     const permissionsUrl = () => `${url}/me/permissions`;
 

@@ -1,4 +1,4 @@
-import { readJwtExpiry, readJwtPayload, readJwtSubject } from './jwt';
+import { readJwtExpiry, readJwtPayload, readJwtRoleIds, readJwtSubject } from './jwt';
 
 /** JWT без підпису з таким payload (base64url, без доповнення). */
 function jwt(payload: unknown): string {
@@ -63,6 +63,21 @@ describe('jwt', () => {
       ['there is no token', undefined],
     ])('gives null when %s', (_name, token) => {
       expect(readJwtSubject(token)).toBeNull();
+    });
+  });
+
+  describe('readJwtRoleIds', () => {
+    it.each([
+      ['one role (a string)', { role_id: 'r1' }, ['r1']],
+      ['several roles (an array)', { role_id: ['r1', 'r2'] }, ['r1', 'r2']],
+      ['no roles (no field)', { sub: 'u1' }, []],
+      ['values that are not ids', { role_id: ['r1', 7, ''] }, ['r1']],
+    ])('gives the ids for %s', (_name, payload, expected) => {
+      expect(readJwtRoleIds(jwt(payload))).toEqual(expected);
+    });
+
+    it('gives null for a token that cannot be read', () => {
+      expect(readJwtRoleIds('not-a-jwt')).toBeNull();
     });
   });
 });

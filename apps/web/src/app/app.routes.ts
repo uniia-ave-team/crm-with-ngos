@@ -6,7 +6,8 @@ import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS } from './core/auth/per
 import { connectionGuard } from './core/connection/connection.guard';
 
 /**
- * Те, що потрібне кожній сторінці для того, хто увійшов (усі, крім /login, /join і /relogin):
+ * Те, що потрібне кожній сторінці для того, хто увійшов (усі, крім /login, /join,
+ * /reset-password і /relogin):
  * два стражі й їхній запуск при кожній зміні сторінки. Нова така сторінка бере це цілком
  * (`...SIGNED_IN`), тож забути стража не вийде; сторінка з правами додає свій страж після цих.
  *
@@ -78,6 +79,13 @@ export const routes: Routes = [
     loadComponent: () => import('./join/join.page').then((m) => m.JoinPage),
     // Сторінка запрошення: без стражів (колега ще не має акаунта на цьому сервері) і
     // без бічного меню — як /login.
+    data: { layout: 'none' },
+  },
+  {
+    path: 'reset-password',
+    loadComponent: () => import('./reset-password/reset-password.page').then((m) => m.ResetPasswordPage),
+    // Новий пароль за посиланням: без стражів (колега може не мати акаунта в цьому браузері) і
+    // без бічного меню — як /join.
     data: { layout: 'none' },
   },
   {

@@ -40,7 +40,6 @@ import {
   search,
   serverOutline,
   shareSocial,
-  shieldCheckmarkOutline,
   syncCircle,
   trashOutline,
 } from 'ionicons/icons';
@@ -94,7 +93,6 @@ export function registerIcons(): void {
     'search': search,
     'server-outline': serverOutline,
     'share-social': shareSocial,
-    'shield-checkmark-outline': shieldCheckmarkOutline,
     'sync-circle': syncCircle,
     'trash-outline': trashOutline,
   });

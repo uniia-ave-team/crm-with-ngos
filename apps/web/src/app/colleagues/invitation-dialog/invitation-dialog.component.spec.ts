@@ -3,11 +3,11 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { InvitationShare, InvitationStatus } from './invitation-dialog.component';
+import { InvitationKind, InvitationShare, InvitationStatus } from './invitation-dialog.component';
 import { InvitationDialogComponent } from './invitation-dialog.component';
 
 @Component({
-  template: `<app-invitation-dialog [email]="email()" [token]="token()" [server]="server()" [expiresAt]="expiresAt()" [ngoName]="ngo()" [status]="status()" (copyLink)="copied.push($event)" (shareLink)="shared.push($event)" (dismiss)="dismissed = dismissed + 1" />`,
+  template: `<app-invitation-dialog [email]="email()" [token]="token()" [server]="server()" [expiresAt]="expiresAt()" [ngoName]="ngo()" [status]="status()" [kind]="kind()" (copyLink)="copied.push($event)" (shareLink)="shared.push($event)" (dismiss)="dismissed = dismissed + 1" />`,
   imports: [InvitationDialogComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
@@ -18,6 +18,7 @@ class HostComponent {
   readonly expiresAt = signal('2026-11-20T10:00:00Z');
   readonly ngo = signal('Організація');
   readonly status = signal<InvitationStatus>('idle');
+  readonly kind = signal<InvitationKind>('invitation');
   readonly copied: string[] = [];
   readonly shared: InvitationShare[] = [];
   dismissed = 0;
@@ -49,6 +50,32 @@ describe('InvitationDialogComponent', () => {
     expect(q('.invitation__hint').textContent?.trim()).toBe(uk.colleagues.invitation.hint);
     expect(uk.colleagues.invitation.hint).toContain('Поділіться посиланням з колегою');
     expect(uk.colleagues.invitation.hint).not.toContain('токен');
+  });
+
+  describe('the link for resetting the password (kind "passwordReset")', () => {
+    function renderReset() {
+      const ctx = render();
+      ctx.host.kind.set('passwordReset');
+      ctx.fixture.detectChanges();
+      return ctx;
+    }
+
+    it('has its own title, hint and label of the link, and leads to /reset-password with the token', () => {
+      const { q } = renderReset();
+      expect(q('.invitation__title').textContent?.trim()).toBe(uk.colleagues.passwordReset.title);
+      expect(q('.invitation__hint').textContent?.trim()).toBe(uk.colleagues.passwordReset.hint);
+      expect(q('.invitation__link').getAttribute('aria-label')).toBe(uk.colleagues.passwordReset.link);
+      expect(q('.invitation__link').textContent?.trim()).toBe(`${origin()}/reset-password?token=eyJ.header.payload.signature-of-a-long-token`);
+    });
+
+    it('shares its own title and signature', () => {
+      const { fixture, host, q } = renderReset();
+      q<HTMLButtonElement>('.invitation__share').click();
+      fixture.detectChanges();
+      expect(host.shared[0].title).toBe(uk.colleagues.passwordReset.shareTitle);
+      expect(host.shared[0].text.startsWith(uk.colleagues.passwordReset.shareIntro.replace('{{ngo}}', 'Організація'))).toBe(true);
+      expect(host.shared[0].url).toContain('/reset-password?token=');
+    });
   });
 
   describe('the link', () => {

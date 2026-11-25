@@ -355,6 +355,44 @@ describe('CurrentUserService', () => {
       expect(stored().permissions).toEqual(['ViewUser']);
     });
 
+    describe('the roles were changed after the token was issued (role_id of the token)', () => {
+      const jwt = (payload: unknown) =>
+        `header.${btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.signature`;
+      const server = () => TestBed.inject(ConnectionService).serverUrl();
+      const useToken = (roleIds: string[]) => {
+        const accounts = TestBed.inject(AccountsService);
+        accounts.update(accounts.activeId()!, { accessToken: jwt({ sub: 'u1', exp: Date.now() / 1000 + 3600, role_id: roleIds }) });
+      };
+      const withRoles = (...ids: string[]) => ({ ...profile, roles: ids.map((id) => ({ id, name: id })) });
+
+      it('refreshes the tokens first and asks for the permissions with the new one', async () => {
+        useToken(['admin']);
+        const result = service.reload();
+        http.expectOne(url).flush(withRoles('member'));
+        await result;
+        http.match(`${server()}/api/v1/ngo`);
+
+        const fresh = jwt({ sub: 'u1', exp: Date.now() / 1000 + 3600, role_id: ['member'] });
+        http.expectNone(permissionsUrl());
+        (await vi.waitFor(() => http.expectOne(`${server()}/api/v1/auth/refresh-token`))).flush({ accessToken: fresh, refreshToken: 'refresh-2' });
+        const request = await vi.waitFor(() => http.expectOne(permissionsUrl()));
+        // Права запитуються вже після того, як збережено новий токен (його додасть authInterceptor).
+        expect(auth.accessTokenOf()).toBe(fresh);
+        request.flush(['ViewUser']);
+        await vi.waitFor(() => expect(service.permissions()).toEqual(['ViewUser']));
+      });
+
+      it('does not refresh when the roles are the same, in any order', async () => {
+        useToken(['b', 'a']);
+        const result = service.reload();
+        http.expectOne(url).flush(withRoles('a', 'b'));
+        await result;
+        http.match(`${server()}/api/v1/ngo`);
+        (await vi.waitFor(() => http.expectOne(permissionsUrl()))).flush([]);
+        http.expectNone(`${server()}/api/v1/auth/refresh-token`);
+      });
+    });
+
     it('does not write the permissions to an account that is not the current one any more', async () => {
       const first = service.ensure();
       http.expectOne(url).flush(profile);

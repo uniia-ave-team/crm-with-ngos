@@ -27,10 +27,10 @@ const ROW_ACTIONS = [
   'Permissions.UpdateUser',
   'Permissions.DisableUser',
   'Permissions.DeleteUser',
-  'Permissions.AssignRoleToUser',
   'Permissions.CanResetPassword',
-  'Permissions.ManageRole',
 ];
+/** Права ролей: вікно «Ролі» (`ManageRole`) і ролі у формі «Редагувати» (`AssignRoleToUser`); пунктів меню не дають. */
+const ROLE_RIGHTS = ['Permissions.AssignRoleToUser', 'Permissions.ManageRole'];
 
 describe('ColleaguesPage', () => {
   beforeEach(async () => {
@@ -511,14 +511,13 @@ describe('ColleaguesPage', () => {
       return page.actions().map((a) => a.id);
     };
 
-    it('has all six items, in this order, for a user with all the rights', () => {
-      expect(actionIds(ROW_ACTIONS)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'enable', 'delete']);
+    it('has all five items, in this order, for a user with all the rights', () => {
+      expect(actionIds(ROW_ACTIONS)).toEqual(['edit', 'resetPassword', 'disable', 'enable', 'delete']);
     });
 
     it.each([
-      [['Permissions.AssignRoleToUser'], ['permissions']],
-      [['Permissions.ManageRole'], ['permissions']],
-      [['Permissions.AssignRoleToUser', 'Permissions.ManageRole'], ['permissions']],
+      // Прав ролей у меню нема: «Змінити ролі» прибрано, ролі колеги — у формі «Редагувати».
+      [['Permissions.AssignRoleToUser', 'Permissions.ManageRole'], []],
       // «Редагувати» читає профіль колеги, тож потребує ще й `ViewUser`.
       [['Permissions.UpdateUser'], ['enable']],
       [['Permissions.UpdateUser', 'Permissions.ViewUser'], ['edit', 'enable']],
@@ -537,7 +536,6 @@ describe('ColleaguesPage', () => {
     it('takes the texts and the icons of the items from the language file keys', () => {
       const page = render(ROW_ACTIONS).fixture.componentInstance as unknown as { actions(): { labelKey: string; icon: string }[] };
       expect(page.actions().map((a) => a.labelKey)).toEqual([
-        'colleagues.actions.permissions',
         'colleagues.actions.edit',
         'colleagues.actions.resetPassword',
         'colleagues.actions.disable',
@@ -545,14 +543,13 @@ describe('ColleaguesPage', () => {
         'colleagues.actions.delete',
       ]);
       expect(page.actions().map((a) => a.icon)).toEqual([
-        'shield-checkmark-outline',
         'create-outline',
         'key-outline',
         'ban-outline',
         'checkmark-circle-outline',
         'trash-outline',
       ]);
-      expect(Object.keys(uk.colleagues.actions)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'enable', 'delete']);
+      expect(Object.keys(uk.colleagues.actions)).toEqual(['edit', 'resetPassword', 'disable', 'enable', 'delete']);
     });
 
     describe('the popover', () => {
@@ -590,7 +587,6 @@ describe('ColleaguesPage', () => {
       });
 
       it.each([
-        ['permissions', 'changePermissions'],
         ['edit', 'editColleague'],
         ['resetPassword', 'resetPassword'],
         ['disable', 'disableColleague'],
@@ -599,7 +595,7 @@ describe('ColleaguesPage', () => {
       ])('calls the function of the action "%s" (%s) with the id of the colleague of that row', async (action, method) => {
         const { fixture, element } = await renderLoaded(ROW_ACTIONS);
         const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
-        const spies = ['changePermissions', 'editColleague', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague'].map(
+        const spies = ['editColleague', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague'].map(
           (name) => [name, vi.spyOn(page, name)] as const,
         );
         rowDots(element, 2).click();
@@ -653,11 +649,11 @@ describe('ColleaguesPage', () => {
           const { fixture, element } = await renderWithDisabled(ROW_ACTIONS);
           rowDots(element, 1).click();
           fixture.detectChanges();
-          expect(itemIds(fixture)).toEqual(['permissions', 'edit', 'resetPassword', 'enable', 'delete']);
+          expect(itemIds(fixture)).toEqual(['edit', 'resetPassword', 'enable', 'delete']);
 
           rowDots(element, 2).click();
           fixture.detectChanges();
-          expect(itemIds(fixture)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'delete']);
+          expect(itemIds(fixture)).toEqual(['edit', 'resetPassword', 'disable', 'delete']);
         });
 
         it('does not open an empty menu: only DisableUser, and the account is already disabled', async () => {
@@ -701,7 +697,7 @@ describe('ColleaguesPage', () => {
           asUser('user-2');
           rowDots(element, 0).click();
           fixture.detectChanges();
-          expect(itemsOf(fixture).map((item) => item.id)).toEqual(['permissions', 'edit', 'resetPassword', 'disable', 'delete']);
+          expect(itemsOf(fixture).map((item) => item.id)).toEqual(['edit', 'resetPassword', 'disable', 'delete']);
 
           rowDots(element, 1).click();
           fixture.detectChanges();
@@ -709,7 +705,7 @@ describe('ColleaguesPage', () => {
 
           rowDots(element, 2).click();
           fixture.detectChanges();
-          expect(itemsOf(fixture)).toHaveLength(5);
+          expect(itemsOf(fixture)).toHaveLength(4);
         });
 
         it('is known by the id of the loaded profile too (it wins over the snapshot of the account)', async () => {
@@ -726,7 +722,7 @@ describe('ColleaguesPage', () => {
           asUser('');
           rowDots(element, 1).click();
           fixture.detectChanges();
-          expect(itemsOf(fixture)).toHaveLength(5);
+          expect(itemsOf(fixture)).toHaveLength(4);
         });
 
         it('goes to the settings of the profile when it is chosen: no panel and none of the actions with a colleague', async () => {
@@ -734,7 +730,7 @@ describe('ColleaguesPage', () => {
           asUser('user-2');
           const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
           const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
-          const spies = ['changePermissions', 'editColleague', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague'].map((name) =>
+          const spies = ['editColleague', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague'].map((name) =>
             vi.spyOn(page, name),
           );
           rowDots(element, 1).click();
@@ -778,8 +774,8 @@ describe('ColleaguesPage', () => {
     });
   });
 
-  describe('disabling, enabling and deleting a colleague', () => {
-    const RIGHTS = [...FULL, ...ROW_ACTIONS];
+  describe('disabling, enabling and deleting a colleague, resetting the password', () => {
+    const RIGHTS = [...FULL, ...ROW_ACTIONS, ...ROLE_RIGHTS];
     let http: HttpTestingController;
     beforeEach(() => {
       http = TestBed.inject(HttpTestingController);
@@ -834,6 +830,7 @@ describe('ColleaguesPage', () => {
     it.each([
       ['disable', uk.colleagues.actions.disable, uk.colleagues.confirm.disable],
       ['delete', uk.colleagues.actions.delete, uk.colleagues.confirm.delete],
+      ['resetPassword', uk.colleagues.actions.resetPassword, uk.colleagues.confirm.resetPassword],
     ])('"%s" asks first in the modal in the middle of the screen with the name of the colleague, and sends nothing yet', async (action, label, question) => {
       const ctx = await renderList();
       choose(ctx, 0, action);
@@ -856,6 +853,56 @@ describe('ColleaguesPage', () => {
       });
       choose(ctx, 0, 'delete');
       expect(page(ctx.fixture).colleagueConfirm()?.name).toBe('user1@example.org');
+    });
+
+    describe('"Yes" for "resetPassword" (POST /users/{id}/password-reset-token and the link in the modal)', () => {
+      /** Вікно з посиланням — перше `app-modal` сторінки (те саме, що й для запрошення). */
+      const linkModal = (fixture: ComponentFixture<ColleaguesPage>) =>
+        fixture.debugElement.queryAll(By.directive(ModalComponent))[0].componentInstance as ModalComponent;
+
+      async function confirmReset() {
+        const ctx = await renderList();
+        choose(ctx, 2, 'resetPassword');
+        const found = await dialog(ctx.fixture);
+        found.querySelector<HTMLButtonElement>('.confirm__button--confirm')!.click();
+        ctx.fixture.detectChanges();
+        return { ...ctx, found, request: accountRequest('POST', 'user-3/password-reset-token') };
+      }
+
+      it('asks for the token, closes the question and shows the link to /reset-password with the email and the date', async () => {
+        const { fixture, request } = await confirmReset();
+        expect(request.request.body).toBeNull();
+        request.flush({ token: 'reset 1', expiresAt: '2026-11-20T10:00:00Z' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(linkModal(fixture).isOpen()).toBe(true);
+        });
+        expect(confirmModal(fixture).isOpen()).toBe(false);
+        expect(linkModal(fixture).label()).toBe(uk.colleagues.passwordReset.title);
+        const shown = await vi.waitFor(() => {
+          fixture.detectChanges();
+          const dialogElement = document.querySelector('app-invitation-dialog');
+          expect(dialogElement).not.toBeNull();
+          return dialogElement!;
+        });
+        expect(shown.querySelector('.invitation__title')?.textContent?.trim()).toBe(uk.colleagues.passwordReset.title);
+        expect(shown.querySelector('.invitation__hint')?.textContent?.trim()).toBe(uk.colleagues.passwordReset.hint);
+        expect(shown.querySelector('.invitation__link')?.textContent?.trim()).toBe(`${location.origin}/reset-password?token=reset%201`);
+        expect(shown.querySelector('.invitation__details dd')?.textContent?.trim()).toBe('user3@example.org');
+        // Список не змінюється: пароль діє, доки колега його не змінить.
+        http.expectNone((r) => r.url === usersUrl());
+      });
+
+      it('stays on the question with the reason when the token is not made', async () => {
+        const { fixture, found, request } = await confirmReset();
+        request.flush({}, { status: 403, statusText: 'x' });
+        await vi.waitFor(() => {
+          fixture.detectChanges();
+          expect(found.textContent).toContain(uk.colleagues.actionError.resetPassword.forbidden);
+        });
+        expect(confirmModal(fixture).isOpen()).toBe(true);
+        expect(linkModal(fixture).isOpen()).toBe(false);
+      });
     });
 
     it('"Cancel" closes the modal and sends nothing', async () => {
@@ -963,7 +1010,7 @@ describe('ColleaguesPage', () => {
       fixture.debugElement.query(By.directive(SidePanelComponent)).componentInstance as SidePanelComponent;
     const state = (fixture: ComponentFixture<ColleaguesPage>) =>
       (fixture.componentInstance as unknown as { panel(): unknown }).panel();
-    const FULL_RIGHTS = [...FULL, ...ROW_ACTIONS];
+    const FULL_RIGHTS = [...FULL, ...ROW_ACTIONS, ...ROLE_RIGHTS];
 
     it('is closed at first, with nothing opened', () => {
       const { fixture } = render(FULL_RIGHTS);
@@ -988,11 +1035,7 @@ describe('ColleaguesPage', () => {
       expect(state(fixture)).toEqual({ kind: 'add', userId: null, userName: null });
     });
 
-    it.each([
-      ['permissions', 'changePermissions'],
-      ['edit', 'editColleague'],
-      ['resetPassword', 'resetPassword'],
-    ])('is called by the actions of the menu with a panel: "%s" opens it for the colleague of that row', async (action, method) => {
+    it.each([['edit', 'editColleague']])('is called by the action of the menu with a panel: "%s" opens it for the colleague of that row', async (action, method) => {
       const { fixture, element } = await renderLoaded(FULL_RIGHTS);
       (element.querySelectorAll('tbody .data-table__menu')[3] as HTMLButtonElement).click();
       fixture.detectChanges();
@@ -1034,14 +1077,10 @@ describe('ColleaguesPage', () => {
       }
     });
 
-    it('opens by each of the three actions themselves, with the id that was given to them', () => {
+    it('opens by the action "Edit" itself, with the id that was given to it', () => {
       const { fixture } = render(FULL_RIGHTS);
       const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
-      const cases: [string, string][] = [
-        ['changePermissions', 'permissions'],
-        ['editColleague', 'edit'],
-        ['resetPassword', 'resetPassword'],
-      ];
+      const cases: [string, string][] = [['editColleague', 'edit']];
       for (const [method, kind] of cases) {
         page[method]({ id: 'user-1', name: 'Перший' });
         expect(state(fixture)).toEqual({ kind, userId: 'user-1', userName: 'Перший' });
@@ -1175,7 +1214,7 @@ describe('ColleaguesPage', () => {
       it('shows all the roles as in the form of a new colleague, the roles of the colleague chosen, before "Save"', async () => {
         const { element } = await editWithRoles();
         expect(checked(element)).toEqual(['Куратор:false', 'Член:true']);
-        expect(element.querySelector('app-side-panel app-role-choices legend')?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.roles);
+        expect(element.querySelector('app-side-panel app-role-choices legend')?.textContent?.replaceAll('*', '').trim()).toBe(uk.colleagues.colleagueForm.roles);
         const block = element.querySelector('app-side-panel app-role-choices')!;
         const save = element.querySelector('app-side-panel button[type=submit]')!;
         expect(block.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1326,15 +1365,35 @@ describe('ColleaguesPage', () => {
         submit(ctx);
         await answerPut(ctx);
 
+        // По черзі: сервер не приймає одночасних змін ролей одного користувача. Спершу нова роль,
+        // тоді знята — колега посеред збереження не лишається без ролі.
         const assign = controller().expectOne(`${profileUrl('user-1')}/roles/r1`);
-        const remove = controller().expectOne(`${profileUrl('user-1')}/roles/r2`);
-        expect([assign.request.method, remove.request.method]).toEqual(['POST', 'DELETE']);
+        controller().expectNone(`${profileUrl('user-1')}/roles/r2`);
+        expect(assign.request.method).toBe('POST');
         assign.flush(null, { status: 204, statusText: 'No Content' });
+        const remove = await vi.waitFor(() => controller().expectOne(`${profileUrl('user-1')}/roles/r2`));
+        expect(remove.request.method).toBe('DELETE');
         remove.flush(null, { status: 204, statusText: 'No Content' });
         await vi.waitFor(() => {
           ctx.fixture.detectChanges();
           expect(isOpen(ctx.fixture)).toBe(false);
         });
+      });
+
+      it('needs at least one role, as the form of a new colleague: without it nothing is sent', async () => {
+        const ctx = await open([...RIGHTS, 'Permissions.AssignRoleToUser']);
+        roleChoices(ctx.element)[1].click();
+        ctx.fixture.detectChanges();
+        submit(ctx);
+        expect(ctx.element.querySelector('app-side-panel .role-choices__error')?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.error.rolesRequired);
+        expect(ctx.element.querySelector('app-side-panel app-role-choices .settings-field__required')).not.toBeNull();
+        controller().expectNone((r) => r.method === 'PUT');
+        expect(isOpen(ctx.fixture)).toBe(true);
+
+        // Вибір ролі ховає помилку.
+        roleChoices(ctx.element)[0].click();
+        ctx.fixture.detectChanges();
+        expect(ctx.element.querySelector('app-side-panel .role-choices__error')).toBeNull();
       });
 
       it('asks nothing about the roles when they are not changed', async () => {
@@ -1353,7 +1412,8 @@ describe('ColleaguesPage', () => {
         submit(ctx);
         await answerPut(ctx);
         controller().expectOne(`${profileUrl('user-1')}/roles/r1`).flush({}, { status: 403, statusText: 'x' });
-        controller().expectOne(`${profileUrl('user-1')}/roles/r2`).flush(null, { status: 204, statusText: 'No Content' });
+        // Невдача однієї зміни не зупиняє наступну.
+        (await vi.waitFor(() => controller().expectOne(`${profileUrl('user-1')}/roles/r2`))).flush(null, { status: 204, statusText: 'No Content' });
         await vi.waitFor(() => {
           ctx.fixture.detectChanges();
           expect(errors(ctx.element)).toEqual([uk.colleagues.profileForm.rolesError.forbidden]);
@@ -1710,7 +1770,7 @@ describe('ColleaguesPage', () => {
   });
 
   describe('the roles in the side panel (GET /api/v1/roles)', () => {
-    const FULL_RIGHTS = [...FULL, ...ROW_ACTIONS];
+    const FULL_RIGHTS = [...FULL, ...ROW_ACTIONS, ...ROLE_RIGHTS];
     let http: HttpTestingController;
     let rolesUrl: string;
 
@@ -1797,7 +1857,7 @@ describe('ColleaguesPage', () => {
     it('does not ask for the roles for the actions of the menu (except "Edit" with AssignRoleToUser, see there)', () => {
       const { fixture } = render(FULL_RIGHTS);
       const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
-      for (const method of ['changePermissions', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague']) {
+      for (const method of ['resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague']) {
         page[method]({ id: 'user-1', name: 'Перший' });
       }
       http.expectNone((request) => request.url === rolesUrl);
@@ -1833,9 +1893,10 @@ describe('ColleaguesPage', () => {
         addButton(element).click();
         fixture.detectChanges();
         expect(rolesRequest().request.method).toBe('GET');
-        expect(element.querySelector('app-colleague-form h2')?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.title);
+        // Заголовок — у шапці вікна, на одній висоті з хрестиком.
+        expect(element.querySelector('.side-panel__header-start .colleagues__panel-title')?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.title);
         expect(element.querySelector('app-roles-panel')).toBeNull();
-        expect(element.querySelector('.side-panel__header-start')?.children).toHaveLength(0);
+        expect(element.querySelector('.side-panel__header-start')?.children).toHaveLength(1);
       });
 
       it('offers the roles as pills to choose, the same roles the list of "Roles" has', async () => {
@@ -1902,6 +1963,7 @@ describe('ColleaguesPage', () => {
           await shown(ctx);
 
           expect(state(ctx.fixture).invitation()).toEqual({
+            kind: 'invitation',
             email: 'a@b.org',
             token: 'tok-1',
             expiresAt: '2026-11-20T10:00:00Z',

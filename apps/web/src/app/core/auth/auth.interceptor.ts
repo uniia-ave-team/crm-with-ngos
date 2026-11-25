@@ -8,7 +8,7 @@ import { AuthService, RefreshResult } from './auth.service';
 /**
  * Запити до API, яким токени не потрібні (і які не мають спричиняти оновлення
  * токенів чи вихід): вхід, вихід, обмін токенів, статус системи, умови до пароля,
- * створення користувача (реєстрація першого адміна) та запрошення — їх відкриває людина,
+ * створення користувача (реєстрація першого адміна), запрошення й новий пароль за посиланням — їх відкриває людина,
  * яка ще не має акаунта, а якщо в браузері є чужий активний акаунт, він тут ні до чого.
  */
 const ANONYMOUS_REQUESTS: ReadonlyArray<{ method?: string; path: string }> = [
@@ -25,6 +25,8 @@ const ANONYMOUS_REQUESTS: ReadonlyArray<{ method?: string; path: string }> = [
   { method: 'POST', path: '/api/v1/users' },
   { method: 'GET', path: '/api/v1/invitations/validate' },
   { method: 'POST', path: '/api/v1/invitations/accept' },
+  // Новий пароль за посиланням: колега відкриває його без входу в акаунт.
+  { method: 'POST', path: '/api/v1/users/reset-password' },
 ];
 
 /**

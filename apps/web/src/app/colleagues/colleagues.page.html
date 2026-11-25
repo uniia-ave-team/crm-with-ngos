@@ -93,6 +93,9 @@
     }
   }
   @if (panelContent() === 'add') {
+    <h2 sidePanelHeader class="colleagues__panel-title">{{ 'colleagues.colleagueForm.title' | translate }}</h2>
+  }
+  @if (panelContent() === 'add') {
     <app-colleague-form [roles]="rolesView()" [saving]="colleagueSaving()" [error]="colleagueSaveError()" (save)="createColleague($event)" />
   }
   @if (panelContent() === 'edit') {
@@ -111,7 +114,13 @@
         (save)="saveColleague($event)"
       >
         @if (canAssignRoles()) {
-          <app-role-choices [roles]="rolesView()" [selected]="colleagueEditRoles()" (roleToggle)="toggleColleagueEditRole($event)" />
+          <app-role-choices
+            [roles]="rolesView()"
+            [selected]="colleagueEditRoles()"
+            [required]="true"
+            [error]="colleagueEditRolesError()"
+            (roleToggle)="toggleColleagueEditRole($event)"
+          />
         }
         @for (errorKey of colleagueEditErrors(); track errorKey) {
           <p class="colleagues__panel-message colleagues__panel-message--error" role="alert">{{ errorKey | translate }}</p>
@@ -129,9 +138,10 @@
 </app-side-panel>
 
 <!-- Запрошення створено: посилання, яким адмін ділиться з колегою (по центру екрана, затемнює весь екран). -->
-<app-modal #invitationDialog width="460px" [label]="'colleagues.invitation.title' | translate">
+<app-modal #invitationDialog width="460px" [label]="'colleagues.' + (invitation()?.kind ?? 'invitation') + '.title' | translate">
   @if (invitation(); as invite) {
     <app-invitation-dialog
+      [kind]="invite.kind"
       [email]="invite.email"
       [token]="invite.token"
       [server]="invite.server"

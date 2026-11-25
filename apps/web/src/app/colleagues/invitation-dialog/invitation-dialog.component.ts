@@ -8,6 +8,16 @@ import { LanguageService } from '../../core/i18n/language.service';
 /** Стан дій з посиланням: нічого не робили, скопійовано, не вдалося скопіювати, не вдалося поділитися. */
 export type InvitationStatus = 'idle' | 'copied' | 'failed' | 'shareFailed';
 
+/**
+ * Про що посилання: запрошення колеги (`/join`, тексти `colleagues.invitation.*`) чи скидання
+ * пароля (`/reset-password`, тексти `colleagues.passwordReset.*`; кнопки, статуси й підписи
+ * пошти та дати — спільні, з `colleagues.invitation.*`).
+ */
+export type InvitationKind = 'invitation' | 'passwordReset';
+
+/** Сторінка застосунку, на яку веде посилання кожного виду. */
+const KIND_PATH: Record<InvitationKind, string> = { invitation: '/join', passwordReset: '/reset-password' };
+
 /** Що віддається системі поширення (`navigator.share`): заголовок, підпис і саме посилання. */
 export interface InvitationShare {
   readonly title: string;
@@ -26,6 +36,9 @@ export interface InvitationShare {
  * Закривається хрестиком у рівень із заголовком (як у бічного вікна). Копіювання, поширення й
  * закриття віддає подіями `copyLink` (з посиланням), `shareLink` (з даними для поширення) та
  * `dismiss`; сам нічого не робить, а як усе пройшло, приходить входом `status`.
+ *
+ * Те саме вікно показує й посилання для скидання пароля колеги (`kind="passwordReset"`): інші
+ * заголовок, підказка й підпис поширення, а посилання веде на `/reset-password?token=…`.
  */
 @Component({
   selector: 'app-invitation-dialog',
@@ -50,6 +63,7 @@ export class InvitationDialogComponent {
   /** Назва організації, що користується системою (з підпису поширення); порожньо — підпис без неї. */
   readonly ngoName = input('');
   readonly status = input<InvitationStatus>('idle');
+  readonly kind = input<InvitationKind>('invitation');
 
   /** Натиснули кнопку копіювання: віддається саме посилання. */
   readonly copyLink = output<string>();
@@ -62,13 +76,19 @@ export class InvitationDialogComponent {
   protected readonly canShare = typeof this.document.defaultView?.navigator?.share === 'function';
 
   /**
-   * Посилання для колеги: `<адреса застосунку>/join?token=<токен>` (токен кодується для адреси).
+   * Посилання для колеги: `<адреса застосунку>/join?token=<токен>` (для скидання пароля —
+   * `/reset-password?token=<токен>`) (токен кодується для адреси).
    * Застосунок і API живуть на одному хості (API — на порту 5065), а `/join` шукає сервер за
    * доменом сторінки. Тому посилання веде на хост сервера, де створено запрошення: якщо це той
    * самий хост, що й у цієї сторінки, — на цю ж адресу (так і під час розробки, коли застосунок
    * на іншому порту); якщо інший — на той хост зі стандартним портом.
    */
-  protected readonly link = computed(() => `${this.appOrigin()}/join?token=${encodeURIComponent(this.token())}`);
+  protected readonly link = computed(() => `${this.appOrigin()}${KIND_PATH[this.kind()]}?token=${encodeURIComponent(this.token())}`);
+
+  /** Ключ тексту, що залежить від виду посилання (`title`, `hint`, `link`, `share*`). */
+  protected text(name: string): string {
+    return `colleagues.${this.kind()}.${name}`;
+  }
 
   private readonly appOrigin = computed(() => {
     let server: URL;
@@ -84,9 +104,9 @@ export class InvitationDialogComponent {
     const t = (key: string, params?: Record<string, string>) => this.translate.instant(key, params) as string;
     const ngo = this.ngoName().trim();
     const date = this.expires();
-    const intro = ngo ? t('colleagues.invitation.shareIntro', { ngo }) : t('colleagues.invitation.shareIntroNoNgo');
-    const outro = date ? t('colleagues.invitation.shareOutro', { date }) : t('colleagues.invitation.shareOutroNoDate');
-    this.shareLink.emit({ title: t('colleagues.invitation.shareTitle'), text: `${intro} ${outro}`, url: this.link() });
+    const intro = ngo ? t(this.text('shareIntro'), { ngo }) : t(this.text('shareIntroNoNgo'));
+    const outro = date ? t(this.text('shareOutro'), { date }) : t(this.text('shareOutroNoDate'));
+    this.shareLink.emit({ title: t(this.text('shareTitle')), text: `${intro} ${outro}`, url: this.link() });
   }
 
   /** До коли діє запрошення, словами за мовою інтерфейсу; порожньо, коли дати нема чи вона некоректна. */

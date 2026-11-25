@@ -1,6 +1,6 @@
 <ion-app>
   @if (layout.hideShell()) {
-    <!-- Сторінки без оболонки (наразі /login, /join і /relogin): жодного рейла чи другої
+    <!-- Сторінки без оболонки (наразі /login, /join, /reset-password і /relogin): жодного рейла чи другої
          панелі, просто маршрутизований вміст на всю площу. -->
     <ion-router-outlet></ion-router-outlet>
   } @else {
@@ -78,6 +78,20 @@
     [message]="notice?.message ?? ''"
     [buttons]="[{ text: 'common.close' | translate, role: 'cancel' }]"
     (didDismiss)="maintenance.dismiss()"
+  ></ion-toast>
+
+  <!-- Повідомлення про успіх, що переживає перехід (наприклад, «Пароль змінено…» після
+       /reset-password): угорі, зникає саме. -->
+  @let successKey = successNotice.key();
+  <ion-toast
+    class="success-notice"
+    color="success"
+    position="top"
+    [duration]="6000"
+    [isOpen]="successKey !== null"
+    [message]="successKey ? (successKey | translate) : ''"
+    [buttons]="[{ text: 'common.close' | translate, role: 'cancel' }]"
+    (didDismiss)="successNotice.dismiss()"
   ></ion-toast>
 
   <!-- Прелоадер на всю сторінку: поки шукаємо чинний акаунт серед збережених. -->
