@@ -1,4 +1,3 @@
-using Crm.Application.Common.Consts;
 using Crm.Application.Common.Validators;
 using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Features.CustomTables.Commands;
@@ -18,17 +17,15 @@ public sealed class CreateCustomTableCommandValidator : AbstractValidator<Create
     public CreateCustomTableCommandValidator()
     {
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Table name is required.")
-            .MaximumLength(CustomTableValidationConstants.MaxNameLength)
-            .WithMessage($"Table name must not exceed {CustomTableValidationConstants.MaxNameLength} characters.")
-            .Must(name => name is null || !name.Contains('\0', StringComparison.Ordinal))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+            .ApplyRequiredTextRules(
+                CustomTableValidationConstants.MaxNameLength,
+                "Table name is required.",
+                $"Table name must not exceed {CustomTableValidationConstants.MaxNameLength} characters.");
 
         RuleFor(x => x.Description)
-            .MaximumLength(CustomTableValidationConstants.MaxDescriptionLength)
-            .WithMessage($"Description must not exceed {CustomTableValidationConstants.MaxDescriptionLength} characters.")
-            .Must(description => description is null || !description.Contains('\0', StringComparison.Ordinal))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
+            .ApplyOptionalTextRules(
+                CustomTableValidationConstants.MaxDescriptionLength,
+                $"Description must not exceed {CustomTableValidationConstants.MaxDescriptionLength} characters.")
             .When(x => !string.IsNullOrEmpty(x.Description));
 
         RuleFor(x => x.Fields)

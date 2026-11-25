@@ -1,4 +1,3 @@
-using Crm.Application.Common.Consts;
 using Crm.Application.Common.Validators;
 using Crm.Application.Dtos.TableTemplates;
 using Crm.Application.Features.TableTemplates.Commands;
@@ -21,17 +20,15 @@ public sealed class UpdateTableTemplateCommandValidator : AbstractValidator<Upda
             .NotEmpty().WithMessage("Template ID is required.");
 
         RuleFor(x => x.Name)
-            .NotEmpty().WithMessage("Template name is required.")
-            .MaximumLength(TableTemplateValidationConstants.MaxNameLength)
-            .WithMessage($"Template name must not exceed {TableTemplateValidationConstants.MaxNameLength} characters.")
-            .Must(name => name is null || !name.Contains('\0', StringComparison.Ordinal))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+            .ApplyRequiredTextRules(
+                TableTemplateValidationConstants.MaxNameLength,
+                "Template name is required.",
+                $"Template name must not exceed {TableTemplateValidationConstants.MaxNameLength} characters.");
 
         RuleFor(x => x.Description)
-            .MaximumLength(TableTemplateValidationConstants.MaxDescriptionLength)
-            .WithMessage($"Description must not exceed {TableTemplateValidationConstants.MaxDescriptionLength} characters.")
-            .Must(description => description is null || !description.Contains('\0', StringComparison.Ordinal))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
+            .ApplyOptionalTextRules(
+                TableTemplateValidationConstants.MaxDescriptionLength,
+                $"Description must not exceed {TableTemplateValidationConstants.MaxDescriptionLength} characters.")
             .When(x => !string.IsNullOrEmpty(x.Description));
 
         RuleFor(x => x.Fields)
