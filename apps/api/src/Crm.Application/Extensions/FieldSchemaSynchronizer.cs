@@ -1,6 +1,9 @@
 using Crm.Application.Dtos.Common;
+using Crm.Domain.Common;
+using Crm.Domain.Entities.Base;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Entities;
+using Mapster;
 
 namespace Crm.Application.Extensions;
 
@@ -96,6 +99,95 @@ public static class FieldSchemaSynchronizer
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Computes structural schema differences between an existing <see cref="FieldDefinitionBase"/> collection and incoming field DTOs,
+    /// synchronizing <paramref name="existingFields"/> in-place and detecting key renames, mandatory backfills, and disallowed data type changes.
+    /// </summary>
+    /// <typeparam name="TEntity">The concrete field definition entity type.</typeparam>
+    /// <typeparam name="TDto">The incoming identifiable field DTO type.</typeparam>
+    /// <param name="existingFields">The mutable collection of existing field entities to synchronize in-place.</param>
+    /// <param name="incomingFields">The collection of incoming field definitions.</param>
+    /// <param name="isDataTypeChangeBlocked">Predicate returning <see langword="true"/> when a matched entity's data type cannot be changed.</param>
+    /// <returns>A <see cref="SchemaDiffResult"/> describing all additions, removals, key renames, and required backfills.</returns>
+    public static SchemaDiffResult ComputeSchemaDiff<TEntity, TDto>(
+        this ICollection<TEntity> existingFields,
+        IReadOnlyCollection<TDto> incomingFields,
+        Func<TEntity, bool> isDataTypeChangeBlocked)
+        where TEntity : FieldDefinitionBase
+        where TDto : IIdentifiableField
+    {
+        ArgumentNullException.ThrowIfNull(existingFields);
+        ArgumentNullException.ThrowIfNull(incomingFields);
+        ArgumentNullException.ThrowIfNull(isDataTypeChangeBlocked);
+
+        List<KeyRename> keyRenames = [];
+        List<FieldDefinitionBase> needingBackfill = [];
+
+        var result = Synchronize(
+            existingFields,
+            incomingFields,
+            id => new EntityNotFoundException<TEntity>(id),
+            createEntity: dto => dto.Adapt<TEntity>(),
+            updateEntity: (existing, dto) => dto.Adapt(existing),
+            onMatched: (existing, dto) =>
+            {
+                if (existing.DataType != dto.DataType && isDataTypeChangeBlocked(existing))
+                {
+                    throw new FieldDataTypeChangeNotAllowedException(existing.Key);
+                }
+
+                if (!string.Equals(existing.Key, dto.Key, StringComparison.Ordinal))
+                {
+                    keyRenames.Add(new KeyRename(existing.Id, existing.Key, dto.Key));
+                }
+
+                if (!existing.IsRequired && dto.IsRequired)
+                {
+                    needingBackfill.Add(existing);
+                }
+            });
+
+        return new SchemaDiffResult(result.Removed, result.Added, keyRenames, needingBackfill);
+    }
+
+    /// <summary>
+    /// Returns the existing keys of fields whose <see cref="IFieldSchema.DataType"/> is being changed by <paramref name="incomingFields"/>.
+    /// </summary>
+    /// <typeparam name="TEntity">The concrete field definition entity type.</typeparam>
+    /// <typeparam name="TDto">The incoming identifiable field DTO type.</typeparam>
+    /// <param name="existingFields">The current field definitions.</param>
+    /// <param name="incomingFields">The incoming field definitions.</param>
+    /// <returns>A list of existing field keys whose data types differ from their matched incoming DTOs.</returns>
+    public static List<string> FindKeysWithDataTypeChange<TEntity, TDto>(
+        this IReadOnlyCollection<TEntity> existingFields,
+        IReadOnlyCollection<TDto> incomingFields)
+        where TEntity : FieldDefinitionBase
+        where TDto : IIdentifiableField
+    {
+        ArgumentNullException.ThrowIfNull(existingFields);
+        ArgumentNullException.ThrowIfNull(incomingFields);
+
+        if (existingFields.Count == 0 || incomingFields.Count == 0)
+        {
+            return [];
+        }
+
+        var existingById = existingFields.ToDictionary(f => f.Id);
+        List<string> keys = [];
+
+        foreach (var dto in incomingFields)
+        {
+            if (dto.Id is { } id
+                && existingById.TryGetValue(id, out var existing)
+                && existing.DataType != dto.DataType)
+            {
+                keys.Add(existing.Key);
+            }
+        }
+
+        return keys;
     }
 
     private static Dictionary<Guid, TEntity> IndexExistingById<TEntity>(IReadOnlyCollection<TEntity> existingItems)

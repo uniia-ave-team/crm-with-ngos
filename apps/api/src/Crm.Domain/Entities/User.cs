@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Crm.Domain.Attributes;
 using Crm.Domain.Entities.Base;
 using Crm.Domain.Enums;
@@ -94,7 +95,8 @@ public class User : BaseEntity, IAuditableEntity
     public Ngo? Ngo { get; set; }
 
     /// <summary>
-    /// Gets the collection of custom key-value fields associated with this user.
+    /// Gets or sets the dynamic JSONB payload storing this user's values for the global <see cref="UserCustomField"/> schema.
+    /// Keys correspond to <see cref="FieldDefinitionBase.Key"/> definitions.
     /// </summary>
-    public ICollection<UserCustomField> CustomFields { get; init; } = [];
+    public JsonObject CustomFields { get; set; } = [];
 }

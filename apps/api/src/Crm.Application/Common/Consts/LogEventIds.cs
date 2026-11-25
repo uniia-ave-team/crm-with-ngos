@@ -91,14 +91,8 @@ public static class LogEventIds
     public const int FetchingUserPermissions = 2064;
     public const int NoRoleIdsProvidedForPermissions = 2065;
     public const int PermissionsFetchedSuccessfully = 2066;
-    public const int AddingUserCustomField = 2067;
-    public const int UserCustomFieldAddedSuccessfully = 2068;
-    public const int RemovingUserCustomField = 2069;
-    public const int UserCustomFieldRemovedSuccessfully = 2070;
-    public const int UnauthorizedCustomFieldRemoval = 2071;
     public const int UpdatingUserCustomField = 2072;
     public const int UserCustomFieldUpdatedSuccessfully = 2073;
-    public const int UnauthorizedCustomFieldUpdate = 2074;
     public const int DeletingUser = 2075;
     public const int CannotDeleteLastAdmin = 2076;
     public const int UserDeletedSuccessfully = 2077;
@@ -118,6 +112,10 @@ public static class LogEventIds
     public const int TransferredSoleManagedProjectsOnDeactivation = 2091;
     public const int CannotDeleteSoleProjectManager = 2092;
     public const int TransferredSoleManagedProjectsOnDeletion = 2093;
+    public const int SyncingUserCustomFields = 2094;
+    public const int UserCustomFieldsSyncedSuccessfully = 2095;
+    public const int FetchingUserCustomFields = 2100;
+    public const int UserCustomFieldsFetched = 2101;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;

@@ -7,6 +7,7 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
 using Mediator;
@@ -23,6 +24,7 @@ public sealed partial class CompleteRegistrationCommandHandler(
     INgoRepository ngoRepository,
     IAuthUserRepository userRepository,
     IAuthRoleRepository roleRepository,
+    IUserCustomFieldRepository userCustomFieldRepository,
     IIdentityService identityService,
     TimeProvider timeProvider,
     ILogger<CompleteRegistrationCommandHandler> logger) : ICommandHandler<CompleteRegistrationCommand, AuthTokensDto>
@@ -47,8 +49,9 @@ public sealed partial class CompleteRegistrationCommandHandler(
         }
 
         var roleNames = await roleRepository.GetRoleNamesByIdsAsync(roleIds, cancellationToken);
+        var schemaFields = await userCustomFieldRepository.GetAllOrderedAsync(cancellationToken);
 
-        var userBasic = await CreateUserAsync(command, email, ngoId, cancellationToken);
+        var userBasic = await CreateUserAsync(command, email, ngoId, schemaFields, cancellationToken);
 
         await identityService.AddToRolesAsync(userBasic.Id, roleNames, cancellationToken);
 
@@ -98,13 +101,19 @@ public sealed partial class CompleteRegistrationCommandHandler(
         return roleIds;
     }
 
-    private async Task<UserBasicDto> CreateUserAsync(CompleteRegistrationCommand command, string email, Guid ngoId, CancellationToken cancellationToken = default)
+    private async Task<UserBasicDto> CreateUserAsync(
+        CompleteRegistrationCommand command,
+        string email,
+        Guid ngoId,
+        IReadOnlyList<UserCustomField> schemaFields,
+        CancellationToken cancellationToken = default)
     {
         var user = command.Adapt<User>();
 
         user.NgoId = ngoId;
         user.IsActive = true;
         user.CreatedAt = timeProvider.GetUtcNow().UtcDateTime;
+        user.CustomFields = schemaFields.CreateDefaultPayload();
 
         return await identityService.CreateUserAsync(email, command.Password, user, cancellationToken);
     }

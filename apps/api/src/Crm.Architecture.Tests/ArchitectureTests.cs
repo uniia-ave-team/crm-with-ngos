@@ -100,6 +100,19 @@ public class ArchitectureTests
     }
 
     [Fact]
+    public void ControllersShouldNotDependOnCurrentUserService()
+    {
+        var result = Types.InAssembly(ApiAssembly)
+            .That()
+            .ResideInNamespace("Crm.Api.Controllers")
+            .ShouldNot()
+            .HaveDependencyOn(typeof(ICurrentUserService).FullName)
+            .GetResult();
+
+        Assert.True(result.IsSuccessful, FormatFailingTypes(result));
+    }
+
+    [Fact]
     public void ApiExceptionExtensionsAndMiddlewareShouldNotDependOnNpgsqlOrEntityFrameworkCore()
     {
         var result = Types.InAssembly(ApiAssembly)
@@ -171,7 +184,7 @@ public class ArchitectureTests
                         && t.Namespace is not null
                         && t.Namespace.StartsWith("Crm.Application.Features.Tasks", StringComparison.Ordinal)
                         && IsMediatorRequest(t)
-                        && t.GetProperty("TaskId") is not null
+                        && t.GetProperty(nameof(ITaskScoped.TaskId)) is not null
                         && !directTaskRequests.Contains(t)
                         && !typeof(ITaskScoped).IsAssignableFrom(t)),
         ];

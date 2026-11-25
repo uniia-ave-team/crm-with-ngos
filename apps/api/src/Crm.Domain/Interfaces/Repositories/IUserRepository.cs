@@ -1,3 +1,4 @@
+using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
@@ -71,4 +72,26 @@ public interface IUserRepository : IGenericRepository<User>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous update operation.</returns>
     Task UpdateLastLoginAtAsync(Guid userId, DateTime lastLoginAt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asynchronously determines which of the specified custom field keys currently have at least one non-null value
+    /// stored inside any user's <see cref="User.CustomFields"/> JSONB payload.
+    /// </summary>
+    /// <param name="keys">The candidate schema keys to inspect.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A set of keys that have at least one non-null value stored on any user.</returns>
+    Task<HashSet<string>> GetKeysWithNonNullCustomFieldValuesAsync(
+        IEnumerable<string> keys,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Synchronizes all users' <see cref="User.CustomFields"/> JSONB documents in a single bulk SQL update
+    /// according to <paramref name="diff"/> (dropping removed keys, renaming keys, and backfilling newly required defaults).
+    /// </summary>
+    /// <param name="diff">The computed schema diff.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The number of user rows updated in the database.</returns>
+    Task<int> SyncCustomFieldsSchemaAsync(
+        SchemaDiffResult diff,
+        CancellationToken cancellationToken = default);
 }

@@ -1,6 +1,7 @@
 using Crm.Domain.Entities.Base;
 using Crm.Domain.Interfaces.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Crm.Infrastructure.Persistence.Extensions;
 
@@ -11,9 +12,6 @@ public static class FieldSchemaPersistenceExtensions
 {
     /// <summary>
     /// Resolves unique key constraint cycles when existing fields swap or chain-rename keys within the same parent schema.
-    /// Temporarily updates colliding keys in the database to deterministic temporary keys and synchronizes
-    /// the EF Core <see cref="Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker"/> original values so the subsequent
-    /// <see cref="DbContext.SaveChangesAsync(CancellationToken)"/> can apply the final keys in a single pass.
     /// </summary>
     /// <typeparam name="TField">The persisted field entity type.</typeparam>
     /// <param name="context">The active database context.</param>
@@ -21,7 +19,7 @@ public static class FieldSchemaPersistenceExtensions
     /// <param name="parentIdSelector">A delegate selecting the parent identifier property from the field entity.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public static async Task ResolveFieldKeyCollisionsAsync<TField>(
+    public static Task ResolveFieldKeyCollisionsAsync<TField>(
         this DbContext context,
         Guid parentId,
         Func<TField, Guid> parentIdSelector,
@@ -37,6 +35,37 @@ public static class FieldSchemaPersistenceExtensions
             .Where(e => parentIdSelector(e.Entity) == parentId)
             .ToList();
 
+        return ResolveFieldKeyCollisionsCoreAsync(context, trackedEntries, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resolves unique key constraint cycles when global fields (such as <see cref="Domain.Entities.UserCustomField"/>)
+    /// swap or chain-rename keys within a single global schema.
+    /// </summary>
+    /// <typeparam name="TField">The persisted field entity type.</typeparam>
+    /// <param name="context">The active database context.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    public static Task ResolveFieldKeyCollisionsAsync<TField>(
+        this DbContext context,
+        CancellationToken cancellationToken = default)
+        where TField : BaseEntity, IEntityField
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        context.ChangeTracker.DetectChanges();
+
+        var trackedEntries = context.ChangeTracker.Entries<TField>().ToList();
+
+        return ResolveFieldKeyCollisionsCoreAsync(context, trackedEntries, cancellationToken);
+    }
+
+    private static async Task ResolveFieldKeyCollisionsCoreAsync<TField>(
+        DbContext context,
+        List<EntityEntry<TField>> trackedEntries,
+        CancellationToken cancellationToken)
+        where TField : BaseEntity, IEntityField
+    {
         var targetKeys = trackedEntries
             .Where(e => e.State != EntityState.Deleted)
             .Select(e => e.Entity.Key)

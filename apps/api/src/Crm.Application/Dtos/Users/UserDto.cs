@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Crm.Application.Dtos.Roles;
 using Crm.Domain.Enums;
 
@@ -19,6 +20,7 @@ namespace Crm.Application.Dtos.Users;
 /// <param name="AvatarUrl">The resolved URL or API endpoint to access the user's avatar image.</param>
 /// <param name="IsActive">Indicates whether the user account is active; if false, the account is deactivated.</param>
 /// <param name="Roles">The collection of roles assigned to the user, localized to their pronoun category.</param>
+/// <param name="CustomFields">The JSON object containing custom field values visible to the requesting user, ordered by schema definition.</param>
 public record UserDto(
     Guid Id,
     string Email,
@@ -32,4 +34,5 @@ public record UserDto(
     PronounCategory? PronounCategory,
     string? AvatarUrl,
     bool IsActive,
-    IEnumerable<RoleUserDto> Roles);
+    IEnumerable<RoleUserDto> Roles,
+    JsonObject CustomFields);

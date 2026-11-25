@@ -1,4 +1,4 @@
-using Crm.Domain.Entities;
+using Crm.Domain.Entities.Base;
 
 namespace Crm.Domain.Common;
 
@@ -10,7 +10,7 @@ namespace Crm.Domain.Common;
 /// <param name="KeyRenames">The list of key renaming operations that need two-phase execution.</param>
 /// <param name="FieldsNeedingBackfill">The list of fields that were made required and need default value backfilling.</param>
 public sealed record SchemaDiffResult(
-    IReadOnlyList<CustomField> FieldsToRemove,
-    IReadOnlyList<CustomField> FieldsToAdd,
+    IReadOnlyList<FieldDefinitionBase> FieldsToRemove,
+    IReadOnlyList<FieldDefinitionBase> FieldsToAdd,
     IReadOnlyList<KeyRename> KeyRenames,
-    IReadOnlyList<CustomField> FieldsNeedingBackfill);
+    IReadOnlyList<FieldDefinitionBase> FieldsNeedingBackfill);

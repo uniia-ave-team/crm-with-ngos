@@ -1,6 +1,9 @@
+using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Queries;
 using Crm.Application.Features.Users.Validators;
 using Crm.Domain.Constants;
+using Crm.Domain.Entities;
+using Crm.Domain.Extensions;
 using Shouldly;
 
 namespace Crm.Application.Tests.Features.Users.Validators;
@@ -23,33 +26,41 @@ public class GetUsersQueryValidatorTests
     }
 
     [Theory]
-    [InlineData("Id")]
+    [InlineData(nameof(UserDto.Id))]
     [InlineData("id")]
-    [InlineData("FirstName")]
+    [InlineData(nameof(UserDto.FirstName))]
     [InlineData("firstname")]
-    [InlineData("LastName")]
+    [InlineData(nameof(UserDto.LastName))]
     [InlineData("lastname")]
-    [InlineData("Patronymic")]
+    [InlineData(nameof(UserDto.Patronymic))]
     [InlineData("patronymic")]
-    [InlineData("Email")]
+    [InlineData(nameof(UserDto.Email))]
     [InlineData("email")]
-    [InlineData("PhoneNumber")]
+    [InlineData(nameof(UserDto.PhoneNumber))]
     [InlineData("phonenumber")]
-    [InlineData("Country")]
+    [InlineData(nameof(UserDto.Country))]
     [InlineData("country")]
-    [InlineData("EmergencyContact")]
+    [InlineData(nameof(UserDto.EmergencyContact))]
     [InlineData("emergencycontact")]
-    [InlineData("Pronouns")]
+    [InlineData(nameof(UserDto.Pronouns))]
     [InlineData("pronouns")]
-    [InlineData("PronounCategory")]
+    [InlineData(nameof(UserDto.PronounCategory))]
     [InlineData("pronouncategory")]
-    [InlineData("IsActive")]
+    [InlineData(nameof(UserDto.IsActive))]
     [InlineData("isactive")]
-    [InlineData("FullName")]
+    [InlineData(UserConstants.FullName)]
     [InlineData("fullname")]
-    [InlineData("CreatedAt")]
+    [InlineData(nameof(User.CreatedAt))]
     [InlineData("createdat")]
-    [InlineData("  FirstName  ")]
+    [InlineData($"  {nameof(UserDto.FirstName)}  ")]
+    [InlineData("city")]
+    [InlineData("birth_date")]
+    [InlineData("t_shirt_size")]
+    [InlineData($"{UserCustomFieldExtensions.SortPrefix}.city")]
+    [InlineData($"{UserCustomFieldExtensions.SortPrefix}.birth_date")]
+    [InlineData($"{UserCustomFieldExtensions.SortPrefix}['birth_date']")]
+    [InlineData($"{UserCustomFieldExtensions.SortPrefix}[\"t_shirt_size\"]")]
+    [InlineData("CUSTOMFIELDS.age")]
     public void ValidateWhenValidOrderByProvidedShouldPass(string orderBy)
     {
         // Arrange
@@ -63,11 +74,17 @@ public class GetUsersQueryValidatorTests
     }
 
     [Theory]
-    [InlineData("Name")]
     [InlineData("PasswordHash")]
-    [InlineData("SecretKey")]
-    [InlineData("DropTableUsers")]
-    [InlineData("InvalidColumn")]
+    [InlineData("SecurityStamp")]
+    [InlineData("ConcurrencyStamp")]
+    [InlineData("NormalizedEmail")]
+    [InlineData($"{UserCustomFieldExtensions.SortPrefix}.")]
+    [InlineData($"{UserCustomFieldExtensions.SortPrefix}.{nameof(UserDto.FirstName)}")]
+    [InlineData($"{UserCustomFieldExtensions.SortPrefix}.PasswordHash")]
+    [InlineData($"{UserCustomFieldExtensions.SortPrefix}.bad key; DROP TABLE Users;")]
+    [InlineData($"{UserCustomFieldExtensions.SortPrefix}.nested.path")]
+    [InlineData("invalid column")]
+    [InlineData("key; DROP TABLE Users;")]
     public void ValidateWhenInvalidOrderByProvidedShouldFail(string invalidOrderBy)
     {
         // Arrange

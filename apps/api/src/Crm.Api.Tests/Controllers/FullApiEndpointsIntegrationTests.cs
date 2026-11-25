@@ -313,41 +313,104 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         (await adminClient.GetAsync($"/api/v1/users/{memberId}/avatar", ct))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // Admin adds, updates, removes custom field on target user
-        (await adminClient.PostAsJsonAsync(
-                $"/api/v1/users/{memberId}/custom-fields",
-                new AddUserCustomFieldCommand("telegram", "@olena", true),
-                ct))
-            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-
-        var memberWithField = (await adminClient.GetFromJsonAsync<UserProfileDto>($"/api/v1/users/{memberId}", JsonOptions, ct))!;
-        var adminAddedFieldId = memberWithField.CustomFields.ShouldHaveSingleItem().Id;
-
+        // Global user custom fields schema + JSONB values: sync schema, update self & target values,
+        // verify typed sorting & plain SearchTerm filtering, rename key atomically, and remove columns.
         (await adminClient.PutAsJsonAsync(
-                $"/api/v1/users/{memberId}/custom-fields/{adminAddedFieldId}",
-                new UpdateUserCustomFieldCommand("@olena_updated", false),
-                ct))
-            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await adminClient.DeleteAsync($"/api/v1/users/{memberId}/custom-fields/{adminAddedFieldId}", ct))
-            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-
-        // Self user adds, updates, removes own custom field
-        (await memberClient.PostAsJsonAsync(
-                "/api/v1/users/me/custom-fields",
-                new AddUserCustomFieldCommand("city", "Kyiv", true),
+                "/api/v1/users/custom-fields",
+                new SyncUserCustomFieldsCommand(
+                [
+                    new UpdateUserCustomFieldDto(null, "Досвід (років)", "experience_years", FieldDataType.Number, IsRequired: true, IsPublic: true, Order: 0),
+                    new UpdateUserCustomFieldDto(null, "Внутрішній бал", "internal_score", FieldDataType.Number, IsRequired: false, IsPublic: false, Order: 1),
+                    new UpdateUserCustomFieldDto(null, "Місто", "city", FieldDataType.Text, IsRequired: false, IsPublic: true, Order: 2),
+                ]),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        var selfProfile = (await memberClient.GetFromJsonAsync<UserProfileDto>("/api/v1/users/me", JsonOptions, ct))!;
-        var selfFieldId = selfProfile.CustomFields.ShouldHaveSingleItem().Id;
+        var adminHeaders = (await adminClient.GetFromJsonAsync<List<UserCustomFieldDto>>("/api/v1/users/custom-fields", JsonOptions, ct))!;
+        adminHeaders.Count.ShouldBe(3);
+        var expField = adminHeaders[0];
+        expField.Key.ShouldBe("experience_years");
+        expField.Name.ShouldBe("Досвід (років)");
+        expField.DataType.ShouldBe(FieldDataType.Number);
+        expField.IsRequired.ShouldBeTrue();
+        expField.IsPublic.ShouldBeTrue();
+        var internalField = adminHeaders[1];
+        internalField.Key.ShouldBe("internal_score");
+        internalField.IsPublic.ShouldBeFalse();
+        var cityField = adminHeaders[2];
 
+        // Member sees all schema columns on /me/custom-fields to fill their own profile
+        var selfHeaders = (await memberClient.GetFromJsonAsync<List<UserCustomFieldDto>>("/api/v1/users/me/custom-fields", JsonOptions, ct))!;
+        selfHeaders.Count.ShouldBe(3);
+
+        // Invalid typed custom field payload -> 400
         (await memberClient.PutAsJsonAsync(
-                $"/api/v1/users/me/custom-fields/{selfFieldId}",
-                new UpdateUserCustomFieldCommand("Lviv", true),
+                "/api/v1/users/me/custom-fields",
+                new UpdateUserCustomFieldsCommand(new JsonObject { ["experience_years"] = "not-a-number" }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // Member updates own custom field values
+        (await memberClient.PutAsJsonAsync(
+                "/api/v1/users/me/custom-fields",
+                new UpdateUserCustomFieldsCommand(new JsonObject
+                {
+                    ["experience_years"] = 10,
+                    ["internal_score"] = 95,
+                    ["city"] = "Lviv",
+                }),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await memberClient.DeleteAsync($"/api/v1/users/me/custom-fields/{selfFieldId}", ct))
+
+        // Admin updates admin's own custom field values via /{id}/custom-fields
+        (await adminClient.PutAsJsonAsync(
+                $"/api/v1/users/{adminId}/custom-fields",
+                new UpdateUserCustomFieldsCommand(new JsonObject
+                {
+                    ["experience_years"] = 1,
+                    ["city"] = "Kyiv",
+                }),
+                ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Admin sorts users by bare custom field key (numeric DESC) and searches by custom field value via plain SearchTerm
+        var sortedUsers = (await adminClient.GetFromJsonAsync<PagedResult<UserDto>>(
+                "/api/v1/users?OrderBy=experience_years&SortOrder=desc",
+                JsonOptions,
+                ct))!;
+        sortedUsers.Items.Count.ShouldBe(2);
+        var topSortedUser = sortedUsers.Items.First();
+        topSortedUser.Id.ShouldBe(memberId);
+        topSortedUser.CustomFields["experience_years"]?.GetValue<decimal>().ShouldBe(10m);
+
+        var filteredUsers = (await adminClient.GetFromJsonAsync<PagedResult<UserDto>>(
+                "/api/v1/users?SearchTerm=Lviv",
+                JsonOptions,
+                ct))!;
+        filteredUsers.Items.ShouldHaveSingleItem().Id.ShouldBe(memberId);
+
+        // Admin renames key & removes internal_score atomically -> JSONB payloads updated across all users
+        (await adminClient.PutAsJsonAsync(
+                "/api/v1/users/custom-fields",
+                new SyncUserCustomFieldsCommand(
+                [
+                    new UpdateUserCustomFieldDto(expField.Id, "Роки активності", "years_active", FieldDataType.Number, IsRequired: true, IsPublic: true, Order: 0),
+                    new UpdateUserCustomFieldDto(cityField.Id, "Місто", "city", FieldDataType.Text, IsRequired: false, IsPublic: true, Order: 1),
+                ]),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var memberProfileAfterRename = (await adminClient.GetFromJsonAsync<UserProfileDto>($"/api/v1/users/{memberId}", JsonOptions, ct))!;
+        memberProfileAfterRename.CustomFields["years_active"]?.GetValue<decimal>().ShouldBe(10m);
+        memberProfileAfterRename.CustomFields.ContainsKey("experience_years").ShouldBeFalse();
+        memberProfileAfterRename.CustomFields.ContainsKey("internal_score").ShouldBeFalse();
+
+        // Clean up global user custom fields schema (sync to empty)
+        (await adminClient.PutAsJsonAsync("/api/v1/users/custom-fields", new SyncUserCustomFieldsCommand([]), ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var adminProfileAfterDelete = (await adminClient.GetFromJsonAsync<UserProfileDto>("/api/v1/users/me", JsonOptions, ct))!;
+        adminProfileAfterDelete.CustomFields.Count.ShouldBe(0);
 
         // Last admin protection -> 400
         (await adminClient.PostAsync($"/api/v1/users/{adminId}/deactivate", null, ct))

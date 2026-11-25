@@ -65,6 +65,24 @@ public static partial class FieldDataTypeExtensions
         }
     }
 
+    /// <summary>
+    /// Attempts to parse an ISO 8601 round-trip date/time string and normalize it to UTC (<c>"O"</c> format).
+    /// </summary>
+    /// <param name="value">The raw ISO 8601 date/time string.</param>
+    /// <param name="normalized">When successful, receives the UTC-normalized ISO 8601 string.</param>
+    /// <returns><see langword="true"/> if <paramref name="value"/> is a valid ISO 8601 round-trip timestamp; otherwise, <see langword="false"/>.</returns>
+    public static bool TryNormalizeDateTimeString(string value, out string normalized)
+    {
+        if (TryParseDateTimeString(value, out var parsedOffset))
+        {
+            normalized = parsedOffset.ToUtc().ToString("O", CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        normalized = string.Empty;
+        return false;
+    }
+
     private static bool IsValidJsonValue(this FieldDataType dataType, JsonNode? node)
     {
         if (IsNull(node))
@@ -89,29 +107,43 @@ public static partial class FieldDataTypeExtensions
 
             FieldDataType.Date => kind == JsonValueKind.String
                 && jsonValue.TryGetValue<string>(out var strDate)
-                && DateOnly.TryParseExact(strDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _),
+                && IsValidDateString(strDate),
 
             FieldDataType.DateTime => kind == JsonValueKind.String
                 && jsonValue.TryGetValue<string>(out var strDateTime)
-                && DateTimeOffset.TryParseExact(strDateTime, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _),
+                && TryParseDateTimeString(strDateTime, out _),
 
             FieldDataType.Email => kind == JsonValueKind.String
                 && jsonValue.TryGetValue<string>(out var emailStr)
-                && MailAddress.TryCreate(emailStr, out var mail)
-                && mail.Address == emailStr,
+                && IsValidEmailString(emailStr),
 
             FieldDataType.Url => kind == JsonValueKind.String
                 && jsonValue.TryGetValue<string>(out var urlStr)
-                && Uri.TryCreate(urlStr, UriKind.Absolute, out var uri)
-                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps),
+                && IsValidUrlString(urlStr),
 
             FieldDataType.PhoneNumber => kind == JsonValueKind.String
                 && jsonValue.TryGetValue<string>(out var phoneStr)
-                && E164Regex().IsMatch(phoneStr),
+                && IsValidPhoneNumberString(phoneStr),
 
             _ => false,
         };
     }
+
+    private static bool IsValidDateString(string value)
+        => DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+
+    private static bool TryParseDateTimeString(string value, out DateTimeOffset parsedOffset)
+        => DateTimeOffset.TryParseExact(value, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out parsedOffset);
+
+    private static bool IsValidEmailString(string value)
+        => MailAddress.TryCreate(value, out var mail) && mail.Address == value;
+
+    private static bool IsValidUrlString(string value)
+        => Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    private static bool IsValidPhoneNumberString(string value)
+        => E164Regex().IsMatch(value);
 
     private static bool IsNull(JsonNode? node) => node is null || node.GetValueKind() == JsonValueKind.Null;
 

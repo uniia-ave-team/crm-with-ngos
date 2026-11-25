@@ -3,7 +3,6 @@ using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Entities;
-using Mapster;
 
 namespace Crm.Application.Features.CustomTables.Extensions;
 
@@ -14,9 +13,8 @@ public static class CustomTableSchemaExtensions
 {
     /// <summary>
     /// Computes structural schema differences between the current table field state and an incoming set of field update DTOs,
-    /// synchronizing the table's <see cref="CustomTable.Fields"/> collection in-place.
-    /// Utilizes <see cref="FieldSchemaSynchronizer.Synchronize{TEntity, TDto}"/> for collection comparison and identifies key renames,
-    /// mandatory field backfills, and forbidden data type modifications.
+    /// synchronizing the table's <see cref="CustomTable.Fields"/> collection in-place by delegating to
+    /// <see cref="FieldSchemaSynchronizer.ComputeSchemaDiff{TEntity, TDto}"/>.
     /// </summary>
     /// <typeparam name="TDto">The incoming field DTO type implementing <see cref="IIdentifiableField"/>.</typeparam>
     /// <param name="table">The target custom table entity containing the current field schema.</param>
@@ -36,46 +34,6 @@ public static class CustomTableSchemaExtensions
         ArgumentNullException.ThrowIfNull(table);
         ArgumentNullException.ThrowIfNull(incomingFields);
 
-        List<KeyRename> keyRenames = [];
-        List<CustomField> needingBackfill = [];
-
-        var result = FieldSchemaSynchronizer.Synchronize(
-            table.Fields,
-            incomingFields,
-            id => new EntityNotFoundException<CustomField>(id),
-            createEntity: dto => dto.Adapt<CustomField>(),
-            updateEntity: (existing, dto) => dto.Adapt(existing),
-            onMatched: (existing, dto) =>
-            {
-                ValidateDataTypeChange(existing, dto, hasExistingRecords);
-                DetectKeyRename(existing, dto, keyRenames);
-                DetectBackfillRequirement(existing, dto, needingBackfill);
-            });
-
-        return new SchemaDiffResult(result.Removed, result.Added, keyRenames, needingBackfill);
-    }
-
-    private static void ValidateDataTypeChange(CustomField existingField, IIdentifiableField dto, bool hasExistingRecords)
-    {
-        if (hasExistingRecords && existingField.DataType != dto.DataType)
-        {
-            throw new FieldDataTypeChangeNotAllowedException(existingField.Key);
-        }
-    }
-
-    private static void DetectKeyRename(CustomField existingField, IIdentifiableField dto, List<KeyRename> keyRenames)
-    {
-        if (!string.Equals(existingField.Key, dto.Key, StringComparison.Ordinal))
-        {
-            keyRenames.Add(new KeyRename(existingField.Id, existingField.Key, dto.Key));
-        }
-    }
-
-    private static void DetectBackfillRequirement(CustomField existingField, IIdentifiableField dto, List<CustomField> needingBackfill)
-    {
-        if (!existingField.IsRequired && dto.IsRequired)
-        {
-            needingBackfill.Add(existingField);
-        }
+        return table.Fields.ComputeSchemaDiff(incomingFields, _ => hasExistingRecords);
     }
 }

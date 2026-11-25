@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using Crm.Application.Common.Consts;
 using Crm.Domain.Constants.Validation;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Entities;
@@ -17,20 +16,25 @@ public sealed partial class FieldValidationRules<TField> : AbstractValidator<TFi
     /// <summary>
     /// Initializes a new instance of the <see cref="FieldValidationRules{TField}"/> class.
     /// </summary>
-    public FieldValidationRules()
+    /// <param name="isReservedKey">
+    /// Optional predicate determining whether a field key collides with a reserved entity property.
+    /// Defaults to <see cref="CustomFieldExtensions.IsReservedKey"/>.
+    /// </param>
+    public FieldValidationRules(Func<string?, bool>? isReservedKey = null)
     {
+        var reservedCheck = isReservedKey ?? CustomFieldExtensions.IsReservedKey;
+
         RuleFor(x => x.Name)
             .NotEmpty()
             .MaximumLength(FieldSchemaValidationConstants.MaxNameLength)
-            .Must(name => name is null || !name.Contains('\0', StringComparison.Ordinal))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+            .NotContainNullChars();
 
         RuleFor(x => x.Key)
             .Cascade(CascadeMode.Stop)
             .NotEmpty()
             .MaximumLength(FieldSchemaValidationConstants.MaxKeyLength)
             .Matches(KeyRegex()).WithMessage("Key must be snake_case.")
-            .Must(k => !CustomFieldExtensions.IsReservedKey(k)).WithMessage("Key cannot be a reserved entity property name.");
+            .Must(k => !reservedCheck(k)).WithMessage("Key cannot be a reserved entity property name.");
 
         RuleFor(x => x.DataType)
             .IsInEnum();

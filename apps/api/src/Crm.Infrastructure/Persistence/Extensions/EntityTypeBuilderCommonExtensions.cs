@@ -32,11 +32,17 @@ internal static class EntityTypeBuilderCommonExtensions
     /// <summary>
     /// Configures common schema-field columns (<see cref="IFieldSchema.Name"/>, <see cref="IFieldSchema.Key"/>,
     /// <see cref="IFieldSchema.DataType"/>, <see cref="IFieldSchema.IsRequired"/>, <see cref="IOrderedEntity.Order"/>)
-    /// shared by custom table fields and template fields.
+    /// shared by custom table fields, template fields, and user custom fields.
     /// </summary>
     /// <typeparam name="TField">The field entity type implementing <see cref="IEntityField"/>.</typeparam>
     /// <param name="builder">The EF Core entity type builder.</param>
-    public static void ConfigureFieldDefinition<TField>(this EntityTypeBuilder<TField> builder)
+    /// <param name="storeDataTypeAsString">
+    /// Whether to persist <see cref="IFieldSchema.DataType"/> as a string column (<see langword="true"/> for custom tables/templates)
+    /// or as its underlying integer value (<see langword="false"/> for user custom fields).
+    /// </param>
+    public static void ConfigureFieldDefinition<TField>(
+        this EntityTypeBuilder<TField> builder,
+        bool storeDataTypeAsString = true)
         where TField : class, IEntityField
     {
         builder.ConfigureGuidV7Key();
@@ -49,10 +55,18 @@ internal static class EntityTypeBuilderCommonExtensions
             .IsRequired()
             .HasMaxLength(FieldSchemaValidationConstants.MaxKeyLength);
 
-        builder.Property(f => f.DataType)
-            .HasConversion<string>()
-            .IsRequired()
-            .HasMaxLength(FieldSchemaValidationConstants.MaxDataTypeLength);
+        if (storeDataTypeAsString)
+        {
+            builder.Property(f => f.DataType)
+                .HasConversion<string>()
+                .IsRequired()
+                .HasMaxLength(FieldSchemaValidationConstants.MaxDataTypeLength);
+        }
+        else
+        {
+            builder.Property(f => f.DataType)
+                .IsRequired();
+        }
 
         builder.Property(f => f.IsRequired)
             .IsRequired();

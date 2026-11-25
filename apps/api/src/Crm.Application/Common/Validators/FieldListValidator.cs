@@ -14,7 +14,10 @@ public class FieldListValidator<TField> : AbstractValidator<IReadOnlyCollection<
     /// <summary>
     /// Initializes a new instance of the <see cref="FieldListValidator{TField}"/> class and defines validation rules for field uniqueness and sequential ordering.
     /// </summary>
-    public FieldListValidator()
+    /// <param name="isReservedKey">
+    /// Optional predicate determining whether a field key collides with a reserved entity property.
+    /// </param>
+    public FieldListValidator(Func<string?, bool>? isReservedKey = null)
     {
         RuleFor(fields => fields)
             .NotNull()
@@ -24,7 +27,7 @@ public class FieldListValidator<TField> : AbstractValidator<IReadOnlyCollection<
             .Cascade(CascadeMode.Stop)
             .NotNull()
             .WithMessage("Field item cannot be null.")
-            .SetValidator(new FieldValidationRules<TField>())
+            .SetValidator(new FieldValidationRules<TField>(isReservedKey))
             .When(fields => fields is not null);
 
         RuleFor(fields => fields)

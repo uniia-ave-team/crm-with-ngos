@@ -1,25 +1,24 @@
-using System.Globalization;
 using System.Text.Json.Nodes;
-using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
+using Crm.Domain.Interfaces.Entities;
 
 namespace Crm.Domain.Extensions;
 
 /// <summary>
-/// Provides extension methods for <see cref="JsonObject"/> schema validation, null backfilling, and key reordering.
+/// Provides extension methods for <see cref="JsonObject"/> schema validation, default payload creation, null backfilling, and key reordering.
 /// </summary>
 public static class JsonObjectExtensions
 {
     /// <summary>
-    /// Validates field data types and requirements against the table schema, prevents unknown properties,
+    /// Validates field data types and requirements against the schema, prevents unknown properties,
     /// and populates null values for missing optional fields. Intended for write operations (Create/Update).
     /// </summary>
     /// <param name="incomingData">The source JSON payload object.</param>
-    /// <param name="customFields">The list of custom field definitions.</param>
+    /// <param name="customFields">The list of field schema definitions.</param>
     /// <returns>A validated and normalized <see cref="JsonObject"/> payload containing schema-only keys.</returns>
     /// <exception cref="InvalidCustomRecordPayloadException">Thrown when any field value fails data type or required validation, or when unknown fields are present.</exception>
-    public static JsonObject ValidateAndBackfillPayload(this JsonObject incomingData, IReadOnlyList<CustomField> customFields)
+    public static JsonObject ValidateAndBackfillPayload(this JsonObject incomingData, IReadOnlyList<IFieldSchema> customFields)
     {
         ArgumentNullException.ThrowIfNull(incomingData);
         ArgumentNullException.ThrowIfNull(customFields);
@@ -97,19 +96,35 @@ public static class JsonObjectExtensions
         return reorderedData;
     }
 
+    /// <summary>
+    /// Creates an initial schema-aligned <see cref="JsonObject"/> payload for newly created entities (such as newly registered users),
+    /// backfilling mandatory fields with their default typed values and setting optional fields to <see langword="null"/>.
+    /// </summary>
+    /// <param name="fields">The ordered field schema definitions.</param>
+    /// <returns>A schema-aligned <see cref="JsonObject"/> initialized with defaults.</returns>
+    public static JsonObject CreateDefaultPayload(this IEnumerable<IFieldSchema> fields)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+
+        var payload = new JsonObject();
+        foreach (var field in fields.OrderBy(f => f.Order))
+        {
+            payload[field.Key] = field.IsRequired
+                ? JsonNode.Parse(field.DataType.GetBackfillJson())
+                : null;
+        }
+
+        return payload;
+    }
+
     private static JsonNode? NormalizeValidatedValue(FieldDataType dataType, JsonNode? valueNode)
         => valueNode switch
         {
             null => null,
             JsonValue jsonValue when dataType == FieldDataType.DateTime
                 && jsonValue.TryGetValue<string>(out var rawDateTime)
-                && DateTimeOffset.TryParseExact(
-                    rawDateTime,
-                    "O",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.RoundtripKind,
-                    out var parsedOffset)
-                => JsonValue.Create(parsedOffset.ToUtc().ToString("O", CultureInfo.InvariantCulture)),
+                && FieldDataTypeExtensions.TryNormalizeDateTimeString(rawDateTime, out var normalizedDateTime)
+                => JsonValue.Create(normalizedDateTime),
             _ => valueNode.DeepClone(),
         };
 }

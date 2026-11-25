@@ -236,12 +236,13 @@ public class InfrastructureTests
             .ToQueryString();
         CountOccurrences(templateDtoSql, "LEFT JOIN").ShouldBe(1);
 
-        // 4. UserProfileResult must join UserCustomField once (not 2x N^2; 1 LEFT JOIN User + 1 LEFT JOIN UserCustomField).
+        // 4. UserProfileResult projects CustomFields directly from Users JSONB with ZERO UserCustomField joins.
         string profileSql = context.Set<AuthUser>()
             .AsNoTracking()
             .ProjectToType<UserProfileResult>()
             .ToQueryString();
-        CountOccurrences(profileSql, "LEFT JOIN \"UserCustomField\"").ShouldBe(1);
+        profileSql.ShouldNotContain("LEFT JOIN \"UserCustomField\"");
+        profileSql.ShouldContain("\"CustomFields\"");
     }
 
     [Fact]

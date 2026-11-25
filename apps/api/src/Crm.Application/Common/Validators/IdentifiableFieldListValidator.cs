@@ -13,7 +13,11 @@ public sealed class IdentifiableFieldListValidator<TField> : FieldListValidator<
     /// <summary>
     /// Initializes a new instance of the <see cref="IdentifiableFieldListValidator{TField}"/> class.
     /// </summary>
-    public IdentifiableFieldListValidator()
+    /// <param name="isReservedKey">
+    /// Optional predicate determining whether a field key collides with a reserved entity property.
+    /// </param>
+    public IdentifiableFieldListValidator(Func<string?, bool>? isReservedKey = null)
+        : base(isReservedKey)
     {
         RuleFor(fields => fields)
             .Must(NotContainEmptyGuidIds)
