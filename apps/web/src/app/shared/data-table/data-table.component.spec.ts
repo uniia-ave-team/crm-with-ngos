@@ -8,7 +8,7 @@ import { DataTableComponent } from './data-table.component';
 
 @Component({
   template: `
-    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [highlightedRowId]="highlighted()" [defaultSortColumnId]="defaultSort()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
+    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [addColumnPlanned]="addPlanned()" [highlightedRowId]="highlighted()" [defaultSortColumnId]="defaultSort()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
     <ng-template #custom let-row let-column="column"><b class="custom">{{ column.id }}:{{ row['title'] }}</b></ng-template>
   `,
   imports: [DataTableComponent],
@@ -19,6 +19,7 @@ class HostComponent {
   readonly label = signal<string | null>(null);
   readonly rowMenuShown = signal(true);
   readonly addShown = signal(true);
+  readonly addPlanned = signal(false);
   readonly highlighted = signal<string | null>(null);
   readonly defaultSort = signal<string | null>(null);
   readonly opened: DataTableRowMenuEvent[] = [];
@@ -240,6 +241,15 @@ describe('DataTableComponent', () => {
       host.addShown.set(false);
       fixture.detectChanges();
       expect(element.querySelector('.data-table__add')).toBeNull();
+      expect(element.querySelectorAll('thead th')).toHaveLength(3);
+    });
+
+    it('stays in the markup but is hidden with the class planned when its action is not there yet', () => {
+      const { fixture, host, element } = render(base, rows);
+      expect(element.querySelector('.data-table__add')?.classList.contains('planned')).toBe(false);
+      host.addPlanned.set(true);
+      fixture.detectChanges();
+      expect(element.querySelector('.data-table__add')?.classList.contains('planned')).toBe(true);
       expect(element.querySelectorAll('thead th')).toHaveLength(3);
     });
 

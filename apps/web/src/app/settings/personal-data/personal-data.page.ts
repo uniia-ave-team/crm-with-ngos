@@ -28,7 +28,8 @@ type SaveResult =
   | 'avatar.unauthorized'
   | 'avatar.forbidden'
   | 'avatar.unreachable'
-  | 'avatar.error';
+  | 'avatar.error'
+  | 'avatar.quotaExceeded';
 
 const ERROR_PREFIX = 'settings.personal.error.';
 
@@ -37,6 +38,13 @@ export type PronounChoice = 'she' | 'he' | 'they' | 'other';
 
 /** Ключі підписів готових варіантів у мовному файлі. */
 const PRONOUN_LABELS = { she: 'pronounShe', he: 'pronounHe', they: 'pronounThey' } as const;
+
+/** Категорія займенників (`PronounCategory` на сервері) кожного готового варіанта. */
+const PRONOUN_CHOICE_CATEGORY = {
+  she: PRONOUN_CATEGORY.feminine,
+  he: PRONOUN_CATEGORY.masculine,
+  they: PRONOUN_CATEGORY.neutral,
+} as const;
 
 /**
  * Вкладка «Дані профілю» (`/settings/personal-data`). Поля заповнюються з
@@ -255,6 +263,7 @@ export class PersonalDataPage {
         emergencyContact: body.emergencyContact,
         preferredLanguage: body.preferredLanguage,
         pronouns: body.pronouns,
+        pronounCategory: body.pronounCategory,
       });
       // Результат показуємо після обох запитів: успіх — лише якщо й аватар (за наявності файлу) завантажено.
       this.result.set((await this.uploadAvatar()) ?? 'success');
@@ -348,16 +357,8 @@ export class PersonalDataPage {
 
   /** Категорія займенників: за готовим варіантом; «Інше» категорії не має (`null`). */
   private pronounCategory(): number | null {
-    switch (this.pronounChoice()) {
-      case 'she':
-        return PRONOUN_CATEGORY.feminine;
-      case 'he':
-        return PRONOUN_CATEGORY.masculine;
-      case 'they':
-        return PRONOUN_CATEGORY.neutral;
-      default:
-        return null;
-    }
+    const choice = this.pronounChoice();
+    return choice === null || choice === 'other' ? null : PRONOUN_CHOICE_CATEGORY[choice];
   }
 
   private label(choice: Exclude<PronounChoice, 'other'>): string {
@@ -376,31 +377,21 @@ export class PersonalDataPage {
     this.emergencyContact.set(user.emergencyContact ?? '');
     this.country.set(user.country ?? '');
     this.preferredLanguage.set(user.preferredLanguage ?? '');
-    this.fillPronouns(user.pronouns ?? '');
+    this.fillPronouns(user.pronounCategory ?? null, user.pronouns ?? '');
   }
 
   /**
-   * Розкладає рядок `pronouns` профілю назад у радіокнопки: точний збіг із
-   * підписом готового варіанта вибирає його, будь-що інше (зокрема кілька
-   * значень, збережених раніше) іде в «Інше» як власний текст.
+   * Займенники профілю назад у радіокнопки. Готовий варіант вибирає категорія (`pronounCategory`),
+   * а не текст: текст записано мовою, яка була на момент збереження, і за ним варіант не впізнати.
+   * Без категорії текст — це «Інше» з власним текстом; нема й тексту — нічого не вибрано.
    */
-  private fillPronouns(pronouns: string): void {
-    const text = pronouns.trim();
-    if (!text) {
-      this.pronounChoice.set(null);
-      this.otherPronounsText.set('');
-      return;
-    }
-    const known = (Object.keys(PRONOUN_LABELS) as Exclude<PronounChoice, 'other'>[]).find(
-      (choice) => this.label(choice) === text,
+  private fillPronouns(category: number | null, pronouns: string): void {
+    const known = (Object.keys(PRONOUN_CHOICE_CATEGORY) as Exclude<PronounChoice, 'other'>[]).find(
+      (choice) => PRONOUN_CHOICE_CATEGORY[choice] === category,
     );
-    if (known) {
-      this.pronounChoice.set(known);
-      this.otherPronounsText.set('');
-    } else {
-      this.pronounChoice.set('other');
-      this.otherPronounsText.set(text);
-    }
+    const text = pronouns.trim();
+    this.pronounChoice.set(known ?? (text ? 'other' : null));
+    this.otherPronounsText.set(known ? '' : text);
   }
 
   /** Звільняє памʼять, яку тримає посилання на попереднє обране зображення. */

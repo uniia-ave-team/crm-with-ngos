@@ -5,7 +5,7 @@ import { firstValueFrom, timeout } from 'rxjs';
 import { LoginPageImageDto, PagedResultOfLoginPageImageDto } from '../../api/generated/models';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
-import { RequestFailure, toRequestFailure } from '../http/request-failure';
+import { RequestFailure, UploadFailure, toRequestFailure, toUploadFailure } from '../http/request-failure';
 import { REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from '../http/timeouts';
 
 /** Зображення збоку форм входу, поки з сервера нічого не отримано (або його нема). */
@@ -20,7 +20,7 @@ export interface LoginPageImage {
 }
 
 export type DeleteImageResult = 'deleted' | RequestFailure;
-export type UploadImageResult = 'uploaded' | RequestFailure;
+export type UploadImageResult = 'uploaded' | UploadFailure;
 
 /** Одна сторінка зображень: список і чи є за нею наступна. */
 export interface LoginPageImagesPage {
@@ -137,7 +137,7 @@ export class LoginPageImagesService {
       await firstValueFrom(this.http.post(url, form).pipe(timeout(UPLOAD_TIMEOUT_MS)));
       return 'uploaded';
     } catch (error) {
-      const failure = toRequestFailure(error);
+      const failure = toUploadFailure(error);
       console.warn(`[LoginPageImagesService] Не вдалося завантажити зображення (${failure})`, error);
       return failure;
     }

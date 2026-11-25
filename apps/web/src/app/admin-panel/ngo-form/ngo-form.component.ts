@@ -5,6 +5,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { AccountsService } from '../../core/accounts/accounts.service';
 import { GALLERY_PERMISSIONS, PERMISSIONS, hasAnyPermission } from '../../core/auth/permissions';
 import { ConnectionService } from '../../core/connection/connection.service';
+import { UploadFailure } from '../../core/http/request-failure';
 import { IMAGE_MAX_BYTES, IMAGE_MAX_MEGABYTES, IMAGE_TYPES, IMAGE_TYPE_NAMES } from '../../core/images/image-types';
 import { NGO_NAME_MAX_LENGTH } from '../../core/ngo/logo-rules';
 import { NgoService, UpdateNgoResult } from '../../core/ngo/ngo.service';
@@ -16,8 +17,11 @@ import { ProtectedSrcDirective } from '../../shared/protected-src/protected-src.
 /** Чому обраний файл не підійшов (ключ у `admin.error.*`). */
 type LogoError = 'logoType' | 'logoSize';
 
-/** Чим закінчилася частина збереження, що не вдалася (ключі в `admin.result.*Failed.*`). */
-type PartFailure = Exclude<UpdateNgoResult, 'updated'>;
+/**
+ * Чим закінчилася частина збереження, що не вдалася (ключі в `admin.result.*Failed.*`): назва ГО
+ * — як будь-який запит, логотип і зображення входу — ще й вичерпаною квотою (`quotaExceeded`).
+ */
+type PartFailure = Exclude<UpdateNgoResult, 'updated'> | UploadFailure;
 
 /** Рядок результату збереження: що саме змінено (або не вдалося змінити). */
 interface ResultLine {

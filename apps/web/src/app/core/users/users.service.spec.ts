@@ -104,6 +104,20 @@ describe('UsersService', () => {
       expect(await result).toEqual({ items: [], hasNextPage: false });
     });
 
+    it('sends the search trimmed as SearchTerm, and no SearchTerm for a blank one', async () => {
+      const found = service.list(1, 20, null, '  Колега ');
+      const request = page(1);
+      expect(request.request.params.get('SearchTerm')).toBe('Колега');
+      request.flush({ items: [], hasNextPage: false });
+      await found;
+
+      const all = service.list(1, 20, null, '   ');
+      const plain = page(1);
+      expect(plain.request.params.has('SearchTerm')).toBe(false);
+      plain.flush({ items: [], hasNextPage: false });
+      await all;
+    });
+
     it('gives no arguments of the sorting when there is none (OrderBy and SortOrder are not in the request)', async () => {
       const result = service.list(1, 20);
       const request = page(1);
@@ -328,6 +342,7 @@ describe('UsersService', () => {
       [401, 'unauthorized'],
       [403, 'forbidden'],
       [404, 'error'],
+      [413, 'quotaExceeded'],
       [500, 'error'],
     ])('maps HTTP %i to %s', async (status, expected) => {
       const result = service.uploadAvatar(file);

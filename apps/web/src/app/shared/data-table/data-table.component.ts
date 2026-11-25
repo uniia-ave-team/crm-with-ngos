@@ -86,6 +86,11 @@ export class DataTableComponent {
   readonly labelKey = input<string | null>(null);
   /** Показувати «+» в кінці рядка заголовків. */
   readonly showAddColumn = input(true);
+  /**
+   * «+» ще не має дії на цій сторінці: кнопка лишається в розмітці з класом `planned` (див.
+   * `global.scss`) і не показується. Колонка й три крапки в рядках лишаються.
+   */
+  readonly addColumnPlanned = input(false);
   /** Показувати кнопку з трьома крапками в кінці рядків (без неї комірка порожня). */
   readonly showRowMenu = input(true);
   /** Рядок, який лишається виділеним, як при наведенні (наприклад, поки відкрите його меню); `null` — нема. */

@@ -215,6 +215,7 @@ describe('LoginPageImagesService', () => {
       [400, 'invalid'],
       [401, 'unauthorized'],
       [403, 'forbidden'],
+      [413, 'quotaExceeded'],
       [500, 'error'],
     ])('returns the failure for HTTP %i (%s)', async (status, expected) => {
       const result = service.upload(file());

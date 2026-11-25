@@ -6,7 +6,7 @@ import { PasswordPolicyService } from '../../core/auth/password-policy.service';
 import { ConnectionService } from '../../core/connection/connection.service';
 import { UsersService } from '../../core/users/users.service';
 import { PasswordFieldsComponent } from '../../shared/password-fields/password-fields.component';
-import { isStrongPassword } from '../../shared/password-fields/password-rules';
+import { isPasswordTooLong, isStrongPassword } from '../../shared/password-fields/password-rules';
 
 /** Що показати в блоці над формою за результатом останньої спроби. */
 type PasswordResult = 'success' | 'failed' | 'unreachable' | 'error';
@@ -60,6 +60,9 @@ export class PasswordPage {
     const password = this.newPassword();
     if (!password) {
       return `${ERROR_PREFIX}passwordRequired`;
+    }
+    if (isPasswordTooLong(password)) {
+      return `${ERROR_PREFIX}passwordTooLong`;
     }
     if (!isStrongPassword(password, this.passwordPolicy())) {
       return `${ERROR_PREFIX}passwordWeak`;

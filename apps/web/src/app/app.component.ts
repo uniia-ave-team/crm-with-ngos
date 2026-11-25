@@ -17,6 +17,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 
 import { AccountsService } from './core/accounts/accounts.service';
 import { LayoutService, LayoutSection } from './core/layout/layout.service';
+import { MaintenanceNoticeService } from './core/maintenance/maintenance-notice.service';
 import { PrimaryNavComponent } from './core/layout/primary-nav/primary-nav.component';
 import { SecondaryPanelComponent } from './core/layout/secondary-panel/secondary-panel.component';
 import { PreloaderComponent } from './shared/preloader/preloader.component';
@@ -48,6 +49,8 @@ export class AppComponent {
   protected readonly layout = inject(LayoutService);
 
   protected readonly accounts = inject(AccountsService);
+  /** Оголошення сервера про технічні роботи (плашка вгорі). */
+  protected readonly maintenance = inject(MaintenanceNoticeService);
 
   /** Іде пошук чинного акаунта чи перемикання на інший — на весь час показуємо прелоадер. */
   protected readonly accountSearch = this.accounts.switching;

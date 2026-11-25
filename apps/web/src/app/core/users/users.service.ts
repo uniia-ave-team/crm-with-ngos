@@ -7,7 +7,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { AuthService, AuthTokens, toAuthTokens } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
-import { RequestFailure, toRequestFailure } from '../http/request-failure';
+import { RequestFailure, UploadFailure, toRequestFailure, toUploadFailure } from '../http/request-failure';
 import { REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from '../http/timeouts';
 import { UserRole, sanitizeRoles } from './user-profile';
 
@@ -60,7 +60,11 @@ export interface UsersPage {
 export type CreateUserResult = 'created' | RequestFailure;
 export type ChangePasswordResult = 'changed' | RequestFailure;
 export type UpdateProfileResult = 'updated' | RequestFailure;
-export type UploadAvatarResult = 'uploaded' | RequestFailure;
+export type UploadAvatarResult = 'uploaded' | UploadFailure;
+/** Найкоротший і найдовший пошуковий рядок, який приймає сервер (`SearchValidationConstants`). */
+export const SEARCH_MIN_LENGTH = 3;
+export const SEARCH_MAX_LENGTH = 100;
+
 /** Результат дії з акаунтом колеги (вимкнення, ввімкнення, видалення). */
 export type ColleagueAccountResult = 'done' | RequestFailure;
 
@@ -137,19 +141,30 @@ export class UsersService {
    * `GET <сервер>/api/v1/users?PageNumber=&PageSize=&ShowDeleted=true[&OrderBy=&SortOrder=]` —
    * одна сторінка колег (потрібне право `ViewUser`) разом із вимкненими акаунтами
    * (`ShowDeleted=true`; без нього сервер їх не віддає, і їх не було б як ввімкнути знову).
+   * Пошук (`searchTerm`, `SearchTerm`) — лише непорожній; сервер шукає за імʼям, прізвищем, по
+   * батькові, телефоном, країною й поштою і приймає від `SEARCH_MIN_LENGTH` до
+   * `SEARCH_MAX_LENGTH` символів (коротший — 400, і це приходить як `invalid`).
    * Сортування (`sort`) передається лише коли воно є й має непорожній `orderBy`. Без
    * нього сервер сортує за `id`, тобто у випадковому для людини порядку, тож сторінка
    * колег завжди передає своє (за замовчуванням — за ПІБ). Елементи без `id`
    * пропускаються; відсутні імена й пошта — порожні рядки. Повертає сторінку або причину невдачі; відповідь без списку
    * `items` вважається помилкою. Токен додає `authInterceptor`.
    */
-  async list(pageNumber: number, pageSize: number, sort: UsersSort | null = null): Promise<UsersPage | RequestFailure> {
+  async list(
+    pageNumber: number,
+    pageSize: number,
+    sort: UsersSort | null = null,
+    searchTerm: string | null = null,
+  ): Promise<UsersPage | RequestFailure> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}`;
 
     try {
       let params = new HttpParams().set('PageNumber', pageNumber).set('PageSize', pageSize).set('ShowDeleted', true);
       if (sort?.orderBy.trim()) {
         params = params.set('OrderBy', sort.orderBy.trim()).set('SortOrder', sort.sortOrder);
+      }
+      if (searchTerm?.trim()) {
+        params = params.set('SearchTerm', searchTerm.trim());
       }
       const body = await firstValueFrom(this.http.get<Untrusted<PagedResultOfUserDto>>(url, { params }).pipe(timeout(REQUEST_TIMEOUT_MS)));
       if (!Array.isArray(body?.items)) {
@@ -224,7 +239,7 @@ export class UsersService {
       await firstValueFrom(this.http.post(url, form).pipe(timeout(UPLOAD_TIMEOUT_MS)));
       return 'uploaded';
     } catch (error) {
-      const failure = toRequestFailure(error);
+      const failure = toUploadFailure(error);
       console.warn(`[UsersService] Не вдалося завантажити аватар (${failure})`, error);
       return failure;
     }

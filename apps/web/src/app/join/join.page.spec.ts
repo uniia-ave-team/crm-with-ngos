@@ -153,6 +153,19 @@ describe('JoinPage', () => {
     http.expectNone((r) => r.url.includes('/invitations/validate'));
   });
 
+  it('says the account already exists, with a link to sign in, when the server answers 409 (the invitation was accepted)', async () => {
+    const { fixture, element } = create();
+    answerHealth(fixture);
+    await answerValidate(fixture, element, {}, 409);
+
+    const error = element.querySelector('.auth-error');
+    expect(error?.textContent).toContain(uk.join.exists);
+    expect(error?.textContent).not.toContain(uk.join.invalid);
+    expect(error?.querySelector('a')?.textContent?.trim()).toBe(uk.join.signIn);
+    expect(error?.querySelector('a')?.getAttribute('href')).toBe('/login');
+    expect(element.querySelector('ion-input')).toBeNull();
+  });
+
   it('says the link is inactive, with a link to the login page, when the server rejects the token', async () => {
     const { fixture, element } = create();
     answerHealth(fixture);
@@ -243,6 +256,18 @@ describe('JoinPage', () => {
     expect(element.textContent).toContain(uk.join.error.passwordMismatch);
   });
 
+  it('does not send a password longer than the server takes (128): it is too long, not too simple', async () => {
+    const { fixture, element, page } = await createForm();
+    const password = 'Aa1!' + 'x'.repeat(125);
+    fill(page, { lastName: 'Другий', firstName: 'Перший', password, passwordRepeat: password });
+    await page.submit();
+    fixture.detectChanges();
+
+    http.expectNone(`${server}/api/v1/invitations/accept`);
+    expect(element.textContent).toContain(uk.join.error.passwordTooLong);
+    expect(element.textContent).not.toContain(uk.join.error.passwordWeak);
+  });
+
   it('accepts the invitation, adds the account as the active one and goes to the first page', async () => {
     const { fixture, page } = await createForm();
     fill(page, { lastName: ' Другий ', firstName: ' Перший ', password: 'Abcde1!x', passwordRepeat: 'Abcde1!x' });
@@ -317,6 +342,7 @@ describe('JoinPage', () => {
 
   it.each([
     [400, uk.join.saveError.invalid],
+    [409, uk.join.saveError.exists],
     [500, uk.join.saveError.error],
     [0, uk.join.saveError.unreachable],
   ])('keeps the form and shows the error above it when the server answers %i, so it can be sent again', async (status, text) => {

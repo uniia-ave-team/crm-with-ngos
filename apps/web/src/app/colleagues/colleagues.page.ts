@@ -1,7 +1,7 @@
-import { Component, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, OnInit, TemplateRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService, TranslatePipe } from '@ngx-translate/core';
-import { IonButtons, IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonTitle, IonToast, IonToolbar } from '@ionic/angular';
+import { IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonToast, IonToolbar } from '@ionic/angular';
 
 import { AccountsService } from '../core/accounts/accounts.service';
 import { ConnectionService } from '../core/connection/connection.service';
@@ -14,7 +14,7 @@ import { Role, RoleDetails, RolesService } from '../core/roles/roles.service';
 import { CurrentUserService } from '../core/users/current-user.service';
 import { PRONOUN_CATEGORY } from '../core/users/pronouns';
 import { UserRole } from '../core/users/user-profile';
-import { UserSummary, UsersService, UsersSort } from '../core/users/users.service';
+import { SEARCH_MAX_LENGTH, UserSummary, UsersService, UsersSort } from '../core/users/users.service';
 import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent, DataTableSort, DataTableComponent } from '../shared/data-table/data-table.component';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { ModalComponent } from '../shared/modal/modal.component';
@@ -39,6 +39,7 @@ export interface RoleEditView {
 
 /** Скільки колег підвантажується за один запит. */
 export const COLLEAGUES_PAGE_SIZE = 20;
+
 
 /**
  * Порядок колег, поки користувач не вибрав інший: за ПІБ, від А до Я (таблиця позначає це
@@ -138,6 +139,8 @@ interface ColleagueRow extends DataTableRow {
   readonly name: string;
   readonly email: string;
   readonly phone: string;
+  /** Екстрений контакт (колонка лише з правом `ViewEmergencyContact`); нема — прочерк. */
+  readonly emergencyContact: string;
   /** Акаунт увімкнено; вимкнений — сірий аватар, приглушене імʼя й іконка перед ним. */
   readonly isActive: boolean;
 }
@@ -179,13 +182,11 @@ interface ColleagueRow extends DataTableRow {
   templateUrl: './colleagues.page.html',
   styleUrls: ['./colleagues.page.scss'],
   imports: [
-    IonButtons,
     IonContent,
     IonHeader,
     IonIcon,
     IonInfiniteScroll,
     IonInfiniteScrollContent,
-    IonTitle,
     IonToast,
     IonToolbar,
     DataTableComponent,
@@ -318,13 +319,13 @@ export class ColleaguesPage implements OnInit {
   /** Рядок, для якого відкрите меню дій (лишається виділеним, поки меню відкрите); `null` — меню закрите. */
   protected readonly menuRowId = signal<string | null>(null);
   /**
-   * Бачить додаткові поля: показуємо «+» в кінці рядка заголовків таблиці
-   * (додавання колонки). Колонок із додатковими полями ще нема.
+   * Бачить додаткові поля: «+» в кінці рядка заголовків таблиці (додавання колонки). Колонок із
+   * додатковими полями ще нема, тож кнопка позначена `planned` і не показується.
    */
   protected readonly canViewCustomFields = computed(() => this.permissions().includes(PERMISSIONS.viewCustomFields));
   /**
-   * Право на екстрений контакт: перевірено при побудові таблиці, але колонки
-   * «Екстрений контакт» ще нема, тож поки не використовується.
+   * Може бачити екстрені контакти колег: показуємо їхню колонку. Без цього права сервер однаково
+   * віддає замість чужого контакту `null`, тож колонка була б порожньою.
    */
   protected readonly canViewEmergencyContact = computed(() => this.permissions().includes(PERMISSIONS.viewEmergencyContact));
 
@@ -335,14 +336,21 @@ export class ColleaguesPage implements OnInit {
    * Колонки; `orderBy` — що йде в `OrderBy` запиту при сортуванні за колонкою (одне імʼя
    * властивості `UserDto`). «ПІБ» — `LastName`: сервер сортує за ним прізвище, потім імʼя,
    * потім по батькові. «Посада» поки без сортування (порожній), «Пошта» — `Email`,
-   * «Телефон» — `PhoneNumber`.
+   * «Телефон» — `PhoneNumber`. З правом `ViewEmergencyContact` після «Телефону» йде
+   * «Екстрений контакт» — `EmergencyContact`, а ширини решти колонок трохи менші.
    */
-  protected readonly columns = computed<readonly DataTableColumn[]>(() => [
-    { id: 'name', labelKey: 'colleagues.columns.name', width: '30%', template: this.personCell(), orderBy: 'LastName' },
-    { id: 'position', labelKey: 'colleagues.columns.position', width: '30%', template: this.positionCell(), orderBy: '' },
-    { id: 'email', labelKey: 'colleagues.columns.email', width: '22%', orderBy: 'Email' },
-    { id: 'phone', labelKey: 'colleagues.columns.phone', width: '18%', orderBy: 'PhoneNumber' },
-  ]);
+  protected readonly columns = computed<readonly DataTableColumn[]>(() => {
+    const emergency = this.canViewEmergencyContact();
+    return [
+      { id: 'name', labelKey: 'colleagues.columns.name', width: emergency ? '26%' : '30%', template: this.personCell(), orderBy: 'LastName' },
+      { id: 'position', labelKey: 'colleagues.columns.position', width: emergency ? '24%' : '30%', template: this.positionCell(), orderBy: '' },
+      { id: 'email', labelKey: 'colleagues.columns.email', width: emergency ? '18%' : '22%', orderBy: 'Email' },
+      { id: 'phone', labelKey: 'colleagues.columns.phone', width: emergency ? '16%' : '18%', orderBy: 'PhoneNumber' },
+      ...(emergency
+        ? [{ id: 'emergencyContact', labelKey: 'colleagues.columns.emergencyContact', width: '16%', orderBy: 'EmergencyContact' }]
+        : []),
+    ];
+  });
 
   /** Колеги з сервера (по `COLLEAGUES_PAGE_SIZE` за запит, решта підвантажується при прокрутці). */
   protected readonly colleagues = signal<ColleaguesView>({ status: 'loading', users: [], failure: null, hasMore: false });
@@ -358,9 +366,21 @@ export class ColleaguesPage implements OnInit {
   /** Вкладку вже відкривали: наступні входи на неї оновлюють список (`ionViewWillEnter`). */
   private entered = false;
 
+  /** Шапка в режимі пошуку: заголовок прибрано, кнопки стиснуто до іконок, видно поле й хрестик. */
+  protected readonly searchOpen = signal(false);
+  /** Що введено в поле пошуку. */
+  protected readonly searchText = signal('');
+  protected readonly searchMaxLength = SEARCH_MAX_LENGTH;
+  /** Пошук, за яким запитано поточний список (`SearchTerm`); `null` — без пошуку. */
+  protected readonly searchTerm = signal<string | null>(null);
+  private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
+  private readonly searchButton = viewChild<ElementRef<HTMLButtonElement>>('searchButton');
+  private readonly injector = inject(Injector);
+
   /**
    * Рядки з полів колеги (`UserSummary`): ПІБ («Прізвище Імʼя По батькові», як на плитках
-   * акаунтів), пошта й телефон; чого нема — прочерк (`common.empty`), а не вигадане значення.
+   * акаунтів), пошта, телефон і екстрений контакт; чого нема — прочерк (`common.empty`), а не
+   * вигадане значення.
    * Займенники — за `pronounsText`. Тексти перераховуються при зміні мови.
    */
   protected readonly rows = computed<readonly ColleagueRow[]>(() => {
@@ -374,6 +394,7 @@ export class ColleaguesPage implements OnInit {
       email: user.email.trim() || empty,
       pronouns: this.pronounsText(user),
       phone: user.phoneNumber?.trim() || empty,
+      emergencyContact: user.emergencyContact?.trim() || empty,
       avatarUrl: user.avatarUrl,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -397,6 +418,36 @@ export class ColleaguesPage implements OnInit {
       this.reloadColleagues();
     }
     this.entered = true;
+  }
+
+  /** Лупа в шапці: ховаємо заголовок і кнопки, показуємо поле пошуку й ставимо в нього курсор. */
+  protected openSearch(): void {
+    this.searchOpen.set(true);
+    afterNextRender(() => this.searchInput()?.nativeElement.focus(), { injector: this.injector });
+  }
+
+  /**
+   * Будь-яка зміна в полі пошуку одразу запитує список заново з першої сторінки: введений рядок
+   * (без пробілів по краях) іде в `SearchTerm`, порожній — `null`, тобто повний список. Відповідь
+   * на попередній запит, що ще йшов, ігнорується. Сервер не приймає рядок, коротший за
+   * `SEARCH_MIN_LENGTH` символи (400): тоді над таблицею помилка запиту.
+   */
+  protected onSearchInput(value: string): void {
+    this.searchText.set(value);
+    this.searchTerm.set(value.trim() || null);
+    this.reloadColleagues();
+  }
+
+  /**
+   * Хрестик (чи Esc у полі): поле закривається й порожніє, повертаються заголовок і кнопки. Якщо
+   * в полі щось було, це теж зміна: список запитується заново без пошуку (`SearchTerm` — `null`).
+   */
+  protected closeSearch(): void {
+    this.searchOpen.set(false);
+    afterNextRender(() => this.searchButton()?.nativeElement.focus(), { injector: this.injector });
+    if (this.searchText()) {
+      this.onSearchInput('');
+    }
   }
 
   /**
@@ -428,7 +479,7 @@ export class ColleaguesPage implements OnInit {
     const kept = fresh ? [] : before.users;
     this.colleagues.set({ ...before, status: 'loading', failure: null });
     try {
-      const result = await this.users.list(this.nextPage, COLLEAGUES_PAGE_SIZE, this.sort);
+      const result = await this.users.list(this.nextPage, COLLEAGUES_PAGE_SIZE, this.sort, this.searchTerm());
       if (generation !== this.colleaguesGeneration) {
         return;
       }

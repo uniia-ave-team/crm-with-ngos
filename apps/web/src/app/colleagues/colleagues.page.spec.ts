@@ -98,19 +98,27 @@ describe('ColleaguesPage', () => {
   describe('the header', () => {
     it('has the title, then the buttons "Roles", "Add" and the search, texts from the language file', () => {
       const { element } = render();
-      expect(element.querySelector('ion-title')?.textContent?.trim()).toBe(uk.page.colleagues);
+      expect(element.querySelector('.colleagues__title')?.textContent?.trim()).toBe(uk.page.colleagues);
       const buttons = headerButtons(element);
       expect(buttons).toHaveLength(3);
+      // Назва кнопки — і в aria-label: у стиснутій (лише іконка) кнопці тексту не видно.
+      expect(buttons[0].getAttribute('aria-label')).toBe(uk.colleagues.roles);
+      expect(buttons[1].getAttribute('aria-label')).toBe(uk.colleagues.add);
       expect(buttons[0].textContent?.trim()).toBe(uk.colleagues.roles);
       expect(buttons[1].textContent?.trim()).toBe(uk.colleagues.add);
       expect(buttons[2].textContent?.trim()).toBe('');
       expect(buttons[2].getAttribute('aria-label')).toBe(uk.colleagues.search);
     });
 
-    it('puts the buttons on the right side of the toolbar', () => {
-      const group = render().element.querySelector('ion-header ion-buttons') as HTMLElement;
-      expect(group.getAttribute('slot')).toBe('end');
-      expect(group.querySelectorAll('button')).toHaveLength(3);
+    it('keeps one row: the title, the buttons, the place of the search field and the magnifier, in this order', () => {
+      const row = render().element.querySelector('ion-header .colleagues__head') as HTMLElement;
+      expect(Array.from(row.children).map((child) => child.className.split(' ')[0])).toEqual([
+        'colleagues__title-slot',
+        'colleagues__actions',
+        'colleagues__search-slot',
+        'colleagues__search',
+      ]);
+      expect(row.querySelectorAll('.colleagues__actions button')).toHaveLength(2);
     });
 
     it('draws the icons: people for the roles, plus for adding, magnifier for the search', () => {
@@ -154,6 +162,116 @@ describe('ColleaguesPage', () => {
         fixture.detectChanges();
         expect(headerButtons(element)).toHaveLength(2);
       });
+    });
+  });
+
+  describe('the search in the header (SearchTerm of GET /users)', () => {
+    const searchButton = (element: HTMLElement) => element.querySelector<HTMLButtonElement>('ion-header .colleagues__search')!;
+    const input = (element: HTMLElement) => element.querySelector<HTMLInputElement>('.colleagues__search-input')!;
+    const head = (element: HTMLElement) => element.querySelector('.colleagues__head')!;
+    const isOpen = (element: HTMLElement) => head(element).classList.contains('colleagues__head--search');
+    const type = (fixture: ComponentFixture<ColleaguesPage>, element: HTMLElement, text: string) => {
+      const field = input(element);
+      field.value = text;
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+    const usersRequests = () =>
+      TestBed.inject(HttpTestingController).match((request) => request.url === usersUrl());
+
+    async function openSearch() {
+      const ctx = await renderLoaded();
+      searchButton(ctx.element).click();
+      ctx.fixture.detectChanges();
+      return ctx;
+    }
+
+    it('is closed at first: the field takes no place and cannot be reached, the magnifier opens it', () => {
+      const { element } = render();
+      expect(isOpen(element)).toBe(false);
+      expect(element.querySelector('.colleagues__search-slot')?.hasAttribute('inert')).toBe(true);
+      expect(searchButton(element).getAttribute('aria-label')).toBe(uk.colleagues.search);
+      expect(searchButton(element).getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('opens: the title goes away, the buttons stay (pressed to icons), the field gets the cursor, the magnifier becomes the cross', async () => {
+      const { element } = await openSearch();
+      expect(isOpen(element)).toBe(true);
+      expect(element.querySelector('.colleagues__title-slot')?.hasAttribute('inert')).toBe(true);
+      expect(element.querySelector('.colleagues__search-slot')?.hasAttribute('inert')).toBe(false);
+      expect(element.querySelectorAll('.colleagues__actions button')).toHaveLength(2);
+      expect(input(element).getAttribute('aria-label')).toBe(uk.colleagues.search);
+      expect(input(element).placeholder).toBe(uk.colleagues.searchPlaceholder);
+      await vi.waitFor(() => expect(document.activeElement).toBe(input(element)));
+      expect(searchButton(element).getAttribute('aria-label')).toBe(uk.colleagues.searchClose);
+      expect(searchButton(element).getAttribute('aria-expanded')).toBe('true');
+      expect(searchButton(element).querySelector('ion-icon')?.getAttribute('name')).toBe('close-outline');
+    });
+
+    it('asks for the first page again with the typed text as SearchTerm at once, and says when nobody is found', async () => {
+      const { fixture, element } = await openSearch();
+      type(fixture, element, '  Кол  ');
+
+      const request = usersRequest(1);
+      expect(request.request.params.get('SearchTerm')).toBe('Кол');
+      expect(request.request.params.get('OrderBy')).toBe('LastName');
+      request.flush({ items: [], hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelector('.colleagues__list-message')?.textContent?.trim()).toBe(uk.colleagues.list.notFound);
+      });
+    });
+
+    it('asks again on every change: the latest answer wins, and an emptied field asks for the full list', async () => {
+      const { fixture, element } = await openSearch();
+      type(fixture, element, 'Кол');
+      type(fixture, element, 'Коле');
+      const [first, second] = usersRequests();
+      expect([first.request.params.get('SearchTerm'), second.request.params.get('SearchTerm')]).toEqual(['Кол', 'Коле']);
+      second.flush({ items: [user(2)], hasNextPage: false });
+      first.flush({ items: [user(1), user(3)], hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelectorAll('tbody tr')).toHaveLength(1);
+      });
+
+      type(fixture, element, '   ');
+      expect(usersRequest(1).request.params.has('SearchTerm')).toBe(false);
+    });
+
+    it('sends even one or two characters; the server rejects them (400), and the error is shown above the table', async () => {
+      const { fixture, element } = await openSearch();
+      type(fixture, element, 'Ко');
+      usersRequest(1).flush({}, { status: 400, statusText: 'Bad Request' });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelector('.colleagues__list-message--error')?.textContent).toContain(uk.colleagues.list.error.invalid);
+      });
+    });
+
+    it.each([
+      ['the cross', (element: HTMLElement) => searchButton(element).click()],
+      ['Esc in the field', (element: HTMLElement) => input(element).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))],
+    ])('closes by %s, empties the field and asks for the full list again when a search was on', async (_name, close) => {
+      const { fixture, element } = await openSearch();
+      type(fixture, element, 'Колега');
+      usersRequest(1).flush({ items: [user(1)], hasNextPage: false });
+
+      close(element);
+      fixture.detectChanges();
+      expect(isOpen(element)).toBe(false);
+      expect(input(element).value).toBe('');
+      expect(searchButton(element).getAttribute('aria-label')).toBe(uk.colleagues.search);
+      const request = usersRequest(1);
+      expect(request.request.params.has('SearchTerm')).toBe(false);
+    });
+
+    it('asks nothing when it is closed without a search', async () => {
+      const { fixture, element } = await openSearch();
+      searchButton(element).click();
+      fixture.detectChanges();
+      expect(isOpen(element)).toBe(false);
+      expect(usersRequests()).toHaveLength(0);
     });
   });
 
@@ -402,8 +520,10 @@ describe('ColleaguesPage', () => {
     describe('the plus at the end of the header row', () => {
       const plus = (element: HTMLElement) => element.querySelector('thead .data-table__add');
 
-      it('is shown with Permissions.ViewCustomFields', () => {
-        expect(plus(render(['Permissions.ViewCustomFields']).element)).not.toBeNull();
+      it('is there with Permissions.ViewCustomFields, but planned (hidden): adding a column is not done yet', () => {
+        const button = plus(render(['Permissions.ViewCustomFields']).element);
+        expect(button).not.toBeNull();
+        expect(button?.classList.contains('planned')).toBe(true);
       });
 
       it('is hidden without it, whatever other rights there are', () => {
@@ -1549,6 +1669,7 @@ describe('ColleaguesPage', () => {
         it.each([
           [400, 'invalid'],
           [403, 'forbidden'],
+          [409, 'exists'],
           [500, 'error'],
         ] as const)('keeps the form with the error from the language file when it fails with HTTP %i, shows no modal, and the button is free again', async (status, failure) => {
           const ctx = await openAdd();
@@ -2566,15 +2687,48 @@ describe('ColleaguesPage', () => {
     });
   });
 
-  describe('the rights for the columns that are not there yet', () => {
-    it('knows whether the user may see the emergency contact, and does not use it yet', () => {
-      const withRight = render(['Permissions.ViewEmergencyContact']).fixture.componentInstance as unknown as { canViewEmergencyContact(): boolean };
-      expect(withRight.canViewEmergencyContact()).toBe(true);
+  describe('the column of the emergency contacts (GET /users gives them only with ViewEmergencyContact)', () => {
+    const WITH_RIGHT = [...FULL, 'Permissions.ViewEmergencyContact'];
+    const headers = (element: HTMLElement) => Array.from(element.querySelectorAll('th')).map((th) => th.textContent?.trim());
+
+    it('comes after the phone with the right, with its header from the language file', () => {
+      expect(headers(render(WITH_RIGHT).element)).toEqual([
+        uk.colleagues.columns.name,
+        uk.colleagues.columns.position,
+        uk.colleagues.columns.email,
+        uk.colleagues.columns.phone,
+        uk.colleagues.columns.emergencyContact,
+        '',
+      ]);
     });
 
-    it('does not show the emergency contact column even with the right (there is no such column yet)', () => {
-      const { element } = render(['Permissions.ViewEmergencyContact']);
-      expect(Array.from(element.querySelectorAll('th'))).toHaveLength(5);
+    it('is not there without the right', () => {
+      expect(headers(render(FULL).element)).not.toContain(uk.colleagues.columns.emergencyContact);
+    });
+
+    it('shows the contact of each colleague, and a dash when there is none', async () => {
+      const { fixture, element } = render(WITH_RIGHT);
+      usersRequest().flush({ items: [user(1, { emergencyContact: ' Контакт ' }), user(2, { emergencyContact: null })], hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelectorAll('tbody tr')).toHaveLength(2);
+      });
+      const cells = Array.from(element.querySelectorAll('tbody tr')).map((tr) => tr.querySelectorAll('td')[4]?.textContent?.trim());
+      expect(cells).toEqual(['Контакт', uk.common.empty]);
+    });
+
+    it('sorts by EmergencyContact on the server', async () => {
+      const { fixture, element } = render(WITH_RIGHT);
+      usersRequest().flush({ items: [user(1)], hasNextPage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(element.querySelectorAll('tbody tr')).toHaveLength(1);
+      });
+      (element.querySelectorAll('thead th .data-table__sort')[4] as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const request = usersRequest(1);
+      expect(request.request.params.get('OrderBy')).toBe('EmergencyContact');
+      expect(request.request.params.get('SortOrder')).toBe('asc');
     });
   });
 });

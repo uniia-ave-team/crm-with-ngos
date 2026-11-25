@@ -52,6 +52,22 @@ export function passwordRules(policy: PasswordPolicy = DEFAULT_PASSWORD_POLICY):
   return rules.filter((rule): rule is PasswordRule => rule !== false);
 }
 
+/**
+ * Найбільша довжина пароля. Сервер відхиляє довший пароль (`MaxPasswordLength`), але серед
+ * умов (`identity-options`) її не віддає, тож вона стала й тут. Довжина рахується так само, як на
+ * сервері (одиниці UTF-16, `String.length`).
+ */
+export const PASSWORD_MAX_LENGTH = 128;
+
+/**
+ * Пароль довший, ніж приймає сервер. Це окрема помилка форми, а не одна з умов списку: «занадто
+ * простий» для задовгого пароля був би неправдою, а `maxlength` у полі мовчки обрізав би
+ * вставлений пароль, і зберігся б не той, який людина має на увазі.
+ */
+export function isPasswordTooLong(password: string): boolean {
+  return password.length > PASSWORD_MAX_LENGTH;
+}
+
 /** Пароль відповідає всім умовам сервера. */
 export function isStrongPassword(password: string, policy: PasswordPolicy = DEFAULT_PASSWORD_POLICY): boolean {
   return passwordRules(policy).every((rule) => rule.test(password));

@@ -31,6 +31,7 @@
             <button
               type="button"
               class="data-table__add"
+              [class.planned]="addColumnPlanned()"
               tabindex="0"
               [attr.aria-label]="'table.addColumn' | translate"
               [attr.title]="'table.addColumn' | translate"

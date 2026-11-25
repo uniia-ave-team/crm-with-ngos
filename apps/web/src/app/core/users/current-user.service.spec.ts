@@ -82,6 +82,18 @@ describe('CurrentUserService', () => {
       expect(await result).toBe('ok');
       expect(service.user()).toEqual({ ...shownProfile, patronymic: null, phoneNumber: '+380123456789', roles: [{ id: 'r1', name: 'Перша' }] });
     });
+
+    it.each([
+      ['a known category', 3, 3],
+      ['no category (null)', null, null],
+      ['an unknown number', 7, undefined],
+      ['a category as text', '2', undefined],
+    ])('takes the category of the pronouns for %s, and drops anything else', async (_name, pronounCategory, expected) => {
+      const result = service.ensure();
+      http.expectOne(url).flush({ ...profile, pronounCategory });
+      expect(await result).toBe('ok');
+      expect(service.user()?.pronounCategory).toBe(expected);
+    });
   });
 
   it('asks again for the profile of a newly active account instead of sharing the request of the previous one, which then counts as unavailable', async () => {
