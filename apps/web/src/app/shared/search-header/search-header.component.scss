@@ -1,0 +1,167 @@
+// Тривалість однакова з `app-action-button`: кнопки стискаються разом із рухом заголовка й поля.
+$transition: 0.25s ease;
+
+:host {
+  display: block;
+  font-family: var(--font-menu);
+}
+
+.search-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding-inline: 28px 24px;
+}
+
+// Заголовок — розміру заголовка Ionic, жирний і вирівняний зліва по краю змісту сторінки.
+// Власний елемент, а не `ion-title`: той на iOS центрується поверх рядка.
+.search-header__title-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  transition: flex-grow $transition;
+}
+
+.search-header__title {
+  overflow: hidden;
+  color: var(--nav-fg-active);
+  font-size: 20px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: transform $transition;
+}
+
+.search-header__actions {
+  display: flex;
+  flex: none;
+  gap: 16px;
+}
+
+// Місце поля між кнопками й лупою: закрите — нульової ширини, відкрите — забирає все вільне
+// місце рядка. Поле всередині на всю ширину місця, тож росте разом із ним.
+.search-header__field-slot {
+  display: flex;
+  flex: 0 1 0;
+  min-width: 0;
+  margin-inline-start: 0;
+  overflow: hidden;
+  transition:
+    flex-grow $transition,
+    margin $transition;
+}
+
+.search-header__field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-active);
+  cursor: text;
+
+  ion-icon {
+    flex: none;
+    font-size: 22px;
+  }
+
+  &:focus-within {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: -2px;
+  }
+}
+
+.search-header__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+
+  &::placeholder {
+    color: var(--nav-fg-inactive);
+  }
+
+  // Свій хрестик браузера в полі пошуку не потрібен: закриває пошук хрестик шапки.
+  &::-webkit-search-cancel-button {
+    appearance: none;
+  }
+}
+
+// Лупа; у режимі пошуку — хрестик, що закриває пошук.
+.search-header__toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-inline-start: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font-size: 30px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+.search-header--open {
+  .search-header__title-slot {
+    flex-grow: 0;
+  }
+
+  .search-header__title {
+    transform: translateX(-100%);
+  }
+
+  .search-header__field-slot {
+    flex-grow: 1;
+    margin-inline-start: 16px;
+  }
+
+  .search-header__toggle {
+    font-size: 40px;
+  }
+}
+
+@media (max-width: 600px) {
+  .search-header {
+    padding-inline: 16px 12px;
+  }
+
+  .search-header__actions {
+    gap: 8px;
+  }
+
+  .search-header__toggle,
+  .search-header--open .search-header__field-slot {
+    margin-inline-start: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-header__title-slot,
+  .search-header__title,
+  .search-header__field-slot {
+    transition: none;
+  }
+}

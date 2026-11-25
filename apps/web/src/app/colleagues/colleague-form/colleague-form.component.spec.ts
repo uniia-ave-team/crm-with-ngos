@@ -45,7 +45,7 @@ describe('ColleagueFormComponent', () => {
       email().value = value;
       email().dispatchEvent(new Event('input'));
     };
-    const choices = () => Array.from(element.querySelectorAll<HTMLButtonElement>('.colleague-form__choice'));
+    const choices = () => Array.from(element.querySelectorAll<HTMLButtonElement>('.role-choices__choice'));
     const submit = () => {
       (element.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
       fixture.detectChanges();
@@ -119,15 +119,15 @@ describe('ColleagueFormComponent', () => {
       const { fixture, host, element } = render();
       host.roles.set({ status: 'loading', roles: [], failure: null });
       fixture.detectChanges();
-      expect(element.querySelector('.colleague-form__message')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.loading);
+      expect(element.querySelector('.role-choices__message')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.loading);
 
       host.roles.set({ status: 'ready', roles: [], failure: null });
       fixture.detectChanges();
-      expect(element.querySelector('.colleague-form__message')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.empty);
+      expect(element.querySelector('.role-choices__message')?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.empty);
 
       host.roles.set({ status: 'failed', roles: [], failure: 'forbidden' });
       fixture.detectChanges();
-      const error = element.querySelector('.colleague-form__message--error');
+      const error = element.querySelector('.role-choices__message--error');
       expect(error?.textContent?.trim()).toBe(uk.colleagues.rolesPanel.error.forbidden);
       expect(error?.getAttribute('role')).toBe('alert');
     });
@@ -148,7 +148,7 @@ describe('ColleagueFormComponent', () => {
       type('a@b.org');
       submit();
       expect(host.saved).toEqual([]);
-      const error = element.querySelector('.colleague-form__roles-error');
+      const error = element.querySelector('.role-choices__error');
       expect(error?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.error.rolesRequired);
       expect(error?.getAttribute('role')).toBe('alert');
       expect(element.querySelector('fieldset')?.contains(error)).toBe(true);
@@ -156,13 +156,13 @@ describe('ColleagueFormComponent', () => {
 
     it('shows no roles error before the first try, and takes it away when a role is chosen', () => {
       const { fixture, element, choices, type, submit } = render();
-      expect(element.querySelector('.colleague-form__roles-error')).toBeNull();
+      expect(element.querySelector('.role-choices__error')).toBeNull();
       type('a@b.org');
       submit();
-      expect(element.querySelector('.colleague-form__roles-error')).not.toBeNull();
+      expect(element.querySelector('.role-choices__error')).not.toBeNull();
       choices()[0].click();
       fixture.detectChanges();
-      expect(element.querySelector('.colleague-form__roles-error')).toBeNull();
+      expect(element.querySelector('.role-choices__error')).toBeNull();
     });
 
     it('marks the roles as required, like the email', () => {

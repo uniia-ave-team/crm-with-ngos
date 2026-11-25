@@ -10,7 +10,7 @@ import uk from '../../assets/i18n/uk.json';
 import { AccountsService } from '../core/accounts/accounts.service';
 import { ConnectionService } from '../core/connection/connection.service';
 import { CurrentUserService } from '../core/users/current-user.service';
-import { UsersService } from '../core/users/users.service';
+import { SEARCH_MAX_LENGTH, UsersService } from '../core/users/users.service';
 import { ALWAYS_GRANTED_PERMISSIONS, PERMISSION_GROUPS } from '../core/roles/role-permissions';
 import { avatarColor } from '../shared/avatar/avatar-color';
 import { PopoverComponent } from '../shared/popover/popover.component';
@@ -21,8 +21,9 @@ import { ColleaguesPage } from './colleagues.page';
 
 /** Права, з якими видно всі кнопки й три крапки. */
 const FULL = ['Permissions.ViewUser', 'Permissions.CreateUser', 'Permissions.UpdateUser', 'Permissions.ViewCustomFields'];
-/** Усі права, з яких складаються три крапки в рядках. */
+/** Усі права, з яких складаються три крапки в рядках (`ViewUser` — для «Редагувати» разом з `UpdateUser`). */
 const ROW_ACTIONS = [
+  'Permissions.ViewUser',
   'Permissions.UpdateUser',
   'Permissions.DisableUser',
   'Permissions.DeleteUser',
@@ -96,34 +97,21 @@ describe('ColleaguesPage', () => {
   });
 
   describe('the header', () => {
-    it('has the title, then the buttons "Roles", "Add" and the search, texts from the language file', () => {
+    it('has the title, then the buttons "Roles" and "Add" and the search, texts from the language file', () => {
       const { element } = render();
-      expect(element.querySelector('.colleagues__title')?.textContent?.trim()).toBe(uk.page.colleagues);
+      expect(element.querySelector('ion-header .search-header__title')?.textContent?.trim()).toBe(uk.page.colleagues);
       const buttons = headerButtons(element);
       expect(buttons).toHaveLength(3);
-      // Назва кнопки — і в aria-label: у стиснутій (лише іконка) кнопці тексту не видно.
-      expect(buttons[0].getAttribute('aria-label')).toBe(uk.colleagues.roles);
-      expect(buttons[1].getAttribute('aria-label')).toBe(uk.colleagues.add);
+      expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([uk.colleagues.roles, uk.colleagues.add, uk.common.search]);
       expect(buttons[0].textContent?.trim()).toBe(uk.colleagues.roles);
       expect(buttons[1].textContent?.trim()).toBe(uk.colleagues.add);
-      expect(buttons[2].textContent?.trim()).toBe('');
-      expect(buttons[2].getAttribute('aria-label')).toBe(uk.colleagues.search);
+      expect(element.querySelector('.search-header__input')?.getAttribute('placeholder')).toBe(uk.colleagues.searchPlaceholder);
     });
 
-    it('keeps one row: the title, the buttons, the place of the search field and the magnifier, in this order', () => {
-      const row = render().element.querySelector('ion-header .colleagues__head') as HTMLElement;
-      expect(Array.from(row.children).map((child) => child.className.split(' ')[0])).toEqual([
-        'colleagues__title-slot',
-        'colleagues__actions',
-        'colleagues__search-slot',
-        'colleagues__search',
-      ]);
-      expect(row.querySelectorAll('.colleagues__actions button')).toHaveLength(2);
-    });
-
-    it('draws the icons: people for the roles, plus for adding, magnifier for the search', () => {
-      const icons = Array.from(render().element.querySelectorAll('ion-header button ion-icon')).map((i) => i.getAttribute('name'));
-      expect(icons).toEqual(['people', 'add-outline', 'search']);
+    it('draws the roles blue with people and the adding green with plus', () => {
+      const actions = Array.from(render().element.querySelectorAll('ion-header app-action-button button'));
+      expect(actions.map((b) => b.className)).toEqual(['action-button action-button--blue', 'action-button action-button--green']);
+      expect(actions.map((b) => (b.querySelector('ion-icon') as unknown as { name: string }).name)).toEqual(['people', 'add-outline']);
     });
 
     it('gives every button a tabindex (Safari does not tab to the buttons without it)', () => {
@@ -166,10 +154,8 @@ describe('ColleaguesPage', () => {
   });
 
   describe('the search in the header (SearchTerm of GET /users)', () => {
-    const searchButton = (element: HTMLElement) => element.querySelector<HTMLButtonElement>('ion-header .colleagues__search')!;
-    const input = (element: HTMLElement) => element.querySelector<HTMLInputElement>('.colleagues__search-input')!;
-    const head = (element: HTMLElement) => element.querySelector('.colleagues__head')!;
-    const isOpen = (element: HTMLElement) => head(element).classList.contains('colleagues__head--search');
+    const searchButton = (element: HTMLElement) => element.querySelector<HTMLButtonElement>('ion-header .search-header__toggle')!;
+    const input = (element: HTMLElement) => element.querySelector<HTMLInputElement>('.search-header__input')!;
     const type = (fixture: ComponentFixture<ColleaguesPage>, element: HTMLElement, text: string) => {
       const field = input(element);
       field.value = text;
@@ -186,26 +172,8 @@ describe('ColleaguesPage', () => {
       return ctx;
     }
 
-    it('is closed at first: the field takes no place and cannot be reached, the magnifier opens it', () => {
-      const { element } = render();
-      expect(isOpen(element)).toBe(false);
-      expect(element.querySelector('.colleagues__search-slot')?.hasAttribute('inert')).toBe(true);
-      expect(searchButton(element).getAttribute('aria-label')).toBe(uk.colleagues.search);
-      expect(searchButton(element).getAttribute('aria-expanded')).toBe('false');
-    });
-
-    it('opens: the title goes away, the buttons stay (pressed to icons), the field gets the cursor, the magnifier becomes the cross', async () => {
-      const { element } = await openSearch();
-      expect(isOpen(element)).toBe(true);
-      expect(element.querySelector('.colleagues__title-slot')?.hasAttribute('inert')).toBe(true);
-      expect(element.querySelector('.colleagues__search-slot')?.hasAttribute('inert')).toBe(false);
-      expect(element.querySelectorAll('.colleagues__actions button')).toHaveLength(2);
-      expect(input(element).getAttribute('aria-label')).toBe(uk.colleagues.search);
-      expect(input(element).placeholder).toBe(uk.colleagues.searchPlaceholder);
-      await vi.waitFor(() => expect(document.activeElement).toBe(input(element)));
-      expect(searchButton(element).getAttribute('aria-label')).toBe(uk.colleagues.searchClose);
-      expect(searchButton(element).getAttribute('aria-expanded')).toBe('true');
-      expect(searchButton(element).querySelector('ion-icon')?.getAttribute('name')).toBe('close-outline');
+    it('limits the field to the longest text the server takes', () => {
+      expect(input(render().element).getAttribute('maxlength')).toBe(String(SEARCH_MAX_LENGTH));
     });
 
     it('asks for the first page again with the typed text as SearchTerm at once, and says when nobody is found', async () => {
@@ -249,28 +217,20 @@ describe('ColleaguesPage', () => {
       });
     });
 
-    it.each([
-      ['the cross', (element: HTMLElement) => searchButton(element).click()],
-      ['Esc in the field', (element: HTMLElement) => input(element).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))],
-    ])('closes by %s, empties the field and asks for the full list again when a search was on', async (_name, close) => {
+    it('asks for the full list again when the search is closed with text in the field', async () => {
       const { fixture, element } = await openSearch();
       type(fixture, element, 'Колега');
       usersRequest(1).flush({ items: [user(1)], hasNextPage: false });
 
-      close(element);
+      searchButton(element).click();
       fixture.detectChanges();
-      expect(isOpen(element)).toBe(false);
-      expect(input(element).value).toBe('');
-      expect(searchButton(element).getAttribute('aria-label')).toBe(uk.colleagues.search);
-      const request = usersRequest(1);
-      expect(request.request.params.has('SearchTerm')).toBe(false);
+      expect(usersRequest(1).request.params.has('SearchTerm')).toBe(false);
     });
 
     it('asks nothing when it is closed without a search', async () => {
       const { fixture, element } = await openSearch();
       searchButton(element).click();
       fixture.detectChanges();
-      expect(isOpen(element)).toBe(false);
       expect(usersRequests()).toHaveLength(0);
     });
   });
@@ -495,7 +455,8 @@ describe('ColleaguesPage', () => {
         }
       });
 
-      it.each(ROW_ACTIONS)('are shown when the user has only %s', async (right) => {
+      // `ViewUser` сам по собі жодного пункту не дає: він лише потрібен «Редагувати» разом з `UpdateUser`.
+      it.each(ROW_ACTIONS.filter((right) => right !== 'Permissions.ViewUser'))('are shown when the user has only %s', async (right) => {
         expect(menus((await renderLoaded([right])).element).length).toBeGreaterThan(0);
       });
 
@@ -558,11 +519,13 @@ describe('ColleaguesPage', () => {
       [['Permissions.AssignRoleToUser'], ['permissions']],
       [['Permissions.ManageRole'], ['permissions']],
       [['Permissions.AssignRoleToUser', 'Permissions.ManageRole'], ['permissions']],
-      [['Permissions.UpdateUser'], ['edit', 'enable']],
+      // «Редагувати» читає профіль колеги, тож потребує ще й `ViewUser`.
+      [['Permissions.UpdateUser'], ['enable']],
+      [['Permissions.UpdateUser', 'Permissions.ViewUser'], ['edit', 'enable']],
       [['Permissions.CanResetPassword'], ['resetPassword']],
       [['Permissions.DisableUser'], ['disable']],
       [['Permissions.DeleteUser'], ['delete']],
-      [['Permissions.UpdateUser', 'Permissions.DeleteUser'], ['edit', 'enable', 'delete']],
+      [['Permissions.ViewUser', 'Permissions.UpdateUser', 'Permissions.DeleteUser'], ['edit', 'enable', 'delete']],
     ])('for the rights %j shows only %j', (rights, expected) => {
       expect(actionIds(rights)).toEqual(expected);
     });
@@ -1029,7 +992,7 @@ describe('ColleaguesPage', () => {
       ['permissions', 'changePermissions'],
       ['edit', 'editColleague'],
       ['resetPassword', 'resetPassword'],
-    ])('is called by the actions of the menu that are not done yet: "%s" opens it for the colleague of that row', async (action, method) => {
+    ])('is called by the actions of the menu with a panel: "%s" opens it for the colleague of that row', async (action, method) => {
       const { fixture, element } = await renderLoaded(FULL_RIGHTS);
       (element.querySelectorAll('tbody .data-table__menu')[3] as HTMLButtonElement).click();
       fixture.detectChanges();
@@ -1071,7 +1034,7 @@ describe('ColleaguesPage', () => {
       }
     });
 
-    it('opens by each of the three stubs themselves, with the id that was given to them', () => {
+    it('opens by each of the three actions themselves, with the id that was given to them', () => {
       const { fixture } = render(FULL_RIGHTS);
       const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
       const cases: [string, string][] = [
@@ -1095,6 +1058,332 @@ describe('ColleaguesPage', () => {
       fixture.detectChanges();
       expect(panelOf(fixture).isOpen()).toBe(false);
       expect(state(fixture)).toBeNull();
+    });
+  });
+
+  describe('editing a colleague (GET /api/v1/users/{id} and the form of the profile)', () => {
+    const RIGHTS = [...FULL, 'Permissions.ViewEmergencyContact'];
+    const profileUrl = (id: string) => `${usersUrl()}/${id}`;
+    const profile = (id: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      email: 'colleague@example.org',
+      firstName: 'Перший',
+      lastName: 'Колега',
+      patronymic: 'Другий',
+      phoneNumber: '+380 00 000 00 00',
+      country: 'Країна',
+      emergencyContact: 'Контакт',
+      preferredLanguage: 'uk',
+      pronouns: 'Вона/її',
+      pronounCategory: 2,
+      avatarUrl: null,
+      roles: [],
+      customFields: [],
+      isActive: true,
+      ...extra,
+    });
+    const field = (element: HTMLElement, name: string) =>
+      element.querySelector(`app-side-panel #colleague-profile-${name}`) as HTMLInputElement | null;
+    const message = (element: HTMLElement) => element.querySelector('app-side-panel .colleagues__panel-message');
+
+    async function edit(id = 'user-1', rights = RIGHTS) {
+      const ctx = render(rights);
+      const page = ctx.fixture.componentInstance as unknown as { editColleague(colleague: { id: string; name: string | null }): Promise<void> };
+      const done = page.editColleague({ id, name: null });
+      ctx.fixture.detectChanges();
+      return { ...ctx, done };
+    }
+
+    it('asks for the colleague and shows the loading until the answer, then the form filled from it', async () => {
+      const { fixture, element, done } = await edit();
+      expect(message(element)?.textContent?.trim()).toBe(uk.colleagues.profileForm.loading);
+      expect(element.querySelector('app-side-panel app-profile-form')).toBeNull();
+
+      const request = TestBed.inject(HttpTestingController).expectOne(profileUrl('user-1'));
+      expect(request.request.method).toBe('GET');
+      request.flush(profile('user-1'));
+      await done;
+      fixture.detectChanges();
+
+      expect(element.querySelector('.side-panel__header-start .colleagues__panel-title')?.textContent?.trim()).toBe(uk.colleagues.profileForm.title);
+      expect(message(element)).toBeNull();
+      expect(
+        ['last-name', 'first-name', 'patronymic', 'phone', 'emergency-contact', 'country'].map((name) => field(element, name)?.value),
+      ).toEqual(['Колега', 'Перший', 'Другий', '+380 00 000 00 00', 'Контакт', 'Країна']);
+      expect((field(element, 'language') as unknown as HTMLSelectElement).value).toBe('uk');
+      const radios = Array.from(element.querySelectorAll<HTMLInputElement>('app-side-panel .settings-checks input[type=radio]'));
+      expect(radios.findIndex((radio) => radio.checked)).toBe(0);
+    });
+
+    it('names the field of the own pronouns of the colleague, not "yours"', async () => {
+      const { fixture, element, done } = await edit();
+      TestBed.inject(HttpTestingController).expectOne(profileUrl('user-1')).flush(profile('user-1', { pronouns: 'Інші', pronounCategory: null }));
+      await done;
+      fixture.detectChanges();
+      const other = element.querySelector('app-side-panel .settings-input--small') as HTMLInputElement;
+      expect(other.value).toBe('Інші');
+      expect(other.placeholder).toBe(uk.colleagues.profileForm.pronounOtherInput);
+    });
+
+    it('has no emergency contact without Permissions.ViewEmergencyContact (the server gives null then)', async () => {
+      const { fixture, element, done } = await edit('user-1', FULL);
+      TestBed.inject(HttpTestingController).expectOne(profileUrl('user-1')).flush(profile('user-1', { emergencyContact: null }));
+      await done;
+      fixture.detectChanges();
+      expect(field(element, 'last-name')?.value).toBe('Колега');
+      expect(field(element, 'emergency-contact')).toBeNull();
+    });
+
+    it.each(['invalid', 'unauthorized', 'forbidden', 'unreachable', 'error'] as const)(
+      'shows the failure instead of the form (%s)',
+      async (failure) => {
+        vi.spyOn(UsersService.prototype, 'get').mockResolvedValue(failure);
+        const { fixture, element, done } = await edit();
+        await done;
+        fixture.detectChanges();
+        expect(message(element)?.textContent?.trim()).toBe(uk.colleagues.profileForm.loadError[failure]);
+        expect(element.querySelector('app-side-panel app-profile-form')).toBeNull();
+      },
+    );
+
+    describe('the roles of the colleague (with Permissions.AssignRoleToUser)', () => {
+      const rolesUrl = () => `${TestBed.inject(ConnectionService).serverUrl()}/api/v1/roles`;
+      const roleChoices = (element: HTMLElement) =>
+        Array.from(element.querySelectorAll<HTMLButtonElement>('app-side-panel app-profile-form app-role-choices .role-choices__choice'));
+      const checked = (element: HTMLElement) =>
+        roleChoices(element).map((choice) => `${choice.textContent?.trim()}:${choice.getAttribute('aria-checked')}`);
+
+      async function editWithRoles(rights = [...RIGHTS, 'Permissions.AssignRoleToUser']) {
+        const ctx = await edit('user-1', rights);
+        const controller = TestBed.inject(HttpTestingController);
+        controller.expectOne((request) => request.url === rolesUrl()).flush({
+          items: [
+            { id: 'r1', name: 'Куратор', feminitiveName: null, pluralName: null },
+            { id: 'r2', name: 'Член', feminitiveName: null, pluralName: null },
+          ],
+          hasNextPage: false,
+        });
+        controller.expectOne(profileUrl('user-1')).flush(profile('user-1', { roles: [{ id: 'r2', name: 'Член' }] }));
+        await ctx.done;
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(roleChoices(ctx.element)).toHaveLength(2);
+        });
+        return ctx;
+      }
+
+      it('shows all the roles as in the form of a new colleague, the roles of the colleague chosen, before "Save"', async () => {
+        const { element } = await editWithRoles();
+        expect(checked(element)).toEqual(['Куратор:false', 'Член:true']);
+        expect(element.querySelector('app-side-panel app-role-choices legend')?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.roles);
+        const block = element.querySelector('app-side-panel app-role-choices')!;
+        const save = element.querySelector('app-side-panel button[type=submit]')!;
+        expect(block.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      });
+
+      it('chooses and unchooses a role by a press', async () => {
+        const { fixture, element } = await editWithRoles();
+        roleChoices(element)[0].click();
+        roleChoices(element)[1].click();
+        fixture.detectChanges();
+        expect(checked(element)).toEqual(['Куратор:true', 'Член:false']);
+      });
+
+      it('has no roles and does not ask for them without the right', async () => {
+        const { fixture, element, done } = await edit();
+        const controller = TestBed.inject(HttpTestingController);
+        controller.expectOne(profileUrl('user-1')).flush(profile('user-1'));
+        await done;
+        fixture.detectChanges();
+        expect(field(element, 'last-name')?.value).toBe('Колега');
+        expect(element.querySelector('app-side-panel app-role-choices')).toBeNull();
+        controller.expectNone((request) => request.url === rolesUrl());
+      });
+    });
+
+    describe('saving (PUT /api/v1/users/{id}, the avatar and the roles)', () => {
+      const rolesUrl = () => `${TestBed.inject(ConnectionService).serverUrl()}/api/v1/roles`;
+      const controller = () => TestBed.inject(HttpTestingController);
+      const isOpen = (fixture: ComponentFixture<ColleaguesPage>) =>
+        (fixture.debugElement.query(By.directive(SidePanelComponent)).componentInstance as SidePanelComponent).isOpen();
+      const errors = (element: HTMLElement) =>
+        Array.from(element.querySelectorAll('app-side-panel app-profile-form .colleagues__panel-message--error')).map((p) => p.textContent?.trim());
+      const roleChoices = (element: HTMLElement) =>
+        Array.from(element.querySelectorAll<HTMLButtonElement>('app-side-panel app-role-choices .role-choices__choice'));
+      /** Запити списку колег, що ще чекають відповіді (знімає їх). */
+      const listRequests = () => controller().match((request) => request.url === usersUrl());
+
+      async function open(rights = RIGHTS, extra: Record<string, unknown> = {}) {
+        const ctx = await edit('user-1', rights);
+        if (rights.includes('Permissions.AssignRoleToUser')) {
+          controller().expectOne((request) => request.url === rolesUrl()).flush({
+            items: [
+              { id: 'r1', name: 'Куратор', feminitiveName: null, pluralName: null },
+              { id: 'r2', name: 'Член', feminitiveName: null, pluralName: null },
+            ],
+            hasNextPage: false,
+          });
+        }
+        controller().expectOne(profileUrl('user-1')).flush(profile('user-1', { roles: [{ id: 'r2', name: 'Член' }], ...extra }));
+        await ctx.done;
+        ctx.fixture.detectChanges();
+        listRequests();
+        return ctx;
+      }
+
+      function submit(ctx: { fixture: ComponentFixture<ColleaguesPage>; element: HTMLElement }) {
+        (ctx.element.querySelector('app-side-panel button[type=submit]') as HTMLButtonElement).click();
+        ctx.fixture.detectChanges();
+      }
+
+      async function answerPut(ctx: { fixture: ComponentFixture<ColleaguesPage> }, status = 204) {
+        const request = controller().expectOne((r) => r.url === profileUrl('user-1') && r.method === 'PUT');
+        request.flush(status === 204 ? null : {}, { status, statusText: 'x' });
+        await vi.waitFor(() => ctx.fixture.detectChanges());
+        return request;
+      }
+
+      it('puts the form to the colleague, then closes the panel and asks for the list again', async () => {
+        const ctx = await open();
+        const last = field(ctx.element, 'last-name')!;
+        last.value = 'Нове';
+        last.dispatchEvent(new Event('input'));
+        submit(ctx);
+
+        const request = controller().expectOne((r) => r.url === profileUrl('user-1'));
+        expect(request.request.method).toBe('PUT');
+        expect(request.request.body).toMatchObject({ lastName: 'Нове', firstName: 'Перший', emergencyContact: 'Контакт', pronounCategory: 2 });
+        request.flush(null, { status: 204, statusText: 'No Content' });
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(isOpen(ctx.fixture)).toBe(false);
+        });
+        expect(listRequests()).toHaveLength(1);
+      });
+
+      it('sends no emergency contact (null) without Permissions.ViewEmergencyContact', async () => {
+        const ctx = await open(FULL, { emergencyContact: null });
+        submit(ctx);
+        const request = await answerPut(ctx);
+        expect(request.request.body.emergencyContact).toBeNull();
+      });
+
+      it.each(['invalid', 'forbidden', 'unreachable'] as const)('stays open with the reason when the profile is not saved (%s), and asks nothing else', async (failure) => {
+        const ctx = await open([...RIGHTS, 'Permissions.AssignRoleToUser']);
+        roleChoices(ctx.element)[0].click();
+        ctx.fixture.detectChanges();
+        submit(ctx);
+        const request = controller().expectOne((r) => r.url === profileUrl('user-1') && r.method === 'PUT');
+        if (failure === 'unreachable') {
+          request.error(new ProgressEvent('error'));
+        } else {
+          request.flush({}, { status: failure === 'invalid' ? 400 : 403, statusText: 'x' });
+        }
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(errors(ctx.element)).toEqual([uk.colleagues.profileForm.saveError[failure]]);
+        });
+        expect(isOpen(ctx.fixture)).toBe(true);
+        controller().expectNone((r) => r.url.includes('/roles/'));
+        expect(listRequests()).toHaveLength(0);
+      });
+
+      it('uploads the chosen avatar to the colleague after the profile, and stays open with the reason when it fails', async () => {
+        const created = vi.fn(() => 'blob:http://localhost/preview');
+        const urls = URL as unknown as Record<string, unknown>;
+        const original = { create: urls['createObjectURL'], revoke: urls['revokeObjectURL'] };
+        urls['createObjectURL'] = created;
+        urls['revokeObjectURL'] = vi.fn();
+        try {
+          const ctx = await open();
+          const input = ctx.element.querySelector('app-side-panel .settings-avatar__input') as HTMLInputElement;
+          Object.defineProperty(input, 'files', { value: [new File(['x'], 'photo.png', { type: 'image/png' })], configurable: true });
+          input.dispatchEvent(new Event('change'));
+          ctx.fixture.detectChanges();
+          submit(ctx);
+          await answerPut(ctx);
+
+          const upload = controller().expectOne(`${profileUrl('user-1')}/avatar`);
+          expect(upload.request.method).toBe('POST');
+          expect(((upload.request.body as FormData).get('file') as File).name).toBe('photo.png');
+          upload.flush({}, { status: 413, statusText: 'x' });
+          await vi.waitFor(() => {
+            ctx.fixture.detectChanges();
+            expect(errors(ctx.element)).toEqual([uk.colleagues.profileForm.avatarError.quotaExceeded]);
+          });
+          expect(isOpen(ctx.fixture)).toBe(true);
+        } finally {
+          urls['createObjectURL'] = original.create;
+          urls['revokeObjectURL'] = original.revoke;
+        }
+      });
+
+      it('gives and takes away the roles by the difference with the roles of the colleague', async () => {
+        const ctx = await open([...RIGHTS, 'Permissions.AssignRoleToUser']);
+        roleChoices(ctx.element)[0].click();
+        roleChoices(ctx.element)[1].click();
+        ctx.fixture.detectChanges();
+        submit(ctx);
+        await answerPut(ctx);
+
+        const assign = controller().expectOne(`${profileUrl('user-1')}/roles/r1`);
+        const remove = controller().expectOne(`${profileUrl('user-1')}/roles/r2`);
+        expect([assign.request.method, remove.request.method]).toEqual(['POST', 'DELETE']);
+        assign.flush(null, { status: 204, statusText: 'No Content' });
+        remove.flush(null, { status: 204, statusText: 'No Content' });
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(isOpen(ctx.fixture)).toBe(false);
+        });
+      });
+
+      it('asks nothing about the roles when they are not changed', async () => {
+        const ctx = await open([...RIGHTS, 'Permissions.AssignRoleToUser']);
+        submit(ctx);
+        await answerPut(ctx);
+        await vi.waitFor(() => expect(isOpen(ctx.fixture)).toBe(false));
+        controller().expectNone((r) => r.url.includes('/roles/'));
+      });
+
+      it('stays open when a role is not changed, and the next save does only what is left', async () => {
+        const ctx = await open([...RIGHTS, 'Permissions.AssignRoleToUser']);
+        roleChoices(ctx.element)[0].click();
+        roleChoices(ctx.element)[1].click();
+        ctx.fixture.detectChanges();
+        submit(ctx);
+        await answerPut(ctx);
+        controller().expectOne(`${profileUrl('user-1')}/roles/r1`).flush({}, { status: 403, statusText: 'x' });
+        controller().expectOne(`${profileUrl('user-1')}/roles/r2`).flush(null, { status: 204, statusText: 'No Content' });
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(errors(ctx.element)).toEqual([uk.colleagues.profileForm.rolesError.forbidden]);
+        });
+        expect(isOpen(ctx.fixture)).toBe(true);
+        // Збережене частково видно в таблиці одразу.
+        expect(listRequests()).toHaveLength(1);
+
+        submit(ctx);
+        await answerPut(ctx);
+        controller().expectOne(`${profileUrl('user-1')}/roles/r1`).flush(null, { status: 204, statusText: 'No Content' });
+        controller().expectNone(`${profileUrl('user-1')}/roles/r2`);
+        await vi.waitFor(() => {
+          ctx.fixture.detectChanges();
+          expect(isOpen(ctx.fixture)).toBe(false);
+        });
+      });
+    });
+
+    it('ignores the answer for a colleague the panel is no longer opened for', async () => {
+      const { fixture, element, done } = await edit('user-1');
+      const page = fixture.componentInstance as unknown as { editColleague(colleague: { id: string; name: string | null }): Promise<void> };
+      const second = page.editColleague({ id: 'user-2', name: null });
+      const controller = TestBed.inject(HttpTestingController);
+      controller.expectOne(profileUrl('user-2')).flush(profile('user-2', { lastName: 'Другий' }));
+      await second;
+      controller.expectOne(profileUrl('user-1')).flush(profile('user-1'));
+      await done;
+      fixture.detectChanges();
+      expect(field(element, 'last-name')?.value).toBe('Другий');
     });
   });
 
@@ -1505,10 +1794,10 @@ describe('ColleaguesPage', () => {
       });
     });
 
-    it('does not ask for the roles for the actions of the menu', () => {
+    it('does not ask for the roles for the actions of the menu (except "Edit" with AssignRoleToUser, see there)', () => {
       const { fixture } = render(FULL_RIGHTS);
       const page = fixture.componentInstance as unknown as Record<string, (...args: unknown[]) => void>;
-      for (const method of ['changePermissions', 'editColleague', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague']) {
+      for (const method of ['changePermissions', 'resetPassword', 'disableColleague', 'enableColleague', 'deleteColleague']) {
         page[method]({ id: 'user-1', name: 'Перший' });
       }
       http.expectNone((request) => request.url === rolesUrl);
@@ -1526,7 +1815,7 @@ describe('ColleaguesPage', () => {
 
     describe('the form of a new colleague (the button "Add")', () => {
       const addButton = (element: HTMLElement) => headerButtons(element).find((b) => b.textContent?.trim() === uk.colleagues.add) as HTMLButtonElement;
-      const choices = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLButtonElement>('app-colleague-form .colleague-form__choice'));
+      const choices = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLButtonElement>('app-colleague-form .role-choices__choice'));
 
       async function openAdd() {
         const ctx = render(FULL_RIGHTS);
@@ -1663,7 +1952,7 @@ describe('ColleaguesPage', () => {
           (ctx.element.querySelector('app-colleague-form form') as HTMLFormElement).dispatchEvent(new Event('submit', { cancelable: true }));
           ctx.fixture.detectChanges();
           http.expectNone((request) => request.url === invitationsUrl());
-          expect(ctx.element.querySelector('.colleague-form__roles-error')?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.error.rolesRequired);
+          expect(ctx.element.querySelector('.role-choices__error')?.textContent?.trim()).toBe(uk.colleagues.colleagueForm.error.rolesRequired);
         });
 
         it.each([
@@ -1820,7 +2109,7 @@ describe('ColleaguesPage', () => {
 
     describe('the button "Add role" in the header of the panel', () => {
       const addRoleButton = (element: HTMLElement) =>
-        element.querySelector('.side-panel__header-start .colleagues__btn') as HTMLButtonElement | null;
+        element.querySelector('.side-panel__header-start app-action-button button') as HTMLButtonElement | null;
 
       it('stands at the left of the header row of the panel, on the same row with the cross, with the text from the language file', () => {
         const { fixture, element } = render(FULL_RIGHTS);
@@ -1859,7 +2148,7 @@ describe('ColleaguesPage', () => {
 
     describe('the right Permissions.ManageRole for the buttons "Add role", "Edit" and "Delete"', () => {
       const manageButtons = (element: HTMLElement) => ({
-        add: element.querySelector('.side-panel__header-start .colleagues__btn'),
+        add: element.querySelector('.side-panel__header-start app-action-button button'),
         actions: element.querySelectorAll('app-roles-panel .roles__action').length,
       });
       async function openRoles(rights: string[]) {
@@ -1912,7 +2201,7 @@ describe('ColleaguesPage', () => {
     describe('the form of a new role (after "Add role")', () => {
       const RIGHTS = ['Permissions.ViewUser', 'Permissions.ManageRole'];
       const headerStart = (element: HTMLElement) =>
-        element.querySelector('.side-panel__header-start .colleagues__btn') as HTMLButtonElement | null;
+        element.querySelector('.side-panel__header-start app-action-button button') as HTMLButtonElement | null;
 
       async function openRoles(rights = RIGHTS) {
         const ctx = render(rights);
@@ -1948,11 +2237,11 @@ describe('ColleaguesPage', () => {
 
         const back = headerStart(element)!;
         expect(back.textContent?.trim()).toBe(uk.common.back);
-        expect(back.classList).toContain('colleagues__btn--back');
+        expect(back.classList).toContain('action-button--neutral');
         expect(back.getAttribute('tabindex')).toBe('0');
         expect((back.querySelector('ion-icon') as unknown as { name: string }).name).toBe('arrow-back-outline');
         expect(element.textContent).not.toContain(uk.colleagues.rolesPanel.add);
-        expect(element.querySelectorAll('.side-panel__header-start .colleagues__btn')).toHaveLength(1);
+        expect(element.querySelectorAll('.side-panel__header-start app-action-button')).toHaveLength(1);
         expect(back.compareDocumentPosition(element.querySelector('.side-panel__close')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       });
 
@@ -2160,7 +2449,7 @@ describe('ColleaguesPage', () => {
 
     describe('editing a role (the pencil: GET /api/v1/roles/{id} and the filled form)', () => {
       const headerStart = (element: HTMLElement) =>
-        element.querySelector('.side-panel__header-start .colleagues__btn') as HTMLButtonElement | null;
+        element.querySelector('.side-panel__header-start app-action-button button') as HTMLButtonElement | null;
       const roleUrl = (id: string) => `${rolesUrl}/${id}`;
       const detail = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
         id,

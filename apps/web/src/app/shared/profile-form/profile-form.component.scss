@@ -1,0 +1,110 @@
+// «Інше» з полем власних займенників: поле стоїть поруч із чекбоксом.
+.settings-check-other {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+// Невелике поле: вміщує кілька слів, не розтягується на всю ширину.
+.settings-input--small {
+  width: 180px;
+  max-width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+// Поки «Інше» не вибрано, поле приховане, але місце під нього лишається
+// (visibility не прибирає елемент з потоку, а ще й виводить його з табуляції та
+// з дерева доступності).
+.settings-input--hidden {
+  visibility: hidden;
+}
+
+// fieldset без рамки й відступів: лише семантика групи для допоміжних технологій.
+.settings-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  legend {
+    padding: 0;
+    margin-bottom: 14px;
+  }
+}
+
+// Відступи навколо форми — справа сторінки чи вікна, де вона стоїть (у `settings-section.scss`
+// вони для цілої вкладки налаштувань). Ширина форми вибирає вигляд блоку аватара (`@container`).
+:host {
+  display: block;
+  container-type: inline-size;
+  padding: 0;
+}
+
+// Блок аватара — сітка, щоб підпис стояв, де треба, без дублювання. Широко: мініатюра зліва на
+// всю висоту, справа посередині підпис і під ним вибір файлу та підказки (як у логотипа ГО).
+.settings-avatar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 1fr auto auto 1fr;
+  grid-template-areas:
+    'image .'
+    'image label'
+    'image upload'
+    'image .';
+  gap: 0 16px;
+  width: 100%;
+
+  > .settings-field__label {
+    grid-area: label;
+    margin-bottom: 12px;
+  }
+}
+
+.settings-avatar__image {
+  grid-area: image;
+  align-self: center;
+}
+
+.settings-avatar__upload {
+  grid-area: upload;
+}
+
+// Примітка про «Зберегти» до вибору файлу не займає місця: інакше видимий текст стояв би вище
+// середини мініатюри.
+.settings-avatar__hint--hidden {
+  display: none;
+}
+
+// Вузько (бічне вікно): підпис, мініатюра, кнопка вибору файлу, імʼя файлу й підказки — кожне
+// окремим рядком.
+@container (max-width: 480px) {
+  .settings-avatar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'label'
+      'image'
+      'upload';
+    row-gap: 14px;
+
+    > .settings-field__label {
+      margin-bottom: 0;
+    }
+  }
+
+  .settings-avatar__image {
+    justify-self: start;
+  }
+
+  .settings-avatar__file {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .settings-avatar__name {
+    max-width: 100%;
+  }
+}

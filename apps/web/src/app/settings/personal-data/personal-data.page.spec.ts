@@ -881,7 +881,7 @@ describe('PersonalDataPage', () => {
         return hints[1] as HTMLElement;
       };
 
-      it('is in the layout under the size hint from the start, but hidden until an image is chosen', () => {
+      it('is under the size hint from the start, but hidden until an image is chosen', () => {
         const { element } = render();
         expect(note(element).textContent?.trim()).toBe(uk.settings.personal.avatarSaveHint);
         expect(note(element).classList).toContain('settings-avatar__hint--hidden');

@@ -2,14 +2,14 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { CreateUserCommand, PagedResultOfUserDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto } from '../../api/generated/models';
+import { CreateUserCommand, PagedResultOfUserDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto, UserProfileDto } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService, AuthTokens, toAuthTokens } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
 import { RequestFailure, UploadFailure, toRequestFailure, toUploadFailure } from '../http/request-failure';
 import { REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from '../http/timeouts';
-import { UserRole, sanitizeRoles } from './user-profile';
+import { UserProfile, UserRole, sanitizeRoles, toUserProfile } from './user-profile';
 
 const API_USERS_PATH = '/api/v1/users';
 
@@ -65,7 +65,7 @@ export type UploadAvatarResult = 'uploaded' | UploadFailure;
 export const SEARCH_MIN_LENGTH = 3;
 export const SEARCH_MAX_LENGTH = 100;
 
-/** Результат дії з акаунтом колеги (вимкнення, ввімкнення, видалення). */
+/** Результат дії з акаунтом колеги (вимкнення, ввімкнення, видалення, зміна ролі). */
 export type ColleagueAccountResult = 'done' | RequestFailure;
 
 /**
@@ -118,11 +118,27 @@ export class UsersService {
     return this.accountAction('delete', id, '', 'видалити колегу');
   }
 
+  /**
+   * `POST <сервер>/api/v1/users/{id}/roles/{roleId}` — дає колезі роль (право
+   * `AssignRoleToUser`; 204).
+   */
+  assignRole(id: string, roleId: string): Promise<ColleagueAccountResult> {
+    return this.accountAction('post', id, `/roles/${encodeURIComponent(roleId)}`, 'дати роль колезі');
+  }
+
+  /**
+   * `DELETE <сервер>/api/v1/users/{id}/roles/{roleId}` — забирає в колеги роль (право
+   * `AssignRoleToUser`; 204).
+   */
+  removeRole(id: string, roleId: string): Promise<ColleagueAccountResult> {
+    return this.accountAction('delete', id, `/roles/${encodeURIComponent(roleId)}`, 'забрати роль у колеги');
+  }
+
   /** Запит дії з акаунтом колеги `id` (`suffix` — що після `/users/{id}`); `what` — для попередження в консолі. */
   private async accountAction(
     method: 'post' | 'delete',
     id: string,
-    suffix: '' | '/deactivate' | '/activate',
+    suffix: '' | '/deactivate' | '/activate' | `/roles/${string}`,
     what: string,
   ): Promise<ColleagueAccountResult> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}${suffix}`;
@@ -184,6 +200,29 @@ export class UsersService {
   }
 
   /**
+   * `GET <сервер>/api/v1/users/{id}` — профіль колеги (право `ViewUser`): ті самі поля, що
+   * й `/users/me`. Екстрений контакт сервер віддає лише з правом `ViewEmergencyContact`
+   * (інакше `null`). Повертає профіль або причину невдачі (`error` — зокрема 404 і відповідь не
+   * за контрактом, див. `toUserProfile`).
+   */
+  async get(id: string): Promise<UserProfile | RequestFailure> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}`;
+    try {
+      const body = await firstValueFrom(this.http.get<Untrusted<UserProfileDto>>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      const profile = toUserProfile(body);
+      if (!profile) {
+        console.warn('[UsersService] Профіль колеги не за контрактом', body);
+        return 'error';
+      }
+      return profile;
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося отримати профіль колеги (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
    * `GET <сервер>/api/v1/users/me/permissions` — унікальні права поточного
    * користувача, за якими будується інтерфейс. Повертає список або причину
    * невдачі; відповідь не масивом вважається помилкою. Токен додає
@@ -208,11 +247,13 @@ export class UsersService {
 
   /**
    * `PUT <сервер>/api/v1/users/me` — оновлення профілю поточного користувача
-   * (лише авторизація, права `UpdateUser` не потрібно; 204 без тіла). Токен
+   * (лише авторизація, права `UpdateUser` не потрібно; 204 без тіла). З `userId` —
+   * `PUT /api/v1/users/{id}`, профіль колеги (право `UpdateUser`); екстрений контакт колеги
+   * сервер змінює лише з правом `ViewEmergencyContact`, інакше поле ігнорує. Токен
    * додає `authInterceptor`.
    */
-  async updateProfile(profile: ProfileUpdate): Promise<UpdateProfileResult> {
-    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me`;
+  async updateProfile(profile: ProfileUpdate, userId: string | null = null): Promise<UpdateProfileResult> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${userPath(userId)}`;
 
     try {
       await firstValueFrom(this.http.put(url, profile).pipe(timeout(REQUEST_TIMEOUT_MS)));
@@ -228,10 +269,11 @@ export class UsersService {
    * `POST <сервер>/api/v1/users/me/avatar` — завантаження аватара поточного
    * користувача (`multipart/form-data`, поле `file`; лише авторизація; 200 без
    * тіла). Передається саме зображення, а не посилання: посилання на нього
-   * призначає сервер, тож новий `avatarUrl` читається з профілю (`GET /users/me`).
+   * призначає сервер, тож новий `avatarUrl` читається з профілю (`GET /users/me`). З `userId` —
+   * `POST /api/v1/users/{id}/avatar`, аватар колеги (право `UpdateUser`).
    */
-  async uploadAvatar(file: File): Promise<UploadAvatarResult> {
-    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/avatar`;
+  async uploadAvatar(file: File, userId: string | null = null): Promise<UploadAvatarResult> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${userPath(userId)}/avatar`;
 
     try {
       const form = new FormData();
@@ -310,4 +352,9 @@ function toUserSummary(item: Untrusted<UserDto>): UserSummary | null {
     roles: sanitizeRoles(item.roles),
     isActive: item.isActive !== false,
   };
+}
+
+/** Частина шляху після `/users/`: власний профіль (`me`) чи колеги (`id`). */
+function userPath(userId: string | null): string {
+  return userId === null ? 'me' : encodeURIComponent(userId);
 }

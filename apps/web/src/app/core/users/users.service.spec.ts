@@ -52,15 +52,17 @@ describe('UsersService', () => {
     expect(await result).toBe('unreachable');
   });
 
-  describe('the account of a colleague: deactivate, activate, delete', () => {
+  describe('the account of a colleague: deactivate, activate, delete, assign and remove a role', () => {
     const cases = [
       ['deactivate', 'POST', '/u%201/deactivate'],
       ['activate', 'POST', '/u%201/activate'],
       ['delete', 'DELETE', '/u%201'],
+      ['assignRole', 'POST', '/u%201/roles/r%201'],
+      ['removeRole', 'DELETE', '/u%201/roles/r%201'],
     ] as const;
 
     it.each(cases)('%s sends %s to the users path with the encoded id, no body, and gives done on 204', async (name, method, path) => {
-      const result = service[name]('u 1');
+      const result = service[name]('u 1', 'r 1');
       const request = http.expectOne(`${url}${path}`);
       expect(request.request.method).toBe(method);
       expect(request.request.body).toBeNull();
@@ -76,7 +78,7 @@ describe('UsersService', () => {
       [500, 'error'],
     ])('maps HTTP %i to %s', async (status, failure) => {
       for (const [name, , path] of cases) {
-        const result = service[name]('u 1');
+        const result = service[name]('u 1', 'r 1');
         http.expectOne(`${url}${path}`).flush(null, { status, statusText: 'x' });
         expect(await result).toBe(failure);
       }
@@ -240,6 +242,28 @@ describe('UsersService', () => {
     });
   });
 
+  describe('get (GET /users/{id}, the profile of a colleague)', () => {
+    const profile = { id: 'u 2', email: 'a@b.org', firstName: ' ', lastName: ' ', roles: [], customFields: [], pronounCategory: 2, emergencyContact: null };
+
+    it('asks for the colleague by id and gives the profile', async () => {
+      const result = service.get('u 2');
+      const request = http.expectOne(`${url}/u%202`);
+      expect(request.request.method).toBe('GET');
+      request.flush(profile);
+      expect(await result).toMatchObject({ id: 'u 2', email: 'a@b.org', pronounCategory: 2, emergencyContact: null });
+    });
+
+    it.each([
+      ['an answer without the id', { ...profile, id: '' }, 200, 'error'],
+      ['404', {}, 404, 'error'],
+      ['403', {}, 403, 'forbidden'],
+    ])('gives the failure on %s', async (_name, body, status, failure) => {
+      const result = service.get('u2');
+      http.expectOne(`${url}/u2`).flush(body, { status, statusText: String(status) });
+      expect(await result).toBe(failure);
+    });
+  });
+
   describe('getMyPermissions', () => {
     const permissionsUrl = () => `${url}/me/permissions`;
 
@@ -315,6 +339,15 @@ describe('UsersService', () => {
       expect(await result).toBe(expected);
     });
 
+    it('puts the profile of a colleague to /users/{id} when the id is given', async () => {
+      const result = service.updateProfile(body, 'u 2');
+      const request = http.expectOne(`${url}/u%202`);
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.body).toEqual(body);
+      request.flush(null, { status: 204, statusText: 'No Content' });
+      expect(await result).toBe('updated');
+    });
+
     it('reports an unreachable server', async () => {
       const result = service.updateProfile(body);
       http.expectOne(meUrl()).error(new ProgressEvent('error'));
@@ -348,6 +381,15 @@ describe('UsersService', () => {
       const result = service.uploadAvatar(file);
       http.expectOne(meAvatarUrl()).flush({}, { status, statusText: 'x' });
       expect(await result).toBe(expected);
+    });
+
+    it('posts the avatar of a colleague to /users/{id}/avatar when the id is given', async () => {
+      const result = service.uploadAvatar(file, 'u 2');
+      const request = http.expectOne(`${url}/u%202/avatar`);
+      expect(request.request.method).toBe('POST');
+      expect(((request.request.body as FormData).get('file') as File).name).toBe('photo.png');
+      request.flush(null);
+      expect(await result).toBe('uploaded');
     });
 
     it('reports an unreachable server', async () => {

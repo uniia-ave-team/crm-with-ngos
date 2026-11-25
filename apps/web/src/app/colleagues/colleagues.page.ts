@@ -1,4 +1,4 @@
-import { Component, ElementRef, Injector, OnInit, TemplateRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService, TranslatePipe } from '@ngx-translate/core';
 import { IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonToast, IonToolbar } from '@ionic/angular';
@@ -13,7 +13,7 @@ import { diffClaims } from '../core/roles/role-permissions';
 import { Role, RoleDetails, RolesService } from '../core/roles/roles.service';
 import { CurrentUserService } from '../core/users/current-user.service';
 import { PRONOUN_CATEGORY } from '../core/users/pronouns';
-import { UserRole } from '../core/users/user-profile';
+import { UserProfile, UserRole } from '../core/users/user-profile';
 import { SEARCH_MAX_LENGTH, UserSummary, UsersService, UsersSort } from '../core/users/users.service';
 import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent, DataTableSort, DataTableComponent } from '../shared/data-table/data-table.component';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
@@ -24,15 +24,27 @@ import { ColleagueAction, ColleagueActionItem, ColleagueActionsComponent } from 
 import { ColleagueFormComponent, NewColleague } from './colleague-form/colleague-form.component';
 import { InvitationShare, InvitationStatus, InvitationDialogComponent } from './invitation-dialog/invitation-dialog.component';
 import { NewRole, RoleFormComponent } from './role-form/role-form.component';
+import { RoleChoicesComponent } from './role-choices/role-choices.component';
 import { RolesPanelComponent } from './roles-panel/roles-panel.component';
 import { RolesView } from './roles-view';
 import { AvatarComponent } from '../shared/avatar/avatar.component';
 import { RolePillComponent } from '../shared/role-pill/role-pill.component';
+import { ActionButtonComponent } from '../shared/action-button/action-button.component';
+import { SearchHeaderComponent } from '../shared/search-header/search-header.component';
+import { ProfileFormComponent, ProfileFormValue } from '../shared/profile-form/profile-form.component';
 
 /** Стан форми редагування ролі: запит ролі (`GET /api/v1/roles/{id}`) і сама роль, коли вона є. */
 export interface RoleEditView {
   readonly status: 'loading' | 'ready' | 'failed';
   readonly role: RoleDetails | null;
+  /** Причина невдачі (лише для `failed`). */
+  readonly failure: RequestFailure | null;
+}
+
+/** Стан форми «Редагувати» колегу: запит профілю (`GET /api/v1/users/{id}`) і сам профіль. */
+export interface ColleagueEditView {
+  readonly status: 'loading' | 'ready' | 'failed';
+  readonly profile: UserProfile | null;
   /** Причина невдачі (лише для `failed`). */
   readonly failure: RequestFailure | null;
 }
@@ -79,9 +91,13 @@ export interface ColleaguesPanelState {
   readonly userName: string | null;
 }
 
-/** Пункт меню дій з колегою й права, з яких він показується (достатньо будь-якого одного). */
+/**
+ * Пункт меню дій з колегою й права, з яких він показується: хоча б одне з `requiresAny` і, якщо
+ * задано, усі `requiresAll`.
+ */
 interface ColleagueActionRule extends ColleagueActionItem {
   readonly requiresAny: readonly string[];
+  readonly requiresAll?: readonly string[];
 }
 
 const ACTION_RULES: readonly ColleagueActionRule[] = [
@@ -91,7 +107,14 @@ const ACTION_RULES: readonly ColleagueActionRule[] = [
     icon: 'shield-checkmark-outline',
     requiresAny: [PERMISSIONS.assignRoleToUser, PERMISSIONS.manageRole],
   },
-  { id: 'edit', labelKey: 'colleagues.actions.edit', icon: 'create-outline', requiresAny: [PERMISSIONS.updateUser] },
+  // Форма редагування спершу читає профіль колеги (`GET /users/{id}`), а це вимагає `ViewUser`.
+  {
+    id: 'edit',
+    labelKey: 'colleagues.actions.edit',
+    icon: 'create-outline',
+    requiresAny: [PERMISSIONS.updateUser],
+    requiresAll: [PERMISSIONS.viewUser],
+  },
   {
     id: 'resetPassword',
     labelKey: 'colleagues.actions.resetPassword',
@@ -156,7 +179,7 @@ interface ColleagueRow extends DataTableRow {
  * знімка в `localStorage`): кнопка «Додати» — з `Permissions.CreateUser`; три
  * крапки в кінці рядків відкривають меню дій, у якому кожен пункт має своє
  * право («Змінити ролі» — `AssignRoleToUser` або `ManageRole`, «Редагувати» —
- * `UpdateUser`, «Скинути пароль» — `CanResetPassword`, «Вимкнути акаунт» —
+ * `UpdateUser` разом із `ViewUser`, «Скинути пароль» — `CanResetPassword`, «Вимкнути акаунт» —
  * `DisableUser`, «Ввімкнути акаунт» — `UpdateUser`, «Видалити» — `DeleteUser`),
  * а без жодного з них крапок нема; «+» в кінці рядка заголовків — з
  * `Permissions.ViewCustomFields`. У вікні «Ролі» кнопки «Додати роль»,
@@ -166,8 +189,9 @@ interface ColleagueRow extends DataTableRow {
  *
  * Бічне вікно (`app-side-panel`) відкривають кнопки «Ролі» й «Додати» та дії «Змінити
  * ролі», «Редагувати» й «Скинути пароль» з меню біля трьох крапок. Для «Ролі» й «Додати» в
- * ньому список ролей, форми ролі й форма колеги; для цих дій (функції-заглушки нижче) вікно
- * поки порожнє, а `panel` каже, що саме його відкрило й для якого колеги. «Вимкнути акаунт»
+ * ньому список ролей, форми ролі й форма колеги, для «Редагувати» — форма профілю колеги; для
+ * решти дій (функції-заглушки нижче) вікно поки порожнє, а `panel` каже, що саме його відкрило
+ * й для якого колеги. «Вимкнути акаунт»
  * і «Видалити» питають підтвердження у вікні по центру екрана й тоді шлють запит,
  * «Ввімкнути акаунт» шле його одразу; після кожної список оновлюється.
  *
@@ -201,6 +225,10 @@ interface ColleagueRow extends DataTableRow {
     InvitationDialogComponent,
     AvatarComponent,
     RolePillComponent,
+    SearchHeaderComponent,
+    ActionButtonComponent,
+    ProfileFormComponent,
+    RoleChoicesComponent,
     TranslatePipe,
   ],
 })
@@ -227,9 +255,15 @@ export class ColleaguesPage implements OnInit {
   protected readonly canAdd = computed(() => this.permissions().includes(PERMISSIONS.createUser));
   /** Може керувати ролями: кнопки «Додати роль», «Редагувати» й «Видалити» у вікні «Ролі». */
   protected readonly canManageRoles = computed(() => this.permissions().includes(PERMISSIONS.manageRole));
+  /** Може змінювати ролі колеги: ролі у формі «Редагувати». */
+  protected readonly canAssignRoles = computed(() => this.permissions().includes(PERMISSIONS.assignRoleToUser));
   /** Дії з колегою, доступні користувачеві (пункти меню біля трьох крапок). */
   protected readonly actions = computed<readonly ColleagueActionItem[]>(() =>
-    ACTION_RULES.filter((rule) => hasAnyPermission(this.permissions(), rule.requiresAny)),
+    ACTION_RULES.filter(
+      (rule) =>
+        hasAnyPermission(this.permissions(), rule.requiresAny) &&
+        (rule.requiresAll ?? []).every((permission) => this.permissions().includes(permission)),
+    ),
   );
   /** Може щось робити з колегою: показуємо три крапки в кінці рядків. */
   protected readonly canOpenRowMenu = computed(() => this.actions().length > 0);
@@ -285,6 +319,22 @@ export class ColleaguesPage implements OnInit {
    * (інакше він зникав би ще до кінця анімації закриття).
    */
   protected readonly panelContent = signal<ColleaguesPanelKind | null>(null);
+  /** Профіль колеги для форми «Редагувати» (запит іде при кожному її відкритті). */
+  protected readonly colleagueEditView = signal<ColleagueEditView>({ status: 'loading', profile: null, failure: null });
+  /** Номер запиту профілю: відповідь на давніший (вікно відкрили для іншого колеги) ігнорується. */
+  private colleagueEditRequest = 0;
+  /** Ролі, вибрані у формі «Редагувати» (`id`): спершу — ролі з профілю колеги. */
+  protected readonly colleagueEditRoles = signal<ReadonlySet<string>>(new Set());
+  /**
+   * Ролі, які колега має на сервері (`id`): з профілю, далі — після кожної вдалої зміни. З ними
+   * при збереженні порівнюються вибрані (`colleagueEditRoles`).
+   */
+  private colleagueSavedRoles: ReadonlySet<string> = new Set();
+  /** Іде збереження форми «Редагувати»: кнопка вимкнена. */
+  protected readonly colleagueEditSaving = signal(false);
+  /** Ключі помилок збереження форми «Редагувати» (над «Зберегти»); порожньо — нема. */
+  protected readonly colleagueEditErrors = signal<readonly string[]>([]);
+  private readonly colleagueProfileForm = viewChild(ProfileFormComponent);
   /** Ролі для бічного вікна «Ролі» (запит іде при кожному його відкритті). */
   protected readonly rolesView = signal<RolesView>({ status: 'loading', roles: [], failure: null });
   private rolesLoading = false;
@@ -366,16 +416,9 @@ export class ColleaguesPage implements OnInit {
   /** Вкладку вже відкривали: наступні входи на неї оновлюють список (`ionViewWillEnter`). */
   private entered = false;
 
-  /** Шапка в режимі пошуку: заголовок прибрано, кнопки стиснуто до іконок, видно поле й хрестик. */
-  protected readonly searchOpen = signal(false);
-  /** Що введено в поле пошуку. */
-  protected readonly searchText = signal('');
   protected readonly searchMaxLength = SEARCH_MAX_LENGTH;
   /** Пошук, за яким запитано поточний список (`SearchTerm`); `null` — без пошуку. */
   protected readonly searchTerm = signal<string | null>(null);
-  private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
-  private readonly searchButton = viewChild<ElementRef<HTMLButtonElement>>('searchButton');
-  private readonly injector = inject(Injector);
 
   /**
    * Рядки з полів колеги (`UserSummary`): ПІБ («Прізвище Імʼя По батькові», як на плитках
@@ -420,34 +463,16 @@ export class ColleaguesPage implements OnInit {
     this.entered = true;
   }
 
-  /** Лупа в шапці: ховаємо заголовок і кнопки, показуємо поле пошуку й ставимо в нього курсор. */
-  protected openSearch(): void {
-    this.searchOpen.set(true);
-    afterNextRender(() => this.searchInput()?.nativeElement.focus(), { injector: this.injector });
-  }
-
   /**
-   * Будь-яка зміна в полі пошуку одразу запитує список заново з першої сторінки: введений рядок
-   * (без пробілів по краях) іде в `SearchTerm`, порожній — `null`, тобто повний список. Відповідь
-   * на попередній запит, що ще йшов, ігнорується. Сервер не приймає рядок, коротший за
-   * `SEARCH_MIN_LENGTH` символи (400): тоді над таблицею помилка запиту.
+   * Будь-яка зміна в полі пошуку шапки (і закриття пошуку з непорожнім полем) одразу запитує
+   * список заново з першої сторінки: введений рядок (без пробілів по краях) іде в `SearchTerm`,
+   * порожній — `null`, тобто повний список. Відповідь на попередній запит, що ще йшов,
+   * ігнорується. Сервер не приймає рядок, коротший за `SEARCH_MIN_LENGTH` символи (400): тоді
+   * над таблицею помилка запиту.
    */
-  protected onSearchInput(value: string): void {
-    this.searchText.set(value);
+  protected onSearch(value: string): void {
     this.searchTerm.set(value.trim() || null);
     this.reloadColleagues();
-  }
-
-  /**
-   * Хрестик (чи Esc у полі): поле закривається й порожніє, повертаються заголовок і кнопки. Якщо
-   * в полі щось було, це теж зміна: список запитується заново без пошуку (`SearchTerm` — `null`).
-   */
-  protected closeSearch(): void {
-    this.searchOpen.set(false);
-    afterNextRender(() => this.searchButton()?.nativeElement.focus(), { injector: this.injector });
-    if (this.searchText()) {
-      this.onSearchInput('');
-    }
   }
 
   /**
@@ -596,7 +621,7 @@ export class ColleaguesPage implements OnInit {
         this.changePermissions(colleague);
         break;
       case 'edit':
-        this.editColleague(colleague);
+        void this.editColleague(colleague);
         break;
       case 'resetPassword':
         this.resetPassword(colleague);
@@ -858,9 +883,122 @@ export class ColleaguesPage implements OnInit {
     this.openPanel('permissions', colleague);
   }
 
-  /** «Редагувати» (`UpdateUser`). Заглушка. */
-  protected editColleague(colleague: ColleagueRef): void {
+  /**
+   * «Редагувати» (`UpdateUser`): бічне вікно з формою профілю колеги (`app-profile-form`, та сама,
+   * що в «Даних профілю»), заповненою з `GET /api/v1/users/{id}`. Поки йде запит чи якщо він не
+   * вдався, замість форми — повідомлення. З правом `AssignRoleToUser` у формі ще й ролі плашками,
+   * як у формі нового колеги (список — `GET /api/v1/roles`, спершу вибрані ролі з профілю).
+   * «Зберегти» — `saveColleague`.
+   */
+  protected async editColleague(colleague: ColleagueRef): Promise<void> {
+    const request = ++this.colleagueEditRequest;
+    this.colleagueEditView.set({ status: 'loading', profile: null, failure: null });
+    this.colleagueEditRoles.set(new Set());
+    this.colleagueSavedRoles = new Set();
+    this.colleagueEditErrors.set([]);
     this.openPanel('edit', colleague);
+    if (this.canAssignRoles()) {
+      void this.loadRoles();
+    }
+    const result = await this.users.get(colleague.id);
+    if (request !== this.colleagueEditRequest) {
+      return;
+    }
+    if (typeof result === 'string') {
+      this.colleagueEditView.set({ status: 'failed', profile: null, failure: result });
+      return;
+    }
+    this.colleagueSavedRoles = new Set(result.roles.map((role) => role.id));
+    this.colleagueEditRoles.set(this.colleagueSavedRoles);
+    this.colleagueEditView.set({ status: 'ready', profile: result, failure: null });
+  }
+
+  /**
+   * «Зберегти» у формі «Редагувати» (поля форма вже перевірила): `PUT /api/v1/users/{id}`; якщо
+   * обрано файл — `POST /api/v1/users/{id}/avatar`; з правом `AssignRoleToUser` — ролі за
+   * різницею вибраних із тими, що колега має: нові — `POST /users/{id}/roles/{roleId}`,
+   * зняті — `DELETE` (усі одночасно). Невдалий `PUT` зупиняє збереження. Якщо не вдалося
+   * завантажити аватар чи змінити якусь роль, решта все одно зберігається, вікно лишається
+   * відкритим з помилкою за кожну частину, а повторне «Зберегти» робить лише те, що лишилося
+   * (вдалі зміни ролей запамʼятовуються). Усе вдалося — вікно закривається. Після будь-якої
+   * вдалої зміни список колег запитується заново.
+   */
+  protected async saveColleague({ profile, avatar }: ProfileFormValue): Promise<void> {
+    const id = this.panel()?.userId;
+    if (!id || this.colleagueEditSaving()) {
+      return;
+    }
+    this.colleagueEditSaving.set(true);
+    this.colleagueEditErrors.set([]);
+    try {
+      const updated = await this.users.updateProfile(profile, id);
+      if (updated !== 'updated') {
+        this.colleagueEditErrors.set([`colleagues.profileForm.saveError.${updated}`]);
+        return;
+      }
+      const errors: string[] = [];
+      if (avatar) {
+        const uploaded = await this.users.uploadAvatar(avatar, id);
+        if (uploaded === 'uploaded') {
+          this.colleagueProfileForm()?.clearAvatar();
+        } else {
+          errors.push(`colleagues.profileForm.avatarError.${uploaded}`);
+        }
+      }
+      if (this.canAssignRoles()) {
+        const failure = await this.saveColleagueRoles(id);
+        if (failure) {
+          errors.push(`colleagues.profileForm.rolesError.${failure}`);
+        }
+      }
+      this.reloadColleagues();
+      if (errors.length > 0) {
+        this.colleagueEditErrors.set(errors);
+        return;
+      }
+      void this.sidePanel()?.close();
+    } finally {
+      this.colleagueEditSaving.set(false);
+    }
+  }
+
+  /**
+   * Ролі колеги за різницею вибраних із тими, що він має (усі запити одночасно). Вдалі зміни
+   * запамʼятовуються в `colleagueSavedRoles`. Повертає причину першої невдачі або `null`.
+   */
+  private async saveColleagueRoles(id: string): Promise<RequestFailure | null> {
+    const selected = this.colleagueEditRoles();
+    const saved = new Set(this.colleagueSavedRoles);
+    const added = [...selected].filter((roleId) => !saved.has(roleId));
+    const removed = [...saved].filter((roleId) => !selected.has(roleId));
+    const results = await Promise.all([
+      ...added.map(async (roleId) => ({ roleId, add: true, result: await this.users.assignRole(id, roleId) })),
+      ...removed.map(async (roleId) => ({ roleId, add: false, result: await this.users.removeRole(id, roleId) })),
+    ]);
+    let failure: RequestFailure | null = null;
+    for (const { roleId, add, result } of results) {
+      if (result === 'done') {
+        if (add) {
+          saved.add(roleId);
+        } else {
+          saved.delete(roleId);
+        }
+      } else {
+        failure ??= result;
+      }
+    }
+    this.colleagueSavedRoles = saved;
+    return failure;
+  }
+
+  /** Натиснули на плашку ролі у формі «Редагувати»: роль вибирається чи знімається. */
+  protected toggleColleagueEditRole(id: string): void {
+    const selected = new Set(this.colleagueEditRoles());
+    if (!selected.delete(id)) {
+      selected.add(id);
+    }
+    this.colleagueEditRoles.set(selected);
+    this.colleagueEditErrors.set([]);
   }
 
   /** «Скинути пароль» (`CanResetPassword`). Заглушка. */
