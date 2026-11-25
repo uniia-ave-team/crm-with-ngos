@@ -4,6 +4,7 @@ using System.Text;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.Users;
+using Crm.Application.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Constants;
 using Crm.Infrastructure.Consts;
@@ -95,42 +96,16 @@ public sealed partial class TokenService : ITokenService
             _signingKey,
             validateLifetime: false);
 
-        try
-        {
-            // Symmetric key validation without external OIDC metadata completes synchronously in-memory.
-            TokenValidationResult validationResult = TokenHandler
-                .ValidateTokenAsync(token, tokenValidationParameters)
-                .GetAwaiter()
-                .GetResult();
-
-            if (!validationResult.IsValid)
-            {
-                LogExpiredTokenValidationFailed(_logger, validationResult.Exception?.Message ?? "Token validation failed.");
-                return null;
-            }
-
-            if (validationResult.SecurityToken is not JsonWebToken jsonWebToken
-                || !string.Equals(jsonWebToken.Alg, SecurityAlgorithms.HmacSha256, StringComparison.Ordinal))
-            {
-                LogInvalidExpiredToken(_logger, "Invalid token algorithm.");
-                return null;
-            }
-
-            var principal = new ClaimsPrincipal(validationResult.ClaimsIdentity);
-
-            if (!JwtTokenValidationHelper.IsValidAccessTokenPrincipal(principal))
-            {
-                LogInvalidExpiredToken(_logger, "Token is not an access token.");
-                return null;
-            }
-
-            return principal;
-        }
-        catch (Exception ex)
-        {
-            LogExpiredTokenValidationFailed(_logger, ex.Message);
-            return null;
-        }
+        // Symmetric key validation without external OIDC metadata completes synchronously in-memory.
+        return ValidateTokenCoreAsync(
+            token,
+            tokenValidationParameters,
+            identity => JwtTokenValidationHelper.IsValidAccessTokenPrincipal(new ClaimsPrincipal(identity)),
+            "Token is not an access token.",
+            onValidationError: reason => LogExpiredTokenValidationFailed(_logger, reason),
+            onInvalidToken: reason => LogInvalidExpiredToken(_logger, reason))
+            .GetAwaiter()
+            .GetResult();
     }
 
     /// <inheritdoc />
@@ -149,7 +124,9 @@ public sealed partial class TokenService : ITokenService
         var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(_jwtOptions.InvitationTokenExpiryHours);
         var tokenString = GenerateTokenString(claims, expiresAt);
 
-        LogInvitationTokenGenerated(_logger, dto.Email);
+        var maskedEmail = dto.Email.MaskEmail();
+
+        LogInvitationTokenGenerated(_logger, maskedEmail);
 
         return new TokenResultDto(tokenString, expiresAt);
     }
@@ -210,7 +187,7 @@ public sealed partial class TokenService : ITokenService
         return TokenHandler.CreateToken(descriptor);
     }
 
-    private async Task<ClaimsPrincipal?> ValidateCustomTokenAsync(
+    private Task<ClaimsPrincipal?> ValidateCustomTokenAsync(
         string token,
         Func<ClaimsIdentity, bool> claimRequirement,
         string requirementFailureMessage,
@@ -224,26 +201,45 @@ public sealed partial class TokenService : ITokenService
             validateLifetime: true,
             timeProvider: _timeProvider);
 
+        return ValidateTokenCoreAsync(
+            token,
+            tokenValidationParameters,
+            claimRequirement,
+            requirementFailureMessage,
+            onValidationError: _ => LogTokenValidationFailed(_logger, "Token validation failed according to validation parameters."),
+            onInvalidToken: reason => LogTokenValidationFailed(_logger, reason),
+            onException: reason => LogTokenValidationFailed(_logger, reason));
+    }
+
+    private static async Task<ClaimsPrincipal?> ValidateTokenCoreAsync(
+        string token,
+        TokenValidationParameters validationParameters,
+        Func<ClaimsIdentity, bool> claimRequirement,
+        string requirementFailureMessage,
+        Action<string> onValidationError,
+        Action<string> onInvalidToken,
+        Action<string>? onException = null)
+    {
         try
         {
-            var validationResult = await TokenHandler.ValidateTokenAsync(token, tokenValidationParameters);
+            var validationResult = await TokenHandler.ValidateTokenAsync(token, validationParameters);
 
             if (!validationResult.IsValid)
             {
-                LogTokenValidationFailed(_logger, "Token validation failed according to validation parameters.");
+                onValidationError(validationResult.Exception?.Message ?? "Token validation failed.");
                 return null;
             }
 
             if (validationResult.SecurityToken is not JsonWebToken jsonWebToken
                 || !string.Equals(jsonWebToken.Alg, SecurityAlgorithms.HmacSha256, StringComparison.Ordinal))
             {
-                LogTokenValidationFailed(_logger, "Invalid token algorithm.");
+                onInvalidToken("Invalid token algorithm.");
                 return null;
             }
 
             if (!claimRequirement(validationResult.ClaimsIdentity))
             {
-                LogTokenValidationFailed(_logger, requirementFailureMessage);
+                onInvalidToken(requirementFailureMessage);
                 return null;
             }
 
@@ -251,7 +247,7 @@ public sealed partial class TokenService : ITokenService
         }
         catch (Exception ex)
         {
-            LogTokenValidationFailed(_logger, ex.Message);
+            (onException ?? onValidationError)(ex.Message);
             return null;
         }
     }

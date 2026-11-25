@@ -1,6 +1,7 @@
 using Crm.Infrastructure.Options;
 using Crm.Infrastructure.Services.Caching;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using MsOptions = Microsoft.Extensions.Options.Options;
@@ -26,8 +27,12 @@ public class RevokedUsersCacheTests
             AccessTokenExpiryMinutes = 15,
         });
 
-        using var memoryCache = new MemoryCache(new MemoryCacheOptions());
-        var cache = new RevokedUsersCache(memoryCache, jwtOptions, clock, NullLogger<RevokedUsersCache>.Instance);
+        using var serviceProvider = BuildServiceProvider();
+        var cache = new RevokedUsersCache(
+            serviceProvider.GetRequiredService<HybridCache>(),
+            jwtOptions,
+            clock,
+            NullLogger<RevokedUsersCache>.Instance);
         var revokedUserId = Guid.CreateVersion7();
         var otherUserId = Guid.CreateVersion7();
 
@@ -60,8 +65,12 @@ public class RevokedUsersCacheTests
             AccessTokenExpiryMinutes = 15,
         });
 
-        using var memoryCache = new MemoryCache(new MemoryCacheOptions());
-        var cache = new RevokedUsersCache(memoryCache, jwtOptions, clock, NullLogger<RevokedUsersCache>.Instance);
+        using var serviceProvider = BuildServiceProvider();
+        var cache = new RevokedUsersCache(
+            serviceProvider.GetRequiredService<HybridCache>(),
+            jwtOptions,
+            clock,
+            NullLogger<RevokedUsersCache>.Instance);
         var userId = Guid.CreateVersion7();
 
         await cache.RevokeUserAsync(userId, ct);
@@ -69,6 +78,13 @@ public class RevokedUsersCacheTests
 
         await cache.UnrevokeUserAsync(userId, ct);
         (await cache.IsUserRevokedAsync(userId, ct)).ShouldBeFalse();
+    }
+
+    private static ServiceProvider BuildServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddHybridCache();
+        return services.BuildServiceProvider();
     }
 
     private sealed class TestTimeProvider(DateTimeOffset initialUtcNow) : TimeProvider
