@@ -59,4 +59,10 @@ public static class CustomClaimTypes
     /// The claim value marking a password reset token.
     /// </summary>
     public const string PasswordResetTokenValue = "password_reset";
+
+    /// <summary>
+    /// The high-precision UTC ticks timestamp (<see cref="DateTimeOffset.UtcTicks"/>) recorded when an access token was issued,
+    /// enabling sub-second comparisons against timestamped token revocation entries.
+    /// </summary>
+    public const string IssuedAtTicks = "iat_ticks";
 }

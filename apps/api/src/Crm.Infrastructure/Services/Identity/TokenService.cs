@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -54,11 +55,14 @@ public sealed partial class TokenService : ITokenService
     /// <inheritdoc />
     public TokenResult GenerateAccessToken(UserBasicDto user, IList<Guid> roleIds)
     {
+        DateTimeOffset utcNow = _timeProvider.GetUtcNow();
+
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new(CustomClaimTypes.TokenType, CustomClaimTypes.AccessTokenValue),
+            new(CustomClaimTypes.IssuedAtTicks, utcNow.UtcTicks.ToString(CultureInfo.InvariantCulture)),
         };
 
         if (!string.IsNullOrWhiteSpace(user.Email))
@@ -68,8 +72,8 @@ public sealed partial class TokenService : ITokenService
 
         claims.AddRange(roleIds.Select(roleId => new Claim(CustomClaimTypes.RoleId, roleId.ToString())));
 
-        var expiresAt = _timeProvider.GetUtcNow().AddMinutes(_jwtOptions.AccessTokenExpiryMinutes);
-        var tokenString = GenerateTokenString(claims, expiresAt.UtcDateTime);
+        DateTimeOffset expiresAt = utcNow.AddMinutes(_jwtOptions.AccessTokenExpiryMinutes);
+        string tokenString = GenerateTokenString(claims, utcNow.UtcDateTime, expiresAt.UtcDateTime);
 
         LogAccessTokenGenerated(_logger, user.Id);
 
@@ -128,10 +132,8 @@ public sealed partial class TokenService : ITokenService
     private static string GenerateOpaqueToken(int byteLength)
         => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(byteLength));
 
-    private string GenerateTokenString(IEnumerable<Claim> claims, DateTime expiresAt)
+    private string GenerateTokenString(IEnumerable<Claim> claims, DateTime utcNow, DateTime expiresAt)
     {
-        DateTime utcNow = _timeProvider.GetUtcNow().UtcDateTime;
-
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = _jwtOptions.Issuer,

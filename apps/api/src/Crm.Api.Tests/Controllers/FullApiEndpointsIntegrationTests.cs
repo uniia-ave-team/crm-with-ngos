@@ -377,17 +377,34 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         memberTokens = (await reLoginResp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
         memberClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberTokens.AccessToken);
 
-        // Admin assigns & removes extra role on user
+        // Admin assigns & removes extra role on user: stale access token must immediately get 401 until refreshed
         var extraRoleResp = await adminClient.PostAsJsonAsync("/api/v1/roles", new CreateRoleCommand("Volunteer", null, null), ct);
         extraRoleResp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var extraRoleId = await extraRoleResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
         (await adminClient.PostAsync($"/api/v1/users/{memberId}/roles/{extraRoleId}", null, ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Old token issued before role assignment is rejected immediately with 401
+        (await memberClient.GetAsync("/api/v1/users/me", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
         (await adminClient.DeleteAsync($"/api/v1/users/{memberId}/roles/{extraRoleId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await adminClient.DeleteAsync($"/api/v1/roles/{extraRoleId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Refreshing restores access with up-to-date role_id claims while old token stays rejected
+        var refreshedAfterRoleChangeResp = await anonClient.PostAsJsonAsync(
+            "/api/v1/auth/refresh-token",
+            new RefreshTokensCommand(memberTokens.AccessToken, memberTokens.RefreshToken),
+            ct);
+        refreshedAfterRoleChangeResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        memberTokens = (await refreshedAfterRoleChangeResp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
+        memberClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberTokens.AccessToken);
+
+        (await memberClient.GetAsync("/api/v1/users/me", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Admin uploads & retrieves user avatar (plus invalid format -> 400)
         using (var badAvatarForm = CreateMultipartFile("file", "bad.png", "image/png", Encoding.UTF8.GetBytes("invalid")))

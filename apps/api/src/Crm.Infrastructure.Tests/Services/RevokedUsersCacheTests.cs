@@ -80,6 +80,57 @@ public class RevokedUsersCacheTests
         (await cache.IsUserRevokedAsync(userId, ct)).ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task RevokeTokensIssuedBeforeShouldRejectOnlyOlderTokensAndPreserveFullRevocation()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var start = new DateTimeOffset(2026, 11, 22, 15, 0, 0, TimeSpan.Zero);
+        var clock = new TestTimeProvider(start);
+        var jwtOptions = MsOptions.Create(new JwtOptions
+        {
+            Secret = "super-secret-signing-key-for-tests-1234",
+            Issuer = "CrmTestIssuer",
+            Audience = "CrmTestAudience",
+            AccessTokenExpiryMinutes = 15,
+        });
+
+        using var serviceProvider = BuildServiceProvider();
+        var cache = new RevokedUsersCache(
+            serviceProvider.GetRequiredService<HybridCache>(),
+            jwtOptions,
+            clock,
+            NullLogger<RevokedUsersCache>.Instance);
+        var userId = Guid.CreateVersion7();
+
+        var oldTokenIssuedAt = start;
+        clock.Advance(TimeSpan.FromMilliseconds(50));
+
+        // Role change happens at start + 50ms.
+        await cache.RevokeTokensIssuedBeforeAsync(userId, ct);
+
+        // User is NOT fully revoked, but tokens issued at or before the role change are rejected.
+        (await cache.IsUserRevokedAsync(userId, ct)).ShouldBeFalse();
+        (await cache.IsTokenRevokedAsync(userId, oldTokenIssuedAt, ct)).ShouldBeTrue();
+        (await cache.IsTokenRevokedAsync(userId, clock.GetUtcNow(), ct)).ShouldBeTrue();
+        (await cache.IsTokenRevokedAsync(userId, null, ct)).ShouldBeTrue();
+
+        // Newly refreshed token issued even 1ms later is accepted immediately.
+        var freshTokenIssuedAt = clock.GetUtcNow().AddMilliseconds(1);
+        (await cache.IsTokenRevokedAsync(userId, freshTokenIssuedAt, ct)).ShouldBeFalse();
+
+        // After TTL expires, cache entry clears and old checks return false.
+        clock.Advance(TimeSpan.FromMinutes(15));
+        (await cache.IsTokenRevokedAsync(userId, oldTokenIssuedAt, ct)).ShouldBeFalse();
+
+        // Full revocation must NOT be downgraded by a subsequent role change.
+        await cache.RevokeUserAsync(userId, ct);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await cache.RevokeTokensIssuedBeforeAsync(userId, ct);
+
+        (await cache.IsUserRevokedAsync(userId, ct)).ShouldBeTrue();
+        (await cache.IsTokenRevokedAsync(userId, clock.GetUtcNow().AddSeconds(10), ct)).ShouldBeTrue();
+    }
+
     private static ServiceProvider BuildServiceProvider()
     {
         var services = new ServiceCollection();

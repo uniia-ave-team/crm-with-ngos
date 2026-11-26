@@ -11,7 +11,8 @@ namespace Crm.Infrastructure.Services.Caching;
 /// <summary>
 /// Provides a <see cref="HybridCache"/>-backed implementation of <see cref="IRevokedUsersCache"/>.
 /// Stores revoked user entries with expiration aligned to <see cref="JwtOptions.AccessTokenExpiryMinutes"/>
-/// so deactivated or deleted users lose API access immediately without querying the database on every request.
+/// so deactivated/deleted users lose API access immediately and users whose roles changed are forced
+/// to refresh stale access tokens without querying the database on every request.
 /// </summary>
 /// <param name="hybridCache">The hybrid cache backing store.</param>
 /// <param name="jwtOptions">The JWT options providing the access token lifetime used as cache TTL.</param>
@@ -46,11 +47,36 @@ public sealed partial class RevokedUsersCache(
         DateTimeOffset expiresAt = timeProvider.GetUtcNow().Add(_ttl);
         await hybridCache.SetAsync(
             GenerateCacheKey(userId),
-            new RevokedUserEntry(expiresAt),
+            new RevokedUserEntry(RevokedBefore: null, ExpiresAt: expiresAt),
             _writeOptions,
             cancellationToken: cancellationToken);
 
         LogUserAddedToRevokedCache(logger, userId, _ttl);
+    }
+
+    /// <inheritdoc />
+    public async Task RevokeTokensIssuedBeforeAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        DateTimeOffset utcNow = timeProvider.GetUtcNow();
+        RevokedUserEntry? existing = await GetActiveEntryAsync(userId, utcNow, cancellationToken);
+
+        // Preserve full account revocation (deactivated/deleted user) instead of downgrading it to timestamp-only.
+        if (existing is { RevokedBefore: null })
+        {
+            return;
+        }
+
+        DateTimeOffset revokedBefore = existing?.RevokedBefore is { } existingCutoff && existingCutoff > utcNow
+            ? existingCutoff
+            : utcNow;
+
+        await hybridCache.SetAsync(
+            GenerateCacheKey(userId),
+            new RevokedUserEntry(RevokedBefore: revokedBefore, ExpiresAt: utcNow.Add(_ttl)),
+            _writeOptions,
+            cancellationToken: cancellationToken);
+
+        LogUserTokensRevokedBefore(logger, userId, revokedBefore, _ttl);
     }
 
     /// <inheritdoc />
@@ -63,6 +89,26 @@ public sealed partial class RevokedUsersCache(
     /// <inheritdoc />
     public async Task<bool> IsUserRevokedAsync(Guid userId, CancellationToken cancellationToken = default)
     {
+        RevokedUserEntry? entry = await GetActiveEntryAsync(userId, timeProvider.GetUtcNow(), cancellationToken);
+        return entry is { RevokedBefore: null };
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> IsTokenRevokedAsync(
+        Guid userId,
+        DateTimeOffset? tokenIssuedAt,
+        CancellationToken cancellationToken = default)
+    {
+        RevokedUserEntry? entry = await GetActiveEntryAsync(userId, timeProvider.GetUtcNow(), cancellationToken);
+        return entry is not null
+            && (entry.RevokedBefore is null || tokenIssuedAt is null || tokenIssuedAt.Value <= entry.RevokedBefore.Value);
+    }
+
+    private async Task<RevokedUserEntry?> GetActiveEntryAsync(
+        Guid userId,
+        DateTimeOffset utcNow,
+        CancellationToken cancellationToken)
+    {
         string key = GenerateCacheKey(userId);
         var entry = await hybridCache.GetOrCreateAsync(
             key,
@@ -72,16 +118,16 @@ public sealed partial class RevokedUsersCache(
 
         if (entry is null)
         {
-            return false;
+            return null;
         }
 
-        if (entry.ExpiresAt > timeProvider.GetUtcNow())
+        if (entry.ExpiresAt > utcNow)
         {
-            return true;
+            return entry;
         }
 
         await hybridCache.RemoveAsync(key, cancellationToken);
-        return false;
+        return null;
     }
 
     private static string GenerateCacheKey(Guid userId) => $"{CacheKeyPrefix}{userId}";
@@ -92,6 +138,9 @@ public sealed partial class RevokedUsersCache(
     [LoggerMessage(EventId = LogEventIds.UserRemovedFromRevokedCache, Level = LogLevel.Information, Message = "User ID '{UserId}' removed from revoked users cache.")]
     private static partial void LogUserRemovedFromRevokedCache(ILogger logger, Guid userId);
 
+    [LoggerMessage(EventId = LogEventIds.UserTokensRevokedBefore, Level = LogLevel.Information, Message = "Access tokens issued at or before {RevokedBefore:O} invalidated for user ID '{UserId}' for {Duration}.")]
+    private static partial void LogUserTokensRevokedBefore(ILogger logger, Guid userId, DateTimeOffset revokedBefore, TimeSpan duration);
+
     [ImmutableObject(true)]
-    private sealed record RevokedUserEntry(DateTimeOffset ExpiresAt);
+    private sealed record RevokedUserEntry(DateTimeOffset? RevokedBefore, DateTimeOffset ExpiresAt);
 }

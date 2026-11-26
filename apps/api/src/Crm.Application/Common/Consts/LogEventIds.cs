@@ -43,6 +43,7 @@ public static class LogEventIds
     public const int InvalidClaimToRemoveAttempt = 1044;
     public const int UserAddedToRevokedCache = 1045;
     public const int UserRemovedFromRevokedCache = 1046;
+    public const int UserTokensRevokedBefore = 1047;
 
     // 2000s: Users, Authentication, and Profiles
     public const int ActivatingUser = 2001;
