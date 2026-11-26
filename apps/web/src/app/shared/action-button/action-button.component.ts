@@ -16,6 +16,8 @@ export type ActionButtonTone = 'blue' | 'green' | 'neutral';
  * `grid-template-columns` 1fr → 0fr, тією ж тривалістю, що й рух шапки), а на телефоні
  * (до 600px) у такій шапці завжди лише іконка. Поза шапкою з пошуком текст видно завжди.
  *
+ * З `iconOnly` кнопка завжди лише іконка, а назва — у підказці (`title`).
+ *
  * Висоту задає змінна `--action-button-height` (за замовчуванням 36px).
  */
 @Component({
@@ -24,7 +26,7 @@ export type ActionButtonTone = 'blue' | 'green' | 'neutral';
   styleUrls: ['./action-button.component.scss'],
   host: {
     '[class.action-button--in-header]': 'inHeader',
-    '[class.action-button--compact]': 'compact()',
+    '[class.action-button--compact]': 'iconOnly() || compact()',
   },
   imports: [IonIcon],
 })
@@ -33,6 +35,8 @@ export class ActionButtonComponent {
   readonly icon = input.required<string>();
   readonly label = input.required<string>();
   readonly tone = input<ActionButtonTone>('neutral');
+  /** Завжди лише іконка (назва — у підказці й `aria-label`): тісна шапка, як у таблиці бази знань. */
+  readonly iconOnly = input(false);
 
   private readonly header = inject(SearchHeaderComponent, { optional: true });
   protected readonly inHeader = this.header !== null;

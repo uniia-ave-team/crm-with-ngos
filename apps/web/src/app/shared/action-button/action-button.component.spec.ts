@@ -8,6 +8,7 @@ import { ActionButtonComponent, ActionButtonTone } from './action-button.compone
 @Component({
   template: `
     <app-action-button class="alone" icon="add-outline" label="Дія" [tone]="tone()" (click)="clicks = clicks + 1" />
+    <app-action-button class="icon-only" icon="share-outline" label="Експорт" [iconOnly]="true" />
     <app-search-header title="Заголовок">
       <app-action-button class="in-header" icon="people" label="Дія" />
     </app-search-header>
@@ -47,6 +48,17 @@ describe('ActionButtonComponent', () => {
     host.tone.set(tone);
     fixture.detectChanges();
     expect(alone().querySelector('button')?.classList).toContain(`action-button--${tone}`);
+  });
+
+  it('is always the icon only with iconOnly, the text in the hint; without it there is no hint', () => {
+    const { element } = render();
+    const iconOnly = element.querySelector('.icon-only')!;
+    expect(iconOnly.classList).toContain('action-button--compact');
+    expect(iconOnly.querySelector('button')?.getAttribute('title')).toBe('Експорт');
+    expect(iconOnly.querySelector('button')?.getAttribute('aria-label')).toBe('Експорт');
+    const alone = element.querySelector('.alone')!;
+    expect(alone.classList).not.toContain('action-button--compact');
+    expect(alone.querySelector('button')?.hasAttribute('title')).toBe(false);
   });
 
   it('passes the click to the page', () => {

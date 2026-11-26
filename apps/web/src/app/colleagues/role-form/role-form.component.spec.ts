@@ -377,12 +377,17 @@ describe('RoleFormComponent', () => {
     });
 
     it('marks every group with a part of its permissions, and only those', () => {
-      const { element } = render(withClaims('Permissions.CreateUser', 'Permissions.DisableUser', 'Permissions.ViewCustomTable'));
-      // editUsers і disableUsers — по одному з двох прав; viewTables — єдине право є, тож повна група.
+      const { element } = render(withClaims('Permissions.CreateUser', 'Permissions.DisableUser', 'Permissions.ViewCustomTable', 'Permissions.ViewCustomRecord'));
+      // editUsers і disableUsers — по одному з двох прав; viewTables — обидва права є, тож повна група.
       expect(warnings(element)).toHaveLength(2);
       expect(rowOf(element, 'editUsers').querySelector('.role-form__partial')).not.toBeNull();
       expect(rowOf(element, 'disableUsers').querySelector('.role-form__partial')).not.toBeNull();
       expect(rowOf(element, 'viewTables').querySelector('.role-form__partial')).toBeNull();
+    });
+
+    it('marks «View tables» of a role with the tables but without their records (ViewCustomRecord) as partial', () => {
+      const { element } = render(withClaims('Permissions.ViewCustomTable'));
+      expect(rowOf(element, 'viewTables').querySelector('.role-form__partial')).not.toBeNull();
     });
 
     it('marks a merged group that has all permissions but one', () => {

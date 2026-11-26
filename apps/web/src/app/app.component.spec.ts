@@ -1,10 +1,10 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { CUSTOM_ELEMENTS_SCHEMA, Signal, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { Router, provideRouter } from '@angular/router';
-import { provideIonicAngular } from '@ionic/angular';
+import { MenuController, provideIonicAngular } from '@ionic/angular';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../assets/i18n/uk.json';
@@ -12,6 +12,8 @@ import uk from '../assets/i18n/uk.json';
 import { AppComponent } from './app.component';
 import { SuccessNoticeService } from './core/notice/success-notice.service';
 import { AccountsService } from './core/accounts/accounts.service';
+import { KnowledgeBaseService } from './core/knowledge-base/knowledge-base.service';
+import { CurrentUserService } from './core/users/current-user.service';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
@@ -25,13 +27,103 @@ describe('AppComponent', () => {
         provideIonicAngular(),
         provideHttpClient(),
         provideHttpClientTesting(),
-        provideRouter([{ path: 'calendar', children: [] }]),
+        provideRouter([
+          { path: 'calendar', children: [] },
+          { path: 'knowledge-base', children: [], data: { layoutSection: 'knowledge-base' } },
+          { path: 'planner', children: [], data: { layoutSection: 'planner' } },
+        ]),
         provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
       ],
       imports: [AppComponent],
     }).compileComponents();
     TestBed.inject(TranslateService).setTranslation('uk', uk);
     await TestBed.inject(Router).navigateByUrl('/calendar');
+  });
+
+  describe('«+» of the knowledge base (to the root of the contents)', () => {
+    async function renderAt(url: string, canCreate = true, permissions: string[] = []) {
+      // Право створювати (`KnowledgeBaseService.canCreate`, з прав акаунта) і права акаунта тут підмінені.
+      (TestBed.inject(KnowledgeBaseService) as { canCreate: Signal<boolean> }).canCreate = signal(canCreate);
+      (TestBed.inject(CurrentUserService) as { permissions: Signal<readonly string[]> }).permissions = signal(permissions);
+      await TestBed.inject(Router).navigateByUrl(url);
+      const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+      return { fixture, element: fixture.nativeElement as HTMLElement };
+    }
+
+    it('stands next to the collapse button in the header of the side menu', async () => {
+      const { element } = await renderAt('/knowledge-base');
+      const add = element.querySelector('ion-menu ion-buttons .shell__menu-add') as HTMLElement;
+      expect(add.getAttribute('aria-label')).toBe(uk.knowledgeBase.addHere);
+      // «+» стоїть перед кнопкою згортання.
+      expect(add.nextElementSibling?.getAttribute('aria-label')).toBe(uk.common.collapsePanel);
+    });
+
+    it('floats in the corner of the screen (outside the menu) while the side menu is open on a phone', async () => {
+      const { fixture, element } = await renderAt('/knowledge-base');
+      expect(element.querySelector('.shell__menu-fab')).toBeNull();
+
+      element.querySelector('ion-menu')!.dispatchEvent(new CustomEvent('ionWillOpen'));
+      fixture.detectChanges();
+      const fab = element.querySelector('.shell__menu-fab') as HTMLButtonElement;
+      expect(fab.closest('ion-menu')).toBeNull();
+      expect(fab.getAttribute('aria-label')).toBe(uk.knowledgeBase.addHere);
+      fab.click();
+      expect(TestBed.inject(KnowledgeBaseService).insertRequest()).toEqual({ folder: null });
+
+      element.querySelector('ion-menu')!.dispatchEvent(new CustomEvent('ionDidClose'));
+      fixture.detectChanges();
+      expect(element.querySelector('.shell__menu-fab')).toBeNull();
+    });
+
+    it('asks to add a page to the root of the contents by the header button', async () => {
+      const { element } = await renderAt('/knowledge-base');
+      (element.querySelector('.shell__menu-add') as HTMLElement).click();
+      expect(TestBed.inject(KnowledgeBaseService).insertRequest()).toEqual({ folder: null });
+    });
+
+    it('is followed by the button of the template manager with Permissions.ViewTableTemplate, every header button with a hint', async () => {
+      const { element } = await renderAt('/knowledge-base', true, ['Permissions.ViewTableTemplate']);
+      const buttons = Array.from(element.querySelectorAll('ion-menu ion-buttons ion-button'));
+      expect(buttons.map((button) => button.getAttribute('title'))).toEqual([
+        uk.knowledgeBase.addHere,
+        uk.knowledgeBase.openTemplates,
+        uk.common.collapsePanel,
+      ]);
+    });
+
+    it('has no button of the template manager without Permissions.ViewTableTemplate', async () => {
+      const { element } = await renderAt('/knowledge-base', true, ['Permissions.CreateCustomTable']);
+      expect(element.querySelector('.shell__menu-templates')).toBeNull();
+    });
+
+    it('floats the button of the template manager above «+» on a phone; it closes the menu and opens the manager', async () => {
+      const { fixture, element } = await renderAt('/knowledge-base', true, ['Permissions.ViewTableTemplate']);
+      element.querySelector('ion-menu')!.dispatchEvent(new CustomEvent('ionWillOpen'));
+      fixture.detectChanges();
+      const fabs = Array.from(element.querySelectorAll('.shell__menu-fabs > button'));
+      expect(fabs.map((fab) => fab.getAttribute('aria-label'))).toEqual([uk.knowledgeBase.openTemplates, uk.knowledgeBase.addHere]);
+
+      const close = vi.spyOn(TestBed.inject(MenuController), 'close').mockResolvedValue(true);
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      (fabs[0] as HTMLButtonElement).click();
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/knowledge-base/templates'));
+      expect(close).toHaveBeenCalledWith('secondary');
+    });
+
+    it('is not there without the right to create', async () => {
+      const { fixture, element } = await renderAt('/knowledge-base', false);
+      expect(element.querySelector('.shell__menu-add')).toBeNull();
+      element.querySelector('ion-menu')!.dispatchEvent(new CustomEvent('ionWillOpen'));
+      fixture.detectChanges();
+      expect(element.querySelector('.shell__menu-fab')).toBeNull();
+    });
+
+    it('is not there in other sections', async () => {
+      const { element } = await renderAt('/planner');
+      expect(element.querySelector('.shell__menu-add')).toBeNull();
+      expect(element.querySelector('.shell__menu-fab')).toBeNull();
+    });
   });
 
   describe('the notice of a success that outlives the page (SuccessNoticeService)', () => {

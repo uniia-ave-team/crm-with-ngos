@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService, TranslatePipe } from '@ngx-translate/core';
@@ -15,12 +16,21 @@ import { CurrentUserService } from '../core/users/current-user.service';
 import { PRONOUN_CATEGORY } from '../core/users/pronouns';
 import { UserProfile, UserRole } from '../core/users/user-profile';
 import { SEARCH_MAX_LENGTH, UserSummary, UsersService, UsersSort } from '../core/users/users.service';
-import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent, DataTableSort, DataTableComponent } from '../shared/data-table/data-table.component';
+import {
+  DataTableCellContext,
+  DataTableColumn,
+  DataTableRow,
+  DataTableRowMenuEvent,
+  DataTableSort,
+  DataTableSortDirection,
+  DataTableComponent,
+} from '../shared/data-table/data-table.component';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { ModalComponent } from '../shared/modal/modal.component';
 import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
-import { ColleagueAction, ColleagueActionItem, ColleagueActionsComponent } from './colleague-actions/colleague-actions.component';
+import { ActionListComponent, ActionListItem } from '../shared/action-list/action-list.component';
+import { SortBarComponent, SortBarOption, SortBarValue } from '../shared/sort-bar/sort-bar.component';
 import { ColleagueFormComponent, NewColleague } from './colleague-form/colleague-form.component';
 import { InvitationKind, InvitationShare, InvitationStatus, InvitationDialogComponent } from './invitation-dialog/invitation-dialog.component';
 import { NewRole, RoleFormComponent } from './role-form/role-form.component';
@@ -72,6 +82,12 @@ export interface ColleaguesView {
 }
 
 /** Що відкрито в бічному вікні: кнопки шапки або дія з колегою. */
+/** Дія з колегою в меню біля трьох крапок. */
+export type ColleagueAction = 'edit' | 'resetPassword' | 'disable' | 'enable' | 'delete' | 'profileSettings';
+
+/** Пункт меню дій з колегою. */
+export type ColleagueActionItem = ActionListItem<ColleagueAction>;
+
 export type ColleaguesPanelKind = 'roles' | 'add' | ColleagueAction;
 
 /** Дії з колегою, які спершу підтверджують у вікні по центру екрана. */
@@ -207,7 +223,9 @@ interface ColleagueRow extends DataTableRow {
     IonToolbar,
     DataTableComponent,
     PopoverComponent,
-    ColleagueActionsComponent,
+    ActionListComponent,
+    NgTemplateOutlet,
+    SortBarComponent,
     SidePanelComponent,
     RoleFormComponent,
     ColleagueFormComponent,
@@ -315,6 +333,17 @@ export class ColleaguesPage implements OnInit {
    * (інакше він зникав би ще до кінця анімації закриття).
    */
   protected readonly panelContent = signal<ColleaguesPanelKind | null>(null);
+  /** Відкритий рядок сортування на телефоні (кнопка з фільтром у шапці). */
+  protected readonly sortOpen = signal(false);
+  /** Поточне сортування для рядка сортування на телефоні: колонка й напрямок (спершу — ПІБ, А–Я). */
+  protected readonly sortSelection = signal<SortBarValue>({ id: 'name', direction: 'asc' });
+  /** Колонки, за якими сортує сервер (з непорожнім `orderBy`): поля рядка сортування на телефоні. */
+  private readonly sortableColumns = computed(() => this.columns().filter((column) => !!column.orderBy));
+  /** Поля рядка сортування на телефоні (`id` колонки й підпис). */
+  protected readonly sortOptions = computed<readonly SortBarOption[]>(() =>
+    this.sortableColumns().map((column) => ({ id: column.id, labelKey: column.labelKey ?? '' })),
+  );
+
   /** Профіль колеги для форми «Редагувати» (запит іде при кожному її відкритті). */
   protected readonly colleagueEditView = signal<ColleagueEditView>({ status: 'loading', profile: null, failure: null });
   /** Номер запиту профілю: відповідь на давніший (вікно відкрили для іншого колеги) ігнорується. */
@@ -534,6 +563,7 @@ export class ColleaguesPage implements OnInit {
    */
   protected onSort(sort: DataTableSort | null): void {
     this.sort = sort && sort.column.orderBy ? { orderBy: sort.column.orderBy, sortOrder: sort.direction } : DEFAULT_SORT;
+    this.sortSelection.set(sort && sort.column.orderBy ? { id: sort.column.id, direction: sort.direction } : { id: 'name', direction: 'asc' });
     this.colleaguesGeneration++;
     this.colleaguesLoading = false;
     this.nextPage = 1;
@@ -1133,6 +1163,19 @@ export class ColleaguesPage implements OnInit {
   /** Рядок із шаблону комірки: типізація для `let-row`. */
   protected asColleague(row: DataTableRow): ColleagueRow {
     return row as ColleagueRow;
+  }
+
+  /** Рядок сортування на телефоні: вибрали поле чи напрям — те саме, що клік по заголовку таблиці. */
+  protected onSortBar(value: SortBarValue): void {
+    this.applySortSelection(value.id, value.direction);
+  }
+
+  /** Те саме, що клік по заголовку таблиці (`onSort`), але з рядка сортування на телефоні. */
+  private applySortSelection(columnId: string, direction: DataTableSortDirection): void {
+    const column = this.sortableColumns().find((candidate) => candidate.id === columnId);
+    if (column) {
+      this.onSort({ column, direction });
+    }
   }
 }
 

@@ -58,8 +58,14 @@ describe('LoginPage', () => {
     navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
   });
 
+  // Справжні `URL.createObjectURL` / `revokeObjectURL` (у jsdom їх нема): тести нижче дописують їх
+  // у глобальний `URL`, а тестові файли не ізольовані — після тесту повертаємо як було.
+  const urlFunctions = { createObjectURL: URL.createObjectURL, revokeObjectURL: URL.revokeObjectURL };
+
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Object.assign(URL, urlFunctions);
     localStorage.clear();
   });
 

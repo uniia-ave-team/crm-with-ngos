@@ -2,7 +2,7 @@ import { Route, Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { requireAnyPermission } from './core/auth/permission.guard';
-import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS } from './core/auth/permissions';
+import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, KNOWLEDGE_BASE_PERMISSIONS } from './core/auth/permissions';
 import { connectionGuard } from './core/connection/connection.guard';
 
 /**
@@ -43,8 +43,10 @@ export const routes: Routes = [
   },
   {
     path: 'knowledge-base',
-    loadComponent: () => import('./knowledge-base/knowledge-base.page').then((m) => m.KnowledgeBasePage),
+    loadChildren: () => import('./knowledge-base/knowledge-base.routes').then((m) => m.KNOWLEDGE_BASE_ROUTES),
+    // Без права ViewCustomTable — на REDIRECT_URL (те саме, що ховає пункт меню «База знань»).
     ...SIGNED_IN,
+    canActivate: [...SIGNED_IN.canActivate, requireAnyPermission(KNOWLEDGE_BASE_PERMISSIONS)],
     data: { layoutSection: 'knowledge-base' },
   },
   {

@@ -1,0 +1,98 @@
+// Зміст спливаючого вікна вибору кольору: кружки (два ряди по шість) і поле HEX під ними — тієї
+// самої ширини, що й ряди (вікно — рівний прямокутник).
+.color-picker {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  font-family: var(--font-menu);
+}
+
+.color-picker__swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 32px);
+  gap: 8px;
+}
+
+.color-picker__swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--nav-border);
+  border-radius: 50%;
+  cursor: pointer;
+
+  // «Без кольору» — пунктирне порожнє коло.
+  &--none {
+    border: 2px dashed var(--nav-fg-inactive);
+    background: transparent;
+  }
+
+  // Вибраний — кільце навколо.
+  &--chosen {
+    box-shadow:
+      0 0 0 2px var(--nav-bg),
+      0 0 0 4px var(--nav-fg-active);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 3px;
+  }
+}
+
+.color-picker__hex {
+  display: flex;
+  gap: 8px;
+  // Не ширше за ряди кружків: поле стискається, щоб плашка лишалася прямокутником.
+  width: 0;
+  min-width: 100%;
+}
+
+.color-picker__input {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--nav-bg);
+  color: var(--nav-fg-active);
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  text-transform: lowercase;
+  outline: none;
+
+  &:focus-visible {
+    border-color: var(--nav-fg-active);
+  }
+
+  &[aria-invalid='true'] {
+    border-color: var(--nav-unavailable-icon);
+  }
+}
+
+.color-picker__apply {
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-active);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+.color-picker__error {
+  margin: 0;
+  color: var(--nav-unavailable-icon);
+  font-size: 12px;
+}

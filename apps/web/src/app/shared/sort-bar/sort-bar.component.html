@@ -1,0 +1,25 @@
+<div class="sort-bar">
+  <label class="sort-bar__label" for="sort-bar-field">{{ 'common.sort.by' | translate }}</label>
+  <span class="sort-bar__select">
+    <select id="sort-bar-field" tabindex="0" [value]="value().id" (change)="onField($any($event.target).value)">
+      @for (option of options(); track option.id) {
+        <option [value]="option.id" [selected]="option.id === value().id">{{ option.labelKey | translate }}</option>
+      }
+    </select>
+    <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+  </span>
+  <button
+    type="button"
+    class="sort-bar__direction"
+    tabindex="0"
+    [attr.aria-label]="(value().direction === 'asc' ? 'common.sort.asc' : 'common.sort.desc') | translate"
+    [attr.title]="(value().direction === 'asc' ? 'common.sort.asc' : 'common.sort.desc') | translate"
+    (click)="toggleDirection()"
+  >
+    @if (value().direction === 'asc') {
+      <ion-icon name="caret-down-outline" aria-hidden="true"></ion-icon>
+    } @else {
+      <ion-icon name="caret-up-outline" aria-hidden="true"></ion-icon>
+    }
+  </button>
+</div>

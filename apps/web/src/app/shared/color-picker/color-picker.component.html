@@ -1,0 +1,46 @@
+<div class="color-picker">
+  <div class="color-picker__swatches" role="group" [attr.aria-label]="'colorPicker.label' | translate">
+    <button
+      type="button"
+      class="color-picker__swatch color-picker__swatch--none"
+      tabindex="0"
+      [class.color-picker__swatch--chosen]="value() === null"
+      [attr.aria-label]="'colorPicker.none' | translate"
+      [attr.title]="'colorPicker.none' | translate"
+      [attr.aria-pressed]="value() === null"
+      (click)="pick.emit(null)"
+    ></button>
+    @for (color of colors; track color.key) {
+      <button
+        type="button"
+        class="color-picker__swatch"
+        tabindex="0"
+        [style.background]="color.hex"
+        [class.color-picker__swatch--chosen]="value() === color.hex"
+        [attr.aria-label]="'colorPicker.colors.' + color.key | translate"
+        [attr.title]="'colorPicker.colors.' + color.key | translate"
+        [attr.aria-pressed]="value() === color.hex"
+        (click)="pick.emit(color.hex)"
+      ></button>
+    }
+  </div>
+  <form class="color-picker__hex" novalidate (submit)="$event.preventDefault(); applyHex()">
+    <input
+      class="color-picker__input"
+      type="text"
+      tabindex="0"
+      maxlength="7"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="#RRGGBB"
+      [attr.aria-label]="'colorPicker.hex' | translate"
+      [attr.aria-invalid]="invalid() ? true : null"
+      [value]="hex()"
+      (input)="onHexInput($event)"
+    />
+    <button type="submit" class="color-picker__apply" tabindex="0">{{ 'colorPicker.apply' | translate }}</button>
+  </form>
+  @if (invalid()) {
+    <p class="color-picker__error" role="alert">{{ 'colorPicker.invalid' | translate }}</p>
+  }
+</div>

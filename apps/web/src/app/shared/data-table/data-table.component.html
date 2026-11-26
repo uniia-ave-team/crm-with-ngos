@@ -1,53 +1,76 @@
 <div class="data-table__scroll">
-  <table class="data-table" [attr.aria-label]="labelKey() ? (labelKey()! | translate) : null">
+  <table class="data-table" [class.data-table--lines]="columnLines()" [attr.aria-label]="labelKey() ? (labelKey()! | translate) : null">
     <colgroup>
       @for (column of columns(); track column.id) {
         <col [style.width]="column.width ?? null" />
       }
-      <col class="data-table__menu-col" />
+      @if (hasMenuColumn()) {
+        <col class="data-table__menu-col" />
+      }
     </colgroup>
     <thead>
       <tr>
         @for (column of columns(); track column.id) {
           @let direction = sortDirection(column);
+          @let label = column.label ?? (column.labelKey ? (column.labelKey | translate) : '');
+          @let icon = direction === 'asc' ? 'caret-down-outline' : direction === 'desc' ? 'caret-up-outline' : 'filter-outline';
           <th
             scope="col"
             class="data-table__head"
             [class.data-table__head--sorted]="direction"
+            [class.data-table__head--custom]="column.headerTemplate"
             [attr.aria-sort]="direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : null"
+            [style.background]="column.headerColors?.background ?? null"
+            [style.color]="column.headerColors?.color ?? null"
           >
-            <button type="button" class="data-table__sort" tabindex="0" (click)="toggleSort(column)">
-              {{ column.labelKey ? (column.labelKey | translate) : '' }}
-              <ion-icon
-                class="data-table__filter"
-                [name]="direction === 'asc' ? 'caret-down-outline' : direction === 'desc' ? 'caret-up-outline' : 'filter-outline'"
-                aria-hidden="true"
-              ></ion-icon>
-            </button>
+            @if (column.headerTemplate; as header) {
+              <!-- Свій вміст заголовка; сортує окрема кнопка-іконка праворуч. -->
+              <div class="data-table__head-content">
+                <ng-container [ngTemplateOutlet]="header" [ngTemplateOutletContext]="{ $implicit: column }" />
+              </div>
+              <button
+                type="button"
+                class="data-table__sort-toggle"
+                tabindex="0"
+                [attr.aria-label]="'table.sortBy' | translate: { name: label }"
+                [attr.title]="'table.sortBy' | translate: { name: label }"
+                (click)="toggleSort(column)"
+              >
+                <ion-icon class="data-table__filter" [name]="icon" aria-hidden="true"></ion-icon>
+              </button>
+            } @else {
+              <button type="button" class="data-table__sort" tabindex="0" (click)="toggleSort(column)">
+                {{ label }}
+                <ion-icon class="data-table__filter" [name]="icon" aria-hidden="true"></ion-icon>
+              </button>
+            }
           </th>
         }
-        <th scope="col" class="data-table__menu-cell">
-          @if (showAddColumn()) {
-            <button
-              type="button"
-              class="data-table__add"
-              [class.planned]="addColumnPlanned()"
-              tabindex="0"
-              [attr.aria-label]="'table.addColumn' | translate"
-              [attr.title]="'table.addColumn' | translate"
-              (click)="columnAdd.emit()"
-            >
-              <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
-            </button>
-          }
-        </th>
+        @if (hasMenuColumn()) {
+          <th scope="col" class="data-table__menu-cell">
+            @if (showAddColumn()) {
+              <button
+                type="button"
+                class="data-table__add"
+                [class.planned]="addColumnPlanned()"
+                tabindex="0"
+                [attr.aria-label]="'table.addColumn' | translate"
+                [attr.title]="'table.addColumn' | translate"
+                (click)="columnAdd.emit()"
+              >
+                <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+              </button>
+            }
+          </th>
+        }
       </tr>
     </thead>
     <tbody>
       @for (row of rows(); track row.id) {
         <tr class="data-table__row" [class.data-table__row--active]="row.id === highlightedRowId()">
           @for (column of columns(); track column.id) {
-            <td>
+            @let colors = column.cellColors?.(row);
+            <td [style.background]="colors?.background ?? null" [style.color]="colors?.color ?? null">
               @if (column.template; as template) {
                 <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="{ $implicit: row, column: column }" />
               } @else {
@@ -55,19 +78,21 @@
               }
             </td>
           }
-          <td class="data-table__menu-cell">
-            @if (showRowMenu()) {
-              <button
-                type="button"
-                class="data-table__menu"
-                tabindex="0"
-                [attr.aria-label]="'table.rowMenu' | translate"
-                (click)="openMenu(row, $event)"
-              >
-                <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
-              </button>
-            }
-          </td>
+          @if (hasMenuColumn()) {
+            <td class="data-table__menu-cell">
+              @if (showRowMenu()) {
+                <button
+                  type="button"
+                  class="data-table__menu"
+                  tabindex="0"
+                  [attr.aria-label]="'table.rowMenu' | translate"
+                  (click)="openMenu(row, $event)"
+                >
+                  <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+                </button>
+              }
+            </td>
+          }
         </tr>
       }
     </tbody>

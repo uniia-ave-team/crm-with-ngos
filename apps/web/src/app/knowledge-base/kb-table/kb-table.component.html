@@ -1,0 +1,208 @@
+<!-- Шапка — як у «Колегах»: назва (до двох рядків, повна — у підказці), праворуч тег стану
+     збереження, кнопки дій (завжди лише іконки, назва — у підказці) і лупа (пошук у записах). -->
+<div class="kb-table__toolbar">
+  <app-search-header
+    [title]="title()"
+    [titleLines]="2"
+    [placeholder]="'knowledgeBase.table.searchPlaceholder' | translate"
+    [maxLength]="searchMaxLength"
+    (searchChange)="onSearch($event)"
+  >
+    <!-- Стан збереження: збережено (зелений), зміни чекають чи йдуть на сервер (помаранчевий), сервер
+         їх не прийняв (червоний; клік — повторити). -->
+    @switch (saver.state()) {
+      @case ('saving') {
+        <span class="kb-table__saved kb-table__saved--saving" role="status" [attr.title]="'knowledgeBase.table.saving' | translate">
+          <ion-icon name="cloud-upload-outline" aria-hidden="true"></ion-icon>
+          <span class="kb-table__saved-label">{{ 'knowledgeBase.table.saving' | translate }}</span>
+        </span>
+      }
+      @case ('failed') {
+        <button
+          type="button"
+          class="kb-table__saved kb-table__saved--failed"
+          tabindex="0"
+          role="alert"
+          [attr.title]="'knowledgeBase.table.saveFailedRetry' | translate"
+          (click)="saver.retry()"
+        >
+          <ion-icon name="cloud-offline-outline" aria-hidden="true"></ion-icon>
+          <span class="kb-table__saved-label">{{ 'knowledgeBase.table.saveFailed' | translate }}</span>
+        </button>
+      }
+      @default {
+        @if (syncing()) {
+          <!-- Перевірка на зміни чи перезавантаження записів: синій «Оновлюються дані». -->
+          <span class="kb-table__saved kb-table__saved--syncing" role="status" [attr.title]="'knowledgeBase.table.syncing' | translate">
+            <ion-icon name="cloud-download-outline" aria-hidden="true"></ion-icon>
+            <span class="kb-table__saved-label">{{ 'knowledgeBase.table.syncing' | translate }}</span>
+          </span>
+        } @else {
+          <span class="kb-table__saved" role="status" [attr.title]="'knowledgeBase.table.saved' | translate">
+            <ion-icon name="cloud-done-outline" aria-hidden="true"></ion-icon>
+            <span class="kb-table__saved-label">{{ 'knowledgeBase.table.saved' | translate }}</span>
+          </span>
+        }
+      }
+    }
+    @if (canCreateTemplate()) {
+      <app-action-button icon="layers-outline" tone="blue" [iconOnly]="true" [label]="'knowledgeBase.table.createTemplate' | translate" (click)="createTemplate()" />
+    }
+    @if (canExport()) {
+      <app-action-button icon="share-outline" [iconOnly]="true" [label]="'knowledgeBase.table.export' | translate" (click)="export()" />
+    }
+  </app-search-header>
+</div>
+
+@let current = state();
+@switch (current.status) {
+  @case ('loading') {
+    <p class="kb-view__message" role="status">{{ 'knowledgeBase.table.loading' | translate }}</p>
+  }
+  @case ('failed') {
+    <p class="kb-view__message kb-view__message--error" role="alert">
+      <span>{{ 'knowledgeBase.table.error' | translate }} {{ current.errorKey | translate }}</span>
+      <button type="button" class="kb-view__retry" tabindex="0" (click)="retry()">{{ 'knowledgeBase.retry' | translate }}</button>
+    </p>
+  }
+  @case ('ready') {
+    @if (canEditTable()) {
+      <!-- Опис змінюється по кліку: поле на місці тексту, висотою за текстом; порожній — «Додати опис». -->
+      <textarea
+        class="kb-view__description kb-table__description"
+        rows="1"
+        tabindex="0"
+        [attr.maxlength]="descriptionMaxLength"
+        [attr.aria-label]="'knowledgeBase.dialogs.form.description' | translate"
+        [placeholder]="'knowledgeBase.table.addDescription' | translate"
+        [value]="current.table.description ?? ''"
+        [appAutoSize]="current.table.description"
+        (input)="onDescriptionInput($event)"
+      ></textarea>
+    } @else if (current.table.description; as description) {
+      <p class="kb-view__description">{{ description }}</p>
+    }
+    <!-- Натискання будь-де в клітинці вибирає її (див. `onTableMouseDown`). -->
+    <!-- Як список колег: на всю ширину основного блоку, прокрутка вбік, лінії між стовпчиками. «+»
+         колонки й трьох крапок рядків поки нема (дій із записами ще нема), тож нема й їхньої колонки. -->
+    <app-data-table
+      class="kb-table__data"
+      [columns]="columns()"
+      [rows]="rows()"
+      [labelKey]="null"
+      [showRowMenu]="false"
+      [showAddColumn]="false"
+      [columnLines]="true"
+      (sortChange)="onSort($event)"
+      (mousedown)="onTableMouseDown($event)"
+      (click)="onTableClick($event)"
+    />
+    <!-- Клітинка, яку можна змінювати. Усі значення — рядки (тип поля не враховуємо): прапорець
+         (`☑` / `☐`, вставляється кнопкою смуги дій) чи текст. -->
+    <ng-template #editableCell let-row let-column="column">
+      @let field = fieldOf(column);
+      @if (field && canEditRow(row)) {
+        @if (isCheckboxCell(row, field)) {
+          <input
+            class="kb-cell kb-cell--check"
+            type="checkbox"
+            tabindex="0"
+            [attr.aria-label]="column.label"
+            [checked]="isCheckboxCellChecked(row, field)"
+            (change)="onCheckboxCellChange(row, field, $event)"
+            (focus)="onCellFocus(row, field, $event)"
+            (blur)="onCellBlur($event)"
+          />
+        } @else {
+          <!-- Текст з форматуванням виділеного (напівжирний, курсив, підкреслення, закреслення):
+               редагований блок, що росте разом із текстом; записується як є. -->
+          <div
+            class="kb-cell kb-cell--text kb-cell--rich"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            tabindex="0"
+            [attr.aria-label]="column.label"
+            [appRichText]="htmlOf(textValue(row, field))"
+            (richTextChange)="onRichTextInput(row, field, $event)"
+            (focus)="onCellFocus(row, field, $event)"
+            (blur)="onCellBlur($event)"
+          ></div>
+        }
+      } @else if (field) {
+        <!-- Лише перегляд: форматування видно, а значення вже очищене (лише b, i, u, s, br). -->
+        <span class="kb-cell-text" [innerHTML]="htmlOf(textValue(row, field))"></span>
+      } @else {
+        {{ row[column.id] }}
+      }
+    </ng-template>
+    <!-- Заголовок стовпчика: назву можна змінювати (з UpdateCustomTable) і форматувати виділене. -->
+    <ng-template #editableHeader let-column>
+      @let field = fieldOf(column);
+      @if (field && canEditTable()) {
+        <div
+          class="kb-head"
+          contenteditable="true"
+          role="textbox"
+          tabindex="0"
+          [attr.aria-label]="'knowledgeBase.table.columnName' | translate"
+          [appRichText]="htmlOf(field.name)"
+          (richTextChange)="onHeaderInput(field, $event)"
+          (focus)="onHeaderFocus(field, $event)"
+          (blur)="onHeaderBlur(field, $event)"
+        ></div>
+      } @else if (field) {
+        <span class="kb-head" [innerHTML]="htmlOf(field.name)"></span>
+      }
+    </ng-template>
+    <!-- Вибір кольору тла клітинки чи заголовка (над кнопкою-кружком у смузі дій). -->
+    <app-popover #colorPopover class="kb-color-popover" side="top" compactSide="top" alignment="start" [label]="'colorPicker.label' | translate">
+      <app-color-picker [value]="colorTarget() ? colorOf(colorTarget()!) : null" (pick)="onColorPick($event)" />
+    </app-popover>
+    @if (exportError(); as errorKey) {
+      <p class="kb-view__message kb-view__message--error kb-table__error" role="alert">
+        <span>{{ 'knowledgeBase.table.exportError' | translate }} {{ errorKey | translate }}</span>
+        <button type="button" class="kb-view__retry" tabindex="0" (click)="export()">{{ 'knowledgeBase.retry' | translate }}</button>
+      </p>
+    }
+        @if (recordsError(); as errorKey) {
+      <p class="kb-view__message kb-view__message--error kb-table__error" role="alert">
+        <span>{{ 'knowledgeBase.table.recordsError' | translate }} {{ errorKey | translate }}</span>
+        <button type="button" class="kb-view__retry" tabindex="0" (click)="retryRecords()">{{ 'knowledgeBase.retry' | translate }}</button>
+      </p>
+    }
+  }
+}
+
+<!-- Підтвердження видалення рядка чи стовпчика або вставлення прапорця замість тексту (смуга дій знизу). -->
+@let dialogTitle = (pendingDelete()?.kind === 'checkbox' ? 'knowledgeBase.table.checkboxDialog.title' : 'knowledgeBase.table.deleteDialog.title') | translate;
+<app-modal #deleteDialog width="min(400px, calc(100vw - 32px))" [label]="dialogTitle" (closed)="pendingDelete.set(null)">
+  @if (pendingDelete(); as pending) {
+    <app-dialog-header [title]="dialogTitle" (dismiss)="cancelDelete()" />
+    <app-confirm-dialog
+      [message]="
+        pending.kind === 'row'
+          ? ('knowledgeBase.table.deleteDialog.row' | translate)
+          : pending.kind === 'checkbox'
+            ? ('knowledgeBase.table.checkboxDialog.message' | translate)
+            : ('knowledgeBase.table.deleteDialog.column' | translate: { name: pending.field.name })
+      "
+      [confirmLabel]="'common.yes' | translate"
+      [cancelLabel]="'common.cancel' | translate"
+      (confirm)="confirmDelete()"
+      (dismiss)="cancelDelete()"
+    />
+  }
+</app-modal>
+
+<!-- «Створити шаблон»: назва й опис шаблону зі стовпчиків таблиці. -->
+<app-modal #templateDialog width="min(420px, calc(100vw - 32px))" [label]="'knowledgeBase.table.createTemplate' | translate">
+  <app-dialog-header [title]="'knowledgeBase.table.createTemplate' | translate" (dismiss)="closeTemplateDialog()" />
+  <app-kb-item-form
+    submitLabelKey="knowledgeBase.table.templateDialog.submit"
+    [initial]="templateInitial()"
+    [busy]="templateBusy()"
+    [error]="templateError()"
+    (submitted)="submitTemplate($event)"
+  />
+</app-modal>

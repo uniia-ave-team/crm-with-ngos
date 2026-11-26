@@ -1,0 +1,25 @@
+// Списки й кнопка — спільні з формами налаштувань (`settings-section.scss`); у вікні — без
+// відступів сторінки, щільніше, списки на всю ширину вікна.
+:host {
+  padding: 16px 0 0;
+}
+
+.settings-form {
+  gap: 20px;
+}
+
+.settings-select-wrap {
+  max-width: none;
+}
+
+// «З папки» лише показує, де матеріал зараз.
+.settings-select:disabled {
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-inactive);
+  cursor: default;
+  opacity: 1;
+}
+
+.settings-submit {
+  align-self: stretch;
+}

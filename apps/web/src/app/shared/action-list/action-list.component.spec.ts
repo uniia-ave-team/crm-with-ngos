@@ -4,21 +4,20 @@ import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { ColleagueAction, ColleagueActionItem } from './colleague-actions.component';
-import { ColleagueActionsComponent } from './colleague-actions.component';
+import { ActionListComponent, ActionListItem } from './action-list.component';
 
 @Component({
-  template: `<app-colleague-actions [items]="items()" (choose)="chosen.push($event)" />`,
-  imports: [ColleagueActionsComponent],
+  template: `<app-action-list [items]="items()" (choose)="chosen.push($event)" />`,
+  imports: [ActionListComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 class HostComponent {
-  readonly items = signal<readonly ColleagueActionItem[]>([]);
-  readonly chosen: ColleagueAction[] = [];
+  readonly items = signal<readonly ActionListItem[]>([]);
+  readonly chosen: string[] = [];
 }
 
-describe('ColleagueActionsComponent', () => {
-  const ITEMS: ColleagueActionItem[] = [
+describe('ActionListComponent', () => {
+  const ITEMS: ActionListItem[] = [
     { id: 'edit', labelKey: 'colleagues.actions.edit', icon: 'create-outline' },
     { id: 'delete', labelKey: 'colleagues.actions.delete', icon: 'trash-outline' },
   ];
@@ -30,7 +29,7 @@ describe('ColleagueActionsComponent', () => {
     TestBed.inject(TranslateService).setTranslation('uk', uk);
   });
 
-  function render(items: ColleagueActionItem[]) {
+  function render(items: ActionListItem[]) {
     const fixture = TestBed.createComponent(HostComponent);
     fixture.componentInstance.items.set(items);
     fixture.detectChanges();

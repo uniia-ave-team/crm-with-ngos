@@ -1,0 +1,1139 @@
+import { Component, DestroyRef, ElementRef, Injector, TemplateRef, afterNextRender, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
+import { IonIcon } from '@ionic/angular';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+
+import { ActionButtonComponent } from '../../shared/action-button/action-button.component';
+import {
+  DataTableCellColors,
+  DataTableCellContext,
+  DataTableColumn,
+  DataTableComponent,
+  DataTableHeaderContext,
+  DataTableRow,
+  DataTableSort,
+} from '../../shared/data-table/data-table.component';
+import { PERMISSIONS } from '../../core/auth/permissions';
+import { CustomRecordData, CustomRecordsService, CustomRecordsSort } from '../../core/custom-tables/custom-records.service';
+import {
+  CUSTOM_TABLE_DESCRIPTION_MAX_LENGTH,
+  CustomTableDetails,
+  CustomTableField,
+  CustomTableUpdate,
+  CustomTablesService,
+} from '../../core/custom-tables/custom-tables.service';
+import { uniqueFieldKey } from '../../core/custom-tables/field-keys';
+import { TableTemplatesService } from '../../core/custom-tables/table-templates.service';
+import { KbItemFormComponent, KbItemFormValue } from '../../core/knowledge-base/kb-item-form/kb-item-form.component';
+import { SuccessNoticeService } from '../../core/notice/success-notice.service';
+import { CurrentUserService } from '../../core/users/current-user.service';
+import { SEARCH_MAX_LENGTH } from '../../core/users/users.service';
+import { AutoSizeDirective } from '../../shared/auto-size/auto-size.directive';
+import { downloadFile } from '../../shared/download/download-file';
+import { RichTextDirective, RichTextFormat, formatSelection } from '../../shared/rich-text/rich-text.directive';
+import { joinBackground, richTextToPlain, splitBackground } from '../../shared/rich-text/rich-text';
+import { cellTextColor } from '../../shared/color/cell-colors';
+import { ColorPickerComponent } from '../../shared/color-picker/color-picker.component';
+import { PopoverComponent } from '../../shared/popover/popover.component';
+import { ActionBarContent, ActionBarItem, ActionBarService } from '../../shared/action-bar/action-bar.service';
+import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog.component';
+import { DialogHeaderComponent } from '../../shared/dialog-header/dialog-header.component';
+import { ModalComponent } from '../../shared/modal/modal.component';
+import { SearchHeaderComponent } from '../../shared/search-header/search-header.component';
+import { injectKnowledgeBaseEntry } from '../kb-entry';
+import { DebouncedSaver } from './debounced-saver';
+import { XLSX_TYPE, sheetName, toXlsx, xlsxFileName } from './table-xlsx';
+import { LocalRecord, mergeRecords } from './merge-records';
+import { CHECKBOX_OFF, CHECKBOX_ON, checkboxLosesText, checkboxState, setCheckbox, toCheckbox, toggleCheckboxFormat } from './cell-checkbox';
+
+/** Стан таблиці у виді: завантажується, є чи не вдалося (ключ причини). */
+type TableState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'ready'; readonly table: CustomTableDetails }
+  | { readonly status: 'failed'; readonly errorKey: string };
+
+/** `id` порожнього рядка, який стоїть під заголовками, поки записів нема. */
+export const EMPTY_ROW_ID = 'kb-table-empty-row';
+
+/**
+ * Ширина стовпчика: назви полів довгі, тож стовпчики не стискаються до ширини блоку — таблиця
+ * ширшає й прокручується вбік (на широкому екрані з кількома стовпчиками — на всю ширину).
+ */
+const COLUMN_WIDTH = '220px';
+
+/** Початок `id` колонки: за ним `key` поля (так `id` колонки не збігається з `id` рядка). */
+const FIELD_COLUMN_PREFIX = 'field:';
+
+/** Як часто перевіряти таблицю на зміни з інших пристроїв (опис, стовпчики, записи). */
+export const POLL_INTERVAL_MS = 10_000;
+
+/** Дії з вибраною клітинкою (смуга дій знизу сторінки). */
+type CellAction =
+  | 'background'
+  | 'bold'
+  | 'italic'
+  | 'underline'
+  | 'strikethrough'
+  | 'addRowBelow'
+  | 'deleteRow'
+  | 'addColumnRight'
+  | 'addColumnLeft'
+  | 'deleteColumn'
+  | 'checkbox'
+  | 'clear'
+  | 'copy';
+
+/** Кнопка смуги дій (підпис — `knowledgeBase.table.cellActions.<id>`, якщо не вказано інший). */
+const cellAction = (item: {
+  readonly id: CellAction;
+  readonly icon: string;
+  readonly disabled: boolean;
+  readonly swatch?: string | null;
+  readonly labelKey?: string;
+}): ActionBarItem<CellAction> => ({
+  ...item,
+  labelKey: item.labelKey ?? `knowledgeBase.table.cellActions.${item.id}`,
+});
+
+/**
+ * Порожня клітинка — порожній рядок: усі значення трактуємо як рядки (тип поля `dataType` і
+ * обовʼязковість `isRequired` не враховуємо — на сервері їх приберуть), а порожній рядок сервер
+ * приймає й в обовʼязковому текстовому полі.
+ */
+const EMPTY_VALUE = '';
+
+/** Початок `id` нового поля, поки сервер не дав справжній (у `PUT` таке поле йде з `id: null`). */
+const NEW_FIELD_PREFIX = 'new:';
+
+/**
+ * Що зробити після підтвердження: видалити рядок (ключ `LocalRecord.key`) чи стовпчик (поле) або
+ * вставити прапорець у клітинку з текстом (текст зникне).
+ */
+type PendingDelete =
+  | { readonly kind: 'row'; readonly key: string }
+  | { readonly kind: 'column'; readonly field: CustomTableField }
+  | { readonly kind: 'checkbox'; readonly key: string; readonly field: CustomTableField };
+
+/** Вибрана клітинка (чи заголовок): рядок (`LocalRecord.key`), поле й елемент поля введення. */
+interface SelectedCell {
+  /** Ключ рядка; `null` — заголовок стовпчика (назва поля). */
+  readonly key: string | null;
+  readonly field: CustomTableField;
+  readonly element: HTMLElement;
+}
+
+/**
+ * Вид «таблиця» (`/knowledge-base/tables/:id`, `id` — вхід із адреси): назва (зі змісту, тож після
+ * «Редагувати» оновлюється одразу), опис і сама таблиця — як список колег (`app-data-table`): на
+ * всю ширину, прокручується вбік, масивний рядок заголовків. Стовпчики — поля таблиці в їхньому
+ * порядку (`GET /api/v1/customtables/{id}`), рядки — записи (`GET /api/v1/customrecords`, право
+ * `ViewCustomRecord`; без нього записи не запитуються). Записів нема — під заголовками порожній
+ * рядок. Клік по заголовку сортує записи на сервері за значенням цього поля.
+ *
+ * Шапка — як у «Колегах» (`app-search-header` на тлі шапки сторінки): назва (до двох рядків, далі
+ * трикрапка; повна — у підказці), праворуч контурний зелений тег «Зміни збережено» (стан
+ * збереження: поки змін у таблиці нема, він завжди такий; поки відкрито пошук — схований), «Створити шаблон» (з
+ * `CreateTableTemplate`), «Експортувати» (з `ViewCustomRecord`) — завжди лише іконки з підказкою — і лупа — пошук у записах
+ * (`SearchTerm`). Дій у кнопок ще нема (TODO). Опис — приглушеним рядком під шапкою.
+ *
+ * Редагування (з `UpdateCustomTable`): опис — по кліку (поле на місці тексту; порожній —
+ * «Додати опис»), клітинки — поля введення за типом поля без рамки (текстові — у кілька рядків, поле
+ * росте разом із текстом; поки вибрано клітинку, знизу сторінки — смуга дій «Копіювати» й
+ * «Очистити», `ActionBarService`) (з `CreateCustomRecord` у порожньому
+ * рядку — новий запис, з `UpdateCustomRecord` — наявні записи). Після кожної зміни — 2 секунди тиші
+ * (`DebouncedSaver`), тоді запити: опис — `PUT /api/v1/customtables/{id}` (з назвою й незмінною
+ * структурою), записи — `POST`/`PUT /api/v1/customrecords` (сервер замінює дані запису цілком).
+ * Тег у шапці: від зміни до відповіді — помаранчевий «Зберігаємо зміни» (`cloud-upload-outline`),
+ * невдача — червоний «Зміни не збережено» (клік — повторити), потім знову «Зміни збережено».
+ * Перед перезавантаженням записів (пошук, сортування), переходом на іншу таблицю й закриттям виду
+ * незбережене надсилається одразу.
+ *
+ * Кожні 10 секунд (`POLL_INTERVAL_MS`; поки вкладка видима) — перевірка на зміни з інших пристроїв:
+ * таблиця й записи заново, і показане оновлюється лише там, де щось змінилося (`mergeRecords`: решта
+ * клітинок не перемальовується). Поки зміни чекають чи йдуть на сервер, перевірка пропускається;
+ * відповідь, за час якої щось змінили, відкидається; рядки з незбереженими змінами, опис, який
+ * зараз редагують, і клітинку з курсором вона не чіпає.
+ */
+@Component({
+  selector: 'app-kb-table',
+  templateUrl: './kb-table.component.html',
+  styleUrls: ['../kb-view.scss', './kb-table.component.scss'],
+  imports: [
+    ActionButtonComponent,
+    AutoSizeDirective,
+    ColorPickerComponent,
+    ConfirmDialogComponent,
+    DataTableComponent,
+    DialogHeaderComponent,
+    IonIcon,
+    KbItemFormComponent,
+    ModalComponent,
+    PopoverComponent,
+    RichTextDirective,
+    SearchHeaderComponent,
+    TranslatePipe,
+  ],
+})
+export class KbTableComponent {
+  /** `id` таблиці з адреси. */
+  readonly id = input.required<string>();
+
+  private readonly tables = inject(CustomTablesService);
+  private readonly recordsService = inject(CustomRecordsService);
+  private readonly currentUser = inject(CurrentUserService);
+  private readonly translate = inject(TranslateService);
+  private readonly entry = injectKnowledgeBaseEntry(this.id);
+  private readonly templatesService = inject(TableTemplatesService);
+  private readonly successNotice = inject(SuccessNoticeService);
+  private readonly templateDialog = viewChild<ModalComponent>('templateDialog');
+  /** Вікно «Створити шаблон»: запит іде; причина невдачі (ключ мовного файлу) чи `null`. */
+  protected readonly templateBusy = signal(false);
+  /** Іде експорт; причина невдачі експорту (ключ мовного файлу) чи `null`. */
+  protected readonly exporting = signal(false);
+  protected readonly exportError = signal<string | null>(null);
+  protected readonly templateError = signal<string | null>(null);
+  /** З чим відкривається вікно «Створити шаблон»: назва й опис таблиці. */
+  protected readonly templateInitial = computed(() => {
+    const state = this.state();
+    return { title: this.title(), description: state.status === 'ready' ? state.table.description : null };
+  });
+
+  protected readonly state = signal<TableState>({ status: 'loading' });
+  /** «Створити шаблон» — лише з правом створювати шаблони. */
+  protected readonly canCreateTemplate = computed(() => this.currentUser.permissions().includes(PERMISSIONS.createTableTemplate));
+  /** «Експортувати» — лише з правом бачити записи (експортуються вони). */
+  protected readonly canExport = computed(() => this.currentUser.permissions().includes(PERMISSIONS.viewCustomRecord));
+  private readonly records = signal<readonly LocalRecord[]>([]);
+  /** Опис і клітинки можна змінювати (`UpdateCustomTable`). */
+  protected readonly canEditTable = computed(() => this.currentUser.permissions().includes(PERMISSIONS.updateCustomTable));
+  /** Порожній рядок стає новим записом — ще й з `CreateCustomRecord`. */
+  private readonly canCreateRecords = computed(() => this.canEditTable() && this.currentUser.permissions().includes(PERMISSIONS.createCustomRecord));
+  /** Наявні записи змінюються — ще й з `UpdateCustomRecord`. */
+  private readonly canUpdateRecords = computed(() => this.canEditTable() && this.currentUser.permissions().includes(PERMISSIONS.updateCustomRecord));
+  protected readonly descriptionMaxLength = CUSTOM_TABLE_DESCRIPTION_MAX_LENGTH;
+  /** Відкладене збереження змін; його стан показує тег у шапці. */
+  protected readonly saver = new DebouncedSaver(() => this.saveChanges());
+  private descriptionDirty = false;
+  /** Ключі записів (`LocalRecord.key`), змінених після останнього збереження. */
+  private readonly dirtyRecords = new Set<string>();
+  private readonly editableCell = viewChild<TemplateRef<DataTableCellContext>>('editableCell');
+  private readonly editableHeader = viewChild<TemplateRef<DataTableHeaderContext>>('editableHeader');
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly injector = inject(Injector);
+  /** Вибрана клітинка (з курсором): поки вона є, знизу смуга дій; перевірка на зміни її не чіпає. */
+  protected readonly selectedCell = signal<SelectedCell | null>(null);
+  private readonly actionBar = inject(ActionBarService);
+  /** Видалити рядок — ще й з `DeleteCustomRecord`. */
+  private readonly canDeleteRecords = computed(() => this.canEditTable() && this.currentUser.permissions().includes(PERMISSIONS.deleteCustomRecord));
+  /**
+   * Смуга дій для вибраної клітинки, чотири групи: форматування (колір тла, напівжирний, курсив,
+   * підкреслення, закреслення — виділеного тексту, а в прапорці — усієї клітинки), рядки (додати
+   * знизу, видалити), стовпчики (додати справа, зліва, видалити) і клітинка (вставити чи прибрати
+   * прапорець, очистити, скопіювати текст). Недоступне за правами чи для цієї клітинки — вимкнене.
+   */
+  private readonly cellActionBar = computed<ActionBarContent<CellAction> | null>(() => {
+    const cell = this.selectedCell();
+    if (!cell) {
+      return null;
+    }
+    const canEditTable = this.canEditTable();
+    const isHeader = cell.key === null;
+    // Заголовок — назва поля: змінюється з `UpdateCustomTable`, клітинка — за правами рядка.
+    const canEditCell = isHeader ? canEditTable : this.canEditRow({ id: cell.key! });
+    // Усе — рядки, форматувати можна будь-яку клітинку (і прапорець) та заголовок.
+    const noFormatting = !canEditCell;
+    const isCheckbox = !isHeader && checkboxState(this.valueOf(cell)) !== null;
+    return {
+      labelKey: 'knowledgeBase.table.cellActions.label',
+      groups: [
+        [
+          cellAction({ id: 'background', icon: 'color-fill', disabled: noFormatting, swatch: splitBackground(this.valueOf(cell)).background }),
+          // Заголовки й так напівжирні: «Напівжирний» там нічого б не додав.
+          cellAction({ id: 'bold', icon: 'format-bold', disabled: noFormatting || isHeader }),
+          cellAction({ id: 'italic', icon: 'format-italic', disabled: noFormatting }),
+          cellAction({ id: 'underline', icon: 'format-underline', disabled: noFormatting }),
+          cellAction({ id: 'strikethrough', icon: 'format-strikethrough', disabled: noFormatting }),
+        ],
+        [
+          cellAction({ id: 'addRowBelow', icon: 'row-add-below', disabled: isHeader || !this.canCreateRecords() }),
+          cellAction({ id: 'deleteRow', icon: 'row-remove', disabled: isHeader || !this.canDeleteRecords() }),
+        ],
+        [
+          cellAction({ id: 'addColumnRight', icon: 'column-add-right', disabled: !canEditTable }),
+          cellAction({ id: 'addColumnLeft', icon: 'column-add-left', disabled: !canEditTable }),
+          // Останній стовпчик не видалити: сервер вимагає хоча б одне поле.
+          cellAction({ id: 'deleteColumn', icon: 'column-remove', disabled: !canEditTable || this.fields().length <= 1 }),
+        ],
+        [
+          // Прапорець — у клітинці, не в заголовку (зберігається символом `☑` / `☐`).
+          cellAction({
+            id: 'checkbox',
+            icon: isCheckbox ? 'checkbox-remove' : 'checkbox-outline',
+            labelKey: `knowledgeBase.table.cellActions.${isCheckbox ? 'removeCheckbox' : 'insertCheckbox'}`,
+            disabled: isHeader || !canEditCell,
+          }),
+          // Назву стовпчика не очистити: сервер вимагає непорожню.
+          cellAction({ id: 'clear', icon: 'eraser-outline', disabled: isHeader || !canEditCell }),
+          cellAction({ id: 'copy', icon: 'copy-outline', disabled: false }),
+        ],
+      ],
+      choose: (action, button) => this.onCellAction(action, button),
+    };
+  });
+  /** Вибір кольору тла (спливаюче вікно над кнопкою-кружком). */
+  private readonly colorPopover = viewChild<PopoverComponent>('colorPopover');
+  /** Клітинка чи заголовок, для якого відкрито вибір кольору. */
+  protected readonly colorTarget = signal<SelectedCell | null>(null);
+  /** Іде перевірка на зміни чи перезавантаження записів — тег «Оновлюються дані». */
+  protected readonly syncing = signal(false);
+  /** Що видалити після підтвердження (вікно «Видалити»). */
+  protected readonly pendingDelete = signal<PendingDelete | null>(null);
+  private readonly deleteDialog = viewChild<ModalComponent>('deleteDialog');
+  /** Нові рядки (кнопка «Додати рядок знизу»): лічильник для їхніх ключів. */
+  private newRowCount = 0;
+  /** Структуру (поля) змінено: піде з наступним збереженням (`PUT` таблиці). */
+  private fieldsDirty = false;
+  /** `id` записів на видалення (`DELETE` з наступним збереженням). */
+  private readonly deletedRecords = new Set<string>();
+  /** Росте з кожною зміною: відповідь перевірки, за час якої щось змінили, відкидається. */
+  private changeGeneration = 0;
+  private polling = false;
+  /** Записи не завантажилися: ключ причини; `null` — усе гаразд. */
+  protected readonly recordsError = signal<string | null>(null);
+  private readonly sort = signal<CustomRecordsSort | null>(null);
+  /** Пошук у записах (лупа в шапці); `null` — без пошуку. */
+  private readonly searchTerm = signal<string | null>(null);
+  protected readonly searchMaxLength = SEARCH_MAX_LENGTH;
+
+  /** Назва — зі змісту (оновлюється після «Редагувати»), а до нього — з відповіді сервера. */
+  protected readonly title = computed(() => {
+    const state = this.state();
+    return this.entry()?.title ?? (state.status === 'ready' ? state.table.name : '');
+  });
+
+  private readonly fields = computed(() => {
+    const state = this.state();
+    return state.status === 'ready' ? [...state.table.fields].sort((a, b) => Number(a.order) - Number(b.order)) : [];
+  });
+
+  protected readonly columns = computed<readonly DataTableColumn[]>(() => {
+    // Клітинки — свій шаблон: поля введення там, де можна змінювати (`canEditRow`), а текст із
+    // форматуванням — з форматуванням і лише для перегляду.
+    const template = this.editableCell();
+    const headerTemplate = this.editableHeader();
+    return this.fields().map((field) => {
+      const background = splitBackground(field.name).background;
+      return {
+        id: FIELD_COLUMN_PREFIX + field.key,
+        labelKey: null,
+        // Підпис для кнопки сортування — лише текст назви (без форматування).
+        label: richTextToPlain(field.name),
+        width: COLUMN_WIDTH,
+        orderBy: field.key,
+        template,
+        headerTemplate,
+        headerColors: background ? colorsFor(background) : null,
+        cellColors: (row: DataTableRow) => this.cellColors(row, field),
+      };
+    });
+  });
+
+  protected readonly rows = computed<readonly DataTableRow[]>(() => {
+    const records = this.records();
+    const fields = this.fields();
+    if (!records.length) {
+      // Нерозривний пробіл: порожній рядок такої самої висоти, як рядок із текстом.
+      return [{ id: EMPTY_ROW_ID, ...Object.fromEntries(fields.map((field) => [FIELD_COLUMN_PREFIX + field.key, '\u00a0'])) }];
+    }
+    return records.map((record) => ({
+      id: record.key,
+      ...Object.fromEntries(fields.map((field) => [FIELD_COLUMN_PREFIX + field.key, richTextToPlain(splitBackground(this.textOf(record.data[field.key])).html)])),
+    }));
+  });
+
+  constructor() {
+    effect(() => {
+      const id = this.id();
+      untracked(() => {
+        this.sort.set(null);
+        this.searchTerm.set(null);
+        // Незбережене в попередній таблиці — спершу на сервер.
+        void this.saver.flush().then(() => this.load(id));
+      });
+    });
+    // Перевірка на зміни з інших пристроїв.
+    const poll = setInterval(() => void this.poll(), POLL_INTERVAL_MS);
+    // Смуга дій знизу — поки вибрано клітинку.
+    effect(() => {
+      const content = this.cellActionBar();
+      if (content) {
+        this.actionBar.show(this, content);
+      } else {
+        this.actionBar.hide(this);
+      }
+    });
+    // Фокус пішов зі смуги дій кудись, крім клітинки, — клітинку вже не вибрано.
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+      // Смуга дій і вибір кольору (вікно Ionic може бути перенесене в кінець сторінки) — частина вибору.
+      const keeps = target?.closest('app-action-bar, ion-popover') || target?.classList.contains('kb-cell') || target?.classList.contains('kb-head');
+      if (this.selectedCell() && target && !keeps) {
+        this.select(null);
+      }
+    };
+    document.addEventListener('focusin', onFocusIn);
+    // Вкладку сховали (перемкнули, згорнули чи закривають): незбережене — одразу, без затримки; поки
+    // сторінка схована, запити йдуть із `keepalive` і не обриваються з її закриттям.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        void this.saver.flush();
+      }
+    };
+    // Закривають сторінку, а зміни ще не збережено: браузер питає, чи залишити сайт.
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (this.saver.state() !== 'saved') {
+        event.preventDefault();
+      }
+    };
+    // Сторінку закривають: решту незбереженого — одразу (`sendRemainingOnClose`).
+    const onPageHide = () => this.sendRemainingOnClose();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener('pagehide', onPageHide);
+    // Закрили вид — перевірка зупиняється, смуга дій ховається, незбережене надсилається одразу
+    // (сервіси живуть далі).
+    this.destroyRef.onDestroy(() => {
+      clearInterval(poll);
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('pagehide', onPageHide);
+      this.actionBar.hide(this);
+      void this.saver.flush();
+    });
+  }
+
+  protected retry(): void {
+    void this.load(this.id());
+  }
+
+  /** «Створити шаблон»: вікно з назвою (спершу — назва таблиці) й описом шаблону. */
+  protected createTemplate(): void {
+    this.templateBusy.set(false);
+    this.templateError.set(null);
+    this.templateDialog()?.open();
+  }
+
+  /**
+   * Надіслали назву й опис: шаблон зі стовпчиків таблиці (`POST /api/v1/tabletemplates`) — назви
+   * заголовків як є (з форматуванням і кольором тла), ключі й порядок. Успіх — вікно закривається,
+   * угорі плашка «Шаблон створено…»; невдача — причина у вікні, воно лишається відкритим.
+   */
+  protected async submitTemplate(value: KbItemFormValue): Promise<void> {
+    this.templateBusy.set(true);
+    this.templateError.set(null);
+    const newColumn = this.translate.instant('knowledgeBase.table.newColumn') as string;
+    const result = await this.templatesService.create({
+      name: value.title,
+      description: value.description,
+      // Порожньої назви сервер не прийме (поки людина ще пише в заголовку).
+      fields: this.fields().map((field) => ({ name: richTextToPlain(field.name).trim() ? field.name : newColumn, key: field.key })),
+    });
+    this.templateBusy.set(false);
+    if (typeof result === 'string') {
+      this.templateError.set(`knowledgeBase.failure.${result}`);
+      return;
+    }
+    void this.templateDialog()?.close();
+    this.successNotice.show('knowledgeBase.table.templateDialog.done');
+  }
+
+  protected closeTemplateDialog(): void {
+    void this.templateDialog()?.close();
+  }
+
+  /**
+   * «Експортувати»: файл Excel `<назва таблиці>.xlsx` (див. `table-xlsx.ts`) — уся таблиця в
+   * поточному порядку: незбережене спершу йде на сервер; поки відкрито пошук, записи — заново, без
+   * нього. Заголовки й значення — з форматуванням і кольором тла, як у таблиці (прапорець — `☑` /
+   * `☐`). Не вдалося отримати записи — повідомлення з «Спробувати ще раз».
+   */
+  protected async export(): Promise<void> {
+    const state = this.state();
+    if (state.status !== 'ready' || this.exporting()) {
+      return;
+    }
+    this.exporting.set(true);
+    this.exportError.set(null);
+    try {
+      await this.saver.flush();
+      let records: readonly { readonly data: CustomRecordData }[] = this.records();
+      if (this.searchTerm() !== null) {
+        const all = await this.recordsService.listAll(state.table.id, this.sort(), null);
+        if (typeof all === 'string') {
+          this.exportError.set(`knowledgeBase.failure.${all}`);
+          return;
+        }
+        records = all;
+      }
+      const fields = this.fields();
+      const title = richTextToPlain(this.title());
+      const fallback = this.translate.instant('knowledgeBase.table.exportFileName') as string;
+      const file = toXlsx({
+        sheetName: sheetName(title, fallback),
+        headers: fields.map((field) => field.name),
+        rows: records.map((record) => fields.map((field) => this.textOf(record.data[field.key]))),
+      });
+      downloadFile(xlsxFileName(title, fallback), file, XLSX_TYPE);
+    } finally {
+      this.exporting.set(false);
+    }
+  }
+
+  protected retryRecords(): void {
+    void this.reloadRecords();
+  }
+
+  /** Текст у полі пошуку: записи заново, з пошуком за ним (як у «Колегах»). */
+  protected onSearch(value: string): void {
+    this.searchTerm.set(value.trim() || null);
+    void this.reloadRecords();
+  }
+
+  /** Клік по заголовку: записи заново, відсортовані за цим полем (чи без порядку — після скидання). */
+  protected onSort(sort: DataTableSort | null): void {
+    this.sort.set(sort?.column.orderBy ? { orderBy: sort.column.orderBy, sortOrder: sort.direction } : null);
+    void this.reloadRecords();
+  }
+
+  /** Записи заново — після того, як незбережені зміни пішли на сервер (інакше вони б загубилися). */
+  private async reloadRecords(): Promise<void> {
+    // Перевірка на зміни, що вже йде, — зі старим пошуком чи порядком: її відповідь відкидається.
+    this.changeGeneration++;
+    await this.saver.flush();
+    this.syncing.set(true);
+    try {
+      await this.loadRecords(this.id());
+    } finally {
+      this.syncing.set(false);
+    }
+  }
+
+  /** Поле таблиці для колонки. */
+  protected fieldOf(column: DataTableColumn): CustomTableField | undefined {
+    return this.fields().find((field) => FIELD_COLUMN_PREFIX + field.key === column.id);
+  }
+
+  /** Чи можна змінювати рядок: порожній (новий запис) — з `CreateCustomRecord`, наявний — з `UpdateCustomRecord`. */
+  protected canEditRow(row: Pick<DataTableRow, 'id'>): boolean {
+    const record = this.records().find((candidate) => candidate.key === row.id);
+    return record && record.serverId !== null ? this.canUpdateRecords() : this.canCreateRecords();
+  }
+
+  /** Змінили текст із форматуванням (значення вже очищене: лише b, i, u, s, br); колір тла лишається. */
+  protected onRichTextInput(row: DataTableRow, field: CustomTableField, html: string): void {
+    const background = splitBackground(this.textValue(row, field)).background;
+    this.setCell(String(row.id), field, joinBackground(background, html));
+  }
+
+  /**
+   * Значення клітинки рядком: усе трактуємо як рядки (старі значення інших типів — їхнім текстом,
+   * логічне — прапорцем `☑` / `☐`).
+   */
+  protected textValue(row: Pick<DataTableRow, 'id'>, field: CustomTableField): string {
+    return this.textOf(this.records().find((record) => record.key === row.id)?.data[field.key]);
+  }
+
+  private textOf(value: unknown): string {
+    if (value === null || value === undefined) {
+      return EMPTY_VALUE;
+    }
+    if (typeof value === 'boolean') {
+      return value ? CHECKBOX_ON : CHECKBOX_OFF;
+    }
+    return String(value);
+  }
+
+  /** Текст значення з форматуванням (без тегу кольору тла) — для редагованого блоку. */
+  protected htmlOf(value: string | null | undefined): string {
+    return splitBackground(value).html;
+  }
+
+  /** Змінили назву стовпчика (у заголовку, з форматуванням); колір тла назви лишається. */
+  protected onHeaderInput(field: CustomTableField, html: string): void {
+    const background = splitBackground(field.name).background;
+    this.renameField(field.key, joinBackground(background, html));
+  }
+
+  /** Вийшли із заголовка з порожньою назвою — «Новий стовпчик» (сервер порожньої не прийме). */
+  protected onHeaderBlur(field: CustomTableField, event: FocusEvent): void {
+    const current = this.fields().find((candidate) => candidate.key === field.key);
+    if (current && !richTextToPlain(current.name).trim()) {
+      this.renameField(field.key, joinBackground(splitBackground(current.name).background, this.translate.instant('knowledgeBase.table.newColumn') as string));
+    }
+    this.onCellBlur(event);
+  }
+
+  protected onHeaderFocus(field: CustomTableField, event: FocusEvent): void {
+    this.select({ key: null, field, element: event.target as HTMLElement });
+  }
+
+  private renameField(key: string, name: string): void {
+    this.setFields(this.fields().map((candidate) => (candidate.key === key ? { ...candidate, name } : candidate)));
+  }
+
+  /** Вибрали колір тла (чи «Без кольору») у спливаючому вікні: для клітинки чи заголовка. */
+  protected onColorPick(color: string | null): void {
+    const target = this.colorTarget();
+    void this.colorPopover()?.close();
+    if (!target) {
+      return;
+    }
+    if (target.key === null) {
+      const current = this.fields().find((candidate) => candidate.key === target.field.key);
+      if (current) {
+        this.renameField(current.key, joinBackground(color, splitBackground(current.name).html));
+      }
+    } else {
+      this.setCell(target.key, target.field, joinBackground(color, splitBackground(this.valueOf(target)).html));
+    }
+    target.element.focus();
+  }
+
+  /** Колір тла клітинки чи заголовка (`null` — нема). */
+  protected colorOf(cell: SelectedCell): string | null {
+    return splitBackground(this.valueOf(cell)).background;
+  }
+
+  /** Значення вибраної клітинки чи назва вибраного стовпчика (рядком). */
+  private valueOf(cell: SelectedCell): string {
+    if (cell.key === null) {
+      return this.fields().find((field) => field.key === cell.field.key)?.name ?? cell.field.name;
+    }
+    return this.textValue({ id: cell.key }, cell.field);
+  }
+
+  /** Кольори всієї клітинки: тло з тегу в значенні, текст — з контрастом 7:1. */
+  private cellColors(row: DataTableRow, field: CustomTableField): DataTableCellColors | null {
+    const background = splitBackground(this.textValue(row, field)).background;
+    return background ? colorsFor(background) : null;
+  }
+
+  /**
+   * Натиснули в клітинці поза її полем (на відступах): клітинку вибрано так само. У клітинці з
+   * текстом (чи порожній) — курсор у поле, у кінець тексту; у клітинці з прапорцем — лише вибір
+   * (смуга дій: форматування, «Прибрати прапорець»), а перемикає прапорець тільки клік по ньому.
+   * Типова дія натискання скасована: фокус не йде на сторінку, тож смуга дій не блимає.
+   */
+  protected onTableMouseDown(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.closest('.kb-cell, .kb-head')) {
+      return;
+    }
+    const cell = target.closest('td')?.querySelector<HTMLElement>('.kb-cell');
+    if (!cell) {
+      return;
+    }
+    event.preventDefault();
+    cell.focus();
+    if (cell.getAttribute('contenteditable') === 'true') {
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      range.collapse(false);
+      const selection = document.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+  }
+
+  /** Клік по самому прапорцю: Safari фокус від кліку прапорцю не дає — даємо його, щоб клітинку вибрали. */
+  protected onTableClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains('kb-cell--check') && document.activeElement !== target) {
+      target.focus();
+    }
+  }
+
+  protected onCellFocus(row: DataTableRow, field: CustomTableField, event: FocusEvent): void {
+    this.select({ key: String(row.id), field, element: event.target as HTMLElement });
+  }
+
+  /** Фокус пішов із клітинки: її вже не вибрано, якщо він не перейшов на смугу дій чи вибір кольору. */
+  protected onCellBlur(event: FocusEvent): void {
+    const next = event.relatedTarget as HTMLElement | null;
+    if (next?.closest('app-action-bar, ion-popover')) {
+      return;
+    }
+    this.select(null);
+  }
+
+  /** Вибір клітинки (чи заголовка; `null` — нічого): поки вона є, знизу смуга дій. */
+  private select(cell: SelectedCell | null): void {
+    this.selectedCell.set(cell);
+  }
+
+  /** Клітинка з прапорцем: увімкнули чи вимкнули. */
+  protected onCheckboxCellChange(row: DataTableRow, field: CustomTableField, event: Event): void {
+    this.setCell(String(row.id), field, setCheckbox(this.textValue(row, field), (event.target as HTMLInputElement).checked));
+  }
+
+  /** Клітинка — прапорець (`☑` / `☐`). */
+  protected isCheckboxCell(row: DataTableRow, field: CustomTableField): boolean {
+    return checkboxState(this.textValue(row, field)) !== null;
+  }
+
+  protected isCheckboxCellChecked(row: DataTableRow, field: CustomTableField): boolean {
+    return checkboxState(this.textValue(row, field)) === true;
+  }
+
+  /** Вставити прапорець у клітинку (текст, що не стане прапорцем, зникне — тоді спершу питаємо). */
+  private insertCheckbox(key: string, field: CustomTableField, confirmed = false): void {
+    const text = this.textValue({ id: key }, field);
+    if (!confirmed && checkboxLosesText(text)) {
+      this.askDelete({ kind: 'checkbox', key, field });
+      return;
+    }
+    this.setCell(key, field, toCheckbox(text));
+    this.focusCellAfterRender(key, field.key);
+  }
+
+  /**
+   * Курсор — у клітинку `key` / `fieldKey` після перемальовування (поле введення в ній змінилося:
+   * прапорець замість тексту чи навпаки).
+   */
+  private focusCellAfterRender(key: string, fieldKey: string): void {
+    afterNextRender(
+      () => {
+        const row = this.rows().findIndex((candidate) => candidate.id === key);
+        const column = this.fields().findIndex((field) => field.key === fieldKey);
+        this.host.querySelectorAll('tbody tr')[row]?.querySelectorAll('td')[column]?.querySelector<HTMLElement>('.kb-cell')?.focus();
+      },
+      { injector: this.injector },
+    );
+  }
+
+  /** Кнопка смуги дій для вибраної клітинки. */
+  protected onCellAction(action: CellAction, button?: HTMLElement): void {
+    const cell = this.selectedCell();
+    if (!cell) {
+      return;
+    }
+    switch (action) {
+      case 'copy': {
+        const text = this.valueOf(cell);
+        void navigator.clipboard?.writeText(richTextToPlain(text));
+        break;
+      }
+      case 'clear': {
+        const field = cell.field;
+        if (cell.key !== null) {
+          const wasCheckbox = checkboxState(this.textValue({ id: cell.key }, field)) !== null;
+          this.setCell(cell.key, field, EMPTY_VALUE);
+          if (wasCheckbox) {
+            // Замість прапорця — знову поле для тексту.
+            this.focusCellAfterRender(cell.key, field.key);
+            return;
+          }
+        }
+        break;
+      }
+      case 'checkbox':
+        if (cell.key !== null) {
+          if (checkboxState(this.textValue({ id: cell.key }, cell.field)) !== null) {
+            this.setCell(cell.key, cell.field, EMPTY_VALUE);
+            this.focusCellAfterRender(cell.key, cell.field.key);
+          } else {
+            this.insertCheckbox(cell.key, cell.field);
+          }
+        }
+        return;
+      case 'background':
+        this.colorTarget.set(cell);
+        if (button) {
+          this.colorPopover()?.open(button);
+        }
+        return;
+      case 'addRowBelow':
+        if (cell.key !== null) {
+          this.addRowBelow(cell.key);
+        }
+        return;
+      case 'addColumnRight':
+      case 'addColumnLeft':
+        this.addColumn(cell.field, action === 'addColumnRight' ? 'right' : 'left');
+        break;
+      case 'deleteRow':
+        if (cell.key !== null) {
+          this.askDelete({ kind: 'row', key: cell.key });
+        }
+        return;
+      case 'deleteColumn':
+        this.askDelete({ kind: 'column', field: cell.field });
+        return;
+      case 'bold':
+      case 'italic':
+      case 'underline':
+      case 'strikethrough':
+        if (cell.key !== null && checkboxState(this.valueOf(cell)) !== null) {
+          // Прапорець: виділяти в ньому нічого, тож форматування — на всю клітинку.
+          this.setCell(cell.key, cell.field, toggleCheckboxFormat(this.valueOf(cell), action));
+          break;
+        }
+        // Курсор лишився в клітинці (кнопки смуги не забирають фокус): форматується виділене,
+        // зміна приходить подією `input` клітинки (`onRichTextInput`).
+        formatSelection(action satisfies RichTextFormat);
+        return;
+    }
+    cell.element.focus();
+  }
+
+  /**
+   * Новий порожній рядок під рядком `key` (з `CreateCustomRecord`). Запис створюється з наступним
+   * збереженням (`POST`); курсор — у першу клітинку нового рядка. Сервер порядку рядків не
+   * зберігає: після перезавантаження новий рядок — у кінці.
+   */
+  private addRowBelow(key: string): void {
+    const newKey = `new-row-${++this.newRowCount}`;
+    // Порожній рядок під заголовками, ще не записаний: спершу він сам стає записом.
+    const placeholder = !this.records().some((record) => record.key === key);
+    this.records.update((records) => {
+      const base = placeholder ? [...records, { key, serverId: null, data: this.emptyData() }] : records;
+      const index = base.findIndex((record) => record.key === key);
+      return [...base.slice(0, index + 1), { key: newKey, serverId: null, data: this.emptyData() }, ...base.slice(index + 1)];
+    });
+    if (placeholder) {
+      this.dirtyRecords.add(key);
+    }
+    this.dirtyRecords.add(newKey);
+    this.changeGeneration++;
+    this.saver.changed();
+    const index = this.records().findIndex((record) => record.key === newKey);
+    afterNextRender(() => this.host.querySelectorAll<HTMLElement>('tbody tr')[index]?.querySelector<HTMLElement>('.kb-cell')?.focus(), { injector: this.injector });
+  }
+
+  /**
+   * Новий текстовий стовпчик праворуч чи ліворуч від поля `field` (з `UpdateCustomTable`): одразу в
+   * таблиці, на сервер — з наступним збереженням (`PUT` таблиці з усією структурою; `id` нового поля
+   * — `null`, ключ — унікальний `column_…`).
+   */
+  private addColumn(field: CustomTableField, side: 'left' | 'right'): void {
+    const fields = this.fields();
+    const index = fields.findIndex((candidate) => candidate.key === field.key) + (side === 'right' ? 1 : 0);
+    const key = uniqueFieldKey(fields);
+    const added: CustomTableField = {
+      id: NEW_FIELD_PREFIX + key,
+      name: this.translate.instant('knowledgeBase.table.newColumn') as string,
+      key,
+      // Сервер ще вимагає тип і обовʼязковість: текст, необовʼязкове.
+      dataType: 0,
+      isRequired: false,
+      order: 0,
+    };
+    this.setFields([...fields.slice(0, index), added, ...fields.slice(index)]);
+  }
+
+  private askDelete(pending: PendingDelete): void {
+    this.pendingDelete.set(pending);
+    this.deleteDialog()?.open();
+  }
+
+  protected cancelDelete(): void {
+    void this.deleteDialog()?.close();
+  }
+
+  /** Підтвердили видалення: рядок чи стовпчик зникає одразу, на сервер — з наступним збереженням. */
+  protected confirmDelete(): void {
+    const pending = this.pendingDelete();
+    void this.deleteDialog()?.close();
+    if (!pending) {
+      return;
+    }
+    if (pending.kind === 'checkbox') {
+      this.insertCheckbox(pending.key, pending.field, true);
+      return;
+    }
+    if (pending.kind === 'row') {
+      const record = this.records().find((candidate) => candidate.key === pending.key);
+      this.records.update((records) => records.filter((candidate) => candidate.key !== pending.key));
+      this.dirtyRecords.delete(pending.key);
+      if (record?.serverId) {
+        this.deletedRecords.add(record.serverId);
+      }
+    } else {
+      this.setFields(this.fields().filter((candidate) => candidate.key !== pending.field.key));
+      return;
+    }
+    this.changeGeneration++;
+    this.saver.changed();
+  }
+
+  /** Нова структура: поля в цьому порядку (позиції — 0, 1, 2…), на сервер — з наступним збереженням. */
+  private setFields(fields: readonly CustomTableField[]): void {
+    const state = this.state();
+    if (state.status !== 'ready') {
+      return;
+    }
+    this.state.set({ status: 'ready', table: { ...state.table, fields: fields.map((field, order) => ({ ...field, order })) } });
+    this.fieldsDirty = true;
+    this.changeGeneration++;
+    this.saver.changed();
+  }
+
+  /**
+   * Перевірка на зміни з інших пристроїв: таблиця й записи (з тим самим пошуком і сортуванням)
+   * заново; показане оновлюється лише там, де змінилося. Пропускається, поки вид не готовий, вкладку
+   * сховано, зміни чекають чи йдуть на сервер або попередня перевірка ще триває.
+   */
+  private async poll(): Promise<void> {
+    const state = this.state();
+    if (state.status !== 'ready' || this.polling || this.saver.state() === 'saving' || document.hidden) {
+      return;
+    }
+    this.polling = true;
+    this.syncing.set(true);
+    const id = state.table.id;
+    const generation = this.changeGeneration;
+    const canViewRecords = this.currentUser.permissions().includes(PERMISSIONS.viewCustomRecord);
+    try {
+      const [table, records] = await Promise.all([
+        this.tables.get(id),
+        canViewRecords ? this.recordsService.listAll(id, this.sort(), this.searchTerm()) : Promise.resolve(null),
+      ]);
+      // Поки йшла перевірка, щось змінили (чи відкрили іншу таблицю) — відповідь уже застаріла.
+      if (generation !== this.changeGeneration || id !== this.id() || this.saver.state() === 'saving') {
+        return;
+      }
+      if (typeof table !== 'string') {
+        this.mergeTable(table);
+      }
+      if (records && typeof records !== 'string') {
+        const selected = this.selectedCell();
+        const focused = selected?.key ? { key: selected.key, field: selected.field.key } : null;
+        this.records.update((local) => mergeRecords(local, records, { dirtyKeys: this.dirtyRecords, focused }));
+      }
+    } finally {
+      this.polling = false;
+      this.syncing.set(false);
+    }
+  }
+
+  /** Свіжа таблиця з сервера: опис (якщо його зараз не редагують) і стовпчики, якщо змінилися. */
+  private mergeTable(fresh: CustomTableDetails): void {
+    const state = this.state();
+    if (state.status !== 'ready') {
+      return;
+    }
+    const editingDescription = this.descriptionDirty || (document.activeElement as HTMLElement | null)?.classList.contains('kb-table__description') === true;
+    const description = editingDescription ? state.table.description : fresh.description;
+    const fieldsChanged = JSON.stringify(fresh.fields) !== JSON.stringify(state.table.fields);
+    if (description === state.table.description && !fieldsChanged) {
+      return;
+    }
+    this.state.set({ status: 'ready', table: { ...state.table, description, fields: fieldsChanged ? fresh.fields : state.table.fields } });
+  }
+
+  /** Змінили опис (по кліку на нього). Порожній надсилається як `null`. */
+  protected onDescriptionInput(event: Event): void {
+    const textarea = event.target as HTMLTextAreaElement;
+    const state = this.state();
+    if (state.status !== 'ready') {
+      return;
+    }
+    this.state.set({ status: 'ready', table: { ...state.table, description: textarea.value } });
+    this.descriptionDirty = true;
+    this.changeGeneration++;
+    this.saver.changed();
+  }
+
+  private setCell(key: string, field: CustomTableField, value: unknown): void {
+    this.records.update((records) => {
+      if (records.some((record) => record.key === key)) {
+        return records.map((record) => (record.key === key ? { ...record, data: { ...record.data, [field.key]: value } } : record));
+      }
+      // Порожній рядок: перший введений символ робить його новим записом (ще без `id` сервера).
+      return [...records, { key, serverId: null, data: { ...this.emptyData(), [field.key]: value } }];
+    });
+    this.dirtyRecords.add(key);
+    this.changeGeneration++;
+    this.saver.changed();
+  }
+
+  /** Дані нового запису: усі поля — порожні рядки. */
+  private emptyData(): CustomRecordData {
+    return Object.fromEntries(this.fields().map((field) => [field.key, EMPTY_VALUE]));
+  }
+
+  /**
+   * Надсилає незбережене по черзі: таблицю (опис і структура — `PUT` з назвою зі змісту й усіма
+   * полями; нові поля — з `id: null`, після успіху — справжні `id` з `GET`), видалені записи
+   * (`DELETE`) і змінені (новий — `POST`, наявний — `PUT`; дані — лише за полями таблиці). Невдале
+   * лишається незбереженим і піде з наступною зміною (чи повтором з тегу). Повертає, чи вдалося все.
+   */
+  private async saveChanges(): Promise<boolean> {
+    const state = this.state();
+    if (state.status !== 'ready') {
+      return true;
+    }
+    let ok = true;
+    if (this.descriptionDirty || this.fieldsDirty) {
+      const fieldsChanged = this.fieldsDirty;
+      this.descriptionDirty = false;
+      this.fieldsDirty = false;
+      const result = await this.tables.update(this.tableUpdate(this.currentTable() ?? state.table));
+      if (result !== 'done') {
+        this.descriptionDirty = true;
+        this.fieldsDirty = fieldsChanged;
+        ok = false;
+      } else if (fieldsChanged) {
+        await this.refreshFieldIds();
+      }
+    }
+    for (const id of [...this.deletedRecords]) {
+      this.deletedRecords.delete(id);
+      if ((await this.recordsService.remove(id)) !== 'done') {
+        this.deletedRecords.add(id);
+        ok = false;
+      }
+    }
+    for (const key of [...this.dirtyRecords]) {
+      // З черги — щойно перед запитом: якщо сторінку закриють посеред збереження, решту черги
+      // надішле `sendRemainingOnClose` (а вже надіслане чи надіслане ним тут пропускається).
+      const record = this.records().find((candidate) => candidate.key === key);
+      if (!this.dirtyRecords.delete(key) || !record) {
+        continue;
+      }
+      const data = this.recordData(record);
+      if (record.serverId === null) {
+        const created = await this.recordsService.create(state.table.id, data);
+        if (typeof created === 'string' || !created.id) {
+          this.dirtyRecords.add(key);
+          ok = false;
+          continue;
+        }
+        this.records.update((records) => records.map((candidate) => (candidate.key === key ? { ...candidate, serverId: created.id } : candidate)));
+      } else {
+        const result = await this.recordsService.update(record.serverId, data);
+        if (result !== 'done') {
+          this.dirtyRecords.add(key);
+          ok = false;
+        }
+      }
+    }
+    return ok;
+  }
+
+  /**
+   * Сторінку закривають (`pagehide`): усе, що ще не пішло, — одразу й паралельно, а не по черзі (після
+   * закриття наступного запиту в черзі вже ніхто не надіслав би). Сторінка вже схована, тож запити
+   * йдуть із `keepalive` (`writeRequestOptions`) і доходять до сервера й після закриття. Якщо сторінку
+   * не закрили, а відновили з кешу браузера, `id` нових записів приходять як завжди.
+   */
+  private sendRemainingOnClose(): void {
+    const state = this.state();
+    if (state.status !== 'ready') {
+      return;
+    }
+    if (this.descriptionDirty || this.fieldsDirty) {
+      this.descriptionDirty = false;
+      this.fieldsDirty = false;
+      void this.tables.update(this.tableUpdate(state.table));
+    }
+    for (const id of this.deletedRecords) {
+      void this.recordsService.remove(id);
+    }
+    this.deletedRecords.clear();
+    for (const key of this.dirtyRecords) {
+      const record = this.records().find((candidate) => candidate.key === key);
+      if (!record) {
+        continue;
+      }
+      if (record.serverId === null) {
+        void this.recordsService.create(state.table.id, this.recordData(record)).then((created) => {
+          if (typeof created !== 'string' && created.id) {
+            this.records.update((records) => records.map((candidate) => (candidate.key === key ? { ...candidate, serverId: created.id } : candidate)));
+          }
+        });
+      } else {
+        void this.recordsService.update(record.serverId, this.recordData(record));
+      }
+    }
+    this.dirtyRecords.clear();
+  }
+
+  /** Таблиця для `PUT`: назва зі змісту, опис і всі поля (нові — з `id: null`). */
+  private tableUpdate(table: CustomTableDetails): CustomTableUpdate {
+    return {
+      id: table.id,
+      name: this.entry()?.title ?? table.name,
+      description: table.description?.trim() || null,
+      fields: table.fields.map((field) => ({
+        ...field,
+        id: field.id.startsWith(NEW_FIELD_PREFIX) ? null : field.id,
+        // Порожньої назви сервер не прийме (поки людина ще пише в заголовку).
+        name: richTextToPlain(field.name).trim() ? field.name : (this.translate.instant('knowledgeBase.table.newColumn') as string),
+      })),
+    };
+  }
+
+  /** Дані запису для сервера — лише поля таблиці (значення видаленого стовпчика сервер не прийняв би). */
+  private recordData(record: LocalRecord): CustomRecordData {
+    return Object.fromEntries(this.fields().map((field) => [field.key, record.data[field.key] ?? null]));
+  }
+
+  /** Після зміни структури — справжні `id` нових полів (без них наступний `PUT` створив би їх знову). */
+  private async refreshFieldIds(): Promise<void> {
+    const state = this.state();
+    if (state.status !== 'ready') {
+      return;
+    }
+    const fresh = await this.tables.get(state.table.id);
+    const current = this.state();
+    if (typeof fresh === 'string' || current.status !== 'ready') {
+      return;
+    }
+    const ids = new Map(fresh.fields.map((field) => [field.key, field.id]));
+    this.state.set({ status: 'ready', table: { ...current.table, fields: current.table.fields.map((field) => ({ ...field, id: ids.get(field.key) ?? field.id })) } });
+  }
+
+  private currentTable(): CustomTableDetails | null {
+    const state = this.state();
+    return state.status === 'ready' ? state.table : null;
+  }
+
+  private async load(id: string): Promise<void> {
+    this.state.set({ status: 'loading' });
+    this.records.set([]);
+    this.recordsError.set(null);
+    const table = await this.tables.get(id);
+    if (id !== this.id()) {
+      return;
+    }
+    if (typeof table === 'string') {
+      this.state.set({ status: 'failed', errorKey: `knowledgeBase.failure.${table}` });
+      return;
+    }
+    this.state.set({ status: 'ready', table });
+    await this.loadRecords(id);
+  }
+
+  private async loadRecords(id: string): Promise<void> {
+    if (!this.currentUser.permissions().includes(PERMISSIONS.viewCustomRecord)) {
+      return;
+    }
+    this.recordsError.set(null);
+    const records = await this.recordsService.listAll(id, this.sort(), this.searchTerm());
+    if (id !== this.id()) {
+      return;
+    }
+    if (typeof records === 'string') {
+      this.recordsError.set(`knowledgeBase.failure.${records}`);
+    } else {
+      this.records.set(records.map((record) => ({ key: record.id, serverId: record.id, data: record.data })));
+    }
+  }
+}
+
+/** Кольори комірки з тлом `background`: текст — того самого відтінку з контрастом 7:1. */
+function colorsFor(background: string): DataTableCellColors {
+  return { background, color: cellTextColor(background) };
+}

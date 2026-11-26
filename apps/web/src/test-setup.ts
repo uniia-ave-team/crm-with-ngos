@@ -34,3 +34,19 @@ if (!window.matchMedia) {
       dispatchEvent: () => false,
     }) as MediaQueryList;
 }
+
+// Кадри анімації (`requestAnimationFrame`) — на справжньому таймері, захопленому тут. У jsdom
+// кадри йдуть інтервалом, який він запускає лише з першим запитом кадру — тим `setInterval`, що
+// глобальний саме тоді. Тести не ізольовані (файли ділять одне вікно jsdom), тож якщо тест із
+// підробленими таймерами (`vi.useFakeTimers`) попросив кадр, інтервал виходив підробленим і зникав
+// разом із підробкою, а jsdom, вважаючи його запущеним, нового не запускав: до кінця прогону кадри не
+// виконувалися, і Ionic не показував вікно (так часом падали тести вікна «Додати» бази знань).
+// Тест, що підробляє й сам `requestAnimationFrame`, і далі отримує підроблений.
+const realTimers = ((globalThis as { __realAnimationFrameTimers?: { set: typeof setTimeout; clear: typeof clearTimeout } }).__realAnimationFrameTimers ??= {
+  set: globalThis.setTimeout.bind(globalThis),
+  clear: globalThis.clearTimeout.bind(globalThis),
+});
+const FRAME_MS = 1000 / 60;
+window.requestAnimationFrame = (callback: FrameRequestCallback): number =>
+  realTimers.set(() => callback(performance.now()), FRAME_MS) as unknown as number;
+window.cancelAnimationFrame = (handle: number): void => realTimers.clear(handle as unknown as ReturnType<typeof setTimeout>);

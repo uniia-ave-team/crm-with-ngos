@@ -1,6 +1,6 @@
 <ul class="actions" role="menu">
   @for (item of items(); track item.id) {
-    <li role="none">
+    <li role="none" [class.planned]="item.planned">
       <button type="button" class="actions__item" role="menuitem" tabindex="0" (click)="choose.emit(item.id)">
         <ion-icon [name]="item.icon" aria-hidden="true"></ion-icon>
         <span>{{ item.labelKey | translate }}</span>

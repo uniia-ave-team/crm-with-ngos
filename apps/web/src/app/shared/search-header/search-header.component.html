@@ -1,6 +1,17 @@
 <div class="search-header" [class.search-header--open]="open()">
-  <div class="search-header__title-slot" [attr.inert]="open() ? '' : null">
-    <div class="search-header__title">{{ title() }}</div>
+  <div class="search-header__title-slot" [attr.inert]="open() ? '' : null" (transitionend)="onTitleSlotTransitionEnd($event)">
+    <!-- Назва (повна — у підказці) виїжджає вліво, коли відкрито пошук; на цей час її ширина
+         зафіксована (`titleWidth`), щоб текст не перескладався. -->
+    <div
+      #titleText
+      class="search-header__title"
+      [class.search-header__title--clamped]="titleLines() > 1"
+      [style.--title-lines]="titleLines()"
+      [style.width.px]="titleWidth()"
+      [attr.title]="title()"
+    >
+      {{ title() }}
+    </div>
   </div>
   <div class="search-header__actions"><ng-content /></div>
   <div class="search-header__field-slot" [attr.inert]="open() ? null : ''">

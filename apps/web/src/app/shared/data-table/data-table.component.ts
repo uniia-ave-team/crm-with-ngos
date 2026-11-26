@@ -1,4 +1,4 @@
-import { Component, TemplateRef, input, linkedSignal, output } from '@angular/core';
+import { Component, TemplateRef, computed, input, linkedSignal, output } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { IonIcon } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -30,16 +30,38 @@ export interface DataTableSort {
   readonly direction: DataTableSortDirection;
 }
 
+/** Кольори комірки: тло й текст (обидва — будь-яке значення CSS-кольору). */
+export interface DataTableCellColors {
+  readonly background: string;
+  readonly color: string;
+}
+
+/** Що отримує шаблон заголовка: колонка (`let-column`). */
+export interface DataTableHeaderContext {
+  readonly $implicit: DataTableColumn;
+}
+
 /** Опис колонки. */
 export interface DataTableColumn {
   /** Ідентифікатор колонки; за ним у рядку береться значення для комірки за замовчуванням. */
   readonly id: string;
   /** Ключ заголовка в мовному файлі; `null` — заголовка нема (наприклад, колонка з аватаром). */
   readonly labelKey: string | null;
+  /** Готовий текст заголовка (не з мовного файлу: назва поля таблиці з сервера); має перевагу над `labelKey`. */
+  readonly label?: string;
   /** Ширина колонки (будь-яке значення CSS `width`); без неї колонки ділять решту порівну. */
   readonly width?: string;
   /** Свій вигляд комірки; без нього показується значення `row[id]` текстом. */
   readonly template?: TemplateRef<DataTableCellContext>;
+  /**
+   * Свій вміст заголовка (наприклад, назва, яку можна змінювати). Тоді заголовок — не кнопка
+   * сортування: сортує окрема кнопка-іконка в ньому праворуч.
+   */
+  readonly headerTemplate?: TemplateRef<DataTableHeaderContext>;
+  /** Кольори всієї комірки цієї колонки в рядку (`null` — звичайні). */
+  readonly cellColors?: (row: DataTableRow) => DataTableCellColors | null;
+  /** Кольори всієї комірки заголовка (`null` — звичайні). */
+  readonly headerColors?: DataTableCellColors | null;
   /**
    * Що передати серверу в `OrderBy`, коли таблицю відсортували за цією колонкою
    * (вона привʼязана до колонки, як аргумент до кнопки); порожній рядок — поки нема.
@@ -93,6 +115,13 @@ export class DataTableComponent {
   readonly addColumnPlanned = input(false);
   /** Показувати кнопку з трьома крапками в кінці рядків (без неї комірка порожня). */
   readonly showRowMenu = input(true);
+  /** Вертикальні лінії між стовпчиками (таблиці «Бази знань»). */
+  readonly columnLines = input(false);
+  /**
+   * Колонка в кінці рядків (для «+» і трьох крапок) — лише коли в ній щось є: інакше таблиця
+   * закінчувалася б порожнім місцем.
+   */
+  protected readonly hasMenuColumn = computed(() => this.showRowMenu() || this.showAddColumn());
   /** Рядок, який лишається виділеним, як при наведенні (наприклад, поки відкрите його меню); `null` — нема. */
   readonly highlightedRowId = input<string | null>(null);
   /**

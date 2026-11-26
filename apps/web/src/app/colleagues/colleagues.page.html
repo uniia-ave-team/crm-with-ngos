@@ -12,8 +12,23 @@
       @if (canAdd()) {
         <app-action-button icon="add-outline" tone="green" [label]="'colleagues.add' | translate" (click)="openPanel('add')" />
       }
+      <!-- Лише на телефоні (до 768px), де нема заголовків таблиці: відкриває рядок сортування. -->
+      <app-action-button
+        class="colleagues__sort-toggle"
+        icon="filter-outline"
+        [label]="'common.sort.open' | translate"
+        [attr.aria-expanded]="sortOpen()"
+        (click)="sortOpen.set(!sortOpen())"
+      />
     </app-search-header>
   </ion-toolbar>
+  <!-- Сортування на телефоні: поле (ті, за якими сортує сервер) і напрямок — замість заголовків
+       таблиці. Зміна одразу запитує список заново, як клік по заголовку. -->
+  @if (sortOpen()) {
+    <ion-toolbar class="colleagues__sort">
+      <app-sort-bar [options]="sortOptions()" [value]="sortSelection()" (sortChange)="onSortBar($event)" />
+    </ion-toolbar>
+  }
 </ion-header>
 
 <ion-content [fullscreen]="true">
@@ -29,6 +44,48 @@
     (rowMenu)="openRowMenu($event)"
     (sortChange)="onSort($event)"
   />
+
+  <!-- На телефоні (до 768px) таблиця не вміщається: колеги — картками. Згори аватар, імʼя й
+       займенники та три крапки, під ними ролі й рядки «проєкт — роль», нижче — пошта, телефон і
+       (з правом) екстрений контакт списком. Ті самі рядки й меню, що й у таблиці. -->
+  <ul class="colleague-cards" [attr.aria-label]="'page.colleagues' | translate">
+    @for (row of rows(); track row.id) {
+      @let colleague = asColleague(row);
+      <li class="colleague-card" [class.colleague-card--active]="menuRowId() === row.id">
+        <div class="colleague-card__head">
+          <ng-container *ngTemplateOutlet="personCell; context: { $implicit: row }" />
+          @if (canOpenRowMenu()) {
+            <button
+              type="button"
+              class="colleague-card__menu"
+              tabindex="0"
+              [attr.aria-label]="'table.rowMenu' | translate"
+              (click)="openRowMenu({ row, anchor: $any($event.currentTarget) })"
+            >
+              <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+            </button>
+          }
+        </div>
+        <ng-container *ngTemplateOutlet="positionCell; context: { $implicit: row }" />
+        <dl class="colleague-card__details">
+          <div class="colleague-card__detail">
+            <dt>{{ 'colleagues.columns.email' | translate }}:</dt>
+            <dd>{{ colleague.email }}</dd>
+          </div>
+          <div class="colleague-card__detail">
+            <dt>{{ 'colleagues.columns.phone' | translate }}:</dt>
+            <dd>{{ colleague.phone }}</dd>
+          </div>
+          @if (canViewEmergencyContact()) {
+            <div class="colleague-card__detail">
+              <dt>{{ 'colleagues.columns.emergencyContact' | translate }}:</dt>
+              <dd>{{ colleague.emergencyContact }}</dd>
+            </div>
+          }
+        </dl>
+      </li>
+    }
+  </ul>
 
   @if (colleagues().status === 'failed') {
     <div class="colleagues__list-message colleagues__list-message--error" role="alert">
@@ -56,7 +113,7 @@
   [label]="'table.rowMenu' | translate"
   (closed)="menuRowId.set(null)"
 >
-  <app-colleague-actions [items]="menuItems()" (choose)="onActionChosen($event)" />
+  <app-action-list [items]="menuItems()" (choose)="onActionChosen($event)" />
 </app-popover>
 
 <!-- Бічне вікно: його відкривають «Ролі», «Додати» та дії з меню; зміст поки є в «Ролей», «Додати» й «Редагувати». -->

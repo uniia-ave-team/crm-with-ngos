@@ -1,0 +1,39 @@
+// Поля й кнопка — спільні з формами налаштувань (`settings-section.scss`); у вікні — без відступів
+// сторінки, щільніше, поля на всю ширину вікна.
+:host {
+  padding: 16px 0 0;
+}
+
+.settings-form {
+  gap: 20px;
+}
+
+.settings-input,
+.settings-select-wrap {
+  max-width: none;
+}
+
+.settings-input--area {
+  height: auto;
+  min-height: 80px;
+  padding: 8px 12px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+// «Тип» поки лише показує вибране.
+.settings-select:disabled {
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-inactive);
+  cursor: default;
+  opacity: 1;
+}
+
+.settings-submit {
+  align-self: stretch;
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+}

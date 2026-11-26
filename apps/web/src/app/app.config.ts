@@ -1,4 +1,4 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { ApplicationConfig, inject, provideAppInitializer } from '@angular/core';
 import { PreloadAllModules, RouteReuseStrategy, provideRouter, withComponentInputBinding, withPreloading } from '@angular/router';
 import { IonicRouteStrategy, provideIonicAngular } from '@ionic/angular';
@@ -14,12 +14,15 @@ import { LanguageService } from './core/i18n/language.service';
 /** Провайдери застосунку: Ionic, маршрути, HTTP з інтерцептором токенів, переклади й сервіси, що стартують разом із ним. */
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideIonicAngular(),
+    // Іконка кнопки бокового меню (`ion-menu-button`) — з нашого набору (`core/icons.ts`), а не Ionicons.
+    provideIonicAngular({ menuIcon: 'menu-outline' }),
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
     // Усі сторінки довантажуються у фоні після старту; query-параметри (`?token=` запрошення)
     // привʼязуються до входів сторінок.
     provideRouter(routes, withPreloading(PreloadAllModules), withComponentInputBinding()),
-    provideHttpClient(withInterceptors([authInterceptor])),
+    // `withFetch()`: запити через `fetch` — так збереження таблиці може йти з `keepalive` і не
+    // обривається, коли вкладку закривають (див. `KbTableComponent`).
+    provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
     // Мову й запасну мову тут не задано навмисно: їх визначає й виставляє LanguageService
     // (сховище браузера / мова пристрою). Задана тут мова лише завантажила б зайвий файл.
     provideTranslateService({

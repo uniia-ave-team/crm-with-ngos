@@ -40,7 +40,9 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
     PERMISSIONS.updateTableTemplate,
     PERMISSIONS.deleteTableTemplate,
   ),
-  groupOf('viewTables', PERMISSIONS.viewCustomTable),
+  // Перегляд таблиць — і самі таблиці, і їхні записи: без `ViewCustomRecord` сервер не віддає записів
+  // (`GET /api/v1/customrecords`), і таблиця була б лише рядком заголовків.
+  groupOf('viewTables', PERMISSIONS.viewCustomTable, PERMISSIONS.viewCustomRecord),
   // Керувати таблицями без їх перегляду нема як.
   subgroupOf(
     'viewTables',
@@ -48,7 +50,6 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
     PERMISSIONS.createCustomTable,
     PERMISSIONS.updateCustomTable,
     PERMISSIONS.deleteCustomTable,
-    PERMISSIONS.viewCustomRecord,
     PERMISSIONS.createCustomRecord,
     PERMISSIONS.updateCustomRecord,
     PERMISSIONS.deleteCustomRecord,

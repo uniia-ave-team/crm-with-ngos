@@ -34,6 +34,20 @@ $transition: 0.25s ease;
   transition: transform $transition;
 }
 
+// Кілька рядків (`titleLines`): назва переноситься, а після останнього рядка — трикрапка. Відступ —
+// зовнішній: `overflow: hidden` обрізає по краю внутрішніх відступів, і в них проглядав би наступний
+// рядок.
+.search-header__title--clamped {
+  display: -webkit-box;
+  margin-block: 6px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--title-lines);
+  line-clamp: var(--title-lines);
+}
+
 .search-header__actions {
   display: flex;
   flex: none;

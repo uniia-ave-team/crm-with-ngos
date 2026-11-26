@@ -1,14 +1,24 @@
 // Таблиця з даних. Кольори — токени меню (світла/темна тема): лінії — `--nav-border`,
 // заголовки — `--nav-fg-inactive`, виділення наведеного рядка — `--nav-active-bg`.
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
   font-family: var(--font-menu);
   color: var(--nav-fg-active);
 }
 
-// На вузьких екранах таблиця не стискається, а прокручується по горизонталі.
+// На вузьких екранах таблиця не стискається, а прокручується по горизонталі. Коли висоту таблиці
+// обмежено (`app-data-table` стискається в колонці, як у виді таблиці «Бази знань»), записи
+// прокручуються й по вертикалі, а рядок заголовків лишається вгорі.
 .data-table__scroll {
-  overflow-x: auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .data-table {
@@ -81,6 +91,39 @@ td:first-child {
   padding-inline-start: 28px;
 }
 
+// Заголовок зі своїм вмістом (`headerTemplate`): вміст на всю комірку (відступи задає він сам; лівий
+// — змінна `--data-table-head-start`: 28px у першій колонці, як у звичайних заголовків), кнопка
+// сортування — іконка праворуч.
+.data-table__head {
+  --data-table-head-start: 12px;
+}
+
+.data-table__head:first-child {
+  --data-table-head-start: 28px;
+}
+
+.data-table__head-content {
+  min-height: 100%;
+}
+
+.data-table__sort-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: -2px;
+  }
+}
+
 .data-table__filter {
   position: absolute;
   top: 50%;
@@ -96,6 +139,14 @@ td:first-child {
 
   .data-table__filter {
     opacity: 1;
+  }
+}
+
+// Лінії між стовпчиками (`columnLines`): справа в кожній комірці, крім останньої.
+.data-table--lines {
+  th:not(:last-child),
+  td:not(:last-child) {
+    border-inline-end: 1px solid var(--nav-border);
   }
 }
 

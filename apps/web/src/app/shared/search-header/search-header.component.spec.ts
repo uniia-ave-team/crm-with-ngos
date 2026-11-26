@@ -111,4 +111,62 @@ describe('SearchHeaderComponent', () => {
     fixture.detectChanges();
     expect(host.searches).toEqual([]);
   });
+
+  it('marks its own element while the search is open (for the page to hide something then)', () => {
+    const { element, open } = render();
+    const header = element.querySelector('app-search-header')!;
+    expect(header.classList).not.toContain('search-header-host--open');
+    open();
+    expect(header.classList).toContain('search-header-host--open');
+  });
+
+  it('keeps the width of the title while the search is open and until the place of the title has grown back', () => {
+    const { element, open, toggle, fixture } = render();
+    const title = element.querySelector<HTMLElement>('.search-header__title')!;
+    vi.spyOn(title, 'getBoundingClientRect').mockReturnValue({ width: 240 } as DOMRect);
+    expect(title.style.width).toBe('');
+    open();
+    expect(title.style.width).toBe('240px');
+
+    toggle().click();
+    fixture.detectChanges();
+    // Закриття ще анімується: ширина та сама, текст не перескладається.
+    expect(title.style.width).toBe('240px');
+    const slot = element.querySelector('.search-header__title-slot')!;
+    slot.dispatchEvent(Object.assign(new Event('transitionend'), { propertyName: 'flex-grow' }));
+    fixture.detectChanges();
+    expect(title.style.width).toBe('');
+  });
+
+  describe('the title', () => {
+    @Component({
+      template: `
+        <app-search-header title="Довга назва" [titleLines]="lines" />
+      `,
+      imports: [SearchHeaderComponent],
+    })
+    class TitleHostComponent {
+      lines = 1;
+    }
+
+    function renderTitle(lines: number) {
+      const fixture = TestBed.createComponent(TitleHostComponent);
+      fixture.componentInstance.lines = lines;
+      fixture.detectChanges();
+      const element = fixture.nativeElement as HTMLElement;
+      return { element, title: element.querySelector<HTMLElement>('.search-header__title')! };
+    }
+
+    it('keeps one line by default and gives the full title in the hint', () => {
+      const { title } = renderTitle(1);
+      expect(title.classList).not.toContain('search-header__title--clamped');
+      expect(title.getAttribute('title')).toBe('Довга назва');
+    });
+
+    it('wraps onto as many lines as asked', () => {
+      const { title } = renderTitle(2);
+      expect(title.classList).toContain('search-header__title--clamped');
+      expect(title.style.getPropertyValue('--title-lines')).toBe('2');
+    });
+  });
 });

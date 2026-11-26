@@ -19,10 +19,11 @@ describe('app routes', () => {
     // authGuard, connectionGuard і страж прав.
     expect(guards('admin-panel')).toBe(3);
     expect(guards('colleagues')).toBe(3);
+    expect(guards('knowledge-base')).toBe(3);
   });
 
   it('keeps only the login and connection guards on the pages that do not depend on rights', () => {
-    for (const path of ['calendar', 'planner', 'knowledge-base', 'settings']) {
+    for (const path of ['calendar', 'planner', 'settings']) {
       expect(guards(path), path).toBe(2);
     }
   });

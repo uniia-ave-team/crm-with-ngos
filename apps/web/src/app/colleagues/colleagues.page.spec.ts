@@ -16,7 +16,7 @@ import { avatarColor } from '../shared/avatar/avatar-color';
 import { PopoverComponent } from '../shared/popover/popover.component';
 import { SidePanelComponent } from '../shared/side-panel/side-panel.component';
 import { ModalComponent } from '../shared/modal/modal.component';
-import { ColleagueActionsComponent } from './colleague-actions/colleague-actions.component';
+import { ActionListComponent } from '../shared/action-list/action-list.component';
 import { ColleaguesPage } from './colleagues.page';
 
 /** Права, з якими видно всі кнопки й три крапки. */
@@ -90,7 +90,9 @@ describe('ColleaguesPage', () => {
     return ctx;
   }
 
-  const headerButtons = (element: HTMLElement) => Array.from(element.querySelectorAll('ion-header button'));
+  /** Кнопки шапки, крім сортування для телефону (воно перевіряється окремо). */
+  const headerButtons = (element: HTMLElement) =>
+    Array.from(element.querySelectorAll('ion-header button')).filter((button) => !button.closest('.colleagues__sort-toggle, app-sort-bar'));
 
   it('should create', () => {
     expect(render().fixture.componentInstance).toBeTruthy();
@@ -109,7 +111,7 @@ describe('ColleaguesPage', () => {
     });
 
     it('draws the roles blue with people and the adding green with plus', () => {
-      const actions = Array.from(render().element.querySelectorAll('ion-header app-action-button button'));
+      const actions = Array.from(render().element.querySelectorAll('ion-header app-action-button:not(.colleagues__sort-toggle) button'));
       expect(actions.map((b) => b.className)).toEqual(['action-button action-button--blue', 'action-button action-button--green']);
       expect(actions.map((b) => (b.querySelector('ion-icon') as unknown as { name: string }).name)).toEqual(['people', 'add-outline']);
     });
@@ -150,6 +152,55 @@ describe('ColleaguesPage', () => {
         fixture.detectChanges();
         expect(headerButtons(element)).toHaveLength(2);
       });
+    });
+  });
+
+  describe('the sorting for phones (instead of the table headers)', () => {
+    const toggle = (element: HTMLElement) => element.querySelector<HTMLButtonElement>('ion-header .colleagues__sort-toggle button')!;
+    const select = (element: HTMLElement) => element.querySelector<HTMLSelectElement>('app-sort-bar select');
+    const direction = (element: HTMLElement) => element.querySelector<HTMLButtonElement>('app-sort-bar .sort-bar__direction')!;
+
+    it('has the sort button among the header buttons, opening and closing the row with the field and the direction', async () => {
+      const { fixture, element } = await renderLoaded([...ROW_ACTIONS, 'Permissions.ViewEmergencyContact']);
+      expect(toggle(element).getAttribute('aria-label')).toBe(uk.common.sort.open);
+      expect(select(element)).toBeNull();
+
+      toggle(element).click();
+      fixture.detectChanges();
+      const options = Array.from(select(element)!.options).map((option) => [option.value, option.textContent?.trim()]);
+      // Лише поля, за якими сортує сервер («Посада» не сортується).
+      expect(options).toEqual([
+        ['name', uk.colleagues.columns.name],
+        ['email', uk.colleagues.columns.email],
+        ['phone', uk.colleagues.columns.phone],
+        ['emergencyContact', uk.colleagues.columns.emergencyContact],
+      ]);
+      expect(select(element)!.value).toBe('name');
+      expect(direction(element).getAttribute('aria-label')).toBe(uk.common.sort.asc);
+
+      toggle(element).click();
+      fixture.detectChanges();
+      expect(select(element)).toBeNull();
+    });
+
+    it('asks for the first page again by the chosen field, and turns the direction by the direction button', async () => {
+      const { fixture, element } = await renderLoaded([...ROW_ACTIONS]);
+      toggle(element).click();
+      fixture.detectChanges();
+
+      const field = select(element)!;
+      field.value = 'email';
+      field.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      let request = usersRequest(1);
+      expect([request.request.params.get('OrderBy'), request.request.params.get('SortOrder')]).toEqual(['Email', 'asc']);
+      request.flush({ items: [], hasNextPage: false });
+
+      direction(element).click();
+      fixture.detectChanges();
+      request = usersRequest(1);
+      expect([request.request.params.get('OrderBy'), request.request.params.get('SortOrder')]).toEqual(['Email', 'desc']);
+      expect(direction(element).getAttribute('aria-label')).toBe(uk.common.sort.desc);
     });
   });
 
@@ -504,6 +555,49 @@ describe('ColleaguesPage', () => {
     });
   });
 
+  describe('the cards for phones (instead of the table below 768px)', () => {
+    const cards = (element: HTMLElement) => Array.from(element.querySelectorAll('.colleague-cards .colleague-card'));
+    const text = (element: Element | null) => element?.textContent?.replace(/\s+/g, ' ').trim();
+
+    it('has a card per colleague: the person and the dots at the top, then the roles, then the email and the phone as a list', async () => {
+      const { element } = await renderLoaded([...ROW_ACTIONS]);
+      const all = cards(element);
+      expect(all).toHaveLength(4);
+      const first = all[0];
+      expect(text(first.querySelector('.colleague-card__head .person__name'))).toBe('Колега1 Перший1');
+      expect(first.querySelector('.colleague-card__head .colleague-card__menu')?.getAttribute('aria-label')).toBe(uk.table.rowMenu);
+      expect(first.querySelector('.position')).not.toBeNull();
+      expect(
+        Array.from(first.querySelectorAll('.colleague-card__detail')).map((detail) => [text(detail.querySelector('dt')), text(detail.querySelector('dd'))]),
+      ).toEqual([
+        [`${uk.colleagues.columns.email}:`, 'user1@example.org'],
+        [`${uk.colleagues.columns.phone}:`, uk.common.empty],
+      ]);
+    });
+
+    it('lists the emergency contact too with Permissions.ViewEmergencyContact', async () => {
+      const { element } = await renderLoaded([...ROW_ACTIONS, 'Permissions.ViewEmergencyContact']);
+      const details = Array.from(cards(element)[0].querySelectorAll('.colleague-card__detail dt')).map((dt) => text(dt));
+      expect(details).toEqual([`${uk.colleagues.columns.email}:`, `${uk.colleagues.columns.phone}:`, `${uk.colleagues.columns.emergencyContact}:`]);
+    });
+
+    it('opens the same menu as the row of the table by the dots of a card, and marks the card while it is open', async () => {
+      const { fixture, element } = await renderLoaded([...ROW_ACTIONS]);
+      const popover = fixture.debugElement.query(By.directive(PopoverComponent)).componentInstance as PopoverComponent;
+      const card = cards(element)[2];
+      (card.querySelector('.colleague-card__menu') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(popover.isOpen()).toBe(true);
+      expect((fixture.componentInstance as unknown as { menuRowId(): string | null }).menuRowId()).toBe('user-3');
+      expect(card.classList).toContain('colleague-card--active');
+    });
+
+    it('has no dots without any of the rights for the menu', async () => {
+      const { element } = await renderLoaded(['Permissions.ViewUser']);
+      expect(element.querySelector('.colleague-card__menu')).toBeNull();
+    });
+  });
+
   describe('the actions menu behind the three dots', () => {
     /** Пункти меню, які бачить користувач із такими правами (id у порядку меню). */
     const actionIds = (permissions: string[]) => {
@@ -616,7 +710,7 @@ describe('ColleaguesPage', () => {
 
       describe('a disabled account (isActive: false)', () => {
         const itemIds = (fixture: ComponentFixture<ColleaguesPage>) =>
-          (fixture.debugElement.query(By.directive(ColleagueActionsComponent)).componentInstance as ColleagueActionsComponent)
+          (fixture.debugElement.query(By.directive(ActionListComponent)).componentInstance as ActionListComponent)
             .items()
             .map((item) => item.id);
 
@@ -635,7 +729,7 @@ describe('ColleaguesPage', () => {
           const { element } = await renderWithDisabled(ROW_ACTIONS);
           const persons = Array.from(element.querySelectorAll('tbody .person'));
           expect(persons.map((person) => person.classList.contains('person--disabled'))).toEqual([false, true, false]);
-          expect(element.querySelectorAll('.person__disabled-icon')).toHaveLength(1);
+          expect(element.querySelectorAll('tbody .person__disabled-icon')).toHaveLength(1);
 
           const name = persons[1].querySelector('.person__name')!;
           const icon = name.firstElementChild!;
@@ -672,7 +766,7 @@ describe('ColleaguesPage', () => {
 
       describe('the row of the user himself', () => {
         const itemsOf = (fixture: ComponentFixture<ColleaguesPage>) =>
-          (fixture.debugElement.query(By.directive(ColleagueActionsComponent)).componentInstance as ColleagueActionsComponent).items();
+          (fixture.debugElement.query(By.directive(ActionListComponent)).componentInstance as ActionListComponent).items();
 
         const state = (fixture: ComponentFixture<ColleaguesPage>) => (fixture.componentInstance as unknown as { panel(): unknown }).panel();
 
