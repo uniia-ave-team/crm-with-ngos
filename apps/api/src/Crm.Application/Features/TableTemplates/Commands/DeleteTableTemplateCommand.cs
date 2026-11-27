@@ -9,4 +9,4 @@ namespace Crm.Application.Features.TableTemplates.Commands;
 /// <param name="Id">The unique identifier of the template to delete.</param>
 /// <returns>Unit signaling command completion.</returns>
 public record DeleteTableTemplateCommand(
-    Guid Id) : ICommand, ITransactionalCommand;
+    Guid Id) : ICommand, ITransactionalCommand, IHasEntityId;

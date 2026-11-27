@@ -1,12 +1,12 @@
 using System.Collections.Frozen;
-using System.Diagnostics.CodeAnalysis;
+using System.ComponentModel;
 using Crm.Application.Common.Consts;
 using Crm.Application.Interfaces;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Consts;
 using Crm.Infrastructure.Options;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -14,93 +14,75 @@ using Microsoft.Extensions.Options;
 namespace Crm.Infrastructure.Services.Caching;
 
 /// <summary>
-/// Provides an in-memory implementation of <see cref="IRolePermissionsCache"/>.
-/// Utilizes <see cref="IMemoryCache"/> for ultra-fast, local authorization checks,
-/// with a built-in fallback mechanism to securely resolve cache misses using isolated async scopes.
+/// Provides a <see cref="HybridCache"/>-backed implementation of <see cref="IRolePermissionsCache"/>
+/// with built-in per-key stampede protection, zero-copy immutable L1 caching, and negative caching for unknown roles.
 /// </summary>
-/// <param name="memoryCache">The in-memory cache backing store.</param>
+/// <param name="hybridCache">The hybrid cache backing store.</param>
 /// <param name="scopeFactory">The DI scope factory used for fallback database lookups.</param>
 /// <param name="jwtOptions">The JWT options supplying negative-cache TTL aligned with access token lifetime.</param>
 /// <param name="logger">The logger instance.</param>
 public sealed partial class RolePermissionsCache(
-    IMemoryCache memoryCache,
+    HybridCache hybridCache,
     IServiceScopeFactory scopeFactory,
     IOptions<JwtOptions> jwtOptions,
-    ILogger<RolePermissionsCache> logger) : IRolePermissionsCache, IDisposable
+    ILogger<RolePermissionsCache> logger) : IRolePermissionsCache
 {
     private const string CacheKeyPrefix = "RoleAccessRights_";
-    private const int LockBucketCount = 16;
-    private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(CacheConstants.RolePermissionsCacheExpirationHours);
-    private readonly TimeSpan _negativeCacheTtl = TimeSpan.FromMinutes(jwtOptions.Value.AccessTokenExpiryMinutes);
-    private readonly SemaphoreSlim[] _locks = [.. Enumerable.Range(0, LockBucketCount).Select(_ => new SemaphoreSlim(1, 1))];
-    private int _disposed;
+
+    private static readonly HybridCacheEntryOptions DefaultEntryOptions = new()
+    {
+        Expiration = TimeSpan.FromHours(CacheConstants.RolePermissionsCacheExpirationHours),
+        LocalCacheExpiration = TimeSpan.FromHours(CacheConstants.RolePermissionsCacheExpirationHours),
+    };
+
+    private readonly HybridCacheEntryOptions _negativeCacheEntryOptions = new()
+    {
+        Expiration = TimeSpan.FromMinutes(jwtOptions.Value.AccessTokenExpiryMinutes),
+        LocalCacheExpiration = TimeSpan.FromMinutes(jwtOptions.Value.AccessTokenExpiryMinutes),
+    };
 
     /// <inheritdoc />
     public async Task<IReadOnlySet<string>> GetRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken = default)
     {
         string cacheKey = GenerateCacheKey(roleId);
 
-        if (TryGetCachedPermissions(cacheKey, out var cachedRights))
+        var entry = await hybridCache.GetOrCreateAsync(
+            cacheKey,
+            (Cache: this, RoleId: roleId),
+            static (state, ct) => state.Cache.FetchRolePermissionsEntryAsync(state.RoleId, ct),
+            DefaultEntryOptions,
+            cancellationToken: cancellationToken);
+
+        if (entry.IsNotFound)
         {
-            return cachedRights;
+            await hybridCache.SetAsync(
+                cacheKey,
+                entry with { IsNotFound = false },
+                _negativeCacheEntryOptions,
+                cancellationToken: cancellationToken);
         }
 
-        var myLock = _locks[GetLockIndex(roleId)];
-
-        await myLock.WaitAsync(cancellationToken);
-
-        try
-        {
-            if (TryGetCachedPermissions(cacheKey, out cachedRights))
-            {
-                return cachedRights;
-            }
-
-            LogCacheMiss(logger, roleId);
-            return await FetchAndCacheRoleAccessRightsAsync(roleId, cancellationToken);
-        }
-        finally
-        {
-            myLock.Release();
-        }
+        return entry.Rights;
     }
 
     /// <inheritdoc />
     public async Task SetRolePermissionsAsync(Guid roleId, HashSet<string> rights, CancellationToken cancellationToken = default)
     {
-        var myLock = _locks[GetLockIndex(roleId)];
+        var frozenRights = rights.ToFrozenSet(StringComparer.Ordinal);
+        await hybridCache.SetAsync(
+            GenerateCacheKey(roleId),
+            new CachedRolePermissions(frozenRights, IsNotFound: false),
+            DefaultEntryOptions,
+            cancellationToken: cancellationToken);
 
-        await myLock.WaitAsync(cancellationToken);
-
-        try
-        {
-            CacheRolePermissions(roleId, rights, CacheExpiration);
-        }
-        finally
-        {
-            myLock.Release();
-        }
+        LogAccessRightsUpdated(logger, roleId, frozenRights.Count);
     }
 
     /// <inheritdoc />
     public async Task RemoveRolePermissionsAsync(Guid roleId, CancellationToken cancellationToken = default)
     {
-        var myLock = _locks[GetLockIndex(roleId)];
-
-        await myLock.WaitAsync(cancellationToken);
-
-        try
-        {
-            string cacheKey = GenerateCacheKey(roleId);
-
-            memoryCache.Remove(cacheKey);
-
-            LogAccessRightsRemoved(logger, roleId);
-        }
-        finally
-        {
-            myLock.Release();
-        }
+        await hybridCache.RemoveAsync(GenerateCacheKey(roleId), cancellationToken);
+        LogAccessRightsRemoved(logger, roleId);
     }
 
     /// <inheritdoc />
@@ -126,61 +108,26 @@ public sealed partial class RolePermissionsCache(
         LogCacheSeededSuccessfully(logger, seededCount);
     }
 
-    /// <summary>
-    /// Disposes all underlying semaphore instances to prevent native resource leaks.
-    /// </summary>
-    public void Dispose()
+    private async ValueTask<CachedRolePermissions> FetchRolePermissionsEntryAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-        {
-            return;
-        }
+        LogCacheMiss(logger, roleId);
 
-        foreach (var semaphore in _locks)
-        {
-            semaphore.Dispose();
-        }
-    }
-
-    private int GetLockIndex(Guid roleId) => (roleId.GetHashCode() & int.MaxValue) % _locks.Length;
-
-    private bool TryGetCachedPermissions(string cacheKey, [NotNullWhen(true)] out FrozenSet<string>? rights)
-    {
-        if (memoryCache.TryGetValue(cacheKey, out rights) && rights is not null)
-        {
-            return true;
-        }
-
-        rights = null;
-        return false;
-    }
-
-    private async Task<FrozenSet<string>> FetchAndCacheRoleAccessRightsAsync(Guid roleId, CancellationToken cancellationToken)
-    {
         await using var scope = scopeFactory.CreateAsyncScope();
         var identityService = scope.ServiceProvider.GetRequiredService<IRoleIdentityService>();
 
         try
         {
             var rights = await identityService.GetRolePermissionsAsync(roleId, cancellationToken);
+            var frozenRights = rights.ToFrozenSet(StringComparer.Ordinal);
 
-            return CacheRolePermissions(roleId, rights, CacheExpiration);
+            LogAccessRightsUpdated(logger, roleId, frozenRights.Count);
+            return new CachedRolePermissions(frozenRights, IsNotFound: false);
         }
         catch (NotFoundException)
         {
-            return CacheRolePermissions(roleId, [], _negativeCacheTtl);
+            LogAccessRightsUpdated(logger, roleId, 0);
+            return new CachedRolePermissions([], IsNotFound: true);
         }
-    }
-
-    private FrozenSet<string> CacheRolePermissions(Guid roleId, HashSet<string> rights, TimeSpan cacheExpiration)
-    {
-        var frozenRights = rights.ToFrozenSet(StringComparer.Ordinal);
-
-        memoryCache.Set(GenerateCacheKey(roleId), frozenRights, cacheExpiration);
-
-        LogAccessRightsUpdated(logger, roleId, frozenRights.Count);
-
-        return frozenRights;
     }
 
     private static string GenerateCacheKey(Guid roleId) => $"{CacheKeyPrefix}{roleId}";
@@ -199,4 +146,7 @@ public sealed partial class RolePermissionsCache(
 
     [LoggerMessage(EventId = LogEventIds.CacheSeededSuccessfully, Level = LogLevel.Information, Message = "Successfully seeded {Count} roles into the access rights cache.")]
     private static partial void LogCacheSeededSuccessfully(ILogger logger, int count);
+
+    [ImmutableObject(true)]
+    private sealed record CachedRolePermissions(FrozenSet<string> Rights, bool IsNotFound);
 }

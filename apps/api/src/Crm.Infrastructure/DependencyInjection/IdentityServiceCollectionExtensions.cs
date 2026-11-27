@@ -101,6 +101,8 @@ public static class IdentityServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddSingleton<ITokenService, TokenService>();
+        services.AddSingleton<IActionTokenProtector, AesGcmActionTokenProtector>();
+        services.AddScoped<IUserActionTokenService, UserActionTokenService>();
         services.AddSingleton<ICurrentUserService, CurrentUserService>();
         services.AddSingleton<IPermissionService, PermissionService>();
         services.AddSingleton<IOptionService, OptionService>();

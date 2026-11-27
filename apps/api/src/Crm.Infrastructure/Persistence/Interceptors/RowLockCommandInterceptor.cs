@@ -62,21 +62,11 @@ public sealed class RowLockCommandInterceptor : DbCommandInterceptor
 
     private static bool HasLeadingTagComment(string sql)
     {
-        ReadOnlySpan<char> remaining = sql.AsSpan();
-
-        while (!remaining.IsEmpty)
+        foreach (ReadOnlySpan<char> rawLine in sql.AsSpan().EnumerateLines())
         {
-            int newlineIndex = remaining.IndexOf('\n');
-            ReadOnlySpan<char> line = (newlineIndex >= 0 ? remaining[..newlineIndex] : remaining).Trim();
-
+            ReadOnlySpan<char> line = rawLine.Trim();
             if (line.IsEmpty)
             {
-                if (newlineIndex < 0)
-                {
-                    break;
-                }
-
-                remaining = remaining[(newlineIndex + 1)..];
                 continue;
             }
 
@@ -89,13 +79,6 @@ public sealed class RowLockCommandInterceptor : DbCommandInterceptor
             {
                 return true;
             }
-
-            if (newlineIndex < 0)
-            {
-                break;
-            }
-
-            remaining = remaining[(newlineIndex + 1)..];
         }
 
         return false;

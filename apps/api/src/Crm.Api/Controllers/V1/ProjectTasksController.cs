@@ -6,7 +6,6 @@ using Crm.Api.Security;
 using Crm.Application.Dtos.Tasks;
 using Crm.Application.Features.Tasks.Commands;
 using Crm.Application.Features.Tasks.Queries;
-using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
@@ -19,15 +18,12 @@ namespace Crm.Api.Controllers.V1;
 /// task assignments, tags, comments, unread comment tracking, and file attachments.
 /// </summary>
 /// <param name="mediator">The mediator instance used for dispatching commands and queries.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 [ApiController]
 [ApiVersion(ApiVersions.V1)]
 [Route(ApiRouteConstants.ProjectTasksRoutePrefix)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
-public sealed class ProjectTasksController(
-    IMediator mediator,
-    ICurrentUserService currentUserService) : ControllerBase
+public sealed class ProjectTasksController(IMediator mediator) : ControllerBase
 {
     /// <summary>
     /// Retrieves a paginated, filtered, and sorted list of project tasks
@@ -47,9 +43,7 @@ public sealed class ProjectTasksController(
         [FromQuery] GetProjectTasksQuery query,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(
-            query with { ProjectId = projectId, CurrentUserId = currentUserService.GetUserId() },
-            cancellationToken);
+        var result = await mediator.Send(query with { ProjectId = projectId }, cancellationToken);
         return Ok(result);
     }
 
@@ -69,9 +63,7 @@ public sealed class ProjectTasksController(
         Guid taskId,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(
-            new GetTaskByIdQuery(projectId, taskId, currentUserService.GetUserId()),
-            cancellationToken);
+        var result = await mediator.Send(new GetTaskByIdQuery(projectId, taskId), cancellationToken);
         return Ok(result);
     }
 
@@ -277,7 +269,7 @@ public sealed class ProjectTasksController(
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(
-            query with { ProjectId = projectId, TaskId = taskId, CurrentUserId = currentUserService.GetUserId() },
+            query with { ProjectId = projectId, TaskId = taskId },
             cancellationToken);
         return Ok(result);
     }
@@ -302,7 +294,7 @@ public sealed class ProjectTasksController(
         CancellationToken cancellationToken)
     {
         var commentId = await mediator.Send(
-            command with { ProjectId = projectId, TaskId = taskId, CurrentUserId = currentUserService.GetUserId() },
+            command with { ProjectId = projectId, TaskId = taskId },
             cancellationToken);
         return StatusCode(StatusCodes.Status201Created, commentId);
     }
@@ -334,7 +326,6 @@ public sealed class ProjectTasksController(
                 ProjectId = projectId,
                 TaskId = taskId,
                 CommentId = commentId,
-                CurrentUserId = currentUserService.GetUserId(),
             },
             cancellationToken);
         return NoContent();
@@ -359,9 +350,7 @@ public sealed class ProjectTasksController(
         Guid commentId,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(
-            new DeleteTaskCommentCommand(projectId, taskId, commentId, currentUserService.GetUserId()),
-            cancellationToken);
+        await mediator.Send(new DeleteTaskCommentCommand(projectId, taskId, commentId), cancellationToken);
         return NoContent();
     }
 
@@ -381,9 +370,7 @@ public sealed class ProjectTasksController(
         Guid taskId,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(
-            new MarkTaskCommentsReadCommand(projectId, taskId, currentUserService.GetUserId()),
-            cancellationToken);
+        await mediator.Send(new MarkTaskCommentsReadCommand(projectId, taskId), cancellationToken);
         return NoContent();
     }
 
@@ -438,8 +425,7 @@ public sealed class ProjectTasksController(
             stream,
             file.FileName,
             file.ContentType,
-            file.Length,
-            currentUserService.GetUserId());
+            file.Length);
 
         var attachment = await mediator.Send(command, cancellationToken);
         return StatusCode(StatusCodes.Status201Created, attachment);

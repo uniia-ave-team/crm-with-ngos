@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Crm.Application.Common.Consts;
+using Crm.Application.Common.Validators;
 using Crm.Domain.Constants.Validation;
 using FluentValidation;
 
@@ -46,7 +47,7 @@ internal static class CustomRecordDataValidationExtensions
         {
             if (node is JsonValue jsonValue &&
                 jsonValue.TryGetValue<string>(out var value) &&
-                value.Contains('\0', StringComparison.Ordinal))
+                !CommonValidationExtensions.ContainsNoNullChar(value))
             {
                 return false;
             }

@@ -6,25 +6,33 @@ using Crm.Domain.Interfaces.Entities;
 namespace Crm.Domain.Entities;
 
 /// <summary>
-/// Represents a single row of dynamic data within a <see cref="CustomTable"/>.
-/// Values are stored flexibly using a JSON column mapping, providing NoSQL-like agility within a relational database.
+/// Represents a single dynamic data row (record) stored within a specific <see cref="CustomTable"/>.
+/// Field values are stored as string-only entries inside the JSONB <see cref="Data"/> column,
+/// while manual row order is maintained via lexicographical fractional indexing (<see cref="Position"/>).
 /// </summary>
 [Auditable]
 public class CustomRecord : BaseEntity, IAuditableEntity, IAuthorTrackedEntity
 {
     /// <summary>
-    /// Gets or sets the identifier of the table where this record resides.
+    /// Gets or sets the unique identifier of the <see cref="CustomTable"/> that owns this record.
     /// </summary>
     public Guid CustomTableId { get; set; }
 
     /// <summary>
-    /// Gets or sets the parent table instance containing this record.
+    /// Gets or sets the parent custom table to which this record belongs.
     /// </summary>
     public CustomTable CustomTable { get; set; } = null!;
 
     /// <summary>
-    /// Gets or sets the dynamic payload containing the actual field values.
-    /// The dictionary keys must correspond to the <see cref="FieldDefinitionBase.Key"/> properties defined in the table's schema.
+    /// Gets or sets the lexicographical fractional-indexing rank defining this row's manual position within its table.
+    /// Decorated with <see cref="AuditIgnoreAttribute"/> so drag-and-drop reordering does not emit noisy field diffs.
+    /// </summary>
+    [AuditIgnore]
+    public string Position { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the dynamic JSONB document containing the actual string cell values for this record,
+    /// keyed by each <see cref="BaseEntity.Id"/> string defined in the parent table's schema.
     /// </summary>
     public JsonObject Data { get; set; } = [];
 

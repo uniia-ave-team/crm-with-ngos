@@ -1,331 +1,175 @@
 using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Extensions;
+using Crm.Application.Features.CustomTables.Mappings;
 using Crm.Domain.Entities;
-using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
+using Mapster;
 using Shouldly;
 
 namespace Crm.Application.Tests.Features.CustomTables.Extensions;
 
 /// <summary>
-/// Contains unit tests for <see cref="FieldSchemaSynchronizer"/> validating reconciliation and synchronization workflows.
+/// Contains unit tests for <see cref="FieldSchemaSynchronizer"/> verifying ID-based matching,
+/// immutable field ID preservation, JSONB sync plan computation, and zero-mutation validation.
 /// </summary>
 public class FieldSchemaSynchronizerTests
 {
-    /// <summary>
-    /// Verifies that incoming DTOs containing valid entity identifiers match existing fields by ID.
-    /// </summary>
+    static FieldSchemaSynchronizerTests()
+    {
+        new CustomTableMappingRegister().Register(TypeAdapterConfig.GlobalSettings);
+    }
+
     [Fact]
-    public void ReconcileWhenDtoHasValidIdShouldMatchById()
+    public void SynchronizeFieldsWhenDtoHasValidIdShouldMatchByIdAndPreserveId()
     {
         // Arrange
-        var fieldId = Guid.NewGuid();
+        var fieldId = Guid.CreateVersion7();
         var existing = new CustomField
         {
             Id = fieldId,
-            Key = "first_name",
             Name = "First Name",
-            DataType = FieldDataType.Text,
+            IsRequired = false,
+            Order = 0,
         };
+        List<CustomField> fields = [existing];
 
-        var dto = new UpdateCustomFieldDto(
-            fieldId,
-            "Updated First Name",
-            "first_name_renamed",
-            FieldDataType.Text,
-            false,
-            0);
+        var dto = new UpdateCustomFieldDto(fieldId, "Updated First Name", IsRequired: false, Order: 0);
 
         // Act
-        var result = FieldSchemaSynchronizer.Reconcile(
-            [existing],
-            [dto],
-            id => new EntityNotFoundException<CustomField>(id),
-            createEntity: d => new CustomField { Key = d.Key, Name = d.Name },
-            updateEntity: (e, d) =>
-            {
-                e.Key = d.Key;
-                e.Name = d.Name;
-            });
+        var plan = fields.SynchronizeFields([dto]);
 
         // Assert
-        result.Matched.ShouldHaveSingleItem();
-        result.Matched[0].ShouldBeSameAs(existing);
-        result.Matched[0].Id.ShouldBe(fieldId);
-        result.Matched[0].Name.ShouldBe("Updated First Name");
-        result.Matched[0].Key.ShouldBe("first_name_renamed");
-        result.Added.ShouldBeEmpty();
-        result.Removed.ShouldBeEmpty();
+        fields.ShouldHaveSingleItem().ShouldBeSameAs(existing);
+        existing.Id.ShouldBe(fieldId);
+        existing.Name.ShouldBe("Updated First Name");
+        plan.AddedFields.ShouldBeEmpty();
+        plan.RemovedFields.ShouldBeEmpty();
+        plan.KeysToDrop.ShouldBeEmpty();
+        plan.KeysToBackfill.ShouldBeEmpty();
+        plan.RequiresJsonbSync.ShouldBeFalse();
     }
 
-    /// <summary>
-    /// Verifies that an incoming DTO without an identifier matches an unclaimed existing entity by its key.
-    /// </summary>
     [Fact]
-    public void ReconcileWhenDtoHasNoIdShouldMatchByUnclaimedKey()
+    public void SynchronizeFieldsWhenDtoHasNullIdShouldGenerateGuidIdAndTrackBackfillOnlyIfRequired()
     {
         // Arrange
-        var existingId = Guid.NewGuid();
-        var existing = new CustomField
+        List<CustomField> fields = [];
+
+        UpdateCustomFieldDto[] incoming =
+        [
+            new(null, "Required Column", IsRequired: true, Order: 0),
+            new(null, "Optional Column", IsRequired: false, Order: 1),
+        ];
+
+        // Act
+        var plan = fields.SynchronizeFields(incoming);
+
+        // Assert
+        fields.Count.ShouldBe(2);
+        plan.AddedFields.Count.ShouldBe(2);
+        plan.RemovedFields.ShouldBeEmpty();
+        plan.KeysToDrop.ShouldBeEmpty();
+
+        var requiredField = fields.Single(f => f.Name == "Required Column");
+        var optionalField = fields.Single(f => f.Name == "Optional Column");
+
+        requiredField.Id.ShouldNotBe(Guid.Empty);
+        optionalField.Id.ShouldNotBe(Guid.Empty);
+        requiredField.Id.ShouldNotBe(optionalField.Id);
+
+        plan.KeysToBackfill.ShouldBe([requiredField.Id.ToString()]);
+        plan.RequiresJsonbSync.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void SynchronizeFieldsWhenOptionalFieldBecomesRequiredAndStaleFieldRemovedShouldPopulateDropAndBackfillKeys()
+    {
+        // Arrange
+        var keepId = Guid.CreateVersion7();
+        var staleId = Guid.CreateVersion7();
+
+        var keptEntity = new CustomField
         {
-            Id = existingId,
-            Key = "phone_number",
-            Name = "Phone",
-            DataType = FieldDataType.PhoneNumber,
+            Id = keepId,
+            Name = "Keep Me",
+            IsRequired = false,
+            Order = 0,
         };
-
-        var dto = new UpdateCustomFieldDto(
-            null,
-            "Mobile Phone",
-            "phone_number",
-            FieldDataType.PhoneNumber,
-            true,
-            1);
-
-        // Act
-        var result = FieldSchemaSynchronizer.Reconcile(
-            [existing],
-            [dto],
-            id => new EntityNotFoundException<CustomField>(id),
-            createEntity: d => new CustomField { Key = d.Key, Name = d.Name },
-            updateEntity: (e, d) =>
-            {
-                e.Name = d.Name;
-                e.IsRequired = d.IsRequired;
-            });
-
-        // Assert
-        result.Matched.ShouldHaveSingleItem();
-        result.Matched[0].ShouldBeSameAs(existing);
-        result.Matched[0].Id.ShouldBe(existingId);
-        result.Matched[0].Name.ShouldBe("Mobile Phone");
-        result.Matched[0].IsRequired.ShouldBeTrue();
-        result.Added.ShouldBeEmpty();
-        result.Removed.ShouldBeEmpty();
-    }
-
-    /// <summary>
-    /// Verifies that an incoming DTO without an identifier that shares a key with an unclaimed existing field
-    /// but specifies a different <see cref="FieldDataType"/> is treated as a separate new field (removing the old field and adding the new one).
-    /// </summary>
-    [Fact]
-    public void ReconcileWhenDtoHasNoIdAndDifferentDataTypeShouldTreatAsRemovedAndAdded()
-    {
-        // Arrange
-        var existingId = Guid.NewGuid();
-        var existing = new CustomField
+        var staleEntity = new CustomField
         {
-            Id = existingId,
-            Key = "city",
-            Name = "City",
-            DataType = FieldDataType.Text,
+            Id = staleId,
+            Name = "Stale",
+            IsRequired = false,
+            Order = 1,
         };
-
-        var dto = new UpdateCustomFieldDto(
-            null,
-            "City Code",
-            "city",
-            FieldDataType.Number,
-            true,
-            0);
+        List<CustomField> fields = [keptEntity, staleEntity];
 
         // Act
-        var result = FieldSchemaSynchronizer.Reconcile(
-            [existing],
-            [dto],
-            id => new EntityNotFoundException<CustomField>(id),
-            createEntity: d => new CustomField { Key = d.Key, Name = d.Name, DataType = d.DataType, IsRequired = d.IsRequired },
-            updateEntity: (e, d) =>
-            {
-                e.Name = d.Name;
-                e.DataType = d.DataType;
-                e.IsRequired = d.IsRequired;
-            });
+        var plan = fields.SynchronizeFields(
+        [
+            new UpdateCustomFieldDto(keepId, "Now Mandatory", IsRequired: true, Order: 0),
+            new UpdateCustomFieldDto(null, "Brand New", IsRequired: true, Order: 1),
+        ]);
 
         // Assert
-        result.Matched.ShouldBeEmpty();
-        result.Removed.ShouldHaveSingleItem();
-        result.Removed[0].ShouldBeSameAs(existing);
-        result.Added.ShouldHaveSingleItem();
-        result.Added[0].Key.ShouldBe("city");
-        result.Added[0].DataType.ShouldBe(FieldDataType.Number);
+        fields.ShouldNotContain(staleEntity);
+        fields.Count.ShouldBe(2);
+
+        keptEntity.Name.ShouldBe("Now Mandatory");
+        keptEntity.IsRequired.ShouldBeTrue();
+        keptEntity.Id.ShouldBe(keepId);
+
+        var added = fields.Single(f => f.Name == "Brand New");
+        plan.AddedFields.ShouldBe([added]);
+        plan.RemovedFields.ShouldBe([staleEntity]);
+        plan.KeysToDrop.ShouldBe([staleId.ToString()]);
+        plan.KeysToBackfill.ShouldBe([added.Id.ToString(), keepId.ToString()], ignoreOrder: true);
+        plan.RequiresJsonbSync.ShouldBeTrue();
     }
 
-    /// <summary>
-    /// Verifies that when an existing field is claimed by ID and renamed, a new incoming DTO without an ID
-    /// that uses the old key is treated as an addition rather than hijacking the existing field.
-    /// </summary>
     [Fact]
-    public void ReconcileWhenExistingFieldClaimedAndNewDtoUsesOldKeyShouldTreatAsAddition()
+    public void SynchronizeFieldsWhenIncomingDtosContainDuplicateIdsShouldThrowWithoutMutatingExistingFields()
     {
         // Arrange
-        var existingId = Guid.NewGuid();
+        var duplicateId = Guid.CreateVersion7();
         var existingField = new CustomField
         {
-            Id = existingId,
-            Key = "legacy_code",
-            Name = "Legacy Code",
-            DataType = FieldDataType.Text,
+            Id = duplicateId,
+            Name = "Original Name",
         };
-
-        var renameDto = new UpdateCustomFieldDto(
-            existingId,
-            "Modern Code",
-            "modern_code",
-            FieldDataType.Text,
-            false,
-            0);
-
-        var newDtoWithOldKey = new UpdateCustomFieldDto(
-            null,
-            "Brand New Legacy",
-            "legacy_code",
-            FieldDataType.Text,
-            false,
-            1);
-
-        // Act
-        var result = FieldSchemaSynchronizer.Reconcile(
-            [existingField],
-            [renameDto, newDtoWithOldKey],
-            id => new EntityNotFoundException<CustomField>(id),
-            createEntity: d => new CustomField { Key = d.Key, Name = d.Name },
-            updateEntity: (e, d) =>
-            {
-                e.Key = d.Key;
-                e.Name = d.Name;
-            });
-
-        // Assert
-        result.Matched.ShouldHaveSingleItem();
-        result.Matched[0].Id.ShouldBe(existingId);
-        result.Matched[0].Key.ShouldBe("modern_code");
-
-        result.Added.ShouldHaveSingleItem();
-        result.Added[0].Key.ShouldBe("legacy_code");
-        result.Added[0].Name.ShouldBe("Brand New Legacy");
-        result.Removed.ShouldBeEmpty();
-    }
-
-    /// <summary>
-    /// Verifies that duplicate field identifiers in incoming DTOs cause a <see cref="DomainValidationException"/>.
-    /// </summary>
-    [Fact]
-    public void ReconcileWhenIncomingDtosContainDuplicateIdsShouldThrowDomainValidationException()
-    {
-        // Arrange
-        var duplicateId = Guid.NewGuid();
-        var existingField = new CustomField { Id = duplicateId, Key = "unique_key" };
-
-        var dtoOne = new UpdateCustomFieldDto(duplicateId, "First", "first", FieldDataType.Text, false, 0);
-        var dtoTwo = new UpdateCustomFieldDto(duplicateId, "Second", "second", FieldDataType.Text, false, 1);
+        List<CustomField> fields = [existingField];
 
         // Act & Assert
         var exception = Should.Throw<DomainValidationException>(() =>
-            FieldSchemaSynchronizer.Reconcile(
-                [existingField],
-                [dtoOne, dtoTwo],
-                id => new EntityNotFoundException<CustomField>(id),
-                createEntity: d => new CustomField(),
-                updateEntity: (e, d) => { }));
+            fields.SynchronizeFields(
+            [
+                new UpdateCustomFieldDto(duplicateId, "First", false, 0),
+                new UpdateCustomFieldDto(duplicateId, "Second", false, 1),
+            ]));
 
         exception.Message.ShouldContain(duplicateId.ToString());
+        existingField.Name.ShouldBe("Original Name");
     }
 
-    /// <summary>
-    /// Verifies that an incoming DTO referencing an unknown identifier invokes the not-found factory.
-    /// </summary>
     [Fact]
-    public void ReconcileWhenIncomingDtoHasNonExistentIdShouldThrowNotFoundException()
+    public void SynchronizeFieldsWhenIncomingDtoHasNonExistentIdShouldThrowNotFoundWithoutMutatingExistingFields()
     {
         // Arrange
-        var nonExistentId = Guid.NewGuid();
-        var existingField = new CustomField { Id = Guid.NewGuid(), Key = "field_one" };
-        var incomingDto = new UpdateCustomFieldDto(nonExistentId, "Unknown", "unknown", FieldDataType.Text, false, 0);
+        var existingField = new CustomField
+        {
+            Id = Guid.CreateVersion7(),
+            Name = "Original",
+        };
+        List<CustomField> fields = [existingField];
 
         // Act & Assert
         Should.Throw<EntityNotFoundException<CustomField>>(() =>
-            FieldSchemaSynchronizer.Reconcile(
-                [existingField],
-                [incomingDto],
-                id => new EntityNotFoundException<CustomField>(id),
-                createEntity: d => new CustomField(),
-                updateEntity: (e, d) => { }));
-    }
+            fields.SynchronizeFields(
+            [
+                new UpdateCustomFieldDto(existingField.Id, "Mutated", false, 0),
+                new UpdateCustomFieldDto(Guid.CreateVersion7(), "Unknown", false, 1),
+            ]));
 
-    /// <summary>
-    /// Verifies the two-phase reconciliation guarantee: if validation fails during <c>onMatched</c>,
-    /// no entities are mutated by <c>updateEntity</c> (zero partial mutations).
-    /// </summary>
-    [Fact]
-    public void ReconcileWhenValidationThrowsInOnMatchedShouldGuaranteeZeroMutations()
-    {
-        // Arrange
-        var fieldOneId = Guid.NewGuid();
-        var fieldTwoId = Guid.NewGuid();
-
-        var fieldOne = new CustomField { Id = fieldOneId, Key = "field_one", Name = "Original One" };
-        var fieldTwo = new CustomField { Id = fieldTwoId, Key = "field_two", Name = "Original Two" };
-
-        var dtoOne = new UpdateCustomFieldDto(fieldOneId, "Mutated One", "field_one", FieldDataType.Text, false, 0);
-        var dtoTwo = new UpdateCustomFieldDto(fieldTwoId, "Mutated Two", "field_two", FieldDataType.Text, false, 1);
-
-        // Act
-        var act = () => FieldSchemaSynchronizer.Reconcile(
-            [fieldOne, fieldTwo],
-            [dtoOne, dtoTwo],
-            id => new EntityNotFoundException<CustomField>(id),
-            createEntity: d => new CustomField(),
-            updateEntity: (e, d) => e.Name = d.Name,
-            onMatched: (e, d) =>
-            {
-                if (e.Key == "field_two")
-                {
-                    throw new InvalidOperationException("Validation failed on second field.");
-                }
-            });
-
-        // Assert
-        Should.Throw<InvalidOperationException>(act);
-        fieldOne.Name.ShouldBe("Original One");
-        fieldTwo.Name.ShouldBe("Original Two");
-    }
-
-    /// <summary>
-    /// Verifies that <see cref="FieldSchemaSynchronizer.Synchronize{TEntity, TDto}"/> updates the collection in-place
-    /// by removing stale entities, appending new entities, and updating matched entities.
-    /// </summary>
-    [Fact]
-    public void SynchronizeShouldUpdateCollectionInPlace()
-    {
-        // Arrange
-        var keepId = Guid.NewGuid();
-        var staleId = Guid.NewGuid();
-
-        var keptEntity = new CustomField { Id = keepId, Key = "keep_me", Name = "Original Keep" };
-        var staleEntity = new CustomField { Id = staleId, Key = "remove_me", Name = "Stale" };
-        var entityCollection = new List<CustomField> { keptEntity, staleEntity };
-
-        var keepDto = new UpdateCustomFieldDto(keepId, "Updated Keep", "keep_me", FieldDataType.Text, false, 0);
-        var newDto = new UpdateCustomFieldDto(null, "Brand New", "brand_new", FieldDataType.Number, true, 1);
-
-        // Act
-        FieldSchemaSynchronizer.Synchronize(
-            entityCollection,
-            [keepDto, newDto],
-            id => new EntityNotFoundException<CustomField>(id),
-            createEntity: d => new CustomField { Key = d.Key, Name = d.Name, DataType = d.DataType },
-            updateEntity: (e, d) => e.Name = d.Name);
-
-        // Assert
-        entityCollection.ShouldNotContain(staleEntity);
-        entityCollection.Count.ShouldBe(2);
-
-        var matched = entityCollection.Single(f => f.Id == keepId);
-        matched.Name.ShouldBe("Updated Keep");
-
-        var added = entityCollection.Single(f => f.Key == "brand_new");
-        added.Name.ShouldBe("Brand New");
-        added.DataType.ShouldBe(FieldDataType.Number);
+        existingField.Name.ShouldBe("Original");
     }
 }

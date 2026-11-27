@@ -1,4 +1,4 @@
-using Crm.Application.Common.Consts;
+using Crm.Application.Common.Validators;
 using Crm.Application.Features.Roles.Commands;
 using Crm.Domain.Constants.Validation;
 using FluentValidation;
@@ -16,31 +16,23 @@ public sealed class CreateRoleCommandValidator : AbstractValidator<CreateRoleCom
     public CreateRoleCommandValidator()
     {
         RuleFor(x => x.Name)
-            .Cascade(CascadeMode.Stop)
-            .NotEmpty().WithMessage("Role name is required.")
-            .MaximumLength(AuthRoleValidationConstants.MaxNameLength)
-            .WithMessage($"Role name must not exceed {AuthRoleValidationConstants.MaxNameLength} characters.")
-            .Must(v => !v.Contains('\0'))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+            .ApplyRequiredTextRules(
+                AuthRoleValidationConstants.MaxNameLength,
+                "Role name is required.",
+                $"Role name must not exceed {AuthRoleValidationConstants.MaxNameLength} characters.");
 
         RuleFor(x => x.FeminitiveName)
-            .Cascade(CascadeMode.Stop)
-            .Must(v => !string.IsNullOrWhiteSpace(v))
-            .WithMessage("Feminitive name cannot be empty or whitespace when provided.")
-            .MaximumLength(AuthRoleValidationConstants.MaxFeminitiveNameLength)
-            .WithMessage($"Feminitive name must not exceed {AuthRoleValidationConstants.MaxFeminitiveNameLength} characters.")
-            .Must(v => v is null || !v.Contains('\0'))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
+            .ApplyOptionalNonBlankTextRules(
+                AuthRoleValidationConstants.MaxFeminitiveNameLength,
+                "Feminitive name cannot be empty or whitespace when provided.",
+                $"Feminitive name must not exceed {AuthRoleValidationConstants.MaxFeminitiveNameLength} characters.")
             .When(x => x.FeminitiveName is not null);
 
         RuleFor(x => x.PluralName)
-            .Cascade(CascadeMode.Stop)
-            .Must(v => !string.IsNullOrWhiteSpace(v))
-            .WithMessage("Plural name cannot be empty or whitespace when provided.")
-            .MaximumLength(AuthRoleValidationConstants.MaxPluralNameLength)
-            .WithMessage($"Plural name must not exceed {AuthRoleValidationConstants.MaxPluralNameLength} characters.")
-            .Must(v => v is null || !v.Contains('\0'))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
+            .ApplyOptionalNonBlankTextRules(
+                AuthRoleValidationConstants.MaxPluralNameLength,
+                "Plural name cannot be empty or whitespace when provided.",
+                $"Plural name must not exceed {AuthRoleValidationConstants.MaxPluralNameLength} characters.")
             .When(x => x.PluralName is not null);
     }
 }

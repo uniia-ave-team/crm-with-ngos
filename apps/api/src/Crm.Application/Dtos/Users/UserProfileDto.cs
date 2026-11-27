@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Crm.Application.Dtos.Roles;
 using Crm.Domain.Enums;
 
@@ -20,7 +21,7 @@ namespace Crm.Application.Dtos.Users;
 /// <param name="AvatarUrl">The URL or file path to the user's avatar.</param>
 /// <param name="IsActive">Indicates whether the user account is active; if false, the account is deactivated.</param>
 /// <param name="Roles">The collection of roles assigned to the user.</param>
-/// <param name="CustomFields">The collection of custom key-value fields associated with the user.</param>
+/// <param name="CustomFields">The JSON object containing custom field values visible to the requester, ordered by schema definition.</param>
 public record UserProfileDto(
     Guid Id,
     string Email,
@@ -36,4 +37,4 @@ public record UserProfileDto(
     string? AvatarUrl,
     bool IsActive,
     IEnumerable<RoleUserDto> Roles,
-    IEnumerable<UserCustomFieldDto> CustomFields);
+    JsonObject CustomFields);

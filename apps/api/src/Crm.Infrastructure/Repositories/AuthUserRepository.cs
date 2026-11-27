@@ -8,6 +8,9 @@ using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
+using Crm.Infrastructure.Persistence.Extensions;
+using Crm.Infrastructure.Persistence.Sorting;
+using LinqKit;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 
@@ -40,21 +43,53 @@ public class AuthUserRepository(
     }
 
     /// <inheritdoc />
-    public Task<PagedResult<TResult>> GetPagedAsync<TResult>(
+    public async Task<PagedResult<TResult>> GetPagedAsync<TResult>(
         string? searchTerm = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
         int pageNumber = PaginationConstants.MinPageNumber,
         int pageSize = PaginationConstants.DefaultPageSize,
         bool showDeleted = false,
+        string? customFieldSortKey = null,
+        IReadOnlyList<string>? searchablePublicCustomFieldKeys = null,
+        IReadOnlyList<string>? searchablePrivateCustomFieldKeys = null,
+        Guid? currentUserId = null,
         CancellationToken cancellationToken = default)
-        => GetPagedAsync<TResult>(
-            predicate: BuildUserFilter(searchTerm, showDeleted),
-            orderBy: orderBy,
-            sortOrder: sortOrder,
-            pageNumber: pageNumber,
-            pageSize: pageSize,
-            cancellationToken: cancellationToken);
+    {
+        IQueryable<AuthUser> query = DbSet.AsNoTracking();
+
+        Expression<Func<AuthUser, bool>>? basePredicate = BuildUserFilter(
+            searchTerm,
+            showDeleted,
+            searchablePublicCustomFieldKeys,
+            searchablePrivateCustomFieldKeys,
+            currentUserId);
+
+        if (basePredicate is not null)
+        {
+            query = query.Where(basePredicate);
+        }
+
+        if (!string.IsNullOrWhiteSpace(customFieldSortKey))
+        {
+            string key = customFieldSortKey;
+            InferredSortKind sortKind = await query
+                .OrderBy(u => u.Id)
+                .DetectSortKindAsync(
+                    u => JsonbFunctionsExtensions.JsonbExtractPathText(u.UserProfile.CustomFields, key),
+                    cancellationToken);
+
+            query = query.OrderByUserCustomField(key, sortOrder, sortKind);
+        }
+        else
+        {
+            query = string.IsNullOrWhiteSpace(orderBy)
+                ? query.OrderBy(u => u.Id)
+                : ApplyOrdering<TResult>(query, orderBy, sortOrder);
+        }
+
+        return await ToPagedResultAsync<TResult>(query, pageNumber, pageSize, cancellationToken);
+    }
 
     /// <inheritdoc />
     public async Task EnsureDoesNotExistAsync(string email, CancellationToken cancellationToken = default)
@@ -84,7 +119,7 @@ public class AuthUserRepository(
         string orderBy,
         string? sortOrder)
     {
-        bool isDescending = string.Equals(sortOrder?.Trim(), SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
+        bool isDescending = sortOrder.IsDescending();
         string normalizedOrderBy = orderBy.Trim();
 
         return normalizedOrderBy switch
@@ -113,12 +148,16 @@ public class AuthUserRepository(
                 ? query.OrderByDescending(u => u.UserProfile.CreatedAt).ThenBy(u => u.Id)
                 : query.OrderBy(u => u.UserProfile.CreatedAt).ThenBy(u => u.Id),
 
-            // TODO: Support dynamic sorting on user custom fields with SQL type casting (Date, Number, Text) similar to CustomRecordRepository.
             _ => base.ApplyOrdering<TResult>(query, normalizedOrderBy, sortOrder),
         };
     }
 
-    private static Expression<Func<AuthUser, bool>>? BuildUserFilter(string? searchTerm, bool showDeleted)
+    private static Expression<Func<AuthUser, bool>>? BuildUserFilter(
+        string? searchTerm,
+        bool showDeleted,
+        IReadOnlyList<string>? searchablePublicCustomFieldKeys,
+        IReadOnlyList<string>? searchablePrivateCustomFieldKeys,
+        Guid? currentUserId)
     {
         Expression<Func<AuthUser, bool>>? activeFilter = showDeleted ? null : u => u.UserProfile.IsActive;
 
@@ -127,7 +166,7 @@ public class AuthUserRepository(
             return activeFilter;
         }
 
-        Expression<Func<AuthUser, bool>> searchFilter = QueryFilterExpressions.ContainsIgnoreCase<AuthUser>(
+        Expression<Func<AuthUser, bool>> profileSearchFilter = QueryFilterExpressions.ContainsIgnoreCase<AuthUser>(
             searchTerm,
             u => u.UserProfile.FirstName,
             u => u.UserProfile.LastName,
@@ -136,8 +175,19 @@ public class AuthUserRepository(
             u => u.UserProfile.Country,
             u => u.Email);
 
+        Expression<Func<AuthUser, bool>>? customFieldSearchFilter = UserCustomFieldQueryExtensions
+            .BuildVisibleCustomFieldSearchPredicate(
+                searchTerm,
+                searchablePublicCustomFieldKeys,
+                searchablePrivateCustomFieldKeys,
+                currentUserId);
+
+        Expression<Func<AuthUser, bool>> searchFilter = customFieldSearchFilter is null
+            ? profileSearchFilter
+            : profileSearchFilter.Or(customFieldSearchFilter).Expand();
+
         return activeFilter is null
             ? searchFilter
-            : ProjectVisibilityExpressions.CombineAnd(activeFilter, searchFilter);
+            : activeFilter.And(searchFilter).Expand();
     }
 }

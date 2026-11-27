@@ -1,4 +1,4 @@
-using Crm.Application.Common.Consts;
+using Crm.Application.Common.Validators;
 using Crm.Application.Features.Ngos.Commands;
 using Crm.Domain.Constants.Validation;
 using FluentValidation;
@@ -16,11 +16,9 @@ public sealed class CreateNgoCommandValidator : AbstractValidator<CreateNgoComma
     public CreateNgoCommandValidator()
     {
         RuleFor(x => x.Name)
-            .Cascade(CascadeMode.Stop)
-            .NotEmpty().WithMessage("NGO name is required.")
-            .MaximumLength(NgoValidationConstants.MaxNameLength)
-                .WithMessage($"NGO name must not exceed {NgoValidationConstants.MaxNameLength} characters.")
-            .Must(name => !name.Contains('\0'))
-                .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+            .ApplyRequiredTextRules(
+                NgoValidationConstants.MaxNameLength,
+                "NGO name is required.",
+                $"NGO name must not exceed {NgoValidationConstants.MaxNameLength} characters.");
     }
 }

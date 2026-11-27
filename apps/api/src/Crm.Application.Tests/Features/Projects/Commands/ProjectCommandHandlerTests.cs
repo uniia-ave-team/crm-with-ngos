@@ -244,7 +244,7 @@ public class ProjectCommandHandlerTests
             _fileTracker,
             Substitute.For<ILogger<DeleteProjectCommandHandler>>());
 
-        await handler.Handle(new DeleteProjectCommand(projectId, ownerId), CancellationToken.None);
+        await handler.Handle(new DeleteProjectCommand(projectId) { CurrentUserId = ownerId }, CancellationToken.None);
 
         await _projectRepository.Received(1).LockForUpdateAsync(projectId, Arg.Any<CancellationToken>());
         await attachmentRepository.Received(1).GetStoredFileNamesByProjectIdAsync(projectId, Arg.Any<CancellationToken>());

@@ -1,5 +1,5 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Features.CustomTables.Extensions;
+using Crm.Application.Extensions;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
@@ -13,21 +13,15 @@ namespace Crm.Application.Features.CustomTables.Commands;
 /// Handles <see cref="UpdateCustomTableCommand"/> to synchronize custom table schemas and record payloads.
 /// </summary>
 /// <param name="customTableRepository">The repository used to fetch and update custom table metadata and fields.</param>
-/// <param name="customRecordRepository">The repository used to verify existing record state.</param>
+/// <param name="customRecordRepository">The repository used to verify existing records and patch JSONB payloads.</param>
 /// <param name="logger">The logger instance for tracking execution.</param>
 public sealed partial class UpdateCustomTableCommandHandler(
     ICustomTableRepository customTableRepository,
     ICustomRecordRepository customRecordRepository,
     ILogger<UpdateCustomTableCommandHandler> logger) : ICommandHandler<UpdateCustomTableCommand>
 {
-    /// <summary>
-    /// Handles the command request to update a custom table and apply schema changes.
-    /// </summary>
-    /// <param name="command">The update custom table command request payload.</param>
-    /// <param name="cancellationToken">Cancellation token for cancelling the async execution.</param>
-    /// <returns>A task representing the completion of the command handler.</returns>
+    /// <inheritdoc />
     /// <exception cref="EntityNotFoundException{CustomTable}">Thrown when table is not found by identifier.</exception>
-    /// <exception cref="FieldDataTypeChangeNotAllowedException">Thrown when field data type is modified while records exist.</exception>
     public async ValueTask<Unit> Handle(UpdateCustomTableCommand command, CancellationToken cancellationToken)
     {
         LogUpdatingCustomTable(logger, command.Id, command.Name);
@@ -37,16 +31,19 @@ public sealed partial class UpdateCustomTableCommandHandler(
 
         command.Adapt(customTable);
 
-        var hasRecords = await customRecordRepository.AnyAsync(customTable.Id, cancellationToken);
-        var diff = customTable.ComputeSchemaDiff(command.Fields, hasRecords);
+        var plan = customTable.Fields.SynchronizeFields(command.Fields);
 
         customTable.Fields.EnsureValidFieldSchema();
 
-        await customTableRepository.ResolveFieldKeyCollisionsAsync(customTable.Id, cancellationToken);
+        await customTableRepository.ApplyFieldSchemaChangesAsync(
+            customTable.Id,
+            plan.AddedFields,
+            plan.RemovedFields,
+            cancellationToken);
 
-        if (hasRecords)
+        if (plan.RequiresJsonbSync && await customRecordRepository.AnyAsync(customTable.Id, cancellationToken))
         {
-            await customRecordRepository.SyncRecordSchemaAsync(customTable.Id, diff, cancellationToken);
+            await customRecordRepository.SyncRecordSchemaAsync(customTable.Id, plan, cancellationToken);
         }
 
         LogCustomTableUpdatedSuccessfully(logger, customTable.Id);

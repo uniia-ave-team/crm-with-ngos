@@ -18,11 +18,11 @@ public record CreateProjectCommand(
     string? Description,
     ProjectVisibility Visibility,
     DateTime StartDate,
-    DateTime? EndDate = null) : ICommand<Guid>, ITransactionalCommand
+    DateTime? EndDate = null) : ICommand<Guid>, ITransactionalCommand, ICurrentUserAware
 {
     /// <summary>
-    /// Gets the unique identifier of the currently authenticated user creating the project, populated by the controller.
+    /// Gets or sets the unique identifier of the currently authenticated user creating the project, populated by the request pipeline.
     /// </summary>
     [JsonIgnore]
-    public Guid CurrentUserId { get; init; }
+    public Guid CurrentUserId { get; set; }
 }

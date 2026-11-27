@@ -253,7 +253,9 @@ public class TaskCommandHandlerTests
             commentRepository,
             Substitute.For<ILogger<MarkTaskCommentsReadCommandHandler>>());
 
-        await handler.Handle(new MarkTaskCommentsReadCommand(projectId, taskId, userId), CancellationToken.None);
+        await handler.Handle(
+            new MarkTaskCommentsReadCommand(projectId, taskId) { CurrentUserId = userId },
+            CancellationToken.None);
 
         await commentRepository.Received(1).MarkAsReadAsync(taskId, userId, Arg.Any<CancellationToken>());
     }
@@ -324,7 +326,9 @@ public class TaskCommandHandlerTests
             Substitute.For<ILogger<DeleteTaskCommentCommandHandler>>());
 
         await Should.ThrowAsync<UnauthorizedAccessException>(() =>
-            handler.Handle(new DeleteTaskCommentCommand(projectId, taskId, commentId, userId), CancellationToken.None).AsTask());
+            handler.Handle(
+                new DeleteTaskCommentCommand(projectId, taskId, commentId) { CurrentUserId = userId },
+                CancellationToken.None).AsTask());
 
         commentRepository.GetByTaskAndIdForUpdateAsync(taskId, commentId, Arg.Any<CancellationToken>())
             .Returns(new TaskComment
@@ -335,7 +339,9 @@ public class TaskCommandHandlerTests
                 Content = "Own comment",
             });
 
-        await handler.Handle(new DeleteTaskCommentCommand(projectId, taskId, commentId, userId), CancellationToken.None);
+        await handler.Handle(
+            new DeleteTaskCommentCommand(projectId, taskId, commentId) { CurrentUserId = userId },
+            CancellationToken.None);
         await commentRepository.Received(1).DeleteAsync(commentId, Arg.Any<CancellationToken>());
     }
 

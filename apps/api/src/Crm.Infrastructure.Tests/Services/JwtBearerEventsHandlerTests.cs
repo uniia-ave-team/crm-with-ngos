@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Crm.Application.Interfaces;
 using Crm.Domain.Constants;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.IdentityModel.JsonWebTokens;
 using NSubstitute;
 using Shouldly;
 
@@ -13,7 +15,7 @@ namespace Crm.Infrastructure.Tests.Services;
 
 /// <summary>
 /// Unit tests for <see cref="JwtBearerEventsHandler"/> verifying access-token claim validation
-/// and rejection of users present in <see cref="IRevokedUsersCache"/>.
+/// and rejection of users or stale tokens present in <see cref="IRevokedUsersCache"/>.
 /// </summary>
 public class JwtBearerEventsHandlerTests
 {
@@ -28,7 +30,8 @@ public class JwtBearerEventsHandlerTests
 
         context.Result.ShouldNotBeNull();
         context.Result.Failure.ShouldNotBeNull();
-        await cache.DidNotReceive().IsUserRevokedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await cache.DidNotReceiveWithAnyArgs()
+            .IsTokenRevokedAsync(default, default, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -47,7 +50,8 @@ public class JwtBearerEventsHandlerTests
 
         context.Result.ShouldNotBeNull();
         context.Result.Failure.ShouldNotBeNull();
-        await cache.DidNotReceive().IsUserRevokedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await cache.DidNotReceiveWithAnyArgs()
+            .IsTokenRevokedAsync(default, default, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -65,21 +69,24 @@ public class JwtBearerEventsHandlerTests
 
         context.Result.ShouldNotBeNull();
         context.Result.Failure.ShouldNotBeNull();
-        await cache.DidNotReceive().IsUserRevokedAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await cache.DidNotReceiveWithAnyArgs()
+            .IsTokenRevokedAsync(default, default, TestContext.Current.CancellationToken);
     }
 
     [Fact]
-    public async Task TokenValidatedShouldFailWhenUserIsInRevokedCache()
+    public async Task TokenValidatedShouldPassHighPrecisionIssuedAtTicksAndFailWhenRevoked()
     {
         var userId = Guid.CreateVersion7();
+        var issuedAt = new DateTimeOffset(2026, 11, 26, 1, 0, 0, 123, TimeSpan.Zero);
         var cache = Substitute.For<IRevokedUsersCache>();
-        cache.IsUserRevokedAsync(userId, Arg.Any<CancellationToken>()).Returns(true);
+        cache.IsTokenRevokedAsync(userId, issuedAt, Arg.Any<CancellationToken>()).Returns(true);
 
         var handler = new JwtBearerEventsHandler(cache, NullLogger<JwtBearerEventsHandler>.Instance);
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
         [
             new Claim(CustomClaimTypes.Sub, userId.ToString()),
             new Claim(CustomClaimTypes.TokenType, CustomClaimTypes.AccessTokenValue),
+            new Claim(CustomClaimTypes.IssuedAtTicks, issuedAt.UtcTicks.ToString(CultureInfo.InvariantCulture)),
         ]));
         var context = CreateContext(principal);
 
@@ -91,23 +98,26 @@ public class JwtBearerEventsHandlerTests
     }
 
     [Fact]
-    public async Task TokenValidatedShouldSucceedWhenAccessTokenIsValidAndUserIsNotRevoked()
+    public async Task TokenValidatedShouldFallbackToIatClaimAndSucceedWhenNotRevoked()
     {
         var userId = Guid.CreateVersion7();
+        var issuedAtSeconds = new DateTimeOffset(2026, 11, 26, 1, 0, 0, TimeSpan.Zero);
         var cache = Substitute.For<IRevokedUsersCache>();
-        cache.IsUserRevokedAsync(userId, Arg.Any<CancellationToken>()).Returns(false);
+        cache.IsTokenRevokedAsync(userId, issuedAtSeconds, Arg.Any<CancellationToken>()).Returns(false);
 
         var handler = new JwtBearerEventsHandler(cache, NullLogger<JwtBearerEventsHandler>.Instance);
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
         [
             new Claim(CustomClaimTypes.Sub, userId.ToString()),
             new Claim(CustomClaimTypes.TokenType, CustomClaimTypes.AccessTokenValue),
+            new Claim(JwtRegisteredClaimNames.Iat, issuedAtSeconds.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)),
         ]));
         var context = CreateContext(principal);
 
         await handler.TokenValidated(context);
 
         context.Result.ShouldBeNull();
+        await cache.Received(1).IsTokenRevokedAsync(userId, issuedAtSeconds, Arg.Any<CancellationToken>());
     }
 
     private static TokenValidatedContext CreateContext(ClaimsPrincipal? principal)

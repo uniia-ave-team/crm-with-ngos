@@ -19,6 +19,9 @@ public sealed class CustomRecordMappingRegister : IRegister
         config.NewConfig<JsonNode, JsonNode>()
             .MapWith(src => src == null ? null! : src.DeepClone());
 
-        config.NewConfig<CustomRecord, CustomRecordDto>();
+        config.NewConfig<CustomRecord, CustomRecordDto>()
+            .MapWith(src => new CustomRecordDto(
+                src.Id,
+                src.Data));
     }
 }

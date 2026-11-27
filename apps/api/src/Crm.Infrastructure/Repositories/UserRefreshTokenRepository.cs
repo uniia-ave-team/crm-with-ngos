@@ -1,8 +1,7 @@
-using System.Security.Cryptography;
-using System.Text;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Services.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -25,7 +24,7 @@ public sealed class UserRefreshTokenRepository(
         var tokenEntity = new UserRefreshToken
         {
             UserId = userId,
-            Token = HashToken(refreshToken),
+            Token = TokenHashHelper.Hash(refreshToken),
             ExpiresAt = expiresAt.ToUniversalTime(),
         };
 
@@ -45,7 +44,7 @@ public sealed class UserRefreshTokenRepository(
     /// <inheritdoc />
     public async Task<bool> TryConsumeValidTokenAsync(Guid userId, string refreshToken, CancellationToken cancellationToken = default)
     {
-        string tokenHash = HashToken(refreshToken);
+        string tokenHash = TokenHashHelper.Hash(refreshToken);
         DateTimeOffset utcNow = timeProvider.GetUtcNow();
 
         int rowsAffected = await DbSet
@@ -61,7 +60,7 @@ public sealed class UserRefreshTokenRepository(
     /// <inheritdoc />
     public Task RemoveTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        string tokenHash = HashToken(refreshToken);
+        string tokenHash = TokenHashHelper.Hash(refreshToken);
 
         return DbSet
             .Where(rt => rt.Token == tokenHash)
@@ -73,7 +72,4 @@ public sealed class UserRefreshTokenRepository(
         => DbSet
             .Where(rt => rt.UserId == userId)
             .ExecuteDeleteAsync(cancellationToken);
-
-    private static string HashToken(string token)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }

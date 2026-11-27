@@ -10,14 +10,17 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Users.Commands;
 
 /// <summary>
-/// Handles the <see cref="RemoveUserRoleCommand"/> to remove a specific Identity Role from a user.
+/// Handles the <see cref="RemoveUserRoleCommand"/> to remove a specific Identity Role from a user
+/// and invalidate their previously issued access tokens so removed permissions cannot be reused.
 /// </summary>
 /// <param name="identityService">The identity service used for user and role management.</param>
 /// <param name="authRoleRepository">The repository for managing authentication roles.</param>
+/// <param name="revokedUsersCache">The cache used to invalidate stale access tokens issued before this role change.</param>
 /// <param name="logger">The logger used to record the lifecycle and outcome of the role removal process.</param>
 public sealed partial class RemoveUserRoleCommandHandler(
     IIdentityService identityService,
     IAuthRoleRepository authRoleRepository,
+    IRevokedUsersCache revokedUsersCache,
     ILogger<RemoveUserRoleCommandHandler> logger) : ICommandHandler<RemoveUserRoleCommand>
 {
     /// <inheritdoc />
@@ -34,6 +37,7 @@ public sealed partial class RemoveUserRoleCommandHandler(
         }
 
         await identityService.RemoveFromRoleAsync(command.UserId, role.Name, cancellationToken);
+        await revokedUsersCache.RevokeTokensIssuedBeforeAsync(command.UserId, cancellationToken);
 
         LogRoleRemovedSuccessfully(logger, command.RoleId, command.UserId);
 

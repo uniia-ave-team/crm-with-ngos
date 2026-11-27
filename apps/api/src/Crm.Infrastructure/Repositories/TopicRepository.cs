@@ -5,6 +5,7 @@ using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -29,12 +30,10 @@ public sealed class TopicRepository(ApplicationDbContext appDbContext)
     {
         IQueryable<Topic> query = DbSet
             .AsNoTracking()
-            .Where(t => t.ProjectId == projectId);
-
-        if (!string.IsNullOrWhiteSpace(searchTerm))
-        {
-            query = query.Where(QueryFilterExpressions.ContainsIgnoreCase<Topic>(t => t.Title, searchTerm));
-        }
+            .Where(t => t.ProjectId == projectId)
+            .WhereIf(
+                !string.IsNullOrWhiteSpace(searchTerm),
+                () => QueryFilterExpressions.ContainsIgnoreCase<Topic>(t => t.Title, searchTerm!));
 
         query = string.IsNullOrWhiteSpace(orderBy)
             ? query.OrderBy(t => t.Order).ThenBy(t => t.Id)

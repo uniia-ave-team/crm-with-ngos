@@ -1,4 +1,4 @@
-using Crm.Application.Dtos.Users;
+using System.Text.Json.Nodes;
 using Crm.Application.Features.Users.Extensions;
 using Shouldly;
 
@@ -6,6 +6,9 @@ namespace Crm.Application.Tests.Features.Users.Extensions;
 
 public class UserSecurityExtensionsTests
 {
+    private static readonly string[] AllKeys = ["public_field", "private_field"];
+    private static readonly string[] PublicKeys = ["public_field"];
+
     [Fact]
     public void ProtectEmergencyContactWhenIsSelfShouldReturnContact()
     {
@@ -47,51 +50,56 @@ public class UserSecurityExtensionsTests
     }
 
     [Fact]
-    public void ProtectCustomFieldsWhenIsSelfShouldReturnAllCustomFields()
+    public void ProtectCustomFieldsWhenIsSelfShouldReturnAllOrderedCustomFields()
     {
         // Arrange
-        var fields = new List<UserCustomFieldDto>
+        var payload = new JsonObject
         {
-            new(Guid.NewGuid(), "PublicField", "val1", IsPublic: true),
-            new(Guid.NewGuid(), "PrivateField", "val2", IsPublic: false),
+            ["private_field"] = "val2",
+            ["public_field"] = "val1",
         };
 
         // Act
-        var result = fields.ProtectCustomFields(isSelf: true, hasGlobalAccess: false);
+        var result = payload.ProtectCustomFields(AllKeys, PublicKeys, isSelf: true, hasGlobalAccess: false);
 
         // Assert
-        result.Count().ShouldBe(2);
+        result.Select(kvp => kvp.Key).ShouldBe(["public_field", "private_field"]);
+        result["public_field"]?.GetValue<string>().ShouldBe("val1");
+        result["private_field"]?.GetValue<string>().ShouldBe("val2");
     }
 
     [Fact]
-    public void ProtectCustomFieldsWhenNotSelfWithGlobalAccessShouldReturnAllCustomFields()
+    public void ProtectCustomFieldsWhenNotSelfWithGlobalAccessShouldReturnAllOrderedCustomFields()
     {
         // Arrange
-        var fields = new List<UserCustomFieldDto>
+        var payload = new JsonObject
         {
-            new(Guid.NewGuid(), "PublicField", "val1", IsPublic: true),
-            new(Guid.NewGuid(), "PrivateField", "val2", IsPublic: false),
+            ["public_field"] = "val1",
+            ["private_field"] = "val2",
         };
 
         // Act
-        var result = fields.ProtectCustomFields(isSelf: false, hasGlobalAccess: true);
+        var result = payload.ProtectCustomFields(AllKeys, PublicKeys, isSelf: false, hasGlobalAccess: true);
 
         // Assert
-        result.Count().ShouldBe(2);
+        result.Count.ShouldBe(2);
     }
 
     [Fact]
     public void ProtectCustomFieldsWhenNotSelfAndNoGlobalAccessShouldReturnOnlyPublicFields()
     {
         // Arrange
-        var publicField = new UserCustomFieldDto(Guid.NewGuid(), "PublicField", "val1", IsPublic: true);
-        var privateField = new UserCustomFieldDto(Guid.NewGuid(), "PrivateField", "val2", IsPublic: false);
-        var fields = new List<UserCustomFieldDto> { publicField, privateField };
+        var payload = new JsonObject
+        {
+            ["public_field"] = "val1",
+            ["private_field"] = "val2",
+        };
 
         // Act
-        var result = fields.ProtectCustomFields(isSelf: false, hasGlobalAccess: false).ToList();
+        var result = payload.ProtectCustomFields(AllKeys, PublicKeys, isSelf: false, hasGlobalAccess: false);
 
         // Assert
-        result.ShouldHaveSingleItem().Key.ShouldBe("PublicField");
+        result.Select(kvp => kvp.Key).ShouldBe(["public_field"]);
+        result["public_field"]?.GetValue<string>().ShouldBe("val1");
     }
 }

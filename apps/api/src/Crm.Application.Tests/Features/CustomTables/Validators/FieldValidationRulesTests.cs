@@ -1,122 +1,117 @@
 using Crm.Application.Common.Validators;
+using Crm.Application.Dtos.Common;
 using Crm.Application.Dtos.CustomTables;
-using Crm.Domain.Enums;
+using Crm.Domain.Constants.Validation;
 using FluentValidation.TestHelper;
 using Shouldly;
 
 namespace Crm.Application.Tests.Features.CustomTables.Validators;
 
 /// <summary>
-/// Contains unit tests for <see cref="FieldValidationRules{T}"/> and <see cref="FieldListValidator{T}"/>.
+/// Contains unit tests for <see cref="FieldValidationRules{T}"/>, <see cref="FieldListValidator{T}"/>,
+/// and <see cref="IdentifiableFieldListValidator{T}"/>.
 /// </summary>
 public class FieldValidationRulesTests
 {
-    private readonly FieldValidationRules<CreateCustomFieldDto> _validator = new();
-    private readonly FieldListValidator<CreateCustomFieldDto> _listValidator = new();
+    private readonly FieldValidationRules<FieldDefinitionDto> _validator = new();
+    private readonly FieldListValidator<FieldDefinitionDto> _listValidator = new();
+    private readonly IdentifiableFieldListValidator<UpdateCustomFieldDto> _identifiableListValidator = new();
 
-    /// <summary>
-    /// Verifies that valid snake_case field keys pass validation.
-    /// </summary>
-    /// <param name="key">The valid snake_case key to test.</param>
-    [Theory]
-    [InlineData("valid_key")]
-    [InlineData("status")]
-    [InlineData("first_name")]
-    [InlineData("field1")]
-    public void KeyWhenValidSnakeCaseShouldNotHaveValidationError(string key)
+    [Fact]
+    public void NameWhenValidShouldNotHaveValidationError()
     {
-        // Arrange
-        var model = new CreateCustomFieldDto("Field", key, FieldDataType.Text, false, 0);
+        var model = new FieldDefinitionDto("Назва колонки", false, 0);
 
-        // Act
         var result = _validator.TestValidate(model);
 
-        // Assert
-        result.ShouldNotHaveValidationErrorFor(x => x.Key);
+        result.ShouldNotHaveValidationErrorFor(x => x.Name);
     }
 
-    /// <summary>
-    /// Verifies that reserved entity property names are rejected as field keys.
-    /// </summary>
-    /// <param name="reservedKey">The reserved property name to test.</param>
     [Theory]
-    [InlineData("Id")]
-    [InlineData("id")]
-    [InlineData("CustomTableId")]
-    [InlineData("customtableid")]
-    [InlineData("CustomTable")]
-    [InlineData("customtable")]
-    [InlineData("Data")]
-    [InlineData("data")]
-    public void KeyWhenReservedEntityPropertyShouldHaveValidationError(string reservedKey)
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("bad\0name")]
+    public void NameWhenBlankOrContainsNullCharShouldHaveValidationError(string invalidName)
     {
-        // Arrange
-        var model = new CreateCustomFieldDto("Field", reservedKey, FieldDataType.Text, false, 0);
+        var model = new FieldDefinitionDto(invalidName, false, 0);
 
-        // Act
         var result = _validator.TestValidate(model);
 
-        // Assert
-        result.ShouldHaveValidationErrorFor(x => x.Key);
+        result.ShouldHaveValidationErrorFor(x => x.Name);
     }
 
-    /// <summary>
-    /// Verifies that a field list containing a null element fails validation.
-    /// </summary>
+    [Fact]
+    public void NameWhenExceedingMaxLengthShouldHaveValidationError()
+    {
+        var model = new FieldDefinitionDto(new string('A', FieldSchemaValidationConstants.MaxNameLength + 1), false, 0);
+
+        var result = _validator.TestValidate(model);
+
+        result.ShouldHaveValidationErrorFor(x => x.Name);
+    }
+
     [Fact]
     public void FieldsWhenContainingNullElementShouldHaveValidationError()
     {
-        // Arrange
-        List<CreateCustomFieldDto> fields =
+        List<FieldDefinitionDto> fields =
         [
-            new CreateCustomFieldDto("Field One", "field_one", FieldDataType.Text, false, 0),
+            new FieldDefinitionDto("Field One", false, 0),
             null!,
         ];
 
-        // Act
         var result = _listValidator.Validate(fields);
 
-        // Assert
         result.IsValid.ShouldBeFalse();
     }
 
-    /// <summary>
-    /// Verifies that non-sequential field display orders fail validation.
-    /// </summary>
     [Fact]
     public void FieldsWhenOrdersAreNotSequentialShouldHaveValidationError()
     {
-        // Arrange
-        List<CreateCustomFieldDto> fields =
+        List<FieldDefinitionDto> fields =
         [
-            new CreateCustomFieldDto("Field One", "field_one", FieldDataType.Text, false, 0),
-            new CreateCustomFieldDto("Field Two", "field_two", FieldDataType.Number, false, 2),
+            new FieldDefinitionDto("Field One", false, 0),
+            new FieldDefinitionDto("Field Two", false, 2),
         ];
 
-        // Act
         var result = _listValidator.Validate(fields);
 
-        // Assert
         result.IsValid.ShouldBeFalse();
     }
 
-    /// <summary>
-    /// Verifies that sequential zero-based field display orders pass validation.
-    /// </summary>
     [Fact]
     public void FieldsWhenOrdersAreSequentialFromZeroShouldNotHaveValidationError()
     {
-        // Arrange
-        List<CreateCustomFieldDto> fields =
+        List<FieldDefinitionDto> fields =
         [
-            new CreateCustomFieldDto("Field One", "field_one", FieldDataType.Text, false, 0),
-            new CreateCustomFieldDto("Field Two", "field_two", FieldDataType.Number, true, 1),
+            new FieldDefinitionDto("Field One", false, 0),
+            new FieldDefinitionDto("Field Two", true, 1),
         ];
 
-        // Act
         var result = _listValidator.Validate(fields);
 
-        // Assert
         result.IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IdentifiableFieldsShouldRejectEmptyAndDuplicateIdsAndAcceptNullOrDistinctIds()
+    {
+        var id = Guid.CreateVersion7();
+
+        _identifiableListValidator.Validate([new UpdateCustomFieldDto(Guid.Empty, "Bad", false, 0)])
+            .IsValid.ShouldBeFalse();
+
+        _identifiableListValidator.Validate(
+            [
+                new UpdateCustomFieldDto(id, "One", false, 0),
+                new UpdateCustomFieldDto(id, "Two", false, 1),
+            ])
+            .IsValid.ShouldBeFalse();
+
+        _identifiableListValidator.Validate(
+            [
+                new UpdateCustomFieldDto(id, "Existing", false, 0),
+                new UpdateCustomFieldDto(null, "New", true, 1),
+            ])
+            .IsValid.ShouldBeTrue();
     }
 }

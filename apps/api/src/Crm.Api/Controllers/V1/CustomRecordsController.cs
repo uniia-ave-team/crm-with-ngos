@@ -61,8 +61,10 @@ public sealed class CustomRecordsController(IMediator mediator) : ControllerBase
 
     /// <summary>
     /// Creates a new dynamic data record inside a target custom table.
+    /// Optionally accepts <c>previousRecordId</c> and <c>nextRecordId</c> to insert at a specific position
+    /// in the table's manual row order; when both are omitted, the record is appended at the end.
     /// </summary>
-    /// <param name="command">The command containing the target custom table ID and initial JSON payload data.</param>
+    /// <param name="command">The command containing the target custom table ID, string JSON payload data, and optional neighbor links.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>The unique identifier of the newly created custom record.</returns>
     [HttpPost]
@@ -70,6 +72,7 @@ public sealed class CustomRecordsController(IMediator mediator) : ControllerBase
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<Guid>> Create(
         [FromBody] CreateCustomRecordCommand command,
         CancellationToken cancellationToken)
@@ -79,13 +82,14 @@ public sealed class CustomRecordsController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Updates the JSON data payload of an existing custom record.
+    /// Partially updates the JSON data payload of an existing custom record without changing its row position.
+    /// Only the keys supplied in <c>data</c> are merged onto the latest stored payload; omitted keys remain untouched.
     /// </summary>
     /// <param name="id">The unique identifier of the custom record to update.</param>
-    /// <param name="command">The command containing the updated JSON data payload.</param>
+    /// <param name="command">The command containing the changed cell values to merge.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status code indicating successful update.</returns>
-    [HttpPut("{id:guid}")]
+    [HttpPatch("{id:guid}")]
     [HasAccessRight(AccessRight.UpdateCustomRecord)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -93,6 +97,29 @@ public sealed class CustomRecordsController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> Update(
         Guid id,
         [FromBody] UpdateCustomRecordCommand command,
+        CancellationToken cancellationToken)
+    {
+        await mediator.Send(command with { Id = id }, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Moves an existing custom record to a new position in its table's manual row order (drag-and-drop).
+    /// When both <c>previousRecordId</c> and <c>nextRecordId</c> are <c>null</c>, the record is moved to the end of the table.
+    /// </summary>
+    /// <param name="id">The unique identifier of the custom record to move.</param>
+    /// <param name="command">The command specifying the target neighboring record identifiers.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status code indicating successful repositioning.</returns>
+    [HttpPatch("{id:guid}/position")]
+    [HasAccessRight(AccessRight.UpdateCustomRecord)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> MovePosition(
+        Guid id,
+        [FromBody] MoveCustomRecordCommand command,
         CancellationToken cancellationToken)
     {
         await mediator.Send(command with { Id = id }, cancellationToken);

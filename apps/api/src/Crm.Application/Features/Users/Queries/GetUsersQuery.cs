@@ -3,6 +3,7 @@ using Crm.Application.Common.Interfaces;
 using Crm.Application.Dtos.Users;
 using Crm.Domain.Common;
 using Crm.Domain.Constants;
+using Crm.Domain.Entities;
 using Mediator;
 
 namespace Crm.Application.Features.Users.Queries;
@@ -12,11 +13,12 @@ namespace Crm.Application.Features.Users.Queries;
 /// Implements the Mediator query pattern returning a paginated collection of user data transfer objects.
 /// </summary>
 /// <param name="SearchTerm">
-/// An optional term to filter users by email, first name, or last name.
+/// An optional term to filter users by email, core profile fields, or visible custom field values.
 /// If null or whitespace, no text filtering is applied.
 /// </param>
 /// <param name="OrderBy">
-/// The name of the entity property or alias by which the collection should be sorted (e.g., "FirstName", "LastName", "FullName", "Email").
+/// The name of the entity property, alias (e.g., "FirstName", "LastName", "FullName", "Email"),
+/// or custom field key (e.g., "city", "customFields.age", "customFields['birth_date']") by which the collection should be sorted.
 /// Default is "FirstName".
 /// </param>
 /// <param name="SortOrder">
@@ -34,21 +36,21 @@ namespace Crm.Application.Features.Users.Queries;
 /// </param>
 public record GetUsersQuery(
     string? SearchTerm = null,
-    string? OrderBy = nameof(Domain.Entities.User.FirstName),
+    string? OrderBy = nameof(User.FirstName),
     string? SortOrder = SortOrderConstants.Ascending,
     int PageNumber = PaginationConstants.MinPageNumber,
     int PageSize = PaginationConstants.DefaultPageSize,
-    bool ShowDeleted = false) : IQuery<PagedResult<UserDto>>, IPagedSearchQuery
+    bool ShowDeleted = false) : IQuery<PagedResult<UserDto>>, IPagedSearchQuery, ICurrentUserAware, ICurrentUserRolesAware
 {
     /// <summary>
-    /// Gets the unique identifier of the currently authenticated user, populated by the controller.
+    /// Gets or sets the unique identifier of the currently authenticated user, populated by the request pipeline.
     /// </summary>
     [JsonIgnore]
-    public Guid CurrentUserId { get; init; }
+    public Guid CurrentUserId { get; set; }
 
     /// <summary>
-    /// Gets the role identifiers of the currently authenticated user, populated by the controller.
+    /// Gets or sets the role identifiers of the currently authenticated user, populated by the request pipeline.
     /// </summary>
     [JsonIgnore]
-    public List<Guid> CurrentUserRoleIds { get; init; } = [];
+    public List<Guid> CurrentUserRoleIds { get; set; } = [];
 }
