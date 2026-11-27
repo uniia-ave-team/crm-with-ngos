@@ -15,7 +15,7 @@ public sealed class GetUsersQueryValidator : AbstractValidator<GetUsersQuery>
     /// </summary>
     public GetUsersQueryValidator()
     {
-        Include(new PagedSearchQueryValidationRules());
+        Include(new PagedSearchQueryValidationRules(minSearchTermLength: 1));
 
         RuleFor(x => x.OrderBy)
             .Must(UserCustomFieldExtensions.IsAllowedUserOrderBy)

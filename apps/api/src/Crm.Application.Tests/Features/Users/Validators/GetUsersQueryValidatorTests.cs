@@ -115,4 +115,30 @@ public class GetUsersQueryValidatorTests
         result.IsValid.ShouldBeFalse();
         result.Errors.ShouldContain(e => e.PropertyName == nameof(GetUsersQuery.SortOrder));
     }
+
+    [Theory]
+    [InlineData("Я")]
+    [InlineData("Ян")]
+    [InlineData("  Ян  ")]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public void ValidateWhenShortOrEmptySearchTermProvidedShouldPass(string? searchTerm)
+    {
+        var query = new GetUsersQuery(SearchTerm: searchTerm);
+
+        var result = _validator.Validate(query);
+
+        result.IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ValidateWhenSearchTermExceedsMaxLengthShouldFail()
+    {
+        var query = new GetUsersQuery(SearchTerm: new string('a', SearchValidationConstants.MaxSearchTermLength + 1));
+
+        var result = _validator.Validate(query);
+
+        result.IsValid.ShouldBeFalse();
+        result.Errors.ShouldContain(e => e.PropertyName == nameof(GetUsersQuery.SearchTerm));
+    }
 }
