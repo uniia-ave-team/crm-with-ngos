@@ -92,6 +92,8 @@ describe('DemoBannerComponent', () => {
     answer();
     expect(text(element)).toBe(withCountdown('59:12'));
     expect(time(element)).toBe('59:12');
+    // Підпис із часом — один блок, що не розривається між рядками (на телефоні банер у кілька рядків).
+    expect(element.querySelector('.demo-banner__countdown')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(`${uk.demo.bannerCountdown} 59:12`);
     // Лічильник — role="timer": екранний диктор не зачитує його щосекунди.
     expect(element.querySelector('.demo-banner__time')?.getAttribute('role')).toBe('timer');
     expect(element.querySelector('[role="status"], [aria-live]')).toBeNull();
