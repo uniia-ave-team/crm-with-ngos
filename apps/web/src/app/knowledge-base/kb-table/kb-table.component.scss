@@ -86,9 +86,39 @@
   font-family: inherit;
   cursor: pointer;
 
+  // Клік зберігає одразу (`saver.retry()`), не чекаючи таймера: при наведенні (і фокусі з
+  // клавіатури) плашка синя, як «Оновлюються дані», з підписом «Зберегти зміни».
+  &:hover,
+  &:focus-visible {
+    border-color: #146ef4;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    color: #146ef4;
+
+    .kb-table__saved-label--failed {
+      display: none;
+    }
+
+    .kb-table__saved-label--retry {
+      display: inline;
+    }
+  }
+
   &:focus-visible {
     outline: 2px solid var(--nav-fg-active);
     outline-offset: 2px;
+  }
+}
+
+// Підпис «Зберегти зміни» — лише при наведенні й фокусі.
+.kb-table__saved-label--retry {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .kb-table__saved--failed:hover,
+  .kb-table__saved--failed:focus-visible {
+    border-color: #6da8ff;
+    color: #6da8ff;
   }
 }
 

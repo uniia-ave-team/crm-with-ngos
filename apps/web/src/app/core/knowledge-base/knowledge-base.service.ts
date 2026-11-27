@@ -1,9 +1,11 @@
 import { HttpClient } from '@angular/common/http';
-import { InjectionToken, Injectable, PendingTasks, Signal, computed, inject, signal } from '@angular/core';
+import { InjectionToken, Injectable, PendingTasks, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
 import { TranslateService } from '@ngx-translate/core';
 
+import { AccountsService } from '../accounts/accounts.service';
+import { AuthService } from '../auth/auth.service';
 import { PERMISSIONS, Permission } from '../auth/permissions';
 import { ConnectionService } from '../connection/connection.service';
 import { CustomTableDetails, CustomTablesService } from '../custom-tables/custom-tables.service';
@@ -62,7 +64,8 @@ const KNOWLEDGE_BASE_RIGHTS: Record<KnowledgeBaseItemType, { create: Permission;
 export const EMPTY_TABLE_FIELD_KEY = 'name';
 
 /** Результат дії: виконано, не вдалося (як у запиту) чи тип ще не підтримується (`unsupported`). */
-export type KnowledgeBaseResult = 'done' | RequestFailure | 'unsupported';
+/** `gone` — матеріал уже видалили (наприклад, на іншому пристрої). */
+export type KnowledgeBaseResult = 'done' | RequestFailure | 'unsupported' | 'gone';
 
 /**
  * Матеріал, відкритий у вікні «Редагувати»: назва й опис для форми, а для таблиці — ще вся її
@@ -100,8 +103,34 @@ export class KnowledgeBaseService {
   /** Завантаження змісту — задача застосунку: `whenStable` (тести, пререндер) його дочікується. */
   private readonly pendingTasks = inject(PendingTasks);
 
+  private readonly auth = inject(AuthService);
+  private readonly accounts = inject(AccountsService);
+
   private readonly stateSignal = signal<KnowledgeBaseState>({ status: 'loading', entries: [] });
   readonly state: Signal<KnowledgeBaseState> = this.stateSignal.asReadonly();
+  /** Для кого завантажено зміст: акаунт (`AuthService.sessionId`) і сервер; інший — зміст чужий. */
+  private loadedFor: string | null = null;
+
+  constructor() {
+    // Інший акаунт (вихід, вхід, перемикання) — зміст попередньої організації забуваємо. Тимчасове
+    // перемикання (пошук акаунта) зміст не скидає, як і профіль у `CurrentUserService`.
+    effect(() => {
+      const owner = this.owner();
+      const switching = this.accounts.switching();
+      untracked(() => {
+        if (!switching && this.loadedFor !== null && this.loadedFor !== owner) {
+          this.loadedFor = null;
+          this.request = null;
+          this.stateSignal.set({ status: 'loading', entries: [] });
+        }
+      });
+    });
+  }
+
+  /** Чий зміст потрібен зараз: активний акаунт на своєму сервері. */
+  private owner(): string {
+    return `${this.auth.sessionId() ?? ''}|${this.connection.serverUrl()}`;
+  }
 
   private request: Promise<void> | null = null;
 
@@ -117,7 +146,7 @@ export class KnowledgeBaseService {
 
   /** Підвантажує зміст, якщо його ще нема (чи минулий раз не вдалося); запит, що йде, не дублює. */
   load(): Promise<void> {
-    if (this.stateSignal().status === 'ready') {
+    if (this.stateSignal().status === 'ready' && this.loadedFor === this.owner()) {
       return Promise.resolve();
     }
     return this.startFetch();
@@ -218,7 +247,7 @@ export class KnowledgeBaseService {
   }
 
   /** Підвантажує назву й опис для вікна «Редагувати» (таблиця — `GET /api/v1/customtables/{id}`). */
-  async openForEdit(entry: KnowledgeBaseEntry): Promise<KnowledgeBaseEditing | RequestFailure | 'unsupported'> {
+  async openForEdit(entry: KnowledgeBaseEntry): Promise<KnowledgeBaseEditing | RequestFailure | 'unsupported' | 'gone'> {
     switch (entry.type) {
       case 'customtable': {
         const table = await this.customTables.get(entry.id);
@@ -233,14 +262,16 @@ export class KnowledgeBaseService {
   }
 
   /**
-   * Зберігає назву й опис. Таблиця — `PUT /api/v1/customtables/{id}` з тими самими полями, що
-   * прийшли з `openForEdit` (сервер приймає назву й опис лише разом зі структурою).
+   * Зберігає назву й опис. Таблиця — `PUT /api/v1/customtables/{id}`: сервер приймає назву й опис лише
+   * разом зі структурою, а поле, якого нема в списку, видаляє разом з усіма його значеннями. Тож
+   * структура — свіжа, з `GET` перед самим збереженням, а не та, що була при відкритті вікна (інакше
+   * колонку, яку тим часом додав хтось інший, було б видалено).
    */
   async saveEdit(editing: KnowledgeBaseEditing, details: KnowledgeBaseDetails): Promise<KnowledgeBaseResult> {
     let result: KnowledgeBaseResult;
     switch (editing.entry.type) {
       case 'customtable':
-        result = editing.table ? await this.customTables.update({ ...editing.table, name: details.title, description: details.description }) : 'error';
+        result = editing.table ? await this.saveTable(editing.table.id, details) : 'error';
         break;
       case 'home':
       case 'page':
@@ -252,6 +283,15 @@ export class KnowledgeBaseService {
       this.rename(editing.entry.id, details.title);
     }
     return result;
+  }
+
+  /** Таблиця зі свіжою структурою (`GET`) і новими назвою й описом. */
+  private async saveTable(id: string, details: KnowledgeBaseDetails): Promise<KnowledgeBaseResult> {
+    const fresh = await this.customTables.get(id);
+    if (typeof fresh === 'string') {
+      return fresh;
+    }
+    return this.customTables.update({ ...fresh, name: details.title, description: details.description });
   }
 
   /** Видаляє матеріал чи папку (таблиця — `DELETE /api/v1/customtables/{id}`). */
@@ -346,10 +386,14 @@ export class KnowledgeBaseService {
   private startFetch(): Promise<void> {
     if (!this.request) {
       const done = this.pendingTasks.add();
-      this.request = this.fetch().finally(() => {
-        this.request = null;
+      const request: Promise<void> = this.fetch().finally(() => {
+        // Тим часом акаунт змінився й пішов новий запит — його не чіпаємо.
+        if (this.request === request) {
+          this.request = null;
+        }
         done();
       });
+      this.request = request;
     }
     return this.request;
   }
@@ -359,7 +403,13 @@ export class KnowledgeBaseService {
     if (this.stateSignal().status !== 'ready') {
       this.stateSignal.set({ status: 'loading', entries: [] });
     }
+    const owner = this.owner();
     const entries = await this.fetchEntries();
+    // Поки йшов запит, акаунт змінився — це зміст іншої організації.
+    if (owner !== this.owner()) {
+      return;
+    }
+    this.loadedFor = owner;
     this.stateSignal.set(entries ? { status: 'ready', entries: withHomePage(entries) } : { status: 'failed', entries: [] });
   }
 

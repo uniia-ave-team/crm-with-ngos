@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
@@ -151,16 +151,22 @@ export class UsersService {
   /**
    * `POST <server>/api/v1/users/reset-password` (без авторизації) — новий пароль за токеном із
    * посилання для скидання пароля (204). Сервер явний: колега відкриває посилання на сторінці
-   * `/reset-password`, можливо, не маючи в браузері акаунта на цьому сервері. 400 — сервер не
-   * прийняв пароль або посиланням уже скористалися, 401 — токен недійсний чи прострочений.
+   * `/reset-password`, можливо, не маючи в браузері акаунта на цьому сервері. 401 — токен
+   * недійсний чи прострочений. 400 буває з двох причин, і їх розрізняємо за тілом відповіді:
+   * - сервер не прийняв пароль (`passwordRejected`): помилка перевірки поля пароля (`errors` з
+   *   `NewPassword`) чи вимог Identity до пароля — форма лишається, пароль можна змінити;
+   * - посиланням уже скористалися (`invalid`): Identity відхилив токен скидання («Invalid token»).
    * Пароль не логується.
    */
-  async resetPassword(server: string, token: string, newPassword: string): Promise<'reset' | RequestFailure> {
+  async resetPassword(server: string, token: string, newPassword: string): Promise<'reset' | 'passwordRejected' | RequestFailure> {
     const url = `${server}${API_USERS_PATH}/reset-password`;
     try {
       await firstValueFrom(this.http.post(url, { token, newPassword } satisfies ResetPasswordCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return 'reset';
     } catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 400 && isPasswordRejection(error.error)) {
+        return 'passwordRejected';
+      }
       const failure = toRequestFailure(error);
       console.warn(`[UsersService] Не вдалося задати новий пароль (${failure})`);
       return failure;
@@ -406,4 +412,17 @@ function toUserSummary(item: Untrusted<UserDto>): UserSummary | null {
 /** Частина шляху після `/users/`: власний профіль (`me`) чи колеги (`id`). */
 function userPath(userId: string | null): string {
   return userId === null ? 'me' : encodeURIComponent(userId);
+}
+
+/**
+ * Відповідь 400 на скидання пароля — через сам пароль, а не через посилання: помилка перевірки, що
+ * стосується пароля (`errors` з ключем на кшталт `NewPassword`), або помилка Identity, що не про
+ * токен (вимоги до пароля). Помилка токена («Invalid token») — посиланням уже скористалися.
+ */
+function isPasswordRejection(body: unknown): boolean {
+  const problem = (body ?? {}) as { errors?: unknown; detail?: unknown };
+  if (problem.errors && typeof problem.errors === 'object') {
+    return Object.keys(problem.errors).some((key) => /password/i.test(key));
+  }
+  return typeof problem.detail === 'string' && !/token/i.test(problem.detail);
 }

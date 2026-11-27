@@ -278,6 +278,28 @@ export class ConnectionService {
   }
 
   /**
+   * Тихо перепитує статус системи (щоб побачити нове оголошення про технічні роботи): поточний
+   * статус лишається, поки не прийде новий, а невдача нічого не міняє (на відміну від
+   * `loadSystemStatus`, який на час запиту статус скидає). Лише коли статус уже завантажено й інший
+   * запит не йде; відповідь для сервера, який тим часом змінився, відкидається.
+   */
+  async refreshSystemStatus(): Promise<void> {
+    if (this.systemStatusStateSignal() !== 'loaded' || this.supersedeSystemStatus) {
+      return;
+    }
+    const server = this.serverUrl();
+    try {
+      const body = await firstValueFrom(this.http.get<Untrusted<SystemStatus>>(`${server}${API_SYSTEM_STATUS_PATH}`).pipe(timeout(API_CHECK_TIMEOUT_MS)));
+      const status = toSystemStatus(body);
+      if (status && server === this.serverUrl() && this.systemStatusStateSignal() === 'loaded' && !this.supersedeSystemStatus) {
+        this.systemStatusSignal.set(status);
+      }
+    } catch {
+      // Невдала фонова перевірка нічого не міняє: наступна спробує знову.
+    }
+  }
+
+  /**
    * Зберігає надану адресу сервера й проходить алгоритм заново вже з нею.
    * Повертає `false` (нічого не змінюючи), якщо це не схоже на адресу
    * http(s)-сервера.

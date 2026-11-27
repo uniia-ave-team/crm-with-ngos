@@ -21,17 +21,38 @@ const TAGS: Readonly<Record<string, string>> = {
 /** Блоки, після яких — перенос рядка (так редактор браузера оформлює новий рядок). */
 const BLOCKS = new Set(['DIV', 'P', 'LI']);
 
+/** Елементи, вміст яких — не текст для людини (код, стилі, вбудовані об'єкти): відкидаються цілком. */
+const DROPPED = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH']);
+
 const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** HTML з редактора (чи з сервера) → лише дозволене форматування; порожній текст — порожній рядок. */
+/** Скільки очищених значень памʼятати: таблиця очищує кожну клітинку на кожне перемальовування. */
+const CACHE_SIZE = 1000;
+const cache = new Map<string, string>();
+
+/**
+ * HTML з редактора (чи з сервера) → лише дозволене форматування; порожній текст — порожній рядок.
+ * Значення з сервера може бути будь-яким (записати його можна й в обхід застосунку, через API), тож
+ * усе, що йде в `innerHTML`, проходить тут: розбір — у документі `DOMParser`, де скрипти не
+ * виконуються й зображення не вантажаться, а назад лишаються тільки текст і теги `b`, `i`, `u`,
+ * `s`, `br` без атрибутів.
+ */
 export function sanitizeRichText(html: string): string {
   if (!/[<&]/.test(html)) {
     return html;
   }
+  const cached = cache.get(html);
+  if (cached !== undefined) {
+    return cached;
+  }
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
-  const out = walk(doc.body);
   // Перенос у самому кінці редактор додає «про запас» — він не потрібен.
-  return out.replace(/(<br>)+$/, '');
+  const out = walk(doc.body).replace(/(<br>)+$/, '');
+  if (cache.size >= CACHE_SIZE) {
+    cache.delete(cache.keys().next().value!);
+  }
+  cache.set(html, out);
+  return out;
 }
 
 function walk(node: Node): string {
@@ -45,6 +66,9 @@ function walk(node: Node): string {
       return;
     }
     const element = child as Element;
+    if (DROPPED.has(element.tagName.toUpperCase())) {
+      return;
+    }
     if (element.tagName === 'BR') {
       out += '<br>';
       return;

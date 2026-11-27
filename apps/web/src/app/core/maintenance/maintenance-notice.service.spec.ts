@@ -6,7 +6,7 @@ import { provideTranslateService } from '@ngx-translate/core';
 import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { LanguageService } from '../i18n/language.service';
-import { MaintenanceNoticeService } from './maintenance-notice.service';
+import { MaintenanceNoticeService, STATUS_REFRESH_MS } from './maintenance-notice.service';
 
 describe('MaintenanceNoticeService', () => {
   let http: HttpTestingController;
@@ -100,5 +100,42 @@ describe('MaintenanceNoticeService', () => {
     TestBed.tick();
     answer({ message: 'Оновлення бази.', startsAt: at(HOUR), endsAt: at(2 * HOUR) });
     expect(service.view()?.message).toBe('Оновлення бази.');
+  });
+
+  it('counts as closed only a notice closed by its button, not one that went away by itself', () => {
+    const { service } = create();
+    answer({ message: 'Оновлення.', startsAt: at(HOUR), endsAt: at(2 * HOUR) });
+    // Плашка зникла сама (наприклад, статус перепитали) — оголошення лишається.
+    service.onDismissed(undefined);
+    service.onDismissed('backdrop');
+    expect(service.view()?.message).toBe('Оновлення.');
+    service.onDismissed('cancel');
+    expect(service.view()).toBeNull();
+  });
+
+  it('asks for the status again every few minutes and when the tab is shown again, keeping the notice meanwhile', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const { service } = create();
+      answer(null);
+      expect(service.view()).toBeNull();
+
+      vi.advanceTimersByTime(STATUS_REFRESH_MS);
+      http.expectOne(statusUrl()).flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: { message: 'Оновлення.', startsAt: at(HOUR), endsAt: at(2 * HOUR) } });
+      await Promise.resolve();
+      TestBed.tick();
+      expect(service.view()?.message).toBe('Оновлення.');
+
+      // Повернулися на вкладку — ще раз; поки йде запит, оголошення не зникає.
+      document.dispatchEvent(new Event('visibilitychange'));
+      const request = http.expectOne(statusUrl());
+      expect(service.view()?.message).toBe('Оновлення.');
+      request.flush({ hasAdmin: true, hasNgo: true, isSetupComplete: true, version: '1.0.0', notice: null });
+      await Promise.resolve();
+      TestBed.tick();
+      expect(service.view()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

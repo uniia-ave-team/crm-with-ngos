@@ -98,6 +98,23 @@ describe('ColleaguesPage', () => {
     expect(render().fixture.componentInstance).toBeTruthy();
   });
 
+  it('replaces the rows with the first page when a failed reload is tried again, not adding it to the old rows', async () => {
+    const { fixture, element } = await renderLoaded();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    (fixture.componentInstance as unknown as { onSearch(value: string): void }).onSearch('Колега');
+    usersRequest().flush(null, { status: 500, statusText: 'Server Error' });
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(element.querySelector('.colleagues__retry')).not.toBeNull();
+    });
+    element.querySelector<HTMLButtonElement>('.colleagues__retry')!.click();
+    usersRequest().flush({ items: [user(5)], hasNextPage: false });
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(element.querySelectorAll('tbody tr')).toHaveLength(1);
+    });
+  });
+
   describe('the header', () => {
     it('has the title, then the buttons "Roles" and "Add" and the search, texts from the language file', () => {
       const { element } = render();
@@ -981,7 +998,7 @@ describe('ColleaguesPage', () => {
         });
         expect(shown.querySelector('.invitation__title')?.textContent?.trim()).toBe(uk.colleagues.passwordReset.title);
         expect(shown.querySelector('.invitation__hint')?.textContent?.trim()).toBe(uk.colleagues.passwordReset.hint);
-        expect(shown.querySelector('.invitation__link')?.textContent?.trim()).toBe(`${location.origin}/reset-password?token=reset%201`);
+        expect(shown.querySelector('.invitation__link')?.textContent?.trim()).toBe(`${location.origin}/reset-password#token=reset%201`);
         expect(shown.querySelector('.invitation__details dd')?.textContent?.trim()).toBe('user3@example.org');
         // Список не змінюється: пароль діє, доки колега його не змінить.
         http.expectNone((r) => r.url === usersUrl());
@@ -1320,6 +1337,35 @@ describe('ColleaguesPage', () => {
         roleChoices(element)[1].click();
         fixture.detectChanges();
         expect(checked(element)).toEqual(['Куратор:true', 'Член:false']);
+      });
+
+      it('sends the roles chosen for the colleague being saved, even if another colleague is opened while the avatar uploads', async () => {
+        const { fixture, element } = await editWithRoles();
+        const users = TestBed.inject(UsersService);
+        vi.spyOn(users, 'updateProfile').mockResolvedValue('updated');
+        let finishUpload!: (result: 'uploaded') => void;
+        const upload = vi.spyOn(users, 'uploadAvatar').mockReturnValue(new Promise((resolve) => (finishUpload = resolve)));
+        const assign = vi.spyOn(users, 'assignRole').mockResolvedValue('done');
+        const remove = vi.spyOn(users, 'removeRole').mockResolvedValue('done');
+        // Для першого колеги: «Куратор» замість «Член».
+        roleChoices(element)[0].click();
+        roleChoices(element)[1].click();
+        fixture.detectChanges();
+        const page = fixture.componentInstance as unknown as {
+          saveColleague(value: { profile: object; avatar: File | null }): Promise<void>;
+          editColleague(colleague: { id: string; name: string | null }): Promise<void>;
+        };
+        const saving = page.saveColleague({ profile: {}, avatar: new File(['x'], 'a.png', { type: 'image/png' }) });
+        await vi.waitFor(() => expect(upload).toHaveBeenCalled());
+
+        // Поки вантажиться аватар, відкрили іншого колегу (з іншими ролями).
+        const opening = page.editColleague({ id: 'user-2', name: null });
+        TestBed.inject(HttpTestingController).expectOne(profileUrl('user-2')).flush(profile('user-2', { roles: [{ id: 'r1', name: 'Куратор' }] }));
+        await opening;
+        finishUpload('uploaded');
+        await saving;
+        expect(assign.mock.calls).toEqual([['user-1', 'r1']]);
+        expect(remove.mock.calls).toEqual([['user-1', 'r2']]);
       });
 
       it('has no roles and does not ask for them without the right', async () => {
@@ -2169,22 +2215,22 @@ describe('ColleaguesPage', () => {
           it('copies the link to the clipboard and says so', async () => {
             const ctx = await withToken();
             const write = clipboard(() => Promise.resolve());
-            await state(ctx.fixture).copyInvitationLink('http://localhost/join?token=tok-1');
-            expect(write).toHaveBeenCalledWith('http://localhost/join?token=tok-1');
+            await state(ctx.fixture).copyInvitationLink('http://localhost/join#token=tok-1');
+            expect(write).toHaveBeenCalledWith('http://localhost/join#token=tok-1');
             expect(state(ctx.fixture).invitationStatus()).toBe('copied');
           });
 
           it('says that the copying failed when the browser does not allow it', async () => {
             const ctx = await withToken();
             clipboard(() => Promise.reject(new Error('denied')));
-            await state(ctx.fixture).copyInvitationLink('http://localhost/join?token=tok-1');
+            await state(ctx.fixture).copyInvitationLink('http://localhost/join#token=tok-1');
             expect(state(ctx.fixture).invitationStatus()).toBe('failed');
           });
 
           it('forgets the copying of the previous link when a new invitation is made', async () => {
             const ctx = await withToken();
             clipboard(() => Promise.resolve());
-            await state(ctx.fixture).copyInvitationLink('http://localhost/join?token=tok-1');
+            await state(ctx.fixture).copyInvitationLink('http://localhost/join#token=tok-1');
             expect(state(ctx.fixture).invitationStatus()).toBe('copied');
 
             state(ctx.fixture).closeInvitation();
@@ -2202,7 +2248,7 @@ describe('ColleaguesPage', () => {
           });
 
                     describe('sharing by the share button of the browser or the system', () => {
-            const data = { title: 'Запрошення', text: 'Підпис', url: 'http://localhost/join?token=tok-1' };
+            const data = { title: 'Запрошення', text: 'Підпис', url: 'http://localhost/join#token=tok-1' };
             const setShare = (impl: (d: unknown) => Promise<void>) => {
               const spy = vi.fn(impl);
               Object.defineProperty(navigator, 'share', { value: spy, configurable: true, writable: true });

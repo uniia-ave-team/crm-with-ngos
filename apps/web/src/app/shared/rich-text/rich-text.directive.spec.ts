@@ -29,6 +29,18 @@ describe('RichTextDirective', () => {
     expect(host.changes).toEqual(['<b>Фонд</b> новий']);
   });
 
+  it('cleans a value from outside before it gets into the block: no script, no element or attribute besides the formatting', () => {
+    const { fixture, host, block } = render();
+    const hostile = vi.fn();
+    (window as unknown as Record<string, unknown>)['hostileValue'] = hostile;
+    host.value.set('<img src="x" onerror="hostileValue()"><b style="position:fixed;inset:0">Фонд</b><script>hostileValue()</script><a href="javascript:hostileValue()">посилання</a>');
+    fixture.detectChanges();
+    expect(block.innerHTML).toBe('<b>Фонд</b>посилання');
+    expect(block.querySelector('img, script, a, [style], [onerror]')).toBeNull();
+    expect(hostile).not.toHaveBeenCalled();
+    delete (window as unknown as Record<string, unknown>)['hostileValue'];
+  });
+
   it('writes a value from outside only when it is really different (the cursor does not jump while typing)', () => {
     const { fixture, host, block } = render();
     const text = block.firstChild;

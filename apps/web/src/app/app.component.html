@@ -129,7 +129,7 @@
     [header]="notice ? (notice.titleKey | translate: notice.params) : ''"
     [message]="notice?.message ?? ''"
     [buttons]="[{ text: 'common.close' | translate, role: 'cancel' }]"
-    (didDismiss)="maintenance.dismiss()"
+    (didDismiss)="maintenance.onDismissed($any($event).detail?.role)"
   ></ion-toast>
 
   <!-- Повідомлення про успіх, що переживає перехід (наприклад, «Пароль змінено…» після

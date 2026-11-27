@@ -1,7 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
+import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../assets/i18n/uk.json';
@@ -20,15 +21,24 @@ interface ResetPasswordPageInternals {
 describe('ResetPasswordPage', () => {
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.spyOn>;
+  let fragment: BehaviorSubject<string | null>;
   const server = `${location.protocol}//${location.hostname}:5065`;
   const resetUrl = `${server}/api/v1/users/reset-password`;
   const PASSWORD = 'Abcde1!x';
 
   beforeEach(() => {
     localStorage.clear();
+    fragment = new BehaviorSubject<string | null>(null);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), provideTranslateService({ lang: 'uk', fallbackLang: 'uk' })],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
+        // Фрагмент адреси сторінки (`#token=…`) — керований тестом.
+        { provide: ActivatedRoute, useValue: { fragment } },
+      ],
     });
     TestBed.inject(TranslateService).setTranslation('uk', uk);
     http = TestBed.inject(HttpTestingController);
@@ -41,8 +51,8 @@ describe('ResetPasswordPage', () => {
   });
 
   function create(token: string | null = 'tok') {
+    fragment.next(token === null ? null : `token=${encodeURIComponent(token)}`);
     const fixture = TestBed.createComponent(ResetPasswordPage);
-    fixture.componentRef.setInput('token', token ?? undefined);
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
     const page = fixture.componentInstance as unknown as ResetPasswordPageInternals;
@@ -105,7 +115,8 @@ describe('ResetPasswordPage', () => {
     expect(request.request.headers.has('Authorization')).toBe(false);
     request.flush(null, { status: 204, statusText: 'No Content' });
     await done;
-    expect(navigate).toHaveBeenCalledWith(RELOGIN_URL);
+    // Без запису в історії: «Назад» не повертає форму з уже використаним посиланням.
+    expect(navigate).toHaveBeenCalledWith(RELOGIN_URL, { replaceUrl: true });
     // «Пароль змінено…» показує плашка в корені застосунку вже на наступній сторінці.
     expect(TestBed.inject(SuccessNoticeService).key()).toBe('resetPassword.done');
   });
@@ -128,6 +139,36 @@ describe('ResetPasswordPage', () => {
     expect(TestBed.inject(SuccessNoticeService).key()).toBeNull();
     buttonByText(element, uk.common.back).click();
     expect(navigate).toHaveBeenCalledWith(RELOGIN_URL);
+  });
+
+  it.each([
+    ['the check of the field', { errors: { NewPassword: ['Password is too weak.'] } }],
+    ['the rules of the password', { detail: "User operation 'ChangePassword' failed: Passwords must have at least one digit ('0'-'9')." }],
+  ])('keeps the form with the error under the password when the server did not take the password (%s)', async (_, body) => {
+    const { fixture, element, page, fill } = create();
+    fill(PASSWORD);
+    const done = page.submit();
+    http.expectOne(resetUrl).flush(body, { status: 400, statusText: 'Bad Request' });
+    await done;
+    fixture.detectChanges();
+    expect(element.querySelector('.auth-error')).toBeNull();
+    expect(element.querySelector('app-password-fields')?.textContent).toContain(uk.resetPassword.error.passwordRejected);
+    expect(navigate).not.toHaveBeenCalled();
+
+    // Інший пароль — відмова сервера стосувалася попереднього.
+    fill(`${PASSWORD}2`);
+    fixture.detectChanges();
+    expect(element.querySelector('app-password-fields')?.textContent).not.toContain(uk.resetPassword.error.passwordRejected);
+  });
+
+  it('says the link was already used when the server rejected its token', async () => {
+    const { fixture, element, page, fill } = create();
+    fill(PASSWORD);
+    const done = page.submit();
+    http.expectOne(resetUrl).flush({ detail: "User operation 'ChangePassword' failed: Invalid token." }, { status: 400, statusText: 'Bad Request' });
+    await done;
+    fixture.detectChanges();
+    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.resetPassword.failure.invalid);
   });
 
   it('says the link is inactive when it has no token', () => {

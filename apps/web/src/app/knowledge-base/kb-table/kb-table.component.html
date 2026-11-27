@@ -27,7 +27,9 @@
           (click)="saver.retry()"
         >
           <ion-icon name="cloud-offline-outline" aria-hidden="true"></ion-icon>
-          <span class="kb-table__saved-label">{{ 'knowledgeBase.table.saveFailed' | translate }}</span>
+          <span class="kb-table__saved-label kb-table__saved-label--failed">{{ 'knowledgeBase.table.saveFailed' | translate }}</span>
+          <!-- При наведенні (і фокусі з клавіатури) — що зробить клік; для екранних читачів назва одна. -->
+          <span class="kb-table__saved-label kb-table__saved-label--retry" aria-hidden="true">{{ 'knowledgeBase.table.saveNow' | translate }}</span>
         </button>
       }
       @default {
@@ -124,6 +126,7 @@
             tabindex="0"
             [attr.aria-label]="column.label"
             [appRichText]="htmlOf(textValue(row, field))"
+            [appRichTextMaxLength]="cellMaxLength"
             (richTextChange)="onRichTextInput(row, field, $event)"
             (focus)="onCellFocus(row, field, $event)"
             (blur)="onCellBlur($event)"
@@ -147,6 +150,7 @@
           tabindex="0"
           [attr.aria-label]="'knowledgeBase.table.columnName' | translate"
           [appRichText]="htmlOf(field.name)"
+          [appRichTextMaxLength]="headMaxLength"
           (richTextChange)="onHeaderInput(field, $event)"
           (focus)="onHeaderFocus(field, $event)"
           (blur)="onHeaderBlur(field, $event)"
@@ -193,6 +197,18 @@
       (dismiss)="cancelDelete()"
     />
   }
+</app-modal>
+
+<!-- Вихід із виду, коли сервер не прийняв зміни: лишитися чи піти без них. -->
+<app-modal #leaveDialog width="min(400px, calc(100vw - 32px))" [label]="'knowledgeBase.table.leaveDialog.title' | translate" (closed)="answerLeave(false)">
+  <app-dialog-header [title]="'knowledgeBase.table.leaveDialog.title' | translate" (dismiss)="answerLeave(false)" />
+  <app-confirm-dialog
+    [message]="'knowledgeBase.table.leaveDialog.message' | translate"
+    [confirmLabel]="'knowledgeBase.table.leaveDialog.leave' | translate"
+    [cancelLabel]="'knowledgeBase.table.leaveDialog.stay' | translate"
+    (confirm)="answerLeave(true)"
+    (dismiss)="answerLeave(false)"
+  />
 </app-modal>
 
 <!-- «Створити шаблон»: назва й опис шаблону зі стовпчиків таблиці. -->

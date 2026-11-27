@@ -13,7 +13,8 @@ export type SaveState = 'saved' | 'saving' | 'failed';
  * Відкладене збереження: після кожної зміни (`changed`) чекає `delayMs` тиші, тоді викликає `save`.
  * Збереження йдуть по черзі (нове чекає, поки скінчиться попереднє), тож новий рядок не створиться
  * двічі. Стан `saving` — від першої зміни до відповіді на останнє збереження; `save` повертає, чи
- * все вдалося (`false` — `failed`, доки не прийде наступна зміна).
+ * все вдалося (`false` — `failed`, доки не прийде наступна зміна). Невдале лишається незбереженим:
+ * наступний `flush` (пошук, сортування, вихід із виду) спробує знову.
  */
 export class DebouncedSaver {
   private readonly stateSignal = signal<SaveState>('saved');
@@ -58,6 +59,8 @@ export class DebouncedSaver {
       this.dirty = false;
       const ok = await this.save();
       if (!ok) {
+        // Не збережене лишається незбереженим: наступний `flush` спробує знову.
+        this.dirty = true;
         this.stateSignal.set('failed');
       } else if (!this.dirty && this.timer === undefined) {
         this.stateSignal.set('saved');

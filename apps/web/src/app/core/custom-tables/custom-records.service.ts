@@ -9,6 +9,7 @@ import { RequestFailure, toRequestFailure } from '../http/request-failure';
 import { REQUEST_TIMEOUT_MS } from '../http/timeouts';
 import { CUSTOM_TABLES_PAGE_SIZE } from './custom-tables.service';
 import { readPagedItems, text } from './paged';
+import { Gone, isGone } from './gone';
 import { writeRequestOptions } from './write-options';
 
 const API_CUSTOM_RECORDS_PATH = '/api/v1/customrecords';
@@ -30,6 +31,10 @@ export type CustomRecordData = Readonly<Record<string, unknown>>;
 
 /** Створено запис (його `id`) чи ні. */
 export type CreateCustomRecordResult = { readonly id: string } | RequestFailure;
+/** Запис змінено; `gone` — його вже видалили (404). */
+export type UpdateCustomRecordResult = 'done' | Gone | RequestFailure;
+/** Запис з сервера; `gone` — його вже видалили (404). */
+export type GetCustomRecordResult = CustomRecord | Gone | RequestFailure;
 
 /**
  * Записи таблиць (`/api/v1/customrecords`): перегляд (`ViewCustomRecord`), створення
@@ -88,24 +93,48 @@ export class CustomRecordsService {
   }
 
   /** `PUT /api/v1/customrecords/{id}`: сервер замінює дані запису цілком, тож передаються всі поля. */
-  async update(id: string, data: CustomRecordData): Promise<'done' | RequestFailure> {
+  async update(id: string, data: CustomRecordData): Promise<UpdateCustomRecordResult> {
     const body = { data: { ...data } } satisfies UpdateCustomRecordCommand;
     try {
       await firstValueFrom(this.http.put(`${this.url()}/${encodeURIComponent(id)}`, body, writeRequestOptions()).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return 'done';
     } catch (error) {
+      if (isGone(error)) {
+        return 'gone';
+      }
       const failure = toRequestFailure(error);
       console.warn(`[CustomRecordsService] Не вдалося змінити запис (${failure})`, error);
       return failure;
     }
   }
 
-  /** `DELETE /api/v1/customrecords/{id}` (право `DeleteCustomRecord`). */
-  async remove(id: string): Promise<'done' | RequestFailure> {
+  /**
+   * `GET /api/v1/customrecords/{id}`: запис, як він зараз на сервері (перед зміною — щоб не затерти
+   * чужих змін у тому самому рядку). Відповідь, з якої не скласти запис, — `error`.
+   */
+  async get(id: string): Promise<GetCustomRecordResult> {
+    try {
+      const body = await firstValueFrom(this.http.get<Untrusted<CustomRecordDto>>(`${this.url()}/${encodeURIComponent(id)}`).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      return toRecord(body)[0] ?? 'error';
+    } catch (error) {
+      if (isGone(error)) {
+        return 'gone';
+      }
+      const failure = toRequestFailure(error);
+      console.warn(`[CustomRecordsService] Не вдалося отримати запис (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /** `DELETE /api/v1/customrecords/{id}` (право `DeleteCustomRecord`); `gone` — запису вже нема. */
+  async remove(id: string): Promise<UpdateCustomRecordResult> {
     try {
       await firstValueFrom(this.http.delete(`${this.url()}/${encodeURIComponent(id)}`, writeRequestOptions()).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return 'done';
     } catch (error) {
+      if (isGone(error)) {
+        return 'gone';
+      }
       const failure = toRequestFailure(error);
       console.warn(`[CustomRecordsService] Не вдалося видалити запис (${failure})`, error);
       return failure;

@@ -61,6 +61,12 @@ describe('KbTableComponent', () => {
     TestBed.inject(HttpTestingController).expectOne(KNOWLEDGE_BASE_SAMPLE_URL).flush(entries);
     await loading;
     const fixture = TestBed.createComponent(KbTableComponent);
+    // Свіжий запис перед збереженням — за замовчуванням такий, як зараз у виді (чужих змін нема).
+    const view = fixture.componentInstance as unknown as { records(): readonly { serverId: string | null; data: Record<string, unknown> }[] };
+    vi.spyOn(TestBed.inject(CustomRecordsService), 'get').mockImplementation(async (recordId) => {
+      const record = view.records().find((candidate) => candidate.serverId === recordId);
+      return record ? { id: recordId, data: record.data } : 'gone';
+    });
     fixture.componentRef.setInput('id', id);
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
@@ -129,12 +135,37 @@ describe('KbTableComponent', () => {
     fixture.detectChanges();
     // Поки відкрито пошук, тег схований.
     expect(getComputedStyle(fixture.nativeElement.querySelector('.kb-table__saved')).display).toBe('none');
+    // Запит — після паузи від останнього символу, не на кожну літеру.
+    header.searchChange.emit('  фо');
     header.searchChange.emit('  фонд ');
     await settle();
-    expect(list).toHaveBeenLastCalledWith('t1', null, 'фонд');
+    expect(list).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(list).toHaveBeenLastCalledWith('t1', null, 'фонд'));
+    expect(list).toHaveBeenCalledTimes(2);
     header.searchChange.emit('');
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(3));
     await settle();
     expect(list).toHaveBeenLastCalledWith('t1', null, null);
+  });
+
+  it('ignores an older answer for the records that comes after a newer one (for example «фон» after «фонд»)', async () => {
+    vi.spyOn(TestBed.inject(CustomTablesService), 'get').mockResolvedValue(table);
+    let answerOld!: (records: { id: string; data: Record<string, unknown> }[]) => void;
+    vi.spyOn(TestBed.inject(CustomRecordsService), 'listAll')
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(new Promise((resolve) => (answerOld = resolve)))
+      .mockResolvedValueOnce([{ id: 'r2', data: { name: 'Фонд «Надія»', signed: false } }]);
+    const { fixture, settle, cells } = await render('t1');
+    await settle();
+    const header = fixture.debugElement.query(By.directive(SearchHeaderComponent)).componentInstance as SearchHeaderComponent;
+    header.searchChange.emit('фон');
+    await vi.waitFor(() => expect(TestBed.inject(CustomRecordsService).listAll).toHaveBeenCalledTimes(2));
+    header.searchChange.emit('фонд');
+    await vi.waitFor(() => expect(TestBed.inject(CustomRecordsService).listAll).toHaveBeenCalledTimes(3));
+    await settle();
+    answerOld([{ id: 'r1', data: { name: 'Фонтан', signed: false } }]);
+    await settle();
+    expect(cells().map((row) => row[0]?.trim())).toEqual(['Фонд «Надія»']);
   });
 
   it('has no «Create template» without Permissions.CreateTableTemplate and no «Export» without Permissions.ViewCustomRecord', async () => {
@@ -143,6 +174,35 @@ describe('KbTableComponent', () => {
     await settle();
     expect(element.querySelector('.kb-table__saved')).not.toBeNull();
     expect(element.querySelectorAll('app-action-button')).toHaveLength(0);
+  });
+
+  describe('values from the server written past the app (a script or an element in the HTML)', () => {
+    const hostile = '<img src="x" onerror="alert(1)"><b style="position:fixed;inset:0">Фонд</b><script>alert(2)</script>';
+
+    async function renderHostile(permissions: string[]) {
+      vi.spyOn(TestBed.inject(CustomTablesService), 'get').mockResolvedValue({
+        ...table,
+        fields: [{ ...table.fields[1], name: `<div style="background-color: #fde2e4">${hostile}</div>` }, table.fields[0]],
+      });
+      vi.spyOn(TestBed.inject(CustomRecordsService), 'listAll').mockResolvedValue([{ id: 'r1', data: { name: hostile, signed: true } }]);
+      const rendered = await render('t1', permissions);
+      await rendered.settle();
+      return rendered.element;
+    }
+
+    const clean = (element: HTMLElement) => {
+      expect(element.querySelector('img, script, [onerror], .kb-cell [style], .kb-head [style], .kb-cell-text [style]')).toBeNull();
+      expect(element.querySelector('tbody td')?.innerHTML).toContain('<b>Фонд</b>');
+      expect(element.querySelector('tbody td')?.textContent).not.toContain('alert');
+    };
+
+    it('shows them cleaned for viewing', async () => {
+      clean(await renderHostile(['Permissions.ViewCustomRecord']));
+    });
+
+    it('puts them cleaned into the cells and headers that can be edited', async () => {
+      clean(await renderHostile(['Permissions.ViewCustomRecord', 'Permissions.UpdateCustomTable', 'Permissions.UpdateCustomRecord']));
+    });
   });
 
   it('shows one empty row under the header when there are no records', async () => {
@@ -234,7 +294,8 @@ describe('KbTableComponent', () => {
 
       await saver.flush();
       await settle();
-      expect(update).toHaveBeenCalledWith({ ...table, name: 'Таблиця', description: 'Новий опис' });
+      // Назва й стовпчики — свіжі з сервера, змінено лише опис.
+      expect(update).toHaveBeenCalledWith({ ...table, description: 'Новий опис' });
       expect(tag(element).textContent?.trim()).toBe(uk.knowledgeBase.table.saved);
       expect(fixture.componentInstance).toBeDefined();
     });
@@ -304,14 +365,127 @@ describe('KbTableComponent', () => {
       }
     });
 
+    describe('changes made meanwhile elsewhere are not lost', () => {
+      const email = { id: 'c3', name: 'Email', key: 'email', dataType: 0, isRequired: false, order: 2 };
+
+      it('keeps a column added by somebody else when only the description changed here', async () => {
+        const update = vi.spyOn(TestBed.inject(CustomTablesService), 'update').mockResolvedValue('done');
+        const { element, type, saver, settle } = await renderEditable();
+        vi.mocked(TestBed.inject(CustomTablesService).get).mockResolvedValue({ ...table, fields: [...table.fields, email] });
+        type(element.querySelector<HTMLTextAreaElement>('textarea.kb-table__description')!, 'Новий опис');
+        await saver.flush();
+        await settle();
+        expect(update.mock.lastCall![0].fields.map((field) => field.key)).toEqual(['signed', 'name', 'email']);
+      });
+
+      it('puts a new column here next to its neighbour, keeping a column added by somebody else', async () => {
+        const update = vi.spyOn(TestBed.inject(CustomTablesService), 'update').mockResolvedValue('done');
+        const { element, saver, settle, fixture } = await renderEditable();
+        vi.mocked(TestBed.inject(CustomTablesService).get).mockResolvedValue({ ...table, fields: [...table.fields, email] });
+        element.querySelector<HTMLElement>('th .kb-head')!.dispatchEvent(new FocusEvent('focus'));
+        fixture.detectChanges();
+        TestBed.inject(ActionBarService).content()!.choose('addColumnRight', document.createElement('button'));
+        await saver.flush();
+        await settle();
+        expect(update.mock.lastCall![0].fields.map((field) => [field.id, field.key])).toEqual([
+          ['c1', 'name'],
+          [null, 'column_3'],
+          ['c2', 'signed'],
+          ['c3', 'email'],
+        ]);
+      });
+
+      it('changes only the cells changed here, keeping a cell somebody else changed in the same row', async () => {
+        const update = vi.spyOn(TestBed.inject(CustomRecordsService), 'update').mockResolvedValue('done');
+        const { element, type, saver, settle } = await renderEditable(editor, [{ id: 'r1', data: { name: 'Фонд', signed: '' } }]);
+        // Тим часом інший змінив «Підписано».
+        vi.mocked(TestBed.inject(CustomRecordsService).get).mockResolvedValue({ id: 'r1', data: { name: 'Фонд', signed: 'Так' } });
+        type(element.querySelector<HTMLElement>('tbody .kb-cell')!, 'Фонд «Надія»');
+        await saver.flush();
+        await settle();
+        expect(update).toHaveBeenCalledWith('r1', { name: 'Фонд «Надія»', signed: 'Так' });
+        // Чуже значення — і в показаному.
+        expect(element.querySelectorAll('tbody .kb-cell')[1].textContent).toBe('Так');
+      });
+
+      it('takes a row deleted elsewhere off the table instead of trying it again', async () => {
+        const update = vi.spyOn(TestBed.inject(CustomRecordsService), 'update');
+        const { element, type, saver, settle } = await renderEditable(editor, [{ id: 'r1', data: { name: 'Фонд', signed: '' } }]);
+        vi.mocked(TestBed.inject(CustomRecordsService).get).mockResolvedValue('gone');
+        type(element.querySelector<HTMLElement>('tbody .kb-cell')!, 'Фонд «Надія»');
+        await saver.flush();
+        await settle();
+        expect(update).not.toHaveBeenCalled();
+        expect(saver.state()).toBe('saved');
+        // Записів не лишилося — під заголовками порожній рядок.
+        expect(element.querySelector('tbody .kb-cell')?.textContent).toBe('');
+      });
+
+      it('says the table was deleted elsewhere instead of saving it again and again', async () => {
+        const { element, type, saver, settle } = await renderEditable();
+        vi.mocked(TestBed.inject(CustomTablesService).get).mockResolvedValue('gone');
+        type(element.querySelector<HTMLTextAreaElement>('textarea.kb-table__description')!, 'Новий опис');
+        await saver.flush();
+        await settle();
+        expect(element.querySelector('.kb-view__message--error')?.textContent).toContain(uk.knowledgeBase.failure.gone);
+        expect(saver.state()).toBe('saved');
+      });
+
+      it('checks for changes at once when the tab is shown again', async () => {
+        const list = vi.spyOn(TestBed.inject(CustomRecordsService), 'listAll').mockResolvedValue([]);
+        const { settle } = await renderEditable();
+        const calls = list.mock.calls.length;
+        document.dispatchEvent(new Event('visibilitychange'));
+        await settle();
+        expect(list.mock.calls.length).toBe(calls + 1);
+      });
+    });
+
+    it('lets leave at once when all is saved, and asks first when the server did not take the changes', async () => {
+      const update = vi.spyOn(TestBed.inject(CustomTablesService), 'update').mockResolvedValue('invalid');
+      const { element, type, fixture } = await renderEditable();
+      const view = fixture.componentInstance as unknown as { canLeave(): Promise<boolean>; answerLeave(leave: boolean): void; leaveAnswer: unknown };
+      expect(await view.canLeave()).toBe(true);
+
+      type(element.querySelector<HTMLTextAreaElement>('textarea.kb-table__description')!, 'Новий опис');
+      const leaving = view.canLeave();
+      await vi.waitFor(() => expect(view.leaveAnswer).not.toBeNull());
+      expect(update).toHaveBeenCalled();
+      view.answerLeave(false);
+      expect(await leaving).toBe(false);
+
+      // Ще раз: «Піти» — зміни пропадуть, але піти можна.
+      const again = view.canLeave();
+      await vi.waitFor(() => expect(view.leaveAnswer).not.toBeNull());
+      view.answerLeave(true);
+      expect(await again).toBe(true);
+    });
+
+    it('turns off adding columns at 50 (the server takes no more)', async () => {
+      const many = Array.from({ length: 50 }, (_, order) => ({ id: `f${order}`, name: `Поле ${order}`, key: `field_${order}`, dataType: 0, isRequired: false, order }));
+      vi.spyOn(TestBed.inject(CustomTablesService), 'get').mockResolvedValue({ ...table, fields: many });
+      vi.spyOn(TestBed.inject(CustomRecordsService), 'listAll').mockResolvedValue([]);
+      const { element, settle, fixture } = await render('t1', editor);
+      await settle();
+      element.querySelector<HTMLElement>('th .kb-head')!.dispatchEvent(new FocusEvent('focus'));
+      fixture.detectChanges();
+      const items = TestBed.inject(ActionBarService).content()!.groups.flat();
+      expect(items.find((item) => item.id === 'addColumnRight')?.disabled).toBe(true);
+      expect(items.find((item) => item.id === 'addColumnLeft')?.disabled).toBe(true);
+    });
+
     it('turns the tag red when the server did not take the changes, and tries again by a click on it', async () => {
       const update = vi.spyOn(TestBed.inject(CustomRecordsService), 'update').mockResolvedValueOnce('invalid').mockResolvedValueOnce('done');
       const { element, type, saver, settle } = await renderEditable(editor, [{ id: 'r1', data: { name: 'Фонд', signed: false } }]);
       type(element.querySelector<HTMLElement>('tbody .kb-cell')!, 'Фонд 2');
       await saver.flush();
       await settle();
-      expect(tag(element).textContent?.trim()).toBe(uk.knowledgeBase.table.saveFailed);
+      expect(tag(element).querySelector('.kb-table__saved-label--failed')?.textContent?.trim()).toBe(uk.knowledgeBase.table.saveFailed);
       expect(tag(element).querySelector('ion-icon')?.getAttribute('name')).toBe('cloud-offline-outline');
+      // При наведенні — «Зберегти зміни» (показує CSS); для екранних читачів назва одна.
+      const retry = tag(element).querySelector('.kb-table__saved-label--retry')!;
+      expect(retry.textContent?.trim()).toBe(uk.knowledgeBase.table.saveNow);
+      expect(retry.getAttribute('aria-hidden')).toBe('true');
 
       (tag(element) as HTMLButtonElement).click();
       await saver.flush();
@@ -780,6 +954,7 @@ describe('KbTableComponent', () => {
       const { fixture, settle, element } = await render('t1');
       await settle();
       fixture.debugElement.query(By.directive(SearchHeaderComponent)).componentInstance.searchChange.emit('Фонд');
+      await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
       await settle();
 
       const { text } = await captureDownload(exportOf(fixture));

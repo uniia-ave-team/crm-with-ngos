@@ -1,5 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Signal, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { ConnectionService } from '../connection/connection.service';
@@ -8,6 +9,7 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
 import { AccountsService } from '../accounts/accounts.service';
+import { AuthService } from '../auth/auth.service';
 import {
   EMPTY_TABLE_FIELD_KEY,
   KNOWLEDGE_BASE_SAMPLE_URL,
@@ -49,6 +51,36 @@ describe('KnowledgeBaseService', () => {
 
     await service.load();
     http.expectNone(KNOWLEDGE_BASE_SAMPLE_URL);
+  });
+
+  it('forgets the contents of the previous organisation when another account becomes active, and loads them again', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
+        { provide: KNOWLEDGE_BASE_SOURCE, useValue: 'sample' },
+      ],
+    });
+    const session = signal<string | null>('a');
+    (TestBed.inject(AuthService) as { sessionId: Signal<string | null> }).sessionId = session;
+    http = TestBed.inject(HttpTestingController);
+    http.match(() => true);
+    const service = TestBed.inject(KnowledgeBaseService);
+    const first = service.load();
+    http.expectOne(KNOWLEDGE_BASE_SAMPLE_URL).flush([{ id: 't1', type: 'customtable', title: 'Таблиця першої' }]);
+    await first;
+    expect(service.state().status).toBe('ready');
+
+    session.set('b');
+    TestBed.tick();
+    expect(service.state()).toEqual({ status: 'loading', entries: [] });
+    const second = service.load();
+    http.expectOne(KNOWLEDGE_BASE_SAMPLE_URL).flush([{ id: 't2', type: 'customtable', title: 'Таблиця другої' }]);
+    await second;
+    expect(service.state().entries.map((entry) => entry.title)).toContain('Таблиця другої');
+    expect(service.state().entries.map((entry) => entry.title)).not.toContain('Таблиця першої');
   });
 
   it('asks the tree of the server of the active account when the source is the general request', async () => {
@@ -239,7 +271,7 @@ describe('KnowledgeBaseService', () => {
       http.expectNone(() => true);
     });
 
-    it('opens a table for editing and saves the new name and description with the same columns', async () => {
+    it('opens a table for editing and saves the new name and description with the fresh columns (keeping one added meanwhile)', async () => {
       const service = await ready();
       const opening = service.openForEdit(table);
       const fields = [
@@ -254,9 +286,12 @@ describe('KnowledgeBaseService', () => {
       expect([editing.title, editing.description]).toEqual(['Таблиця', 'Старий опис']);
 
       const saving = service.saveEdit(editing, { title: 'Нова назва', description: null });
-      const request = http.expectOne(`${tablesUrl()}/t1`);
-      expect(request.request.method).toBe('PUT');
-      expect(request.request.body).toEqual({ name: 'Нова назва', description: null, fields });
+      // Перед збереженням — свіжа структура: тим часом хтось додав «Email», його не можна видалити.
+      const withEmail = [...fields, { id: 'c3', name: 'Email', key: 'email', dataType: 0, isRequired: false, order: 2 }];
+      http.expectOne({ method: 'GET', url: `${tablesUrl()}/t1` }).flush({ id: 't1', ngoId: 'n1', name: 'Таблиця', description: 'Старий опис', sourceTemplateId: null, fields: withEmail });
+      await new Promise((resolve) => setTimeout(resolve));
+      const request = http.expectOne({ method: 'PUT', url: `${tablesUrl()}/t1` });
+      expect(request.request.body).toEqual({ name: 'Нова назва', description: null, fields: withEmail });
       request.flush(null, { status: 204, statusText: 'No Content' });
       expect(await saving).toBe('done');
       expect(service.state().entries[1]).toEqual({ ...table, title: 'Нова назва' });

@@ -53,6 +53,7 @@
                   tabindex="0"
                   [attr.aria-label]="'knowledgeBase.table.columnName' | translate"
                   [appRichText]="htmlOf(field.name)"
+                  [appRichTextMaxLength]="headMaxLength"
                   (richTextChange)="onHeadInput(field, $event)"
                   (focus)="onHeadFocus(field, $event)"
                   (blur)="onHeadBlur(field, $event)"

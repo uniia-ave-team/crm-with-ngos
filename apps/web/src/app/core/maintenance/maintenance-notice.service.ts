@@ -7,6 +7,8 @@ import { LanguageService } from '../i18n/language.service';
 
 /** Як часто перераховується, чи роботи вже почались або скінчились (мс). */
 const CLOCK_TICK_MS = 60_000;
+/** Як часто перепитувати статус (нове оголошення): вкладка, відкрита зранку, побачить денне. */
+export const STATUS_REFRESH_MS = 5 * 60_000;
 
 /** Що показати в оголошенні: ключ заголовка з параметрами й повідомлення сервера. */
 export interface MaintenanceNoticeView {
@@ -26,8 +28,12 @@ export interface MaintenanceNoticeView {
  * пошук по черзі перевіряє сервери збережених акаунтів, і статус кожного з них нікому не потрібен.
  * Сторінка входу запитує статус і сама: новий запит заміняє попередній, тож іде один.
  *
+ * Щоб побачити оголошення, опубліковане пізніше, статус тихо перепитується раз на
+ * `STATUS_REFRESH_MS` (поки вкладку видно) і щойно на вкладку повернулися
+ * (`ConnectionService.refreshSystemStatus`).
+ *
  * Оголошення видно, поки роботи не скінчились (`endsAt`); заголовок каже, заплановані вони чи
- * вже тривають, і перемикається сам (годинник раз на хвилину). Закрите оголошення не
+ * вже тривають, і перемикається сам (годинник раз на хвилину). Закрите кнопкою оголошення не
  * показується до перезавантаження сторінки; інше оголошення (інший текст чи час) — показується.
  * Оголошення з датами, які не вдалося прочитати, не показується: незрозуміло, чи воно ще чинне.
  */
@@ -78,7 +84,33 @@ export class MaintenanceNoticeService {
     });
 
     const timer = setInterval(() => this.now.set(Date.now()), CLOCK_TICK_MS);
-    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+    const refresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && !this.accounts.switching()) {
+        void this.connection.refreshSystemStatus();
+      }
+    };
+    const refreshTimer = setInterval(refresh, STATUS_REFRESH_MS);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', refresh);
+    }
+    inject(DestroyRef).onDestroy(() => {
+      clearInterval(timer);
+      clearInterval(refreshTimer);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', refresh);
+      }
+    });
+  }
+
+  /**
+   * Плашка оголошення зникла (`didDismiss`): закритим вважається лише закрите кнопкою «Закрити»
+   * (`role` — `cancel`). Плашка зникає й сама, коли статус перепитується чи оголошення вже неактуальне,
+   * — тоді його не закривали, і нове чи те саме оголошення має показатися знову.
+   */
+  onDismissed(role: string | undefined): void {
+    if (role === 'cancel') {
+      this.dismiss();
+    }
   }
 
   /** Закриває поточне оголошення (до перезавантаження сторінки). */

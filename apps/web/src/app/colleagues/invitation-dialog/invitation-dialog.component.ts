@@ -4,6 +4,7 @@ import { TranslateService, TranslatePipe } from '@ngx-translate/core';
 import { IonIcon } from '@ionic/angular';
 
 import { LanguageService } from '../../core/i18n/language.service';
+import { linkWithToken } from '../../core/auth/link-token';
 
 /** Стан дій з посиланням: нічого не робили, скопійовано, не вдалося скопіювати, не вдалося поділитися. */
 export type InvitationStatus = 'idle' | 'copied' | 'failed' | 'shareFailed';
@@ -27,7 +28,7 @@ export interface InvitationShare {
 
 /**
  * Зміст модального вікна «Запрошення створено» (`app-modal`): посилання, яким адмін ділиться з
- * колегою (`<адреса застосунку на домені сервера>/join?token=<токен>`, див. `link`), далі
+ * колегою (`<адреса застосунку на домені сервера>/join#token=<токен>`, див. `link`), далі
  * пошта, для якої створено запрошення, і до
  * коли воно діє. Посилання в один рядок із горизонтальною прокруткою, виділяється одним кліком;
  * справа від нього дві кнопки: копіювання (`copy-outline`) і «Поділитися» (`share-social`, через
@@ -38,7 +39,7 @@ export interface InvitationShare {
  * `dismiss`; сам нічого не робить, а як усе пройшло, приходить входом `status`.
  *
  * Те саме вікно показує й посилання для скидання пароля колеги (`kind="passwordReset"`): інші
- * заголовок, підказка й підпис поширення, а посилання веде на `/reset-password?token=…`.
+ * заголовок, підказка й підпис поширення, а посилання веде на `/reset-password#token=…`.
  */
 @Component({
   selector: 'app-invitation-dialog',
@@ -76,14 +77,14 @@ export class InvitationDialogComponent {
   protected readonly canShare = typeof this.document.defaultView?.navigator?.share === 'function';
 
   /**
-   * Посилання для колеги: `<адреса застосунку>/join?token=<токен>` (для скидання пароля —
-   * `/reset-password?token=<токен>`) (токен кодується для адреси).
+   * Посилання для колеги: `<адреса застосунку>/join#token=<токен>` (для скидання пароля —
+   * `/reset-password#token=<токен>`; токен у фрагменті й закодований для адреси, див. `link-token.ts`).
    * Застосунок і API живуть на одному хості (API — на порту 5065), а `/join` шукає сервер за
    * доменом сторінки. Тому посилання веде на хост сервера, де створено запрошення: якщо це той
    * самий хост, що й у цієї сторінки, — на цю ж адресу (так і під час розробки, коли застосунок
    * на іншому порту); якщо інший — на той хост зі стандартним портом.
    */
-  protected readonly link = computed(() => `${this.appOrigin()}${KIND_PATH[this.kind()]}?token=${encodeURIComponent(this.token())}`);
+  protected readonly link = computed(() => linkWithToken(this.appOrigin(), KIND_PATH[this.kind()], this.token()));
 
   /** Ключ тексту, що залежить від виду посилання (`title`, `hint`, `link`, `share*`). */
   protected text(name: string): string {

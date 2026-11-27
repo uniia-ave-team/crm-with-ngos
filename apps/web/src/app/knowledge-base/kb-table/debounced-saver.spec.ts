@@ -58,6 +58,19 @@ describe('DebouncedSaver', () => {
     expect(saver.state()).toBe('saved');
   });
 
+  it('keeps a failed change unsaved, so the next flush (search, sort, leaving) tries it again', async () => {
+    const save = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const saver = new DebouncedSaver(save);
+    saver.changed();
+    await saver.flush();
+    expect(saver.state()).toBe('failed');
+    await saver.flush();
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(saver.state()).toBe('saved');
+    await saver.flush();
+    expect(save).toHaveBeenCalledTimes(2);
+  });
+
   it('saves at once on flush and does nothing without changes', async () => {
     const save = vi.fn().mockResolvedValue(true);
     const saver = new DebouncedSaver(save);

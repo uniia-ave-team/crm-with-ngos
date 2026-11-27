@@ -22,7 +22,8 @@ export const KNOWLEDGE_BASE_ROUTES: Routes = [
     component: KnowledgeBasePage,
     children: [
       { path: '', pathMatch: 'full', component: KbGuideComponent },
-      { path: 'tables/:id', component: KbTableComponent },
+      // Перед виходом незбережене йде на сервер; не вдалося — питаємо (див. `KbTableComponent.canLeave`).
+      { path: 'tables/:id', component: KbTableComponent, canDeactivate: [(table: KbTableComponent) => table.canLeave()] },
       { path: 'pages/:id', component: KbPageComponent },
       { path: 'templates', component: KbTemplatesComponent, canActivate: [requireAnyPermission(TABLE_TEMPLATES_PERMISSIONS)] },
       { path: '**', redirectTo: '' },

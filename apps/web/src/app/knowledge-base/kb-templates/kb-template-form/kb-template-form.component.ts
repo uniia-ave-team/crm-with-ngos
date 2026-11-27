@@ -1,7 +1,12 @@
 import { Component, ElementRef, Injector, afterNextRender, computed, inject, input, linkedSignal, output, signal, viewChild } from '@angular/core';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
-import { CUSTOM_TABLE_DESCRIPTION_MAX_LENGTH, CUSTOM_TABLE_NAME_MAX_LENGTH } from '../../../core/custom-tables/custom-tables.service';
+import {
+  CUSTOM_FIELD_NAME_MAX_LENGTH,
+  CUSTOM_TABLE_DESCRIPTION_MAX_LENGTH,
+  CUSTOM_TABLE_MAX_FIELDS,
+  CUSTOM_TABLE_NAME_MAX_LENGTH,
+} from '../../../core/custom-tables/custom-tables.service';
 import { uniqueFieldKey } from '../../../core/custom-tables/field-keys';
 import { TableTemplate, TableTemplateUpdate } from '../../../core/custom-tables/table-templates.service';
 import { ActionBarComponent } from '../../../shared/action-bar/action-bar.component';
@@ -10,7 +15,7 @@ import { cellTextColor } from '../../../shared/color/cell-colors';
 import { ColorPickerComponent } from '../../../shared/color-picker/color-picker.component';
 import { PopoverComponent } from '../../../shared/popover/popover.component';
 import { RichTextDirective, RichTextFormat, formatSelection } from '../../../shared/rich-text/rich-text.directive';
-import { joinBackground, richTextToPlain, splitBackground } from '../../../shared/rich-text/rich-text';
+import { joinBackground, richTextToPlain, sanitizeRichText, splitBackground } from '../../../shared/rich-text/rich-text';
 
 /** Стовпчик у формі: сталий ключ рядка `uid` (курсор не злітає), `id` на сервері (`null` — новий). */
 interface EditableField {
@@ -68,6 +73,8 @@ export class KbTemplateFormComponent {
   private readonly colorPopover = viewChild<PopoverComponent>('colorPopover');
 
   protected readonly nameMaxLength = CUSTOM_TABLE_NAME_MAX_LENGTH;
+  /** Скільки тексту з форматуванням уміщається в заголовок (ліміт сервера мінус тег кольору тла). */
+  protected readonly headMaxLength = CUSTOM_FIELD_NAME_MAX_LENGTH - '<div style="background-color: #000000"></div>'.length;
   protected readonly descriptionMaxLength = CUSTOM_TABLE_DESCRIPTION_MAX_LENGTH;
 
   protected readonly title = linkedSignal(() => this.template().name);
@@ -105,16 +112,21 @@ export class KbTemplateFormComponent {
           item('underline', none),
           item('strikethrough', none),
         ],
-        [item('addColumnRight', none), item('addColumnLeft', none), item('deleteColumn', none || this.fields().length <= 1)],
+        [
+          // Більше 50 полів сервер не прийме; останнього не видалити — потрібне хоча б одне.
+          item('addColumnRight', none || this.fields().length >= CUSTOM_TABLE_MAX_FIELDS),
+          item('addColumnLeft', none || this.fields().length >= CUSTOM_TABLE_MAX_FIELDS),
+          item('deleteColumn', none || this.fields().length <= 1),
+        ],
       ],
       // Кнопки — лише з `ColumnAction` (вище), тож назва дії — одна з них.
       choose: (action, button) => this.onAction(action as ColumnAction, button),
     };
   });
 
-  /** Назва стовпчика з форматуванням (без тегу кольору тла) — для заголовка. */
+  /** Назва стовпчика з форматуванням (без тегу кольору тла), очищена — для заголовка. */
   protected htmlOf(name: string): string {
-    return splitBackground(name).html;
+    return sanitizeRichText(splitBackground(name).html);
   }
 
   /** Кольори заголовка: тло з тегу в назві, текст того самого відтінку з контрастом 7:1. */

@@ -1,5 +1,6 @@
-import { Component, computed, effect, inject, input, signal, untracked, WritableSignal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Component, computed, effect, inject, signal, untracked, WritableSignal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { IonButton, IonContent, IonInput } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -10,6 +11,7 @@ import { ConnectionService } from '../core/connection/connection.service';
 import { InvitationFailure, InvitationsService } from '../core/invitations/invitations.service';
 import { isPasswordTooLong, isStrongPassword } from '../shared/password-fields/password-rules';
 import { PasswordFieldsComponent } from '../shared/password-fields/password-fields.component';
+import { tokenFromFragment } from '../core/auth/link-token';
 
 /**
  * Що показує сторінка: перевірку сервера й токена, помилку «сервера не знайдено», помилку
@@ -19,7 +21,7 @@ import { PasswordFieldsComponent } from '../shared/password-fields/password-fiel
 type JoinView = 'loading' | 'no-server' | 'invalid' | 'exists' | 'check-failed' | 'form';
 
 /**
- * Сторінка запрошення (`/join?token=…`): колега переходить за посиланням із
+ * Сторінка запрошення (`/join#token=…`): колега переходить за посиланням із
  * діалогу «Додати колегу», завершує реєстрацію й одразу входить. Без стражів і
  * без бічного меню. Сервер — той, на домен якого веде посилання
  * (`ConnectionService.pageServerUrl`), а не сервер активного акаунта.
@@ -39,8 +41,10 @@ export class JoinPage {
   /** Умови до пароля сервера, на якому задають пароль (`PasswordPolicyService`). */
   protected readonly passwordPolicy = inject(PasswordPolicyService).policy(this.connection.pageServerUrl);
 
-  /** Токен із query-параметра `?token=…` (прив'язується роутером через bindToComponentInputs). */
-  readonly token = input<string | undefined>();
+  /** Фрагмент адреси сторінки (`#token=…`). */
+  private readonly fragment = toSignal(inject(ActivatedRoute).fragment, { initialValue: null });
+  /** Токен із фрагмента адреси (`#token=…`, див. `link-token.ts`). */
+  protected readonly token = computed(() => tokenFromFragment(this.fragment()));
 
   protected readonly view = signal<JoinView>('loading');
 

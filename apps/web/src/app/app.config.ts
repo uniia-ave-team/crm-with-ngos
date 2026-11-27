@@ -17,8 +17,8 @@ export const appConfig: ApplicationConfig = {
     // Іконка кнопки бокового меню (`ion-menu-button`) — з нашого набору (`core/icons.ts`), а не Ionicons.
     provideIonicAngular({ menuIcon: 'menu-outline' }),
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
-    // Усі сторінки довантажуються у фоні після старту; query-параметри (`?token=` запрошення)
-    // привʼязуються до входів сторінок.
+    // Усі сторінки довантажуються у фоні після старту; параметри адреси привʼязуються до входів
+    // сторінок (токен запрошення й скидання пароля — у фрагменті, `#token=`, див. `link-token.ts`).
     provideRouter(routes, withPreloading(PreloadAllModules), withComponentInputBinding()),
     // `withFetch()`: запити через `fetch` — так збереження таблиці може йти з `keepalive` і не
     // обривається, коли вкладку закривають (див. `KbTableComponent`).

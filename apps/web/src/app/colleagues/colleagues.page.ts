@@ -354,6 +354,8 @@ export class ColleaguesPage implements OnInit {
    * Ролі, які колега має на сервері (`id`): з профілю, далі — після кожної вдалої зміни. З ними
    * при збереженні порівнюються вибрані (`colleagueEditRoles`).
    */
+  /** Оновлення з першої сторінки ще не вдалося: повтор замінює показані рядки, а не доповнює. */
+  private reloadPending = false;
   private colleagueSavedRoles: ReadonlySet<string> = new Set();
   /** Ключ помилки ролей у формі «Редагувати» (після спроби зберегти без ролі); `null` — нема. */
   protected readonly colleagueEditRolesError = signal<string | null>(null);
@@ -510,6 +512,7 @@ export class ColleaguesPage implements OnInit {
     this.colleaguesGeneration++;
     this.colleaguesLoading = false;
     this.nextPage = 1;
+    this.reloadPending = true;
     void this.loadColleagues(true);
   }
 
@@ -517,7 +520,8 @@ export class ColleaguesPage implements OnInit {
    * Підвантажує наступну сторінку колег (`GET /api/v1/users`, по `COLLEAGUES_PAGE_SIZE`)
    * і додає її до вже показаних (`fresh` — замінює ними показані: оновлення після дії з
    * колегою). Невдача лишає, що вже є, і показує причину; той самий виклик повторює запит.
-   * Запит, що ще триває, не дублюється.
+   * Повтор невдалого оновлення (`reloadPending`) теж замінює показані, а не додає першу сторінку
+   * до старих рядків. Запит, що ще триває, не дублюється.
    */
   protected async loadColleagues(fresh = false): Promise<void> {
     if (this.colleaguesLoading) {
@@ -528,7 +532,7 @@ export class ColleaguesPage implements OnInit {
     const before = this.colleagues();
     // Оновлення з першої сторінки (`fresh`): таблиця показує старі рядки, поки не прийде відповідь,
     // а тоді замінюється нею, а не доповнюється.
-    const kept = fresh ? [] : before.users;
+    const kept = fresh || this.reloadPending ? [] : before.users;
     this.colleagues.set({ ...before, status: 'loading', failure: null });
     try {
       const result = await this.users.list(this.nextPage, COLLEAGUES_PAGE_SIZE, this.sort, this.searchTerm());
@@ -540,6 +544,7 @@ export class ColleaguesPage implements OnInit {
         return;
       }
       this.nextPage++;
+      this.reloadPending = false;
       const known = new Set(kept.map((user) => user.id));
       this.colleagues.set({
         status: 'ready',
@@ -941,6 +946,11 @@ export class ColleaguesPage implements OnInit {
    * відкритим з помилкою за кожну частину, а повторне «Зберегти» робить лише те, що лишилося
    * (вдалі зміни ролей запамʼятовуються). Усе вдалося — вікно закривається. Після будь-якої
    * вдалої зміни список колег запитується заново.
+   *
+   * Що зберігати (колега, вибрані й уже збережені ролі, форма), береться до першого запиту: поки
+   * йде збереження (наприклад, вантажиться аватар), можна відкрити іншого колегу, і його ролі не
+   * мають піти цьому. Помилки, очищення аватара й закриття панелі — лише якщо відкрито досі те
+   * саме редагування.
    */
   protected async saveColleague({ profile, avatar }: ProfileFormValue): Promise<void> {
     const id = this.panel()?.userId;
@@ -948,34 +958,51 @@ export class ColleaguesPage implements OnInit {
       return;
     }
     // Як і у формі нового колеги, хоча б одна роль обовʼязкова (лише коли ролі видно й можна міняти).
-    if (this.canAssignRoles() && this.colleagueEditRoles().size === 0) {
+    const assignRoles = this.canAssignRoles();
+    if (assignRoles && this.colleagueEditRoles().size === 0) {
       this.colleagueEditRolesError.set('colleagues.colleagueForm.error.rolesRequired');
       return;
     }
+    const request = this.colleagueEditRequest;
+    const selectedRoles: ReadonlySet<string> = new Set(this.colleagueEditRoles());
+    const savedRoles: ReadonlySet<string> = new Set(this.colleagueSavedRoles);
+    const form = this.colleagueProfileForm();
+    /** Відкрито досі те саме редагування (не інший колега). */
+    const current = () => request === this.colleagueEditRequest;
     this.colleagueEditSaving.set(true);
     this.colleagueEditErrors.set([]);
     try {
       const updated = await this.users.updateProfile(profile, id);
       if (updated !== 'updated') {
-        this.colleagueEditErrors.set([`colleagues.profileForm.saveError.${updated}`]);
+        if (current()) {
+          this.colleagueEditErrors.set([`colleagues.profileForm.saveError.${updated}`]);
+        }
         return;
       }
       const errors: string[] = [];
       if (avatar) {
         const uploaded = await this.users.uploadAvatar(avatar, id);
         if (uploaded === 'uploaded') {
-          this.colleagueProfileForm()?.clearAvatar();
+          if (current()) {
+            form?.clearAvatar();
+          }
         } else {
           errors.push(`colleagues.profileForm.avatarError.${uploaded}`);
         }
       }
-      if (this.canAssignRoles()) {
-        const failure = await this.saveColleagueRoles(id);
+      if (assignRoles) {
+        const { failure, saved } = await this.saveColleagueRoles(id, selectedRoles, savedRoles);
+        if (current()) {
+          this.colleagueSavedRoles = saved;
+        }
         if (failure) {
           errors.push(`colleagues.profileForm.rolesError.${failure}`);
         }
       }
       this.reloadColleagues();
+      if (!current()) {
+        return;
+      }
       if (errors.length > 0) {
         this.colleagueEditErrors.set(errors);
         return;
@@ -989,13 +1016,16 @@ export class ColleaguesPage implements OnInit {
   /**
    * Ролі колеги за різницею вибраних із тими, що він має: спершу нові, потім зняті (так колега
    * посеред збереження не лишається без ролі), по одному запиту. Одночасно не можна: сервер не
-   * приймає паралельних змін одного користувача (400, «Optimistic concurrency failure»). Вдалі
-   * зміни запамʼятовуються в `colleagueSavedRoles`; невдала не зупиняє решту. Повертає причину
-   * першої невдачі або `null`.
+   * приймає паралельних змін одного користувача (400, «Optimistic concurrency failure»). Вибрані
+   * (`selected`) і збережені (`savedBefore`) ролі — знімок на початку збереження. Невдала зміна не
+   * зупиняє решту. Повертає причину першої невдачі (чи `null`) і ролі, що тепер збережені.
    */
-  private async saveColleagueRoles(id: string): Promise<RequestFailure | null> {
-    const selected = this.colleagueEditRoles();
-    const saved = new Set(this.colleagueSavedRoles);
+  private async saveColleagueRoles(
+    id: string,
+    selected: ReadonlySet<string>,
+    savedBefore: ReadonlySet<string>,
+  ): Promise<{ readonly failure: RequestFailure | null; readonly saved: ReadonlySet<string> }> {
+    const saved = new Set(savedBefore);
     const added = [...selected].filter((roleId) => !saved.has(roleId));
     const removed = [...saved].filter((roleId) => !selected.has(roleId));
     let failure: RequestFailure | null = null;
@@ -1015,8 +1045,7 @@ export class ColleaguesPage implements OnInit {
         failure ??= result;
       }
     }
-    this.colleagueSavedRoles = saved;
-    return failure;
+    return { failure, saved };
   }
 
   /** Натиснули на плашку ролі у формі «Редагувати»: роль вибирається чи знімається. */

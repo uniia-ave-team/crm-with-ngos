@@ -18,6 +18,7 @@ import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
 import { REQUEST_TIMEOUT_MS } from '../http/timeouts';
 import { readPagedItems, text } from './paged';
+import { Gone, isGone } from './gone';
 import { writeRequestOptions } from './write-options';
 
 const API_CUSTOM_TABLES_PATH = '/api/v1/customtables';
@@ -27,6 +28,12 @@ export const CUSTOM_TABLES_PAGE_SIZE = 100;
 /** Найдовші назва й опис таблиці, які приймає сервер (`CustomTableValidationConstants`). */
 export const CUSTOM_TABLE_NAME_MAX_LENGTH = 255;
 export const CUSTOM_TABLE_DESCRIPTION_MAX_LENGTH = 1000;
+/** Найдовша назва поля (`FieldSchemaValidationConstants.MaxNameLength`). */
+export const CUSTOM_FIELD_NAME_MAX_LENGTH = 255;
+/** Найдовше значення клітинки (`CustomRecordDataValidationExtensions.MaxStringValueLength`). */
+export const CUSTOM_RECORD_VALUE_MAX_LENGTH = 10_000;
+/** Найбільше полів у таблиці (`CustomRecordValidationConstants.MaxFields`). */
+export const CUSTOM_TABLE_MAX_FIELDS = 50;
 
 /** Таблиця зі списку `GET /api/v1/customtables`: те, що потрібно змісту бази знань. */
 export interface CustomTableSummary {
@@ -71,6 +78,8 @@ export interface NewCustomTableFromTemplate {
 /** Створено таблицю (її `id`) чи ні. */
 export type CreateCustomTableResult = { readonly id: string } | RequestFailure;
 export type CustomTableResult = 'done' | RequestFailure;
+/** Таблицю змінено; `gone` — її вже видалили (404). */
+export type UpdateCustomTableResult = 'done' | Gone | RequestFailure;
 
 /**
  * Запити до таблиць організації (`/api/v1/customtables`, права `ViewCustomTable`,
@@ -116,7 +125,7 @@ export class CustomTablesService {
   }
 
   /** `GET /api/v1/customtables/{id}`: назва, опис і поля. Відповідь, з якої не скласти поля, — `error`. */
-  async get(id: string): Promise<CustomTableDetails | RequestFailure> {
+  async get(id: string): Promise<CustomTableDetails | Gone | RequestFailure> {
     try {
       const body = await firstValueFrom(this.http.get<Untrusted<CustomTableDto>>(this.url(id)).pipe(timeout(REQUEST_TIMEOUT_MS)));
       const details = toDetails(body);
@@ -126,6 +135,9 @@ export class CustomTablesService {
       }
       return details;
     } catch (error) {
+      if (isGone(error)) {
+        return 'gone';
+      }
       const failure = toRequestFailure(error);
       console.warn(`[CustomTablesService] Не вдалося завантажити таблицю (${failure})`, error);
       return failure;
@@ -153,12 +165,15 @@ export class CustomTablesService {
    * усі поля в їхньому порядку (наявні — з `id`, нові — з `id: null`; поля, якого нема в списку,
    * сервер видаляє).
    */
-  async update(table: CustomTableUpdate): Promise<CustomTableResult> {
+  async update(table: CustomTableUpdate): Promise<UpdateCustomTableResult> {
     const body = { name: table.name, description: table.description, fields: [...table.fields] } satisfies UpdateCustomTableCommand;
     try {
       await firstValueFrom(this.http.put(this.url(table.id), body, writeRequestOptions()).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return 'done';
     } catch (error) {
+      if (isGone(error)) {
+        return 'gone';
+      }
       const failure = toRequestFailure(error);
       console.warn(`[CustomTablesService] Не вдалося змінити таблицю (${failure})`, error);
       return failure;

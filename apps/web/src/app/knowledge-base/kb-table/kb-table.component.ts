@@ -15,7 +15,10 @@ import {
 import { PERMISSIONS } from '../../core/auth/permissions';
 import { CustomRecordData, CustomRecordsService, CustomRecordsSort } from '../../core/custom-tables/custom-records.service';
 import {
+  CUSTOM_FIELD_NAME_MAX_LENGTH,
+  CUSTOM_RECORD_VALUE_MAX_LENGTH,
   CUSTOM_TABLE_DESCRIPTION_MAX_LENGTH,
+  CUSTOM_TABLE_MAX_FIELDS,
   CustomTableDetails,
   CustomTableField,
   CustomTableUpdate,
@@ -30,7 +33,7 @@ import { SEARCH_MAX_LENGTH } from '../../core/users/users.service';
 import { AutoSizeDirective } from '../../shared/auto-size/auto-size.directive';
 import { downloadFile } from '../../shared/download/download-file';
 import { RichTextDirective, RichTextFormat, formatSelection } from '../../shared/rich-text/rich-text.directive';
-import { joinBackground, richTextToPlain, splitBackground } from '../../shared/rich-text/rich-text';
+import { joinBackground, richTextToPlain, sanitizeRichText, splitBackground } from '../../shared/rich-text/rich-text';
 import { cellTextColor } from '../../shared/color/cell-colors';
 import { ColorPickerComponent } from '../../shared/color-picker/color-picker.component';
 import { PopoverComponent } from '../../shared/popover/popover.component';
@@ -43,6 +46,7 @@ import { injectKnowledgeBaseEntry } from '../kb-entry';
 import { DebouncedSaver } from './debounced-saver';
 import { XLSX_TYPE, sheetName, toXlsx, xlsxFileName } from './table-xlsx';
 import { LocalRecord, mergeRecords } from './merge-records';
+import { NEW_FIELD_PREFIX, isNewField, mergeFields } from './merge-fields';
 import { CHECKBOX_OFF, CHECKBOX_ON, checkboxLosesText, checkboxState, setCheckbox, toCheckbox, toggleCheckboxFormat } from './cell-checkbox';
 
 /** Стан таблиці у виді: завантажується, є чи не вдалося (ключ причини). */
@@ -101,8 +105,20 @@ const cellAction = (item: {
  */
 const EMPTY_VALUE = '';
 
-/** Початок `id` нового поля, поки сервер не дав справжній (у `PUT` таке поле йде з `id: null`). */
-const NEW_FIELD_PREFIX = 'new:';
+/** Пауза після останнього символу в пошуку, перш ніж запитати записи (не запит на кожну літеру). */
+export const SEARCH_DELAY_MS = 300;
+
+/**
+ * Скільки тіла запитів надсилати при закритті сторінки: браузер дає всім запитам із `keepalive`
+ * разом до 64 КБ, тож трохи менше — із запасом на заголовки.
+ */
+const CLOSE_BUDGET_BYTES = 60_000;
+
+/** Тег кольору тла навколо значення (`<div style="background-color: #rrggbb">…</div>`) — його довжина. */
+const BACKGROUND_TAG_LENGTH = '<div style="background-color: #000000"></div>'.length;
+/** Скільки тексту з форматуванням можна ввести в клітинку й у заголовок (ліміт сервера мінус тег кольору). */
+const CELL_HTML_MAX_LENGTH = CUSTOM_RECORD_VALUE_MAX_LENGTH - BACKGROUND_TAG_LENGTH;
+const HEAD_HTML_MAX_LENGTH = CUSTOM_FIELD_NAME_MAX_LENGTH - BACKGROUND_TAG_LENGTH;
 
 /**
  * Що зробити після підтвердження: видалити рядок (ключ `LocalRecord.key`) чи стовпчик (поле) або
@@ -187,6 +203,9 @@ export class KbTableComponent {
   private readonly templateDialog = viewChild<ModalComponent>('templateDialog');
   /** Вікно «Створити шаблон»: запит іде; причина невдачі (ключ мовного файлу) чи `null`. */
   protected readonly templateBusy = signal(false);
+  /** Вікно «Зміни не збережено» перед виходом із виду: відповідь чекає на вибір (`canLeave`). */
+  private readonly leaveDialog = viewChild<ModalComponent>('leaveDialog');
+  private leaveAnswer: ((leave: boolean) => void) | null = null;
   /** Іде експорт; причина невдачі експорту (ключ мовного файлу) чи `null`. */
   protected readonly exporting = signal(false);
   protected readonly exportError = signal<string | null>(null);
@@ -215,6 +234,23 @@ export class KbTableComponent {
   private descriptionDirty = false;
   /** Ключі записів (`LocalRecord.key`), змінених після останнього збереження. */
   private readonly dirtyRecords = new Set<string>();
+  /**
+   * Які саме клітинки змінено тут (ключ запису → ключі полів): перед `PUT` запису беремо свіжий з
+   * сервера й накладаємо лише їх, тож чужі зміни в тому самому рядку не затираються.
+   */
+  private readonly dirtyCells = new Map<string, Set<string>>();
+  /**
+   * Структура таблиці, якою її востаннє бачили на сервері: свої зміни стовпчиків — відносно неї
+   * (`mergeFields`), щоб накласти їх на свіжу структуру, не видаливши чужих колонок.
+   */
+  private baseFields: readonly CustomTableField[] = [];
+  /** Номер останнього запиту записів: відповідь на старіший (наприклад, на «фон» після «фонд») відкидається. */
+  private recordsRequest = 0;
+  private searchTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Запис за ключем рядка: клітинки шукають свій запис тут, а не перебором усіх. */
+  private readonly recordByKey = computed(() => new Map(this.records().map((record) => [record.key, record])));
+  protected readonly cellMaxLength = CELL_HTML_MAX_LENGTH;
+  protected readonly headMaxLength = HEAD_HTML_MAX_LENGTH;
   private readonly editableCell = viewChild<TemplateRef<DataTableCellContext>>('editableCell');
   private readonly editableHeader = viewChild<TemplateRef<DataTableHeaderContext>>('editableHeader');
   private readonly destroyRef = inject(DestroyRef);
@@ -259,8 +295,9 @@ export class KbTableComponent {
           cellAction({ id: 'deleteRow', icon: 'row-remove', disabled: isHeader || !this.canDeleteRecords() }),
         ],
         [
-          cellAction({ id: 'addColumnRight', icon: 'column-add-right', disabled: !canEditTable }),
-          cellAction({ id: 'addColumnLeft', icon: 'column-add-left', disabled: !canEditTable }),
+          // Більше 50 полів сервер не прийме.
+          cellAction({ id: 'addColumnRight', icon: 'column-add-right', disabled: !canEditTable || this.fields().length >= CUSTOM_TABLE_MAX_FIELDS }),
+          cellAction({ id: 'addColumnLeft', icon: 'column-add-left', disabled: !canEditTable || this.fields().length >= CUSTOM_TABLE_MAX_FIELDS }),
           // Останній стовпчик не видалити: сервер вимагає хоча б одне поле.
           cellAction({ id: 'deleteColumn', icon: 'column-remove', disabled: !canEditTable || this.fields().length <= 1 }),
         ],
@@ -384,9 +421,12 @@ export class KbTableComponent {
     document.addEventListener('focusin', onFocusIn);
     // Вкладку сховали (перемкнули, згорнули чи закривають): незбережене — одразу, без затримки; поки
     // сторінка схована, запити йдуть із `keepalive` і не обриваються з її закриттям.
+    // Повернулися на вкладку — одразу перевірка на зміни: схована вкладка сервер не опитує.
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         void this.saver.flush();
+      } else {
+        void this.poll();
       }
     };
     // Закривають сторінку, а зміни ще не збережено: браузер питає, чи залишити сайт.
@@ -406,6 +446,7 @@ export class KbTableComponent {
       clearInterval(poll);
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearTimeout(this.searchTimer);
       window.removeEventListener('beforeunload', onBeforeUnload);
       window.removeEventListener('pagehide', onPageHide);
       this.actionBar.hide(this);
@@ -415,6 +456,29 @@ export class KbTableComponent {
 
   protected retry(): void {
     void this.load(this.id());
+  }
+
+  /**
+   * Чи можна піти з виду (`canDeactivate` маршруту): незбережене — спершу на сервер; не вдалося —
+   * вікно «Зміни не збережено»: «Залишитися» чи «Піти» (зміни пропадуть).
+   */
+  async canLeave(): Promise<boolean> {
+    await this.saver.flush();
+    if (this.saver.state() !== 'failed') {
+      return true;
+    }
+    return new Promise<boolean>((resolve) => {
+      this.leaveAnswer = resolve;
+      this.leaveDialog()?.open();
+    });
+  }
+
+  /** Відповідь у вікні «Зміни не збережено» (закрили без вибору — лишаємося). */
+  protected answerLeave(leave: boolean): void {
+    const answer = this.leaveAnswer;
+    this.leaveAnswer = null;
+    answer?.(leave);
+    void this.leaveDialog()?.close();
   }
 
   /** «Створити шаблон»: вікно з назвою (спершу — назва таблиці) й описом шаблону. */
@@ -494,10 +558,16 @@ export class KbTableComponent {
     void this.reloadRecords();
   }
 
-  /** Текст у полі пошуку: записи заново, з пошуком за ним (як у «Колегах»). */
+  /**
+   * Текст у полі пошуку: записи заново, з пошуком за ним (як у «Колегах») — після паузи
+   * `SEARCH_DELAY_MS` від останнього символу, а не на кожну літеру.
+   */
   protected onSearch(value: string): void {
-    this.searchTerm.set(value.trim() || null);
-    void this.reloadRecords();
+    clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      this.searchTerm.set(value.trim() || null);
+      void this.reloadRecords();
+    }, SEARCH_DELAY_MS);
   }
 
   /** Клік по заголовку: записи заново, відсортовані за цим полем (чи без порядку — після скидання). */
@@ -526,7 +596,7 @@ export class KbTableComponent {
 
   /** Чи можна змінювати рядок: порожній (новий запис) — з `CreateCustomRecord`, наявний — з `UpdateCustomRecord`. */
   protected canEditRow(row: Pick<DataTableRow, 'id'>): boolean {
-    const record = this.records().find((candidate) => candidate.key === row.id);
+    const record = this.recordByKey().get(String(row.id));
     return record && record.serverId !== null ? this.canUpdateRecords() : this.canCreateRecords();
   }
 
@@ -541,7 +611,7 @@ export class KbTableComponent {
    * логічне — прапорцем `☑` / `☐`).
    */
   protected textValue(row: Pick<DataTableRow, 'id'>, field: CustomTableField): string {
-    return this.textOf(this.records().find((record) => record.key === row.id)?.data[field.key]);
+    return this.textOf(this.recordByKey().get(String(row.id))?.data[field.key]);
   }
 
   private textOf(value: unknown): string {
@@ -554,9 +624,13 @@ export class KbTableComponent {
     return String(value);
   }
 
-  /** Текст значення з форматуванням (без тегу кольору тла) — для редагованого блоку. */
+  /**
+   * Текст значення з форматуванням (без тегу кольору тла), очищений: лише `b`, `i`, `u`, `s`, `br`
+   * без атрибутів — для редагованого блоку й `[innerHTML]` перегляду (значення з сервера могли
+   * записати в обхід застосунку, а санітайзер Angular пропускає, наприклад, `img` і `a href`).
+   */
   protected htmlOf(value: string | null | undefined): string {
-    return splitBackground(value).html;
+    return sanitizeRichText(splitBackground(value).html);
   }
 
   /** Змінили назву стовпчика (у заголовку, з форматуванням); колір тла назви лишається. */
@@ -856,6 +930,7 @@ export class KbTableComponent {
       const record = this.records().find((candidate) => candidate.key === pending.key);
       this.records.update((records) => records.filter((candidate) => candidate.key !== pending.key));
       this.dirtyRecords.delete(pending.key);
+      this.dirtyCells.delete(pending.key);
       if (record?.serverId) {
         this.deletedRecords.add(record.serverId);
       }
@@ -903,6 +978,10 @@ export class KbTableComponent {
       if (generation !== this.changeGeneration || id !== this.id() || this.saver.state() === 'saving') {
         return;
       }
+      if (table === 'gone') {
+        this.tableGone();
+        return;
+      }
       if (typeof table !== 'string') {
         this.mergeTable(table);
       }
@@ -925,7 +1004,11 @@ export class KbTableComponent {
     }
     const editingDescription = this.descriptionDirty || (document.activeElement as HTMLElement | null)?.classList.contains('kb-table__description') === true;
     const description = editingDescription ? state.table.description : fresh.description;
-    const fieldsChanged = JSON.stringify(fresh.fields) !== JSON.stringify(state.table.fields);
+    // Свої незбережені зміни стовпчиків лишаються (вони накладуться на свіжу структуру при збереженні).
+    const fieldsChanged = !this.fieldsDirty && JSON.stringify(fresh.fields) !== JSON.stringify(state.table.fields);
+    if (!this.fieldsDirty) {
+      this.baseFields = fresh.fields;
+    }
     if (description === state.table.description && !fieldsChanged) {
       return;
     }
@@ -954,8 +1037,15 @@ export class KbTableComponent {
       return [...records, { key, serverId: null, data: { ...this.emptyData(), [field.key]: value } }];
     });
     this.dirtyRecords.add(key);
+    this.markCell(key, field.key);
     this.changeGeneration++;
     this.saver.changed();
+  }
+
+  private markCell(key: string, fieldKey: string): void {
+    const cells = this.dirtyCells.get(key) ?? new Set<string>();
+    cells.add(fieldKey);
+    this.dirtyCells.set(key, cells);
   }
 
   /** Дані нового запису: усі поля — порожні рядки. */
@@ -964,10 +1054,16 @@ export class KbTableComponent {
   }
 
   /**
-   * Надсилає незбережене по черзі: таблицю (опис і структура — `PUT` з назвою зі змісту й усіма
-   * полями; нові поля — з `id: null`, після успіху — справжні `id` з `GET`), видалені записи
-   * (`DELETE`) і змінені (новий — `POST`, наявний — `PUT`; дані — лише за полями таблиці). Невдале
-   * лишається незбереженим і піде з наступною зміною (чи повтором з тегу). Повертає, чи вдалося все.
+   * Надсилає незбережене по черзі. Чужих змін, зроблених тим часом, не затирає:
+   * - таблиця (опис і структура): свіжа з `GET`, на неї — лише свої зміни (`mergeFields`: видалені,
+   *   перейменовані й нові стовпчики; опис — якщо змінювали тут), тоді `PUT`; після нього —
+   *   справжні `id` нових полів;
+   * - видалені записи — `DELETE`;
+   * - нові записи — `POST`; змінені — свіжий запис з `GET`, на нього — лише змінені тут клітинки,
+   *   тоді `PUT`.
+   * Таблицю чи запис уже видалили (404) — повторювати нема чого: таблиця — повідомлення, запис —
+   * рядок зникає. Інша невдача лишається незбереженою і піде з наступною зміною (чи повтором з
+   * тегу). Повертає, чи вдалося все.
    */
   private async saveChanges(): Promise<boolean> {
     const state = this.state();
@@ -976,21 +1072,18 @@ export class KbTableComponent {
     }
     let ok = true;
     if (this.descriptionDirty || this.fieldsDirty) {
-      const fieldsChanged = this.fieldsDirty;
-      this.descriptionDirty = false;
-      this.fieldsDirty = false;
-      const result = await this.tables.update(this.tableUpdate(this.currentTable() ?? state.table));
-      if (result !== 'done') {
-        this.descriptionDirty = true;
-        this.fieldsDirty = fieldsChanged;
-        ok = false;
-      } else if (fieldsChanged) {
-        await this.refreshFieldIds();
+      const saved = await this.saveTable(state.table.id);
+      if (saved === 'gone') {
+        this.tableGone();
+        return true;
       }
+      ok = saved;
     }
     for (const id of [...this.deletedRecords]) {
       this.deletedRecords.delete(id);
-      if ((await this.recordsService.remove(id)) !== 'done') {
+      const result = await this.recordsService.remove(id);
+      // Уже видалений деінде (404) — те саме, що видалили.
+      if (result !== 'done' && result !== 'gone') {
         this.deletedRecords.add(id);
         ok = false;
       }
@@ -998,77 +1091,251 @@ export class KbTableComponent {
     for (const key of [...this.dirtyRecords]) {
       // З черги — щойно перед запитом: якщо сторінку закриють посеред збереження, решту черги
       // надішле `sendRemainingOnClose` (а вже надіслане чи надіслане ним тут пропускається).
-      const record = this.records().find((candidate) => candidate.key === key);
+      const record = this.recordByKey().get(key);
       if (!this.dirtyRecords.delete(key) || !record) {
         continue;
       }
-      const data = this.recordData(record);
+      const cells = this.dirtyCells.get(key) ?? new Set<string>();
+      this.dirtyCells.delete(key);
       if (record.serverId === null) {
-        const created = await this.recordsService.create(state.table.id, data);
+        const created = await this.recordsService.create(state.table.id, this.recordData(record));
         if (typeof created === 'string' || !created.id) {
-          this.dirtyRecords.add(key);
+          this.requeue(key, cells);
           ok = false;
           continue;
         }
         this.records.update((records) => records.map((candidate) => (candidate.key === key ? { ...candidate, serverId: created.id } : candidate)));
-      } else {
-        const result = await this.recordsService.update(record.serverId, data);
-        if (result !== 'done') {
-          this.dirtyRecords.add(key);
-          ok = false;
-        }
+      } else if (!(await this.saveRecord(key, record.serverId, cells))) {
+        ok = false;
       }
     }
     return ok;
   }
 
   /**
-   * Сторінку закривають (`pagehide`): усе, що ще не пішло, — одразу й паралельно, а не по черзі (після
-   * закриття наступного запиту в черзі вже ніхто не надіслав би). Сторінка вже схована, тож запити
-   * йдуть із `keepalive` (`writeRequestOptions`) і доходять до сервера й після закриття. Якщо сторінку
-   * не закрили, а відновили з кешу браузера, `id` нових записів приходять як завжди.
+   * Таблиця: свіжа структура з сервера й на неї — свої зміни (див. `saveChanges`). `gone` — таблицю
+   * видалили; `false` — не вдалося (зміни лишаються незбереженими).
+   */
+  private async saveTable(id: string): Promise<boolean | 'gone'> {
+    const fieldsChanged = this.fieldsDirty;
+    const descriptionChanged = this.descriptionDirty;
+    this.fieldsDirty = false;
+    this.descriptionDirty = false;
+    const restore = () => {
+      this.fieldsDirty ||= fieldsChanged;
+      this.descriptionDirty ||= descriptionChanged;
+    };
+    const fresh = await this.tables.get(id);
+    if (fresh === 'gone') {
+      return 'gone';
+    }
+    const local = this.currentTable();
+    if (typeof fresh === 'string' || !local) {
+      restore();
+      return false;
+    }
+    const merged = fieldsChanged ? mergeFields(this.baseFields, this.fields(), fresh.fields) : { fields: fresh.fields, keyChanges: new Map<string, string>() };
+    if (merged.keyChanges.size) {
+      this.renameNewKeys(merged.keyChanges);
+    }
+    const result = await this.tables.update(
+      this.tableUpdate({ ...fresh, description: descriptionChanged ? local.description : fresh.description, fields: merged.fields }),
+    );
+    if (result === 'gone') {
+      return 'gone';
+    }
+    if (result !== 'done') {
+      restore();
+      return false;
+    }
+    await this.afterTableSaved(id, merged.fields);
+    return true;
+  }
+
+  /**
+   * Запис: свіжий з сервера, на нього — лише змінені тут клітинки (`cells`), тоді `PUT`; показане —
+   * чужими значеннями решти клітинок. Запис уже видалили — рядок зникає. Повертає, чи вдалося.
+   */
+  private async saveRecord(key: string, serverId: string, cells: ReadonlySet<string>): Promise<boolean> {
+    if (!cells.size) {
+      return true;
+    }
+    const fresh = await this.recordsService.get(serverId);
+    if (fresh === 'gone') {
+      this.dropRecord(key);
+      return true;
+    }
+    if (typeof fresh === 'string') {
+      this.requeue(key, cells);
+      return false;
+    }
+    const own = this.recordByKey().get(key)?.data ?? {};
+    const data = Object.fromEntries(this.fields().map((field) => [field.key, (cells.has(field.key) ? own[field.key] : fresh.data[field.key]) ?? null]));
+    const result = await this.recordsService.update(serverId, data);
+    if (result === 'gone') {
+      this.dropRecord(key);
+      return true;
+    }
+    if (result !== 'done') {
+      this.requeue(key, cells);
+      return false;
+    }
+    // Чужі значення решти клітинок — у показане (крім тих, що змінили тут тим часом, і клітинки з курсором).
+    const pending = this.dirtyCells.get(key);
+    const selected = this.selectedCell();
+    this.records.update((records) =>
+      records.map((record) => {
+        if (record.key !== key) {
+          return record;
+        }
+        const next = { ...record.data };
+        for (const [field, value] of Object.entries(data)) {
+          const focused = selected?.key === key && selected.field.key === field;
+          if (!cells.has(field) && !pending?.has(field) && !focused) {
+            next[field] = value;
+          }
+        }
+        return { ...record, data: next };
+      }),
+    );
+    return true;
+  }
+
+  /** Незбережене — назад у чергу (клітинки, змінені тим часом, теж лишаються). */
+  private requeue(key: string, cells: ReadonlySet<string>): void {
+    this.dirtyRecords.add(key);
+    for (const field of cells) {
+      this.markCell(key, field);
+    }
+  }
+
+  /** Запис уже видалили деінде: рядок зникає, його зміни — теж (повторювати нема чого). */
+  private dropRecord(key: string): void {
+    this.records.update((records) => records.filter((record) => record.key !== key));
+    this.dirtyRecords.delete(key);
+    this.dirtyCells.delete(key);
+    if (this.selectedCell()?.key === key) {
+      this.select(null);
+    }
+  }
+
+  /** Таблицю вже видалили деінде: замість неї — повідомлення, незбережене відкидається. */
+  private tableGone(): void {
+    this.descriptionDirty = false;
+    this.fieldsDirty = false;
+    this.dirtyRecords.clear();
+    this.dirtyCells.clear();
+    this.deletedRecords.clear();
+    this.select(null);
+    this.state.set({ status: 'failed', errorKey: 'knowledgeBase.failure.gone' });
+  }
+
+  /**
+   * Новим стовпчикам довелося змінити ключ (його тим часом зайняв хтось інший): новий ключ — у
+   * структурі, у даних записів і у вибраній клітинці.
+   */
+  private renameNewKeys(changes: ReadonlyMap<string, string>): void {
+    const state = this.state();
+    if (state.status !== 'ready') {
+      return;
+    }
+    const renamed = (key: string) => changes.get(key) ?? key;
+    this.state.set({
+      status: 'ready',
+      table: { ...state.table, fields: state.table.fields.map((field) => (isNewField(field) ? { ...field, key: renamed(field.key) } : field)) },
+    });
+    this.records.update((records) =>
+      records.map((record) => ({ ...record, data: Object.fromEntries(Object.entries(record.data).map(([key, value]) => [renamed(key), value])) })),
+    );
+    for (const [record, cells] of this.dirtyCells) {
+      this.dirtyCells.set(record, new Set([...cells].map(renamed)));
+    }
+    const selected = this.selectedCell();
+    if (selected && changes.has(selected.field.key)) {
+      this.selectedCell.set({ ...selected, field: { ...selected.field, key: renamed(selected.field.key) } });
+    }
+  }
+
+  /**
+   * Після збереження структури: справжні `id` нових полів (без них наступний `PUT` створив би їх
+   * знову) і структура сервера як основа для наступних змін. Стовпчики тут тим часом не змінювали —
+   * показується структура сервера (з чужими змінами); змінювали — лишаються свої, з новими `id`.
+   */
+  private async afterTableSaved(id: string, sent: readonly CustomTableField[]): Promise<void> {
+    const fresh = await this.tables.get(id);
+    const current = this.state();
+    if (typeof fresh === 'string' || current.status !== 'ready') {
+      // Без свіжої структури основа — те, що надіслали (нові поля — ще без `id`, як і в показаному).
+      this.baseFields = sent;
+      return;
+    }
+    this.baseFields = fresh.fields;
+    const ids = new Map(fresh.fields.map((field) => [field.key, field.id]));
+    const fields = this.fieldsDirty ? current.table.fields.map((field) => ({ ...field, id: ids.get(field.key) ?? field.id })) : fresh.fields;
+    this.state.set({ status: 'ready', table: { ...current.table, fields } });
+  }
+
+  /**
+   * Сторінку закривають (`pagehide`): записи, які ще не пішли, — одразу й паралельно, а не по черзі
+   * (після закриття наступного запиту в черзі вже ніхто не надіслав би). Сторінка вже схована, тож
+   * запити йдуть із `keepalive` (`writeRequestOptions`) і доходять до сервера й після закриття.
+   * Браузер дає таким запитам разом до 64 КБ — надсилаємо, доки вміщається (`CLOSE_BUDGET_BYTES`).
+   * Свіжого запису чи таблиці тут уже не запитати, тож:
+   * - структура й опис таблиці при закритті не надсилаються: зі старим списком полів `PUT` міг би
+   *   видалити чужі колонки (браузер і так спитав, чи залишити сайт, — `beforeunload`);
+   * - змінений запис — показаний рядок з усіма його клітинками (інші клітинки там — з останньої
+   *   перевірки на зміни).
+   * Якщо сторінку не закрили, а відновили з кешу браузера, `id` нових записів приходять як завжди.
    */
   private sendRemainingOnClose(): void {
     const state = this.state();
     if (state.status !== 'ready') {
       return;
     }
-    if (this.descriptionDirty || this.fieldsDirty) {
-      this.descriptionDirty = false;
-      this.fieldsDirty = false;
-      void this.tables.update(this.tableUpdate(state.table));
-    }
-    for (const id of this.deletedRecords) {
+    let budget = CLOSE_BUDGET_BYTES;
+    const fits = (body: unknown) => {
+      budget -= JSON.stringify(body).length * 2;
+      return budget >= 0;
+    };
+    for (const id of [...this.deletedRecords]) {
+      if (!fits(id)) {
+        return;
+      }
+      this.deletedRecords.delete(id);
       void this.recordsService.remove(id);
     }
-    this.deletedRecords.clear();
-    for (const key of this.dirtyRecords) {
-      const record = this.records().find((candidate) => candidate.key === key);
+    for (const key of [...this.dirtyRecords]) {
+      const record = this.recordByKey().get(key);
       if (!record) {
         continue;
       }
+      const data = this.recordData(record);
+      if (!fits(data)) {
+        return;
+      }
+      this.dirtyRecords.delete(key);
+      this.dirtyCells.delete(key);
       if (record.serverId === null) {
-        void this.recordsService.create(state.table.id, this.recordData(record)).then((created) => {
+        void this.recordsService.create(state.table.id, data).then((created) => {
           if (typeof created !== 'string' && created.id) {
             this.records.update((records) => records.map((candidate) => (candidate.key === key ? { ...candidate, serverId: created.id } : candidate)));
           }
         });
       } else {
-        void this.recordsService.update(record.serverId, this.recordData(record));
+        void this.recordsService.update(record.serverId, data);
       }
     }
-    this.dirtyRecords.clear();
   }
 
-  /** Таблиця для `PUT`: назва зі змісту, опис і всі поля (нові — з `id: null`). */
+  /** Таблиця для `PUT`: назва й опис як у `table` і всі поля (нові — з `id: null`). */
   private tableUpdate(table: CustomTableDetails): CustomTableUpdate {
     return {
       id: table.id,
-      name: this.entry()?.title ?? table.name,
+      name: table.name,
       description: table.description?.trim() || null,
       fields: table.fields.map((field) => ({
         ...field,
-        id: field.id.startsWith(NEW_FIELD_PREFIX) ? null : field.id,
+        id: isNewField(field) ? null : field.id,
         // Порожньої назви сервер не прийме (поки людина ще пише в заголовку).
         name: richTextToPlain(field.name).trim() ? field.name : (this.translate.instant('knowledgeBase.table.newColumn') as string),
       })),
@@ -1078,21 +1345,6 @@ export class KbTableComponent {
   /** Дані запису для сервера — лише поля таблиці (значення видаленого стовпчика сервер не прийняв би). */
   private recordData(record: LocalRecord): CustomRecordData {
     return Object.fromEntries(this.fields().map((field) => [field.key, record.data[field.key] ?? null]));
-  }
-
-  /** Після зміни структури — справжні `id` нових полів (без них наступний `PUT` створив би їх знову). */
-  private async refreshFieldIds(): Promise<void> {
-    const state = this.state();
-    if (state.status !== 'ready') {
-      return;
-    }
-    const fresh = await this.tables.get(state.table.id);
-    const current = this.state();
-    if (typeof fresh === 'string' || current.status !== 'ready') {
-      return;
-    }
-    const ids = new Map(fresh.fields.map((field) => [field.key, field.id]));
-    this.state.set({ status: 'ready', table: { ...current.table, fields: current.table.fields.map((field) => ({ ...field, id: ids.get(field.key) ?? field.id })) } });
   }
 
   private currentTable(): CustomTableDetails | null {
@@ -1112,6 +1364,7 @@ export class KbTableComponent {
       this.state.set({ status: 'failed', errorKey: `knowledgeBase.failure.${table}` });
       return;
     }
+    this.baseFields = table.fields;
     this.state.set({ status: 'ready', table });
     await this.loadRecords(id);
   }
@@ -1121,8 +1374,10 @@ export class KbTableComponent {
       return;
     }
     this.recordsError.set(null);
+    const request = ++this.recordsRequest;
     const records = await this.recordsService.listAll(id, this.sort(), this.searchTerm());
-    if (id !== this.id()) {
+    // Тим часом відкрили іншу таблицю чи запитали записи з іншим пошуком — ця відповідь застаріла.
+    if (id !== this.id() || request !== this.recordsRequest) {
       return;
     }
     if (typeof records === 'string') {

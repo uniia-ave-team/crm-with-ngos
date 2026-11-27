@@ -1,5 +1,6 @@
-import { Component, computed, inject, input, signal, WritableSignal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, computed, inject, signal, WritableSignal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router } from '@angular/router';
 import { IonButton, IonContent } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
 
@@ -11,16 +12,19 @@ import { SuccessNoticeService } from '../core/notice/success-notice.service';
 import { UsersService } from '../core/users/users.service';
 import { isPasswordTooLong, isStrongPassword } from '../shared/password-fields/password-rules';
 import { PasswordFieldsComponent } from '../shared/password-fields/password-fields.component';
+import { tokenFromFragment } from '../core/auth/link-token';
 
 /**
- * Сторінка нового пароля за посиланням (`/reset-password?token=…`): колега переходить за
+ * Сторінка нового пароля за посиланням (`/reset-password#token=…`): колега переходить за
  * посиланням із вікна «Посилання для скидання пароля створено» й задає новий пароль. Без стражів
  * і без бічного меню, вигляд — картка, як на `/join` (стилі спільні з нею). Сервер — той, на домен
  * якого веде посилання (`ConnectionService.pageServerUrl`), а не сервер активного акаунта.
  *
  * Форма: «Пароль» і «Повторити пароль» (`app-password-fields`, умови сервера, щонайбільше 128
  * символів), «Відправити» — `POST /api/v1/users/reset-password` з токеном і паролем; успіх веде на
- * `/relogin` з плашкою «Пароль змінено…» (`SuccessNoticeService`). Невдача (чи посилання без токена) замінює форму повідомленням за причиною й кнопкою
+ * `/relogin` з плашкою «Пароль змінено…» (`SuccessNoticeService`; без запису в історії, тож «Назад» не
+ * повертає форму з використаним посиланням). Пароль, якого сервер не прийняв, — помилка під полем,
+ * форма лишається. Інша невдача (чи посилання без токена) замінює форму повідомленням за причиною й кнопкою
  * «Назад» (на `/relogin`). «Скасувати» — теж на `/relogin`; той, у кого в браузері нема
  * збережених акаунтів, звідти потрапляє на `/login`.
  */
@@ -39,8 +43,10 @@ export class ResetPasswordPage {
   /** Умови до пароля сервера, на якому задають пароль (`PasswordPolicyService`). */
   protected readonly passwordPolicy = inject(PasswordPolicyService).policy(this.connection.pageServerUrl);
 
-  /** Токен із query-параметра `?token=…` (прив'язується роутером через bindToComponentInputs). */
-  readonly token = input<string | undefined>();
+  /** Фрагмент адреси сторінки (`#token=…`). */
+  private readonly fragment = toSignal(inject(ActivatedRoute).fragment, { initialValue: null });
+  /** Токен із фрагмента адреси (`#token=…`, див. `link-token.ts`). */
+  protected readonly token = computed(() => tokenFromFragment(this.fragment()));
 
   protected readonly password = signal('');
   protected readonly passwordRepeat = signal('');
@@ -48,6 +54,8 @@ export class ResetPasswordPage {
   private readonly submitted = signal(false);
   /** Невдача запиту; поки її нема — форма. */
   private readonly sendFailure = signal<RequestFailure | null>(null);
+  /** Сервер не прийняв пароль (400 через сам пароль): помилка під полем, форма лишається. */
+  private readonly passwordRejected = signal(false);
 
   /** Ключ повідомлення замість форми: невдача запиту чи посилання без токена; `null` — форма. */
   protected readonly failureKey = computed(() => {
@@ -63,6 +71,9 @@ export class ResetPasswordPage {
     const password = this.password();
     if (!password) {
       return 'passwordRequired';
+    }
+    if (this.passwordRejected()) {
+      return 'passwordRejected';
     }
     if (isPasswordTooLong(password)) {
       return 'passwordTooLong';
@@ -82,6 +93,10 @@ export class ResetPasswordPage {
 
   protected onFieldChange(field: WritableSignal<string>, value: string | number | null | undefined): void {
     field.set(value == null ? '' : String(value));
+    // Пароль змінили — відмова сервера стосувалася попереднього.
+    if (field === this.password) {
+      this.passwordRejected.set(false);
+    }
   }
 
   /** «Відправити»: перевіряє поля й, якщо все гаразд, задає новий пароль; успіх — на `/relogin`. */
@@ -96,12 +111,17 @@ export class ResetPasswordPage {
     this.saving.set(true);
     const result = await this.users.resetPassword(this.connection.pageServerUrl, this.token() ?? '', this.password());
     this.saving.set(false);
+    if (result === 'passwordRejected') {
+      this.passwordRejected.set(true);
+      return;
+    }
     if (result !== 'reset') {
       this.sendFailure.set(result);
       return;
     }
     this.successNotice.show('resetPassword.done');
-    void this.router.navigateByUrl(RELOGIN_URL);
+    // Без запису в історії: «Назад» не повертає форму з уже використаним посиланням.
+    void this.router.navigateByUrl(RELOGIN_URL, { replaceUrl: true });
   }
 
   /** «Скасувати» чи «Назад»: на `/relogin`. */

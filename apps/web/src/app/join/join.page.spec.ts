@@ -1,7 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
+import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../assets/i18n/uk.json';
@@ -34,10 +35,12 @@ function fillStorageForAccounts(): void {
 describe('JoinPage', () => {
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.spyOn>;
+  let fragment: BehaviorSubject<string | null>;
   const server = `${location.protocol}//${location.hostname}:5065`;
 
   beforeEach(() => {
     localStorage.clear();
+    fragment = new BehaviorSubject<string | null>(null);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [
@@ -45,6 +48,8 @@ describe('JoinPage', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
+        // Фрагмент адреси сторінки (`#token=…`) — керований тестом.
+        { provide: ActivatedRoute, useValue: { fragment } },
       ],
     });
     // Тексти сторінки живуть в uk.json — беремо їх звідти, а не дублюємо.
@@ -59,8 +64,8 @@ describe('JoinPage', () => {
   });
 
   function create(token: string | null = 'tok') {
+    fragment.next(token === null ? null : `token=${encodeURIComponent(token)}`);
     const fixture = TestBed.createComponent(JoinPage);
-    fixture.componentRef.setInput('token', token ?? undefined);
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
     const page = fixture.componentInstance as unknown as JoinPageInternals;
@@ -380,7 +385,7 @@ describe('JoinPage', () => {
     answerHealth(fixture);
     const stale = await vi.waitFor(() => http.expectOne((r) => r.params.get('token') === 'first'));
 
-    fixture.componentRef.setInput('token', 'second');
+    fragment.next('token=second');
     fixture.detectChanges();
     answerHealth(fixture);
     const current = await vi.waitFor(() => http.expectOne((r) => r.params.get('token') === 'second'));

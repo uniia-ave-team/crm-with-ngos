@@ -13,7 +13,8 @@ describe('rich text', () => {
 
   it('drops every other tag, attribute and style, keeping the text, and escapes it', () => {
     expect(sanitizeRichText('<span style="color:red" onclick="x()">а</span><script>alert(1)</script><b class="x">б &lt;в&gt;</b>')).toBe(
-      'аalert(1)<b>б &lt;в&gt;</b>',
+      // Вміст скрипта — не текст для людини: відкидається цілком.
+      'а<b>б &lt;в&gt;</b>',
     );
   });
 

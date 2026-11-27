@@ -38,7 +38,7 @@ describe('KbItemFormComponent', () => {
       element.querySelector('form')?.dispatchEvent(new Event('submit'));
       fixture.detectChanges();
     };
-    const labels = () => Array.from(element.querySelectorAll('label')).map((label) => label.textContent?.replace('*', '').trim());
+    const labels = () => Array.from(element.querySelectorAll('label')).map((label) => label.textContent?.replaceAll('*', '').trim());
     return { host: fixture.componentInstance, element, field, setValue, submit, labels };
   }
 
