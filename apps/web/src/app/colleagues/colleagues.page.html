@@ -1,22 +1,34 @@
 <ion-header [translucent]="true">
   <ion-toolbar>
-    <ion-title>{{ 'page.colleagues' | translate }}</ion-title>
-    <ion-buttons slot="end" class="colleagues__actions">
-      <button type="button" class="colleagues__btn colleagues__btn--roles" tabindex="0" (click)="openPanel('roles')">
-        <ion-icon name="people" aria-hidden="true"></ion-icon>
-        <span>{{ 'colleagues.roles' | translate }}</span>
-      </button>
+    <!-- Шапка з пошуком (`app-search-header`): лупа ховає заголовок, стискає кнопки до іконок і
+         відкриває поле; кожна зміна в полі запитує список заново (`onSearch`). -->
+    <app-search-header
+      [title]="'page.colleagues' | translate"
+      [placeholder]="'colleagues.searchPlaceholder' | translate"
+      [maxLength]="searchMaxLength"
+      (searchChange)="onSearch($event)"
+    >
+      <app-action-button icon="people" tone="blue" [label]="'colleagues.roles' | translate" (click)="openPanel('roles')" />
       @if (canAdd()) {
-        <button type="button" class="colleagues__btn colleagues__btn--add" tabindex="0" (click)="openPanel('add')">
-          <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
-          <span>{{ 'colleagues.add' | translate }}</span>
-        </button>
+        <app-action-button icon="add-outline" tone="green" [label]="'colleagues.add' | translate" (click)="openPanel('add')" />
       }
-      <button type="button" class="colleagues__search" tabindex="0" [attr.aria-label]="'colleagues.search' | translate">
-        <ion-icon name="search" aria-hidden="true"></ion-icon>
-      </button>
-    </ion-buttons>
+      <!-- Лише на телефоні (до 768px), де нема заголовків таблиці: відкриває рядок сортування. -->
+      <app-action-button
+        class="colleagues__sort-toggle"
+        icon="filter-outline"
+        [label]="'common.sort.open' | translate"
+        [attr.aria-expanded]="sortOpen()"
+        (click)="sortOpen.set(!sortOpen())"
+      />
+    </app-search-header>
   </ion-toolbar>
+  <!-- Сортування на телефоні: поле (ті, за якими сортує сервер) і напрямок — замість заголовків
+       таблиці. Зміна одразу запитує список заново, як клік по заголовку. -->
+  @if (sortOpen()) {
+    <ion-toolbar class="colleagues__sort">
+      <app-sort-bar [options]="sortOptions()" [value]="sortSelection()" (sortChange)="onSortBar($event)" />
+    </ion-toolbar>
+  }
 </ion-header>
 
 <ion-content [fullscreen]="true">
@@ -25,12 +37,55 @@
     [rows]="rows()"
     [showRowMenu]="canOpenRowMenu()"
     [showAddColumn]="canViewCustomFields()"
+    [addColumnPlanned]="true"
     [highlightedRowId]="menuRowId()"
     defaultSortColumnId="name"
     labelKey="page.colleagues"
     (rowMenu)="openRowMenu($event)"
     (sortChange)="onSort($event)"
   />
+
+  <!-- На телефоні (до 768px) таблиця не вміщається: колеги — картками. Згори аватар, імʼя й
+       займенники та три крапки, під ними ролі й рядки «проєкт — роль», нижче — пошта, телефон і
+       (з правом) екстрений контакт списком. Ті самі рядки й меню, що й у таблиці. -->
+  <ul class="colleague-cards" [attr.aria-label]="'page.colleagues' | translate">
+    @for (row of rows(); track row.id) {
+      @let colleague = asColleague(row);
+      <li class="colleague-card" [class.colleague-card--active]="menuRowId() === row.id">
+        <div class="colleague-card__head">
+          <ng-container *ngTemplateOutlet="personCell; context: { $implicit: row }" />
+          @if (canOpenRowMenu()) {
+            <button
+              type="button"
+              class="colleague-card__menu"
+              tabindex="0"
+              [attr.aria-label]="'table.rowMenu' | translate"
+              (click)="openRowMenu({ row, anchor: $any($event.currentTarget) })"
+            >
+              <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+            </button>
+          }
+        </div>
+        <ng-container *ngTemplateOutlet="positionCell; context: { $implicit: row }" />
+        <dl class="colleague-card__details">
+          <div class="colleague-card__detail">
+            <dt>{{ 'colleagues.columns.email' | translate }}:</dt>
+            <dd>{{ colleague.email }}</dd>
+          </div>
+          <div class="colleague-card__detail">
+            <dt>{{ 'colleagues.columns.phone' | translate }}:</dt>
+            <dd>{{ colleague.phone }}</dd>
+          </div>
+          @if (canViewEmergencyContact()) {
+            <div class="colleague-card__detail">
+              <dt>{{ 'colleagues.columns.emergencyContact' | translate }}:</dt>
+              <dd>{{ colleague.emergencyContact }}</dd>
+            </div>
+          }
+        </dl>
+      </li>
+    }
+  </ul>
 
   @if (colleagues().status === 'failed') {
     <div class="colleagues__list-message colleagues__list-message--error" role="alert">
@@ -40,7 +95,7 @@
   } @else if (colleagues().status === 'loading' && colleagues().users.length === 0) {
     <p class="colleagues__list-message" role="status">{{ 'colleagues.list.loading' | translate }}</p>
   } @else if (colleagues().status === 'ready' && colleagues().users.length === 0) {
-    <p class="colleagues__list-message">{{ 'colleagues.list.empty' | translate }}</p>
+    <p class="colleagues__list-message">{{ (searchTerm() ? 'colleagues.list.notFound' : 'colleagues.list.empty') | translate }}</p>
   }
 
   <ion-infinite-scroll threshold="200px" [disabled]="!colleagues().hasMore || colleagues().status === 'failed'" (ionInfinite)="onInfiniteScroll($event)">
@@ -58,22 +113,29 @@
   [label]="'table.rowMenu' | translate"
   (closed)="menuRowId.set(null)"
 >
-  <app-colleague-actions [items]="menuItems()" (choose)="onActionChosen($event)" />
+  <app-action-list [items]="menuItems()" (choose)="onActionChosen($event)" />
 </app-popover>
 
-<!-- Бічне вікно: його відкривають «Ролі», «Додати» та дії з меню; зміст поки є в «Ролей» і «Додати». -->
+<!-- Бічне вікно: його відкривають «Ролі», «Додати» та дії з меню; зміст поки є в «Ролей», «Додати» й «Редагувати». -->
 <app-side-panel [label]="'page.colleagues' | translate" (closed)="panel.set(null)">
   @if (panelContent() === 'roles' && rolesScreen() === 'list' && canManageRoles()) {
-    <button sidePanelHeader type="button" class="colleagues__btn colleagues__btn--add colleagues__btn--panel" tabindex="0" (click)="addRole()">
-      <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
-      <span>{{ 'colleagues.rolesPanel.add' | translate }}</span>
-    </button>
+    <app-action-button
+      sidePanelHeader
+      class="colleagues__panel-btn"
+      icon="add-outline"
+      tone="green"
+      [label]="'colleagues.rolesPanel.add' | translate"
+      (click)="addRole()"
+    />
   }
   @if (panelContent() === 'roles' && rolesScreen() !== 'list') {
-    <button sidePanelHeader type="button" class="colleagues__btn colleagues__btn--back colleagues__btn--panel" tabindex="0" (click)="backToRoles()">
-      <ion-icon name="arrow-back-outline" aria-hidden="true"></ion-icon>
-      <span>{{ 'common.back' | translate }}</span>
-    </button>
+    <app-action-button
+      sidePanelHeader
+      class="colleagues__panel-btn"
+      icon="arrow-back-outline"
+      [label]="'common.back' | translate"
+      (click)="backToRoles()"
+    />
   }
   @if (panelContent() === 'roles' && rolesScreen() === 'add') {
     <app-role-form [saving]="roleSaving()" [error]="roleSaveError()" (save)="createRole($event)" />
@@ -88,7 +150,44 @@
     }
   }
   @if (panelContent() === 'add') {
+    <h2 sidePanelHeader class="colleagues__panel-title">{{ 'colleagues.colleagueForm.title' | translate }}</h2>
+  }
+  @if (panelContent() === 'add') {
     <app-colleague-form [roles]="rolesView()" [saving]="colleagueSaving()" [error]="colleagueSaveError()" (save)="createColleague($event)" />
+  }
+  @if (panelContent() === 'edit') {
+    <h2 sidePanelHeader class="colleagues__panel-title">{{ 'colleagues.profileForm.title' | translate }}</h2>
+  }
+  @if (panelContent() === 'edit') {
+    @if (colleagueEditView().profile; as profile) {
+      <app-profile-form
+        idPrefix="colleague-profile"
+        otherPronounsLabelKey="colleagues.profileForm.pronounOtherInput"
+        [profile]="profile"
+        [ngoName]="ngoName()"
+        [showEmergencyContact]="canViewEmergencyContact()"
+        [saving]="colleagueEditSaving()"
+        (changed)="colleagueEditErrors.set([])"
+        (save)="saveColleague($event)"
+      >
+        @if (canAssignRoles()) {
+          <app-role-choices
+            [roles]="rolesView()"
+            [selected]="colleagueEditRoles()"
+            [required]="true"
+            [error]="colleagueEditRolesError()"
+            (roleToggle)="toggleColleagueEditRole($event)"
+          />
+        }
+        @for (errorKey of colleagueEditErrors(); track errorKey) {
+          <p class="colleagues__panel-message colleagues__panel-message--error" role="alert">{{ errorKey | translate }}</p>
+        }
+      </app-profile-form>
+    } @else if (colleagueEditView().failure; as failure) {
+      <p class="colleagues__panel-message colleagues__panel-message--error" role="alert">{{ 'colleagues.profileForm.loadError.' + failure | translate }}</p>
+    } @else {
+      <p class="colleagues__panel-message" role="status">{{ 'colleagues.profileForm.loading' | translate }}</p>
+    }
   }
   @if (panelContent() === 'roles' && rolesScreen() === 'list') {
     <app-roles-panel [view]="rolesView()" [notice]="rolesNotice()" [canManage]="canManageRoles()" (roleEdit)="editRole($event)" (roleDelete)="deleteRole($event)" />
@@ -96,9 +195,10 @@
 </app-side-panel>
 
 <!-- Запрошення створено: посилання, яким адмін ділиться з колегою (по центру екрана, затемнює весь екран). -->
-<app-modal #invitationDialog width="460px" [label]="'colleagues.invitation.title' | translate">
+<app-modal #invitationDialog width="460px" [label]="'colleagues.' + (invitation()?.kind ?? 'invitation') + '.title' | translate">
   @if (invitation(); as invite) {
     <app-invitation-dialog
+      [kind]="invite.kind"
       [email]="invite.email"
       [token]="invite.token"
       [server]="invite.server"

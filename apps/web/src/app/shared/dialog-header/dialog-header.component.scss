@@ -1,0 +1,45 @@
+:host {
+  display: block;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--nav-fg-active);
+}
+
+.dialog-header__title {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-login-title);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.dialog-header__close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-inactive);
+  font-size: 24px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--nav-fg-active);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}

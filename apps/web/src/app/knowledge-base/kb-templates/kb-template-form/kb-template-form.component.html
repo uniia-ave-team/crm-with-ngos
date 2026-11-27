@@ -1,0 +1,79 @@
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <div class="settings-field">
+    <label class="settings-field__label" for="kb-template-title">
+      {{ 'knowledgeBase.dialogs.form.title' | translate
+      }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span>
+    </label>
+    <input
+      id="kb-template-title"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      required
+      autocomplete="off"
+      [attr.maxlength]="nameMaxLength"
+      [value]="title()"
+      [attr.aria-invalid]="titleError() ? true : null"
+      [attr.aria-describedby]="titleError() ? 'kb-template-title-error' : null"
+      (input)="onText(title, $event)"
+    />
+    @if (titleError(); as errorKey) {
+      <p id="kb-template-title-error" class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="kb-template-description">{{ 'knowledgeBase.dialogs.form.description' | translate }}</label>
+    <textarea
+      id="kb-template-description"
+      class="settings-input settings-input--area"
+      tabindex="0"
+      rows="3"
+      [attr.maxlength]="descriptionMaxLength"
+      [value]="description()"
+      (input)="onText(description, $event)"
+    ></textarea>
+  </div>
+
+  <!-- Стовпчики — рядок заголовків, як у таблиці; над ним — смуга дій для вибраного стовпчика. -->
+  <div class="settings-field" role="group" aria-labelledby="kb-template-columns">
+    <span id="kb-template-columns" class="settings-field__label">{{ 'knowledgeBase.templates.columns' | translate }}</span>
+    <app-action-bar class="kb-template-form__toolbar" [inline]="true" [content]="toolbar()" />
+    <div class="kb-template-form__table">
+      <table class="kb-template-form__grid">
+        <thead>
+          <tr>
+            @for (field of fields(); track field.uid) {
+              @let colors = colorsOf(field.name);
+              <th scope="col" [style.background]="colors?.background ?? null" [style.color]="colors?.color ?? null">
+                <div
+                  class="kb-template-form__head"
+                  contenteditable="true"
+                  role="textbox"
+                  tabindex="0"
+                  [attr.aria-label]="'knowledgeBase.table.columnName' | translate"
+                  [appRichText]="htmlOf(field.name)"
+                  [appRichTextMaxLength]="headMaxLength"
+                  (richTextChange)="onHeadInput(field, $event)"
+                  (focus)="onHeadFocus(field, $event)"
+                  (blur)="onHeadBlur(field, $event)"
+                ></div>
+              </th>
+            }
+          </tr>
+        </thead>
+      </table>
+    </div>
+  </div>
+
+  @if (error(); as errorKey) {
+    <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+  }
+
+  <button type="submit" class="settings-submit" tabindex="0" [disabled]="busy()">{{ 'knowledgeBase.dialogs.edit.save' | translate }}</button>
+</form>
+
+<!-- Вибір кольору тла вибраного стовпчика (над кнопкою-кружком). -->
+<app-popover #colorPopover side="bottom" compactSide="bottom" alignment="start" [label]="'colorPicker.label' | translate">
+  <app-color-picker [value]="pickerColor()" (pick)="onColorPick($event)" />
+</app-popover>

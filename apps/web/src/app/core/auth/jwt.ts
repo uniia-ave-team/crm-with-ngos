@@ -8,9 +8,10 @@
  *
  * Клієнт підпис не перевіряє і не може: ключ є лише в сервера. Тому прочитане тут — підказка
  * для інтерфейсу, а не доказ: чи пускати користувача, вирішує сервер у відповідь на запит.
- * Читаємо лише два поля:
+ * Читаємо три поля:
  * - `exp` — щоб оновити токен до того, як сервер його відхилить (`readJwtExpiry`);
- * - `sub` — щоб знати, чий це акаунт (`readJwtSubject`).
+ * - `sub` — щоб знати, чий це акаунт (`readJwtSubject`);
+ * - `role_id` — з якими ролями видано токен (`readJwtRoleIds`).
  *
  * Жодна функція не кидає помилок: зіпсований чи чужий формат токена дає `null`, і той, хто
  * викликав, поводиться так, ніби цього поля нема.
@@ -20,7 +21,7 @@
  * Вміст (друга частина) JWT як обʼєкт. `null` — токена нема або він нечитний: це не JWT (нема
  * другої частини), зіпсований base64 чи JSON, або вміст не є обʼєктом.
  *
- * Основа для двох функцій нижче; окремо в застосунку не викликається.
+ * Основа для функцій нижче; окремо в застосунку не викликається.
  *
  * `atob` розкодовує байти як Latin-1, тож нелатинський текст у вмісті вийшов би спотвореним.
  * Нам це не заважає: `exp` — число, `sub` — ідентифікатор із латинських символів.
@@ -67,4 +68,23 @@ export function readJwtExpiry(token: string | null | undefined): number | null {
 export function readJwtSubject(token: string | null | undefined): string | null {
   const sub = readJwtPayload(token)?.['sub'];
   return typeof sub === 'string' && sub ? sub : null;
+}
+
+/**
+ * Поле `role_id` JWT: `id` ролей, з якими видано токен (сервер пише по claim на роль: одна
+ * роль — рядок, кілька — масив; ролей нема — поля нема, тоді порожній список). `null` — токен
+ * нечитний.
+ *
+ * Сервер бере права з цих ролей, а не з поточних ролей користувача, доки токен не оновлено.
+ * Тому `CurrentUserService` порівнює їх із ролями з профілю (`/users/me`) і, коли ролі змінили,
+ * оновлює токени, а тоді й права.
+ */
+export function readJwtRoleIds(token: string | null | undefined): string[] | null {
+  const payload = readJwtPayload(token);
+  if (!payload) {
+    return null;
+  }
+  const value = payload['role_id'];
+  const ids = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  return ids.filter((id): id is string => typeof id === 'string' && id !== '');
 }

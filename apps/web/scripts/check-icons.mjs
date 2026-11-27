@@ -59,8 +59,14 @@ for (const file of files(appDir, '.ts')) {
   const source = readFileSync(file, 'utf8');
   // Назви Ionicons щонайменше з трьох літер; коротші значення поля `icon` — не іконки
   // (наприклад, літера-позначка умови пароля).
-  for (const [, name] of source.matchAll(/\bicon(?:Active|Name)?\??\s*[:=]\s*'([a-z][a-z-]{2,})'/g)) {
+  // `menuIcon` — іконка `ion-menu-button` з налаштувань Ionic (`app.config.ts`).
+  for (const [, name] of source.matchAll(/\b(?:icon(?:Active|Name)?|menuIcon)\??\s*[:=]\s*'([a-z][a-z-]{2,})'/g)) {
     use(name, file);
+  }
+  // Іконка на вибір за умовою: `icon: isOn ? 'one-icon' : 'other-icon'`.
+  for (const [, first, second] of source.matchAll(/\bicon(?:Active|Name)?\??\s*:\s*[\w.!()]+\s*\?\s*'([a-z][a-z-]{2,})'\s*:\s*'([a-z][a-z-]{2,})'/g)) {
+    use(first, file);
+    use(second, file);
   }
 }
 

@@ -1,0 +1,61 @@
+// Підпис, повідомлення й помилка — спільні з формами налаштувань (`settings-section.scss`);
+// відступів навколо нема: блок стоїть у формі.
+:host {
+  display: block;
+  width: 100%;
+  padding: 0;
+}
+
+.role-choices {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  legend {
+    padding: 0;
+    margin-bottom: 14px;
+  }
+}
+
+// Ролі плашками, що переносяться на наступні рядки.
+.role-choices__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+// Кнопка-обгортка: плашка всередині, сама кнопка без вигляду.
+.role-choices__choice {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--settings-accent);
+    outline-offset: 2px;
+  }
+}
+
+.role-choices__message {
+  margin: 0;
+  font-size: 14px;
+  color: var(--nav-fg-inactive);
+
+  &--error {
+    margin-bottom: 10px;
+    color: var(--nav-unavailable-icon);
+  }
+}
+
+.role-choices__error {
+  margin-top: 10px;
+}

@@ -1,0 +1,13 @@
+<header class="dialog-header">
+  <h2 class="dialog-header__title">{{ title() }}</h2>
+  <button
+    type="button"
+    class="dialog-header__close"
+    tabindex="0"
+    [attr.aria-label]="'common.close' | translate"
+    [attr.title]="'common.close' | translate"
+    (click)="dismiss.emit()"
+  >
+    <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+  </button>
+</header>

@@ -1,0 +1,59 @@
+<app-popover
+  width="240px"
+  side="bottom"
+  alignment="end"
+  compactSide="bottom"
+  compactAlignment="end"
+  [label]="'knowledgeBase.actions.label' | translate"
+>
+  <app-action-list [items]="items()" (choose)="onChoose($event)" />
+</app-popover>
+
+<!-- Вікно дії (по центру екрана): шапка з назвою дії й хрестиком, під нею — зміст дії. -->
+<app-modal
+  #actionDialog
+  width="min(420px, calc(100vw - 32px))"
+  [label]="'knowledgeBase.actions.' + (dialog()?.action ?? 'edit') | translate"
+  (closed)="onDialogClosed()"
+>
+  @if (dialog(); as current) {
+    <app-dialog-header [title]="'knowledgeBase.actions.' + current.action | translate" (dismiss)="closeDialog()" />
+    @switch (current.action) {
+      @case ('edit') {
+        @let state = edit();
+        @switch (state.status) {
+          @case ('loading') {
+            <p class="kb-dialog__message">{{ 'knowledgeBase.dialogs.edit.loading' | translate }}</p>
+          }
+          @case ('failed') {
+            <p class="kb-dialog__message kb-dialog__message--error" role="alert">{{ state.errorKey | translate }}</p>
+          }
+          @case ('ready') {
+            <app-kb-item-form
+              submitLabelKey="knowledgeBase.dialogs.edit.save"
+              [initial]="state.editing"
+              [busy]="busy()"
+              [error]="error()"
+              (submitted)="save(state.editing, $event)"
+            />
+          }
+        }
+      }
+      @case ('move') {
+        <app-kb-move-dialog [folders]="folders()" [from]="folderOf(current.target)" (move)="move(current.target, $event)" />
+      }
+      @case ('delete') {
+        @let deleteError = error();
+        <app-confirm-dialog
+          [message]="'knowledgeBase.dialogs.delete.' + (isFolder(current.target) ? 'folder' : 'page') | translate: { title: current.target.title }"
+          [confirmLabel]="'common.yes' | translate"
+          [cancelLabel]="'common.cancel' | translate"
+          [busy]="busy()"
+          [error]="deleteError ? (deleteError | translate) : null"
+          (confirm)="remove(current.target)"
+          (dismiss)="closeDialog()"
+        />
+      }
+    }
+  }
+</app-modal>

@@ -2,11 +2,12 @@ import { Route, Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { requireAnyPermission } from './core/auth/permission.guard';
-import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS } from './core/auth/permissions';
+import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, KNOWLEDGE_BASE_PERMISSIONS } from './core/auth/permissions';
 import { connectionGuard } from './core/connection/connection.guard';
 
 /**
- * Те, що потрібне кожній сторінці для того, хто увійшов (усі, крім /login, /join і /relogin):
+ * Те, що потрібне кожній сторінці для того, хто увійшов (усі, крім /login, /join,
+ * /reset-password і /relogin):
  * два стражі й їхній запуск при кожній зміні сторінки. Нова така сторінка бере це цілком
  * (`...SIGNED_IN`), тож забути стража не вийде; сторінка з правами додає свій страж після цих.
  *
@@ -42,8 +43,10 @@ export const routes: Routes = [
   },
   {
     path: 'knowledge-base',
-    loadComponent: () => import('./knowledge-base/knowledge-base.page').then((m) => m.KnowledgeBasePage),
+    loadChildren: () => import('./knowledge-base/knowledge-base.routes').then((m) => m.KNOWLEDGE_BASE_ROUTES),
+    // Без права ViewCustomTable — на REDIRECT_URL (те саме, що ховає пункт меню «База знань»).
     ...SIGNED_IN,
+    canActivate: [...SIGNED_IN.canActivate, requireAnyPermission(KNOWLEDGE_BASE_PERMISSIONS)],
     data: { layoutSection: 'knowledge-base' },
   },
   {
@@ -78,6 +81,13 @@ export const routes: Routes = [
     loadComponent: () => import('./join/join.page').then((m) => m.JoinPage),
     // Сторінка запрошення: без стражів (колега ще не має акаунта на цьому сервері) і
     // без бічного меню — як /login.
+    data: { layout: 'none' },
+  },
+  {
+    path: 'reset-password',
+    loadComponent: () => import('./reset-password/reset-password.page').then((m) => m.ResetPasswordPage),
+    // Новий пароль за посиланням: без стражів (колега може не мати акаунта в цьому браузері) і
+    // без бічного меню — як /join.
     data: { layout: 'none' },
   },
   {

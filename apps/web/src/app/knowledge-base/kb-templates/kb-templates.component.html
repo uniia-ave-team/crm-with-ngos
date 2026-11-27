@@ -1,0 +1,88 @@
+<h1 class="kb-view__title">{{ 'knowledgeBase.templates.title' | translate }}</h1>
+
+@let current = state();
+@switch (current.status) {
+  @case ('loading') {
+    <p class="kb-view__message" role="status">{{ 'knowledgeBase.templates.loading' | translate }}</p>
+  }
+  @case ('failed') {
+    <p class="kb-view__message kb-view__message--error" role="alert">
+      <span>{{ 'knowledgeBase.templates.error' | translate }} {{ current.errorKey | translate }}</span>
+      <button type="button" class="kb-view__retry" tabindex="0" (click)="retry()">{{ 'knowledgeBase.retry' | translate }}</button>
+    </p>
+  }
+  @case ('ready') {
+    @if (current.templates.length) {
+      <!-- Кожен шаблон — як таблиця, що з нього вийде: назва, опис і рядок заголовків. -->
+      <ul class="kb-templates">
+        @for (template of current.templates; track template.id) {
+          <li class="kb-template">
+            <!-- Назва; праворуч — позначка «Системний» (такий шаблон сервер не дає ні змінити, ні видалити)
+                 чи кнопки «Редагувати» й «Видалити». -->
+            <div class="kb-template__header">
+              <h2 class="kb-template__title">{{ template.name }}</h2>
+              @if (template.isSystemPreset) {
+                <span class="kb-template__system">{{ 'knowledgeBase.templates.system' | translate }}</span>
+              } @else if (canUpdate() || canDelete()) {
+                <div class="kb-template__actions">
+                  @if (canUpdate()) {
+                    <app-action-button icon="create-outline" [iconOnly]="true" [label]="'knowledgeBase.actions.edit' | translate" (click)="openEdit(template)" />
+                  }
+                  @if (canDelete()) {
+                    <app-action-button icon="trash-outline" [iconOnly]="true" [label]="'knowledgeBase.actions.delete' | translate" (click)="openDelete(template)" />
+                  }
+                </div>
+              }
+            </div>
+            @if (template.description; as description) {
+              <p class="kb-view__description kb-template__description">{{ description }}</p>
+            }
+            <div class="kb-template__table">
+              <table class="kb-template__grid" [attr.aria-label]="template.name">
+                <thead>
+                  <tr>
+                    @for (field of template.fields; track $index) {
+                      @let colors = headerColors(field.name);
+                      <th
+                        scope="col"
+                        [style.background]="colors?.background ?? null"
+                        [style.color]="colors?.color ?? null"
+                        [innerHTML]="headerHtml(field.name)"
+                      ></th>
+                    }
+                  </tr>
+                </thead>
+              </table>
+            </div>
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="kb-view__message">{{ 'knowledgeBase.templates.empty' | translate }}</p>
+    }
+  }
+}
+
+<!-- «Редагувати»: назва, опис і стовпчики шаблону. -->
+<app-modal #editDialog width="min(720px, calc(100vw - 32px))" [label]="'knowledgeBase.templates.editTitle' | translate" (closed)="editing.set(null)">
+  @if (editing(); as template) {
+    <app-dialog-header [title]="'knowledgeBase.templates.editTitle' | translate" (dismiss)="closeEdit()" />
+    <app-kb-template-form [template]="template" [busy]="editBusy()" [error]="editError()" (submitted)="submitEdit($event)" />
+  }
+</app-modal>
+
+<!-- «Видалити»: підтвердження. -->
+<app-modal #deleteDialog width="min(400px, calc(100vw - 32px))" [label]="'knowledgeBase.templates.deleteTitle' | translate" (closed)="deleting.set(null)">
+  @if (deleting(); as template) {
+    <app-dialog-header [title]="'knowledgeBase.templates.deleteTitle' | translate" (dismiss)="closeDelete()" />
+    <app-confirm-dialog
+      [message]="'knowledgeBase.templates.deleteMessage' | translate: { name: template.name }"
+      [confirmLabel]="'common.yes' | translate"
+      [cancelLabel]="'common.cancel' | translate"
+      [busy]="deleteBusy()"
+      [error]="deleteError()"
+      (confirm)="confirmDelete()"
+      (dismiss)="closeDelete()"
+    />
+  }
+</app-modal>

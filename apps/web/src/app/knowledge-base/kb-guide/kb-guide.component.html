@@ -1,0 +1,14 @@
+@switch (state().status) {
+  @case ('loading') {
+    <p class="kb-view__message" role="status">{{ 'knowledgeBase.loading' | translate }}</p>
+  }
+  @case ('failed') {
+    <p class="kb-view__message kb-view__message--error" role="alert">
+      <span>{{ 'knowledgeBase.error' | translate }}</span>
+      <button type="button" class="kb-view__retry" tabindex="0" (click)="retry()">{{ 'knowledgeBase.retry' | translate }}</button>
+    </p>
+  }
+  @default {
+    <app-kb-contents [entries]="state().entries" />
+  }
+}

@@ -1,6 +1,6 @@
 <ion-app>
   @if (layout.hideShell()) {
-    <!-- Сторінки без оболонки (наразі /login, /join і /relogin): жодного рейла чи другої
+    <!-- Сторінки без оболонки (наразі /login, /join, /reset-password і /relogin): жодного рейла чи другої
          панелі, просто маршрутизований вміст на всю площу. -->
     <ion-router-outlet></ion-router-outlet>
   } @else {
@@ -15,6 +15,8 @@
             type="overlay"
             when="lg"
             [class.shell__menu--collapsed]="layout.collapsed()"
+            (ionWillOpen)="menuOpen.set(true)"
+            (ionDidClose)="menuOpen.set(false)"
           >
             <ion-header>
               <ion-toolbar>
@@ -22,9 +24,33 @@
                      обрізає її трикрапкою (white-space: nowrap у його shadow DOM). -->
                 <ion-title><span class="shell__menu-title">{{ titleKeys[section] | translate }}</span></ion-title>
                 <ion-buttons slot="end">
+                  <!-- «Бази знань»: «+» додає матеріал у корінь змісту, за ним — менеджер шаблонів (лише з
+                       `ViewTableTemplate`), далі кнопка згортання. Підказка — `title`. -->
+                  @if (section === 'knowledge-base' && knowledgeBase.canCreate()) {
+                    <ion-button
+                      class="shell__menu-add"
+                      (click)="addKnowledgeBasePage()"
+                      [attr.aria-label]="'knowledgeBase.addHere' | translate"
+                      [attr.title]="'knowledgeBase.addHere' | translate"
+                    >
+                      <ion-icon slot="icon-only" name="add-outline"></ion-icon>
+                    </ion-button>
+                  }
+                  @if (section === 'knowledge-base' && canViewTemplates()) {
+                    <ion-button
+                      class="shell__menu-templates"
+                      routerLink="/knowledge-base/templates"
+                      [attr.aria-label]="'knowledgeBase.openTemplates' | translate"
+                      [attr.title]="'knowledgeBase.openTemplates' | translate"
+                    >
+                      <ion-icon slot="icon-only" name="layers-outline"></ion-icon>
+                    </ion-button>
+                  }
                   <ion-button
+                    class="shell__menu-collapse"
                     (click)="layout.toggleCollapsed()"
                     [attr.aria-label]="(layout.collapsed() ? 'common.expandPanel' : 'common.collapsePanel') | translate"
+                    [attr.title]="(layout.collapsed() ? 'common.expandPanel' : 'common.collapsePanel') | translate"
                   >
                     <ion-icon
                       slot="icon-only"
@@ -51,6 +77,32 @@
         }
         <ion-router-outlet id="main-content"></ion-router-outlet>
       </ion-split-pane>
+
+      <!-- На телефоні шапки бокового меню нема: кнопки бази знань — плаваючі в правому нижньому куті
+           екрана (над затемненням), поки меню відкрите: менеджер шаблонів над «+». -->
+      @if (layout.section() === 'knowledge-base' && menuOpen() && (knowledgeBase.canCreate() || canViewTemplates())) {
+        <div class="shell__menu-fabs">
+          @if (canViewTemplates()) {
+            <button
+              type="button"
+              class="shell__menu-fab shell__menu-fab--templates"
+              tabindex="0"
+              (click)="openTemplatesFromMenu()"
+              [attr.aria-label]="'knowledgeBase.openTemplates' | translate"
+            >
+              <ion-icon name="layers-outline" aria-hidden="true"></ion-icon>
+            </button>
+          }
+          @if (knowledgeBase.canCreate()) {
+            <button type="button" class="shell__menu-fab" tabindex="0" (click)="addKnowledgeBasePage()" [attr.aria-label]="'knowledgeBase.addHere' | translate">
+              <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+            </button>
+          }
+        </div>
+      }
+
+      <!-- Вікно «Додати» бази знань: одне для всіх «+» (бокове меню, «Посібник», плаваюча кнопка). -->
+      <app-kb-add-dialog />
     </div>
   }
 
@@ -64,6 +116,34 @@
     [message]="'common.storageFull' | translate"
     [buttons]="[{ text: 'common.close' | translate, role: 'cancel' }]"
     (didDismiss)="accounts.dismissStorageFull()"
+  ></ion-toast>
+
+  <!-- Оголошення сервера про технічні роботи (`notice` статусу системи): угорі на всіх сторінках,
+       поки роботи не скінчились або його не закрили. -->
+  @let notice = maintenance.view();
+  <ion-toast
+    class="maintenance-notice"
+    color="warning"
+    position="top"
+    [isOpen]="notice !== null"
+    [header]="notice ? (notice.titleKey | translate: notice.params) : ''"
+    [message]="notice?.message ?? ''"
+    [buttons]="[{ text: 'common.close' | translate, role: 'cancel' }]"
+    (didDismiss)="maintenance.onDismissed($any($event).detail?.role)"
+  ></ion-toast>
+
+  <!-- Повідомлення про успіх, що переживає перехід (наприклад, «Пароль змінено…» після
+       /reset-password): угорі, зникає саме. -->
+  @let successKey = successNotice.key();
+  <ion-toast
+    class="success-notice"
+    color="success"
+    position="top"
+    [duration]="6000"
+    [isOpen]="successKey !== null"
+    [message]="successKey ? (successKey | translate) : ''"
+    [buttons]="[{ text: 'common.close' | translate, role: 'cancel' }]"
+    (didDismiss)="successNotice.dismiss()"
   ></ion-toast>
 
   <!-- Прелоадер на всю сторінку: поки шукаємо чинний акаунт серед збережених. -->

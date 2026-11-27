@@ -1,0 +1,51 @@
+// Спільний вигляд видів «Бази знань» (таблиця, сторінка, менеджер шаблонів): заголовок, опис,
+// повідомлення про завантаження чи невдачу. Розміри — як у «Посібника» (заголовок 24px, текст 15px).
+:host {
+  display: block;
+  color: var(--nav-fg-active);
+  font-family: var(--font-menu);
+}
+
+.kb-view__title {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+  font-family: var(--font-login-title);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.kb-view__description {
+  margin: 0 0 24px;
+  color: var(--nav-fg-inactive);
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+// Завантаження, невдача чи заглушка виду.
+.kb-view__message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+
+  &--error {
+    color: var(--nav-unavailable-icon);
+  }
+}
+
+.kb-view__retry {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}

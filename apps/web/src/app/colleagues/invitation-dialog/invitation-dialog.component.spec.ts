@@ -3,11 +3,11 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { InvitationShare, InvitationStatus } from './invitation-dialog.component';
+import { InvitationKind, InvitationShare, InvitationStatus } from './invitation-dialog.component';
 import { InvitationDialogComponent } from './invitation-dialog.component';
 
 @Component({
-  template: `<app-invitation-dialog [email]="email()" [token]="token()" [server]="server()" [expiresAt]="expiresAt()" [ngoName]="ngo()" [status]="status()" (copyLink)="copied.push($event)" (shareLink)="shared.push($event)" (dismiss)="dismissed = dismissed + 1" />`,
+  template: `<app-invitation-dialog [email]="email()" [token]="token()" [server]="server()" [expiresAt]="expiresAt()" [ngoName]="ngo()" [status]="status()" [kind]="kind()" (copyLink)="copied.push($event)" (shareLink)="shared.push($event)" (dismiss)="dismissed = dismissed + 1" />`,
   imports: [InvitationDialogComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
@@ -18,6 +18,7 @@ class HostComponent {
   readonly expiresAt = signal('2026-11-20T10:00:00Z');
   readonly ngo = signal('Організація');
   readonly status = signal<InvitationStatus>('idle');
+  readonly kind = signal<InvitationKind>('invitation');
   readonly copied: string[] = [];
   readonly shared: InvitationShare[] = [];
   dismissed = 0;
@@ -51,10 +52,36 @@ describe('InvitationDialogComponent', () => {
     expect(uk.colleagues.invitation.hint).not.toContain('токен');
   });
 
+  describe('the link for resetting the password (kind "passwordReset")', () => {
+    function renderReset() {
+      const ctx = render();
+      ctx.host.kind.set('passwordReset');
+      ctx.fixture.detectChanges();
+      return ctx;
+    }
+
+    it('has its own title, hint and label of the link, and leads to /reset-password with the token', () => {
+      const { q } = renderReset();
+      expect(q('.invitation__title').textContent?.trim()).toBe(uk.colleagues.passwordReset.title);
+      expect(q('.invitation__hint').textContent?.trim()).toBe(uk.colleagues.passwordReset.hint);
+      expect(q('.invitation__link').getAttribute('aria-label')).toBe(uk.colleagues.passwordReset.link);
+      expect(q('.invitation__link').textContent?.trim()).toBe(`${origin()}/reset-password#token=eyJ.header.payload.signature-of-a-long-token`);
+    });
+
+    it('shares its own title and signature', () => {
+      const { fixture, host, q } = renderReset();
+      q<HTMLButtonElement>('.invitation__share').click();
+      fixture.detectChanges();
+      expect(host.shared[0].title).toBe(uk.colleagues.passwordReset.shareTitle);
+      expect(host.shared[0].text.startsWith(uk.colleagues.passwordReset.shareIntro.replace('{{ngo}}', 'Організація'))).toBe(true);
+      expect(host.shared[0].url).toContain('/reset-password#token=');
+    });
+  });
+
   describe('the link', () => {
     it('is the current domain, /join and the token as the parameter', () => {
       const { q } = render();
-      expect(q('.invitation__link').textContent?.trim()).toBe(`${origin()}/join?token=eyJ.header.payload.signature-of-a-long-token`);
+      expect(q('.invitation__link').textContent?.trim()).toBe(`${origin()}/join#token=eyJ.header.payload.signature-of-a-long-token`);
     });
 
     it('leads to the host of the server of the invitation (without its port) when it is another one', () => {
@@ -62,21 +89,21 @@ describe('InvitationDialogComponent', () => {
       host.server.set('https://ngo.example.org:5065');
       host.token.set('t');
       fixture.detectChanges();
-      expect(q('.invitation__link').textContent?.trim()).toBe('https://ngo.example.org/join?token=t');
+      expect(q('.invitation__link').textContent?.trim()).toBe('https://ngo.example.org/join#token=t');
     });
 
     it('has the token encoded for the address', () => {
       const { fixture, host, q } = render();
       host.token.set('a b+c/d=e&f?g');
       fixture.detectChanges();
-      expect(q('.invitation__link').textContent?.trim()).toBe(`${origin()}/join?token=${encodeURIComponent('a b+c/d=e&f?g')}`);
+      expect(q('.invitation__link').textContent?.trim()).toBe(`${origin()}/join#token=${encodeURIComponent('a b+c/d=e&f?g')}`);
     });
 
     it('follows the token when it changes', () => {
       const { fixture, host, q } = render();
       host.token.set('another');
       fixture.detectChanges();
-      expect(q('.invitation__link').textContent?.trim()).toBe(`${origin()}/join?token=another`);
+      expect(q('.invitation__link').textContent?.trim()).toBe(`${origin()}/join#token=another`);
     });
 
     it('is one line that scrolls sideways (not wrapped), is read by screen readers as a read-only text box, and can be focused by the keyboard', () => {
@@ -122,7 +149,7 @@ describe('InvitationDialogComponent', () => {
     it('gives the whole link (not only the token) when the copy button is pressed', () => {
       const { host, q } = render();
       q<HTMLButtonElement>('.invitation__copy').click();
-      expect(host.copied).toEqual([`${origin()}/join?token=eyJ.header.payload.signature-of-a-long-token`]);
+      expect(host.copied).toEqual([`${origin()}/join#token=eyJ.header.payload.signature-of-a-long-token`]);
       expect(host.shared).toEqual([]);
     });
 
@@ -140,7 +167,7 @@ describe('InvitationDialogComponent', () => {
       expect(host.copied).toEqual([]);
       expect(host.shared).toHaveLength(1);
       const [shared] = host.shared;
-      expect(shared.url).toBe(`${origin()}/join?token=eyJ.header.payload.signature-of-a-long-token`);
+      expect(shared.url).toBe(`${origin()}/join#token=eyJ.header.payload.signature-of-a-long-token`);
       expect(shared.title).toBe(uk.colleagues.invitation.shareTitle);
       expect(shared.text.startsWith('Вас запрошено приєднатися до системи Явір, яку використовує Організація. Ви можете зареєструватися за посиланням нижче до ')).toBe(true);
       expect(shared.text.endsWith('.')).toBe(true);
@@ -183,7 +210,7 @@ describe('InvitationDialogComponent', () => {
       host.token.set('a b+c');
       fixture.detectChanges();
       q<HTMLButtonElement>('.invitation__share').click();
-      expect(host.shared[0].url).toBe(`${origin()}/join?token=${encodeURIComponent('a b+c')}`);
+      expect(host.shared[0].url).toBe(`${origin()}/join#token=${encodeURIComponent('a b+c')}`);
     });
   });
 

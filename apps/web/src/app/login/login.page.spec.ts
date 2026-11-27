@@ -58,8 +58,14 @@ describe('LoginPage', () => {
     navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
   });
 
+  // Справжні `URL.createObjectURL` / `revokeObjectURL` (у jsdom їх нема): тести нижче дописують їх
+  // у глобальний `URL`, а тестові файли не ізольовані — після тесту повертаємо як було.
+  const urlFunctions = { createObjectURL: URL.createObjectURL, revokeObjectURL: URL.revokeObjectURL };
+
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Object.assign(URL, urlFunctions);
     localStorage.clear();
   });
 
@@ -1197,6 +1203,13 @@ describe('LoginPage', () => {
       const { fill, submit } = createAdmin();
       fill({ ...valid, pw: password, repeat: password });
       expect(submit()).toEqual([expect.stringContaining(uk.login.admin.error.passwordWeak)]);
+    });
+
+    it('rejects a password longer than the server takes (128) as too long, not as too simple', () => {
+      const { fill, submit } = createAdmin();
+      const password = 'Aa1!' + 'x'.repeat(125);
+      fill({ ...valid, pw: password, repeat: password });
+      expect(submit()).toEqual([expect.stringContaining(uk.login.admin.error.passwordTooLong)]);
     });
 
     it('accepts a password of exactly eight characters with all required kinds', () => {

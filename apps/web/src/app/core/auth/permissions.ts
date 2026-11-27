@@ -48,7 +48,7 @@ export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
  * організації й дії в галереї (`admin-panel`).
  *
  * Хто читає списки:
- * - `ADMIN_PANEL_PERMISSIONS`, `COLLEAGUES_PERMISSIONS` — пункт бічного меню
+ * - `ADMIN_PANEL_PERMISSIONS`, `COLLEAGUES_PERMISSIONS`, `KNOWLEDGE_BASE_PERMISSIONS` — пункт бічного меню
  *   (`primary-nav`: без права пункту нема) і страж маршруту (`requireAnyPermission` в
  *   `app.routes.ts`: без права на сторінку не пускає й за прямим посиланням);
  * - `GALLERY_PERMISSIONS` — форма організації (`ngo-form`): чи показувати галерею.
@@ -69,6 +69,16 @@ export const GALLERY_PERMISSIONS: readonly string[] = [
 
 /** Права вкладки «Колеги»: достатньо `ViewUser` (пункт меню й страж маршруту). */
 export const COLLEAGUES_PERMISSIONS: readonly string[] = [PERMISSIONS.viewUser];
+
+/**
+ * Права «Бази знань»: пункт меню, страж маршруту й зміст сторінки. Поки в базі лише таблиці,
+ * тож досить `ViewCustomTable`; зʼявляться сторінки й папки — сюди додадуться їхні права
+ * перегляду (достатньо буде будь-якого).
+ */
+export const KNOWLEDGE_BASE_PERMISSIONS: readonly string[] = [PERMISSIONS.viewCustomTable];
+
+/** Права менеджера шаблонів таблиць (кнопка в шапці бокового меню й страж маршруту). */
+export const TABLE_TEMPLATES_PERMISSIONS: readonly string[] = [PERMISSIONS.viewTableTemplate];
 
 /** Чи є в `granted` хоча б одне з прав `required` (порожній `required` — не підходить ніхто). */
 export function hasAnyPermission(granted: readonly string[], required: readonly string[]): boolean {

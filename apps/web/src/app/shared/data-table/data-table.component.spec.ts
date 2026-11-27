@@ -3,13 +3,14 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../assets/i18n/uk.json';
-import { DataTableCellContext, DataTableColumn, DataTableRow, DataTableRowMenuEvent, DataTableSort } from './data-table.component';
+import { DataTableCellContext, DataTableColumn, DataTableHeaderContext, DataTableRow, DataTableRowMenuEvent, DataTableSort } from './data-table.component';
 import { DataTableComponent } from './data-table.component';
 
 @Component({
   template: `
-    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [highlightedRowId]="highlighted()" [defaultSortColumnId]="defaultSort()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
+    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [addColumnPlanned]="addPlanned()" [highlightedRowId]="highlighted()" [columnLines]="lines()" [defaultSortColumnId]="defaultSort()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
     <ng-template #custom let-row let-column="column"><b class="custom">{{ column.id }}:{{ row['title'] }}</b></ng-template>
+    <ng-template #customHeader let-column><i class="custom-header">{{ column.id }}</i></ng-template>
   `,
   imports: [DataTableComponent],
 })
@@ -19,12 +20,15 @@ class HostComponent {
   readonly label = signal<string | null>(null);
   readonly rowMenuShown = signal(true);
   readonly addShown = signal(true);
+  readonly addPlanned = signal(false);
   readonly highlighted = signal<string | null>(null);
   readonly defaultSort = signal<string | null>(null);
+  readonly lines = signal(false);
   readonly opened: DataTableRowMenuEvent[] = [];
   columnAdds = 0;
   readonly sorts: (DataTableSort | null)[] = [];
   readonly custom = viewChild<TemplateRef<DataTableCellContext>>('custom');
+  readonly customHeader = viewChild<TemplateRef<DataTableHeaderContext>>('customHeader');
 }
 
 describe('DataTableComponent', () => {
@@ -57,6 +61,61 @@ describe('DataTableComponent', () => {
     const { element } = render(base, rows);
     const headers = Array.from(element.querySelectorAll('th')).map((th) => th.textContent?.trim());
     expect(headers).toEqual([uk.colleagues.columns.name, uk.colleagues.columns.email, '']);
+  });
+
+  it('takes a ready header text (not from the language file) before the key', () => {
+    const { element } = render([{ id: 'terms', labelKey: null, label: 'Терміни' }, base[0]], rows);
+    expect(Array.from(element.querySelectorAll('th')).map((th) => th.textContent?.trim())).toEqual(['Терміни', uk.colleagues.columns.name, '']);
+  });
+
+  it('has no menu column at all when there is neither «+» nor three dots, so the table ends with the last column', () => {
+    const { fixture, host, element } = render(base, rows);
+    host.rowMenuShown.set(false);
+    host.addShown.set(false);
+    fixture.detectChanges();
+    expect(element.querySelector('.data-table__menu-cell')).toBeNull();
+    expect(element.querySelectorAll('col')).toHaveLength(2);
+    expect(Array.from(element.querySelectorAll('tbody tr')).map((row) => row.querySelectorAll('td').length)).toEqual([2, 2]);
+  });
+
+  it('draws lines between the columns only when asked', () => {
+    const { fixture, host, element } = render(base, rows);
+    expect(element.querySelector('table')?.classList).not.toContain('data-table--lines');
+    host.lines.set(true);
+    fixture.detectChanges();
+    expect(element.querySelector('table')?.classList).toContain('data-table--lines');
+  });
+
+  it('colours a whole cell and a whole header by the colours of the column', () => {
+    const { element } = render(
+      [
+        {
+          id: 'name',
+          labelKey: null,
+          label: 'Назва',
+          headerColors: { background: '#cdeaf5', color: '#123456' },
+          cellColors: (row) => (row.id === 'r1' ? { background: '#fde2e4', color: '#654321' } : null),
+        },
+      ],
+      rows,
+    );
+    const th = element.querySelector<HTMLElement>('th')!;
+    expect([th.style.background, th.style.color]).toEqual(['rgb(205, 234, 245)', 'rgb(18, 52, 86)']);
+    const cells = Array.from(element.querySelectorAll<HTMLElement>('tbody td:first-child'));
+    expect(cells.map((cell) => cell.style.background)).toEqual(['rgb(253, 226, 228)', '']);
+  });
+
+  it('draws a header from its own template, sorting by a separate icon button named after the column', () => {
+    const { fixture, host, element } = render([], rows);
+    host.columns.set([{ id: 'name', labelKey: null, label: 'Назва', headerTemplate: host.customHeader() }]);
+    fixture.detectChanges();
+    const th = element.querySelector('th')!;
+    expect(th.querySelector('.custom-header')?.textContent).toBe('name');
+    expect(th.querySelector('.data-table__sort')).toBeNull();
+    const toggle = th.querySelector<HTMLButtonElement>('.data-table__sort-toggle')!;
+    expect(toggle.getAttribute('aria-label')).toBe(uk.table.sortBy.replace('{{name}}', 'Назва'));
+    toggle.click();
+    expect(host.sorts.map((sort) => sort?.direction)).toEqual(['asc']);
   });
 
   describe('the filter icon in the headers of the columns', () => {
@@ -240,6 +299,15 @@ describe('DataTableComponent', () => {
       host.addShown.set(false);
       fixture.detectChanges();
       expect(element.querySelector('.data-table__add')).toBeNull();
+      expect(element.querySelectorAll('thead th')).toHaveLength(3);
+    });
+
+    it('stays in the markup but is hidden with the class planned when its action is not there yet', () => {
+      const { fixture, host, element } = render(base, rows);
+      expect(element.querySelector('.data-table__add')?.classList.contains('planned')).toBe(false);
+      host.addPlanned.set(true);
+      fixture.detectChanges();
+      expect(element.querySelector('.data-table__add')?.classList.contains('planned')).toBe(true);
       expect(element.querySelectorAll('thead th')).toHaveLength(3);
     });
 

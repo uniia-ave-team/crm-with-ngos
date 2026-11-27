@@ -143,6 +143,7 @@ describe('NgoService', () => {
       [400, 'invalid'],
       [401, 'unauthorized'],
       [403, 'forbidden'],
+      [413, 'quotaExceeded'],
       [500, 'error'],
     ])('returns the failure for HTTP %i (%s) and does not read the organization', async (status, expected) => {
       const result = service.uploadLogo(png());

@@ -10,7 +10,7 @@ import { needsSignIn } from '../../accounts/account-login';
 import { AccountRestoreService } from '../../accounts/account-restore.service';
 import { AccountsService } from '../../accounts/accounts.service';
 import { REDIRECT_URL } from '../../auth/auth.service';
-import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
+import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, KNOWLEDGE_BASE_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
 import { mobileLogoBase } from '../../i18n/logos';
 import { CurrentUserService } from '../../users/current-user.service';
@@ -24,6 +24,8 @@ interface NavItem {
   readonly iconActive: string;
   /** Пункт показується, лише коли є хоча б одне з цих прав; без поля — видно всім. */
   readonly requiresAny?: readonly string[];
+  /** Сторінка запланована, але ще не готова: пункт у розмітці, проте прихований класом `planned`. */
+  readonly planned?: boolean;
 }
 
 /**
@@ -56,9 +58,16 @@ export class PrimaryNavComponent {
   private readonly restore = inject(AccountRestoreService);
 
   private static readonly ITEMS: readonly NavItem[] = [
-    { labelKey: 'nav.calendar', url: '/calendar', icon: 'calendar-outline', iconActive: 'calendar' },
+    // Календар ще не готовий: пункт прихований (`planned`), доки сторінки нема.
+    { labelKey: 'nav.calendar', url: '/calendar', icon: 'calendar-outline', iconActive: 'calendar', planned: true },
     { labelKey: 'nav.planner', url: '/planner', icon: 'checkbox-outline', iconActive: 'checkbox' },
-    { labelKey: 'nav.knowledgeBase', url: '/knowledge-base', icon: 'bulb-outline', iconActive: 'bulb' },
+    {
+      labelKey: 'nav.knowledgeBase',
+      url: '/knowledge-base',
+      icon: 'bulb-outline',
+      iconActive: 'bulb',
+      requiresAny: KNOWLEDGE_BASE_PERMISSIONS,
+    },
     {
       labelKey: 'nav.colleagues',
       url: '/colleagues',

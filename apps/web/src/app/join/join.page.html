@@ -21,6 +21,13 @@
         </div>
       }
 
+      @case ('exists') {
+        <div class="auth-error" role="alert">
+          <p class="auth-error__line join__error-line">{{ 'join.exists' | translate }}</p>
+          <p class="auth-error__line join__error-line"><a class="join__link" routerLink="/login">{{ 'join.signIn' | translate }}</a></p>
+        </div>
+      }
+
       @case ('check-failed') {
         <div class="auth-error" role="alert">
           <p class="auth-error__line join__error-line">{{ 'join.checkFailed' | translate }}</p>

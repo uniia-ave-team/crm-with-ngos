@@ -51,6 +51,7 @@ describe('InvitationsService', () => {
     [400, 'invalid'],
     [401, 'unauthorized'],
     [403, 'forbidden'],
+    [409, 'exists'],
     [500, 'error'],
   ])('reports HTTP %i as %s', async (status, failure) => {
     const result = service.invite('a@b.org', ['r1']);
@@ -85,6 +86,7 @@ describe('InvitationsService', () => {
 
     it.each([
       [400, 'invalid'],
+      [409, 'exists'],
       [500, 'error'],
     ])('reports HTTP %i as %s', async (status, failure) => {
       const result = service.validate(server, 'tok');
@@ -130,6 +132,7 @@ describe('InvitationsService', () => {
     it.each([
       [400, 'invalid'],
       [401, 'unauthorized'],
+      [409, 'exists'],
       [500, 'error'],
     ])('reports HTTP %i as %s', async (status, failure) => {
       const result = service.accept(server, 'tok', registration);

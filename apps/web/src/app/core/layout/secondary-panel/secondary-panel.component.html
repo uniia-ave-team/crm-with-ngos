@@ -1,44 +1,99 @@
 @switch (section()) {
   @case ('knowledge-base') {
-    <ul class="tree">
-      <li>
-        <a
-          class="tree__link tree__link--home"
-          routerLink="/knowledge-base"
-          routerLinkActive="tree__link--active"
-          [routerLinkActiveOptions]="{ exact: true }"
-        >
-          <ion-icon name="home-outline" aria-hidden="true"></ion-icon>
-          <span>Головна</span>
-        </a>
-      </li>
-
-      @for (group of knowledgeBaseGroups; track group.label) {
-        <li class="tree__group">
-          <span class="tree__group-label">
-            <ion-icon [name]="group.icon" aria-hidden="true"></ion-icon>
-            <span>{{ group.label }}</span>
-          </span>
-          <ul>
-            @for (item of group.items; track $index) {
-              <li>
-                <span class="tree__link tree__link--placeholder">
-                  <ion-icon [name]="item.icon" aria-hidden="true"></ion-icon>
-                  <span>{{ item.label }}</span>
-                </span>
-              </li>
-            }
-          </ul>
-        </li>
+    <!-- Три крапки біля папки чи матеріалу: видно при наведенні на рядок (чи фокусі з клавіатури),
+         на телефоні — завжди; відкривають меню дій (`app-kb-item-menu`). -->
+    <app-kb-item-menu #itemMenu />
+    <!-- Кнопки «+» і три крапки — лише якщо є права на дії (`KnowledgeBaseService.can`). -->
+    <ng-template #menuButton let-label="label" let-title="title" let-target="target">
+      @if (knowledgeBaseService.hasActions(target)) {
+        <button type="button" class="tree__menu" tabindex="0" [attr.aria-label]="label | translate: { title }" (click)="itemMenu.open($event, target)">
+          <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+        </button>
       }
-
-      <li>
-        <span class="tree__link tree__link--placeholder">
-          <ion-icon name="grid-outline" aria-hidden="true"></ion-icon>
-          <span>База донорів</span>
-        </span>
-      </li>
+    </ng-template>
+    <!-- Таблиця чи сторінка: посилання на її вид (`knowledgeBaseLink`), поряд три крапки. Рядок
+         виділений, поки вид відкритий (`routerLinkActive` на рядку стежить за посиланням у ньому). -->
+    <ng-template #itemRow let-page="page">
+      <span class="tree__row tree__row--item" routerLinkActive="tree__link--active">
+        <a class="tree__link" [routerLink]="link(page)" (click)="closeMenu()">
+          <ion-icon [name]="iconOf(page)" aria-hidden="true"></ion-icon>
+          <span class="tree__name" [title]="page.title">{{ page.title }}</span>
+        </a>
+        <ng-container *ngTemplateOutlet="menuButton; context: { label: 'knowledgeBase.pageActions', title: page.title, target: page }" />
+      </span>
+    </ng-template>
+    <ul class="tree tree--kb">
+      @for (entry of knowledgeBase().entries; track entry.id) {
+        @if (isGroup(entry)) {
+          @let collapsed = isCollapsed(entry.id);
+          <li class="tree__group">
+            <!-- Назва групи — кнопка згортання: при наведенні (чи фокусі) папка змінюється на
+                 стрілку (розгорнута — вниз, згорнута — вправо). Три крапки — окрема кнопка поряд. -->
+            <span class="tree__group-label tree__row">
+              <button
+                type="button"
+                class="tree__toggle"
+                tabindex="0"
+                [attr.aria-expanded]="!collapsed"
+                [attr.aria-controls]="'kb-group-' + entry.id"
+                (click)="toggleGroup(entry.id)"
+              >
+                <ion-icon class="tree__folder" name="folder-outline" aria-hidden="true"></ion-icon>
+                @if (collapsed) {
+                  <ion-icon class="tree__chevron" name="chevron-forward-outline" aria-hidden="true"></ion-icon>
+                } @else {
+                  <ion-icon class="tree__chevron" name="chevron-down-outline" aria-hidden="true"></ion-icon>
+                }
+                <span class="tree__name" [title]="entry.title">{{ entry.title }}</span>
+              </button>
+              <!-- «+» у плашці папки (перед трьома крапками): додати сторінку в цю папку. На телефоні його
+                   нема: там це пункт «Додати в папку» в меню трьох крапок. -->
+              @if (knowledgeBaseService.can('add', entry)) {
+                <button
+                  type="button"
+                  class="tree__menu tree__add"
+                  tabindex="0"
+                  [attr.aria-label]="'knowledgeBase.addToFolder' | translate: { title: entry.title }"
+                  (click)="addToFolder(entry)"
+                >
+                  <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+                </button>
+              }
+              <ng-container *ngTemplateOutlet="menuButton; context: { label: 'knowledgeBase.groupActions', title: entry.title, target: entry }" />
+            </span>
+            <ul [id]="'kb-group-' + entry.id" [hidden]="collapsed">
+              @for (page of entry.items; track page.id) {
+                <li>
+                  <ng-container *ngTemplateOutlet="itemRow; context: { page }" />
+                </li>
+              }
+            </ul>
+          </li>
+        } @else if (entry.type === 'home') {
+          <li>
+            <a
+              class="tree__link tree__link--home"
+              routerLink="/knowledge-base"
+              routerLinkActive="tree__link--active"
+              [routerLinkActiveOptions]="{ exact: true }"
+              (click)="closeMenu()"
+            >
+              <ion-icon name="home-outline" aria-hidden="true"></ion-icon>
+              <span>{{ 'common.home' | translate }}</span>
+            </a>
+          </li>
+        } @else {
+          <li>
+            <ng-container *ngTemplateOutlet="itemRow; context: { page: entry }" />
+          </li>
+        }
+      }
     </ul>
+    @if (knowledgeBase().status === 'loading') {
+      <p class="hint" role="status">{{ 'knowledgeBase.loading' | translate }}</p>
+    } @else if (knowledgeBase().status === 'failed') {
+      <p class="hint" role="alert">{{ 'knowledgeBase.error' | translate }}</p>
+    }
   }
 
   @case ('planner') {
@@ -51,7 +106,7 @@
           [routerLinkActiveOptions]="{ exact: true }"
         >
           <ion-icon name="home-outline" aria-hidden="true"></ion-icon>
-          <span>Головна</span>
+          <span>{{ 'common.home' | translate }}</span>
         </a>
       </li>
     </ul>

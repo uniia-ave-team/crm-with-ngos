@@ -2,3 +2,35 @@
 ion-title {
   font-weight: 700;
 }
+
+// На десктопі шапки нема: друга панель із деревом уже видна, заголовок дає вид.
+@media (min-width: 992px) {
+  .kb__header {
+    display: none;
+  }
+}
+
+// Відступи основного блоку — як у сторінки «Адмін» (`settings-section.scss`), лише зверху
+// менше: так заголовок виду стоїть на рівні з заголовком другої панелі («База знань»).
+.kb__body {
+  padding: 17px 28px 40px;
+
+  // Смуга дій знизу (56px) не закриває останні рядки змісту.
+  &--with-actions {
+    padding-bottom: calc(40px + 56px);
+  }
+}
+
+// Вид таблиці: блок — на всю видиму висоту змісту, таблиця доходить до низу екрана (чи до смуги
+// дій) і прокручується сама (див. `kb-table.component.scss`).
+.kb__body:has(> app-kb-table) {
+  display: flex;
+  box-sizing: border-box;
+  flex-direction: column;
+  height: 100%;
+  padding-bottom: 0;
+
+  &.kb__body--with-actions {
+    padding-bottom: 56px;
+  }
+}

@@ -19,17 +19,19 @@ describe('app routes', () => {
     // authGuard, connectionGuard і страж прав.
     expect(guards('admin-panel')).toBe(3);
     expect(guards('colleagues')).toBe(3);
+    expect(guards('knowledge-base')).toBe(3);
   });
 
   it('keeps only the login and connection guards on the pages that do not depend on rights', () => {
-    for (const path of ['calendar', 'planner', 'knowledge-base', 'settings']) {
+    for (const path of ['calendar', 'planner', 'settings']) {
       expect(guards(path), path).toBe(2);
     }
   });
 
-  it('has no guards on the login page, on the page of the invitation and on the page of the repeated login', () => {
+  it('has no guards on the login page, on the pages of the invitation and of the new password and on the page of the repeated login', () => {
     expect(guards('login')).toBe(0);
     expect(guards('join')).toBe(0);
+    expect(guards('reset-password')).toBe(0);
     expect(guards('relogin')).toBe(0);
   });
 

@@ -1,5 +1,6 @@
 import { RoleUserDto, UserProfileDto } from '../../api/generated/models';
 import { Untrusted } from '../http/api-contract';
+import { PRONOUN_CATEGORY } from './pronouns';
 
 /** Роль користувача в його профілі (`roles` відповіді `/users/me`): тип із контракту. */
 export type UserRole = RoleUserDto;
@@ -26,14 +27,22 @@ export type UserProfile = Pick<UserProfileDto, 'id' | 'email' | 'firstName' | 'l
   Partial<
     Pick<
       UserProfileDto,
-      'patronymic' | 'phoneNumber' | 'country' | 'emergencyContact' | 'preferredLanguage' | 'pronouns' | 'avatarUrl'
+      | 'patronymic'
+      | 'phoneNumber'
+      | 'country'
+      | 'emergencyContact'
+      | 'preferredLanguage'
+      | 'pronouns'
+      | 'pronounCategory'
+      | 'avatarUrl'
     >
   >;
 
 /**
  * Профіль із відповіді `GET /api/v1/users/me`; `null` — відповідь не за контрактом: `id` не
  * рядок чи порожній, або пошта чи імена не рядки. Ролі — лише придатні (`sanitizeRoles`).
- * Необовʼязкові поля, що прийшли не того типу, відкидаються, ніби їх нема.
+ * Необовʼязкові поля, що прийшли не того типу, відкидаються, ніби їх нема; категорія займенників
+ * — лише одна з відомих (`PRONOUN_CATEGORY`) або `null`.
  */
 export function toUserProfile(body: Untrusted<UserProfileDto>): UserProfile | null {
   const { id, email, firstName, lastName } = body ?? {};
@@ -46,6 +55,10 @@ export function toUserProfile(body: Untrusted<UserProfileDto>): UserProfile | nu
     if (typeof value === 'string' || value === null) {
       profile[field] = value;
     }
+  }
+  const category = body?.pronounCategory;
+  if (category === null || (Object.values(PRONOUN_CATEGORY) as unknown[]).includes(category)) {
+    profile.pronounCategory = category as UserProfile['pronounCategory'];
   }
   return profile;
 }

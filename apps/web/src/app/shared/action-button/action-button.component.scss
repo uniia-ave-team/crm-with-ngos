@@ -1,0 +1,98 @@
+// Тривалість однакова з `app-search-header`.
+$transition: 0.25s ease;
+
+// Акценти: синій і зелений (у темній темі зелений — як на формах налаштувань).
+:host {
+  --action-button-blue: #146ef4;
+  --action-button-green: #32670b;
+  display: inline-flex;
+  flex: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --action-button-green: #478a7f;
+  }
+}
+
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--action-button-height, 36px);
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  font-family: var(--font-login-title);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    gap $transition,
+    padding $transition;
+
+  ion-icon {
+    flex: none;
+    font-size: 20px;
+  }
+
+  &--blue {
+    background: var(--action-button-blue);
+  }
+
+  &--green {
+    background: var(--action-button-green);
+  }
+
+  &--neutral {
+    background: var(--nav-active-bg);
+    color: var(--nav-fg-active);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+// Текст: при стисканні його ширина плавно йде в нуль (`0fr`), лишається іконка.
+.action-button__label {
+  display: grid;
+  grid-template-columns: 1fr;
+  transition: grid-template-columns $transition;
+
+  > span {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+}
+
+@mixin compact {
+  .action-button {
+    gap: 0;
+    padding: 0 10px;
+  }
+
+  .action-button__label {
+    grid-template-columns: 0fr;
+  }
+}
+
+:host(.action-button--compact) {
+  @include compact;
+}
+
+@media (max-width: 600px) {
+  :host(.action-button--in-header) {
+    @include compact;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action-button,
+  .action-button__label {
+    transition: none;
+  }
+}

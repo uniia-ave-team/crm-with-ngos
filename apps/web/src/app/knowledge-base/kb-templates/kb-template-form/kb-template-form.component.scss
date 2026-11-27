@@ -1,0 +1,73 @@
+// Поля й кнопка — спільні з формами налаштувань (`settings-section.scss`); у вікні — як у формі
+// «Бази знань» (`kb-item-form`): без відступів сторінки, щільніше, поля на всю ширину вікна.
+:host {
+  display: block;
+  padding: 16px 0 0;
+}
+
+.settings-form {
+  gap: 20px;
+}
+
+.settings-input {
+  max-width: none;
+}
+
+.settings-input--area {
+  height: auto;
+  min-height: 80px;
+  padding: 8px 12px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.settings-submit {
+  align-self: stretch;
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+}
+
+// Смуга дій над рядком стовпчиків — з невеликим відступом від нього.
+.kb-template-form__toolbar {
+  margin-bottom: 8px;
+}
+
+// Рядок стовпчиків — як у менеджері шаблонів: рамка, заокруглення, прокрутка вбік.
+.kb-template-form__table {
+  overflow-x: auto;
+  border: 1px solid var(--nav-border);
+  border-radius: 12px;
+}
+
+.kb-template-form__grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+
+  th {
+    padding: 0;
+    background: var(--nav-active-bg);
+    font-family: var(--font-login-title);
+    font-weight: 700;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th:not(:last-child) {
+    border-inline-end: 1px solid var(--nav-border);
+  }
+}
+
+// Заголовок, який можна змінювати: без рамки й виділення (видно лише курсор), не вужчий за 140px.
+.kb-template-form__head {
+  min-width: 140px;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  outline: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  cursor: text;
+}

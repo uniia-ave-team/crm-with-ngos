@@ -1,0 +1,92 @@
+<h1 class="kb-contents__title">{{ 'knowledgeBase.guide' | translate }}</h1>
+
+<!-- Вітальний текст розділу: рамка на всю ширину, ліворуч помах руки. -->
+<p class="kb-contents__intro"><span class="kb-contents__wave" aria-hidden="true">👋</span>{{ 'knowledgeBase.intro' | translate }}</p>
+
+<!-- Рядок сторінки чи заголовка групи: при наведенні (чи фокусі в ньому) — підложка й три крапки
+     біля назви (місце під них є завжди, тож назва не перескладається). -->
+<app-kb-item-menu #itemMenu />
+<ng-template #row let-title="title" let-icon="icon" let-label="label" let-folder="folder" let-target="target">
+  @if (folder) {
+    <span class="kb-contents__name" [title]="title">{{ title }}</span>
+  } @else {
+    <!-- Таблиця чи сторінка — посилання на її вид (`knowledgeBaseLink`). -->
+    <a class="kb-contents__link" [routerLink]="link(target)">
+      <ion-icon class="kb-contents__icon" [name]="icon" aria-hidden="true"></ion-icon>
+      <span class="kb-contents__name" [title]="title">{{ title }}</span>
+    </a>
+  }
+  <!-- «+» і три крапки — лише якщо є права на дії (`KnowledgeBaseService.can`). -->
+  @if (folder && knowledgeBase.can('add', folder)) {
+    <!-- «+» папки: додати в неї. -->
+    <button
+      type="button"
+      class="kb-contents__menu kb-contents__add"
+      tabindex="0"
+      [attr.aria-label]="'knowledgeBase.addToFolder' | translate: { title }"
+      (click)="addToFolder(folder)"
+    >
+      <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+    </button>
+  }
+  @if (knowledgeBase.hasActions(target)) {
+    <button
+      type="button"
+      class="kb-contents__menu"
+      tabindex="0"
+      [attr.aria-label]="label | translate: { title }"
+      (click)="itemMenu.open($event, target)"
+    >
+      <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+    </button>
+  }
+</ng-template>
+
+@if (!blocks().length) {
+  <!-- Ні таблиць, ні сторінок, ні папок: ілюстрація за темою (`prefers-color-scheme`) і підпис. -->
+  <div class="kb-contents__empty">
+    <picture>
+      <source srcset="assets/empty_dark.svg" media="(prefers-color-scheme: dark)" />
+      <img class="kb-contents__empty-image" src="assets/empty_light.svg" alt="" width="184" height="200" />
+    </picture>
+    <p class="kb-contents__empty-text">{{ 'knowledgeBase.empty' | translate }}</p>
+  </div>
+}
+
+<div class="kb-contents__grid">
+  @for (block of blocks(); track $index) {
+    @if ('group' in block) {
+      <section class="kb-contents__section">
+        <!-- Назва папки завжди виглядає наведеною: підложка, обрис і видимі «+» та три крапки. -->
+        <h2 class="kb-contents__section-title kb-contents__row kb-contents__row--folder">
+          <ng-container
+            *ngTemplateOutlet="
+              row;
+              context: { title: block.group.title, icon: null, label: 'knowledgeBase.groupActions', folder: block.group, target: block.group }
+            "
+          />
+        </h2>
+        <ul class="kb-contents__items">
+          @for (page of block.group.items; track $index) {
+            <li class="kb-contents__item kb-contents__row">
+              <ng-container
+                *ngTemplateOutlet="row; context: { title: page.title, icon: types[page.type].icon, label: 'knowledgeBase.pageActions', target: page }"
+              />
+            </li>
+          }
+        </ul>
+      </section>
+    } @else {
+      <!-- Усі матеріали без папки — одним стовпчиком. -->
+      <ul class="kb-contents__items kb-contents__items--loose">
+        @for (page of block.pages; track page.id) {
+          <li class="kb-contents__item kb-contents__row">
+            <ng-container
+              *ngTemplateOutlet="row; context: { title: page.title, icon: types[page.type].icon, label: 'knowledgeBase.pageActions', target: page }"
+            />
+          </li>
+        }
+      </ul>
+    }
+  }
+</div>

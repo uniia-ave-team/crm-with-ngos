@@ -1,0 +1,73 @@
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  @if (templates(); as templateOptions) {
+    <!-- «Тип» видно, але поки змінити не можна: сервер уміє лише таблиці. -->
+    <div class="settings-field">
+      <label class="settings-field__label" for="kb-item-type">{{ 'knowledgeBase.dialogs.form.type' | translate }}</label>
+      <span class="settings-select-wrap">
+        <select id="kb-item-type" class="settings-select" tabindex="0" disabled>
+          @for (option of types; track option.type) {
+            <option [value]="option.type" [selected]="option.type === type()">{{ option.labelKey | translate }}</option>
+          }
+        </select>
+        <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+      </span>
+    </div>
+
+    @if (type() === 'customtable') {
+      <div class="settings-field">
+        <label class="settings-field__label" for="kb-item-template">{{ 'knowledgeBase.dialogs.form.template' | translate }}</label>
+        <span class="settings-select-wrap">
+          <select id="kb-item-template" class="settings-select" tabindex="0" (change)="onTemplate($event)">
+            <option [value]="noTemplate" [selected]="templateId() === noTemplate">{{ 'knowledgeBase.dialogs.form.noTemplate' | translate }}</option>
+            @for (template of templateOptions; track template.id) {
+              <option [value]="template.id" [selected]="templateId() === template.id">{{ template.name }}</option>
+            }
+          </select>
+          <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+        </span>
+      </div>
+    }
+  }
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="kb-item-title">
+      {{ 'knowledgeBase.dialogs.form.title' | translate
+      }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span>
+    </label>
+    <input
+      id="kb-item-title"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      required
+      autocomplete="off"
+      [attr.maxlength]="nameMaxLength"
+      [value]="title()"
+      [attr.aria-invalid]="titleError() ? true : null"
+      [attr.aria-describedby]="titleError() ? 'kb-item-title-error' : null"
+      (input)="onText(title, $event)"
+    />
+    @if (titleError(); as errorKey) {
+      <p id="kb-item-title-error" class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="kb-item-description">{{ 'knowledgeBase.dialogs.form.description' | translate }}</label>
+    <textarea
+      id="kb-item-description"
+      class="settings-input settings-input--area"
+      tabindex="0"
+      rows="3"
+      [attr.maxlength]="descriptionMaxLength"
+      [value]="description()"
+      (input)="onText(description, $event)"
+    ></textarea>
+  </div>
+
+  @if (error(); as errorKey) {
+    <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+  }
+
+  <button type="submit" class="settings-submit" tabindex="0" [disabled]="busy()">{{ submitLabelKey() | translate }}</button>
+</form>
