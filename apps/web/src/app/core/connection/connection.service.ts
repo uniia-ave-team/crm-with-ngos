@@ -151,7 +151,9 @@ function reportedStatus(body: Untrusted<{ status: string }>): string | null {
  * нову адресу, перемкнувся акаунт) — перевірку запускає той, хто її змінив.
  *
  * Знайшлося здорове API — одразу запитується статус системи (`loadSystemStatus`), також коли
- * користувач уже ввійшов: з нього відомо, чи сервер у демо-режимі (`demo`).
+ * користувач уже ввійшов: з нього відомо, чи сервер у демо-режимі (`demo`). Так і під час пошуку
+ * чинного акаунта: сторінка входу після пошуку бере вже запитаний статус, а
+ * `MaintenanceNoticeService` свого запиту тоді не додає.
  *
  * Сервіс не відповідає за вхід (сесію, токени) і сам не стежить за сервером: стан — це
  * результат останньої перевірки.
@@ -408,6 +410,28 @@ export class ConnectionService {
     });
     supersede?.(request);
     return request;
+  }
+
+  /**
+   * Тихо перепитує статус системи (щоб побачити нове оголошення про технічні роботи): поточний
+   * статус лишається, поки не прийде новий, а невдача нічого не міняє (на відміну від
+   * `loadSystemStatus`, який на час запиту статус скидає). Лише коли статус уже завантажено й інший
+   * запит не йде; відповідь для сервера, який тим часом змінився, відкидається.
+   */
+  async refreshSystemStatus(): Promise<void> {
+    if (this.systemStatusStateSignal() !== 'loaded' || this.supersedeSystemStatus) {
+      return;
+    }
+    const server = this.serverUrl();
+    try {
+      const body = await firstValueFrom(this.http.get<Untrusted<SystemStatus>>(`${server}${API_SYSTEM_STATUS_PATH}`).pipe(timeout(API_CHECK_TIMEOUT_MS)));
+      const status = toSystemStatus(body);
+      if (status && server === this.serverUrl() && this.systemStatusStateSignal() === 'loaded' && !this.supersedeSystemStatus) {
+        this.systemStatusSignal.set(status);
+      }
+    } catch {
+      // Невдала фонова перевірка нічого не міняє: наступна спробує знову.
+    }
   }
 
   /**

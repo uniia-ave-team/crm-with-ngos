@@ -3,7 +3,6 @@ using Crm.Application.Features.CustomTables.Commands;
 using Crm.Application.Features.CustomTables.Mappings;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
-using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Mapster;
@@ -15,7 +14,7 @@ namespace Crm.Application.Tests.Features.CustomTables.Commands;
 
 /// <summary>
 /// Contains unit tests for <see cref="UpdateCustomTableCommandHandler"/>
-/// verifying command processing, record synchronization, short-circuiting, and error conditions.
+/// verifying command processing, field ID preservation, record synchronization, short-circuiting, and error conditions.
 /// </summary>
 public class UpdateCustomTableCommandHandlerTests
 {
@@ -24,26 +23,18 @@ public class UpdateCustomTableCommandHandlerTests
     private readonly ILogger<UpdateCustomTableCommandHandler> _logger = Substitute.For<ILogger<UpdateCustomTableCommandHandler>>();
     private readonly UpdateCustomTableCommandHandler _handler;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="UpdateCustomTableCommandHandlerTests"/> class.
-    /// Configures Mapster mapping definitions and initializes the handler under test.
-    /// </summary>
     public UpdateCustomTableCommandHandlerTests()
     {
         new CustomTableMappingRegister().Register(TypeAdapterConfig.GlobalSettings);
         _handler = new UpdateCustomTableCommandHandler(_customTableRepository, _customRecordRepository, _logger);
     }
 
-    /// <summary>
-    /// Verifies that when the custom table contains no existing records, metadata and fields are updated,
-    /// but record payload synchronization is bypassed (short-circuited).
-    /// </summary>
     [Fact]
-    public async Task HandleWhenTableHasNoRecordsShouldUpdateSchemaAndBypassRecordSync()
+    public async Task HandleWhenTableHasNoRecordsShouldUpdateSchemaStageChangesAndBypassRecordSync()
     {
         // Arrange
-        var tableId = Guid.NewGuid();
-        var existingFieldId = Guid.NewGuid();
+        var tableId = Guid.CreateVersion7();
+        var existingFieldId = Guid.CreateVersion7();
         var customTable = new CustomTable
         {
             Id = tableId,
@@ -51,7 +42,7 @@ public class UpdateCustomTableCommandHandlerTests
             Description = "Initial Description",
             Fields =
             [
-                new CustomField { Id = existingFieldId, Key = "field_one", Name = "Field One", DataType = FieldDataType.Text },
+                new CustomField { Id = existingFieldId, Name = "Field One" },
             ],
         };
 
@@ -65,8 +56,8 @@ public class UpdateCustomTableCommandHandlerTests
             "Updated Name",
             "Updated Description",
             [
-                new UpdateCustomFieldDto(existingFieldId, "Field One Renamed", "field_one", FieldDataType.Text, false, 0),
-                new UpdateCustomFieldDto(null, "Field Two", "field_two", FieldDataType.Number, true, 1),
+                new UpdateCustomFieldDto(existingFieldId, "Field One Renamed", false, 0),
+                new UpdateCustomFieldDto(null, "Field Two", true, 1),
             ])
         {
             Id = tableId,
@@ -77,32 +68,76 @@ public class UpdateCustomTableCommandHandlerTests
 
         // Assert
         await _customTableRepository.Received(1).LockForUpdateAsync(tableId, Arg.Any<CancellationToken>());
+        await _customTableRepository.Received(1).ApplyFieldSchemaChangesAsync(
+            tableId,
+            Arg.Is<IEnumerable<CustomField>>(added => added.Count() == 1),
+            Arg.Is<IEnumerable<CustomField>>(removed => !removed.Any()),
+            Arg.Any<CancellationToken>());
+
         customTable.Name.ShouldBe("Updated Name");
         customTable.Description.ShouldBe("Updated Description");
         customTable.Fields.Count.ShouldBe(2);
-        customTable.Fields.ShouldContain(f => f.Key == "field_two" && f.IsRequired);
+        customTable.Fields.Single(f => f.Id == existingFieldId).Name.ShouldBe("Field One Renamed");
+
+        var addedField = customTable.Fields.Single(f => f.Name == "Field Two");
+        addedField.IsRequired.ShouldBeTrue();
+        addedField.Id.ShouldNotBe(Guid.Empty);
 
         await _customRecordRepository.DidNotReceive()
-            .SyncRecordSchemaAsync(Arg.Any<Guid>(), Arg.Any<SchemaDiffResult>(), Arg.Any<CancellationToken>());
+            .SyncRecordSchemaAsync(Arg.Any<Guid>(), Arg.Any<SchemaSyncPlan>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Verifies that when the custom table contains existing records, record schema synchronization
-    /// is invoked with the calculated schema diff.
-    /// </summary>
     [Fact]
-    public async Task HandleWhenTableHasRecordsShouldInvokeSyncRecordSchema()
+    public async Task HandleWhenOnlyFieldNameChangesShouldSkipRecordCheckAndJsonbSync()
     {
         // Arrange
-        var tableId = Guid.NewGuid();
-        var fieldId = Guid.NewGuid();
+        var tableId = Guid.CreateVersion7();
+        var fieldId = Guid.CreateVersion7();
         var customTable = new CustomTable
         {
             Id = tableId,
             Name = "Active Table",
             Fields =
             [
-                new CustomField { Id = fieldId, Key = "status", Name = "Status", DataType = FieldDataType.Text, IsRequired = false },
+                new CustomField { Id = fieldId, Name = "Old Name", IsRequired = false },
+            ],
+        };
+
+        _customTableRepository.GetForUpdateWithFieldsAsync(tableId, Arg.Any<CancellationToken>())
+            .Returns(customTable);
+
+        var command = new UpdateCustomTableCommand(
+            "Active Table",
+            null,
+            [
+                new UpdateCustomFieldDto(fieldId, "New Name", false, 0),
+            ])
+        {
+            Id = tableId,
+        };
+
+        // Act
+        await _handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        await _customRecordRepository.DidNotReceive().AnyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _customRecordRepository.DidNotReceive()
+            .SyncRecordSchemaAsync(Arg.Any<Guid>(), Arg.Any<SchemaSyncPlan>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleWhenTableHasRecordsAndFieldBecomesRequiredShouldInvokeSyncRecordSchemaWithFieldId()
+    {
+        // Arrange
+        var tableId = Guid.CreateVersion7();
+        var fieldId = Guid.CreateVersion7();
+        var customTable = new CustomTable
+        {
+            Id = tableId,
+            Name = "Active Table",
+            Fields =
+            [
+                new CustomField { Id = fieldId, Name = "Status", IsRequired = false },
             ],
         };
 
@@ -116,7 +151,7 @@ public class UpdateCustomTableCommandHandlerTests
             "Active Table",
             null,
             [
-                new UpdateCustomFieldDto(fieldId, "Status", "status", FieldDataType.Text, true, 0),
+                new UpdateCustomFieldDto(fieldId, "Status", true, 0),
             ])
         {
             Id = tableId,
@@ -130,18 +165,15 @@ public class UpdateCustomTableCommandHandlerTests
         await _customRecordRepository.Received(1)
             .SyncRecordSchemaAsync(
                 tableId,
-                Arg.Is<SchemaDiffResult>(d => d.FieldsNeedingBackfill.Count == 1 && d.FieldsNeedingBackfill[0].Key == "status"),
+                Arg.Is<SchemaSyncPlan>(p => p.KeysToBackfill.Length == 1 && p.KeysToBackfill[0] == fieldId.ToString()),
                 Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Verifies that when the custom table cannot be found, an <see cref="EntityNotFoundException{CustomTable}"/> is thrown.
-    /// </summary>
     [Fact]
     public async Task HandleWhenTableNotFoundShouldThrowEntityNotFoundException()
     {
         // Arrange
-        var tableId = Guid.NewGuid();
+        var tableId = Guid.CreateVersion7();
         _customTableRepository.GetForUpdateWithFieldsAsync(tableId, Arg.Any<CancellationToken>())
             .Returns(Task.FromException<CustomTable>(new EntityNotFoundException<CustomTable>(tableId)));
 
@@ -155,117 +187,5 @@ public class UpdateCustomTableCommandHandlerTests
             _handler.Handle(command, CancellationToken.None).AsTask());
 
         await _customTableRepository.Received(1).LockForUpdateAsync(tableId, Arg.Any<CancellationToken>());
-    }
-
-    /// <summary>
-    /// Verifies that modifying a field data type when existing records are present throws a <see cref="FieldDataTypeChangeNotAllowedException"/>.
-    /// </summary>
-    [Fact]
-    public async Task HandleWhenDataTypeChangedWithExistingRecordsShouldThrowException()
-    {
-        // Arrange
-        var tableId = Guid.NewGuid();
-        var fieldId = Guid.NewGuid();
-        var customTable = new CustomTable
-        {
-            Id = tableId,
-            Name = "Table With Records",
-            Fields =
-            [
-                new CustomField { Id = fieldId, Key = "quantity", Name = "Quantity", DataType = FieldDataType.Number },
-            ],
-        };
-
-        _customTableRepository.GetForUpdateWithFieldsAsync(tableId, Arg.Any<CancellationToken>())
-            .Returns(customTable);
-
-        _customRecordRepository.AnyAsync(tableId, Arg.Any<CancellationToken>())
-            .Returns(true);
-
-        var command = new UpdateCustomTableCommand(
-            "Table With Records",
-            null,
-            [
-                new UpdateCustomFieldDto(fieldId, "Quantity", "quantity", FieldDataType.Text, false, 0),
-            ])
-        {
-            Id = tableId,
-        };
-
-        // Act & Assert
-        await Should.ThrowAsync<FieldDataTypeChangeNotAllowedException>(() =>
-            _handler.Handle(command, CancellationToken.None).AsTask());
-
-        await _customTableRepository.Received(1).LockForUpdateAsync(tableId, Arg.Any<CancellationToken>());
-        await _customRecordRepository.DidNotReceive()
-            .SyncRecordSchemaAsync(Arg.Any<Guid>(), Arg.Any<SchemaDiffResult>(), Arg.Any<CancellationToken>());
-    }
-
-    /// <summary>
-    /// Verifies that when an incoming field has <see langword="null"/> ID, shares a key with an existing field,
-    /// and specifies a different <see cref="FieldDataType"/> while records exist, the handler replaces the field
-    /// and synchronizes record schemas instead of throwing <see cref="FieldDataTypeChangeNotAllowedException"/>.
-    /// </summary>
-    [Fact]
-    public async Task HandleWhenFieldWithNullIdHasSameKeyAndDifferentDataTypeWithRecordsShouldReplaceFieldAndSyncRecords()
-    {
-        // Arrange
-        var tableId = Guid.NewGuid();
-        var oldFieldId = Guid.NewGuid();
-        var customTable = new CustomTable
-        {
-            Id = tableId,
-            Name = "Locations",
-            Fields =
-            [
-                new CustomField
-                {
-                    Id = oldFieldId,
-                    Key = "city",
-                    Name = "City",
-                    DataType = FieldDataType.Text,
-                    IsRequired = true,
-                    Order = 0,
-                },
-            ],
-        };
-
-        _customTableRepository.GetForUpdateWithFieldsAsync(tableId, Arg.Any<CancellationToken>())
-            .Returns(customTable);
-
-        _customRecordRepository.AnyAsync(tableId, Arg.Any<CancellationToken>())
-            .Returns(true);
-
-        var command = new UpdateCustomTableCommand(
-            "Locations",
-            null,
-            [
-                new UpdateCustomFieldDto(null, "City Code", "city", FieldDataType.Number, true, 0),
-            ])
-        {
-            Id = tableId,
-        };
-
-        // Act
-        await _handler.Handle(command, CancellationToken.None);
-
-        // Assert
-        await _customTableRepository.Received(1).LockForUpdateAsync(tableId, Arg.Any<CancellationToken>());
-        customTable.Fields.ShouldHaveSingleItem();
-        var currentField = customTable.Fields.Single();
-        currentField.Id.ShouldNotBe(oldFieldId);
-        currentField.Key.ShouldBe("city");
-        currentField.DataType.ShouldBe(FieldDataType.Number);
-
-        await _customRecordRepository.Received(1)
-            .SyncRecordSchemaAsync(
-                tableId,
-                Arg.Is<SchemaDiffResult>(d =>
-                    d.FieldsToRemove.Count == 1 && d.FieldsToRemove[0].Id == oldFieldId &&
-                    d.FieldsToAdd.Count == 1 && d.FieldsToAdd[0].Key == "city" && d.FieldsToAdd[0].DataType == FieldDataType.Number),
-                Arg.Any<CancellationToken>());
-
-        await _customTableRepository.Received(1)
-            .ResolveFieldKeyCollisionsAsync(customTable.Id, Arg.Any<CancellationToken>());
     }
 }

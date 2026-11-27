@@ -13,6 +13,7 @@ public sealed class DemoSandbox(string id, string databaseName, string connectio
 {
     private readonly Lock _uploadLock = new();
     private readonly ConcurrentDictionary<Guid, byte> _revokedUsers = new();
+    private readonly ConcurrentDictionary<Guid, DateTimeOffset> _tokensRevokedBefore = new();
     private long _lastAccessTicks = createdAt.UtcTicks;
     private long _uploadedBytes;
     private int _uploadedFiles;
@@ -62,10 +63,25 @@ public sealed class DemoSandbox(string id, string databaseName, string connectio
     public void RevokeUser(Guid userId) => _revokedUsers[userId] = 0;
 
     /// <summary>
-    /// Accepts the access tokens of a user again (the user was activated in this sandbox).
+    /// Rejects the access tokens a user received at or before <paramref name="cutoff"/> in this sandbox (the
+    /// user's roles changed here), so the client refreshes them and picks up the new permissions. A later cutoff
+    /// replaces an earlier one; tokens issued after it stay valid.
     /// </summary>
     /// <param name="userId">The user identifier.</param>
-    public void UnrevokeUser(Guid userId) => _revokedUsers.TryRemove(userId, out _);
+    /// <param name="cutoff">The moment of the role change.</param>
+    public void RevokeTokensIssuedBefore(Guid userId, DateTimeOffset cutoff)
+        => _tokensRevokedBefore.AddOrUpdate(userId, cutoff, (_, existing) => existing > cutoff ? existing : cutoff);
+
+    /// <summary>
+    /// Accepts the access tokens of a user again (the user was activated in this sandbox). Like the regular cache,
+    /// this also forgets the cutoff of an earlier role change.
+    /// </summary>
+    /// <param name="userId">The user identifier.</param>
+    public void UnrevokeUser(Guid userId)
+    {
+        _revokedUsers.TryRemove(userId, out _);
+        _tokensRevokedBefore.TryRemove(userId, out _);
+    }
 
     /// <summary>
     /// Checks whether the access tokens of a user are rejected in this sandbox.
@@ -73,6 +89,18 @@ public sealed class DemoSandbox(string id, string databaseName, string connectio
     /// <param name="userId">The user identifier.</param>
     /// <returns><c>true</c> when the user was deactivated or deleted in this sandbox.</returns>
     public bool IsUserRevoked(Guid userId) => _revokedUsers.ContainsKey(userId);
+
+    /// <summary>
+    /// Checks whether one access token of a user is rejected in this sandbox: the user was deactivated or
+    /// deleted here, or the token was issued at or before the user's last role change here. A token without
+    /// an issue time is rejected whenever such a cutoff exists, as in the regular cache.
+    /// </summary>
+    /// <param name="userId">The user identifier.</param>
+    /// <param name="tokenIssuedAt">When the token was issued, if known.</param>
+    /// <returns><c>true</c> when the token must be rejected.</returns>
+    public bool IsTokenRevoked(Guid userId, DateTimeOffset? tokenIssuedAt)
+        => IsUserRevoked(userId)
+            || (_tokensRevokedBefore.TryGetValue(userId, out var cutoff) && (tokenIssuedAt is null || tokenIssuedAt.Value <= cutoff));
 
     /// <summary>
     /// Records a request served from this sandbox.

@@ -1,9 +1,11 @@
+using System.Text.Json.Nodes;
 using Crm.Application.Common.Consts;
 using Crm.Application.Dtos.Roles;
 using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Queries;
 using Crm.Application.Interfaces;
 using Crm.Domain.Common;
+using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
@@ -14,8 +16,20 @@ namespace Crm.Application.Tests.Features.Users.Queries;
 
 public class GetUsersQueryHandlerTests
 {
+    private static readonly Guid CityFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000201");
+    private static readonly Guid SalaryFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000202");
+    private static readonly Guid AgeFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000203");
+    private static readonly Guid SecretFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000204");
+    private static readonly string CityKey = CityFieldId.ToString();
+    private static readonly string SalaryKey = SalaryFieldId.ToString();
+    private static readonly string AgeKey = AgeFieldId.ToString();
+    private static readonly string SecretKey = SecretFieldId.ToString();
+    private static readonly string[] CityOnlyKeys = [CityKey];
+    private static readonly string[] SecretOnlyKeys = [SecretKey];
+
     private readonly IAuthUserRepository _userRepository = Substitute.For<IAuthUserRepository>();
     private readonly IAuthRoleRepository _authRoleRepository = Substitute.For<IAuthRoleRepository>();
+    private readonly IUserCustomFieldRepository _userCustomFieldRepository = Substitute.For<IUserCustomFieldRepository>();
     private readonly IPermissionService _permissionService = Substitute.For<IPermissionService>();
     private readonly IFileUrlProvider _fileUrlProvider = Substitute.For<IFileUrlProvider>();
     private readonly ILogger<GetUsersQueryHandler> _logger = Substitute.For<ILogger<GetUsersQueryHandler>>();
@@ -24,9 +38,13 @@ public class GetUsersQueryHandlerTests
 
     public GetUsersQueryHandlerTests()
     {
+        _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
+            .Returns([]);
+
         _handler = new GetUsersQueryHandler(
             _userRepository,
             _authRoleRepository,
+            _userCustomFieldRepository,
             _permissionService,
             _fileUrlProvider,
             _logger);
@@ -46,6 +64,10 @@ public class GetUsersQueryHandlerTests
                 pageNumber: query.PageNumber,
                 pageSize: query.PageSize,
                 showDeleted: query.ShowDeleted,
+                customFieldSortKey: null,
+                searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                currentUserId: query.CurrentUserId,
                 cancellationToken: Arg.Any<CancellationToken>())
             .Returns(emptyPagedResult);
 
@@ -63,15 +85,23 @@ public class GetUsersQueryHandlerTests
     }
 
     [Fact]
-    public async Task HandleWhenUsersFoundShouldEnrichRolesAvatarsAndSanitizeEmergencyContactsProperly()
+    public async Task HandleWhenUsersFoundShouldEnrichRolesAvatarsCustomFieldsAndSanitizeSensitiveDataProperly()
     {
         // Arrange
         var currentUserId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
         var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
 
-        // Current user does NOT have global ViewEmergencyContact permission
+        _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new UserCustomField { Id = CityFieldId, Name = "City", IsPublic = true, Order = 0 },
+                new UserCustomField { Id = SalaryFieldId, Name = "Salary", IsPublic = false, Order = 1 },
+            ]);
+
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
+            .Returns(false);
+        _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewCustomFields, Arg.Any<CancellationToken>())
             .Returns(false);
 
         var userSelf = new UserDto(
@@ -87,7 +117,8 @@ public class GetUsersQueryHandlerTests
             PronounCategory: PronounCategory.Feminine,
             AvatarUrl: "avatars/self.png",
             IsActive: true,
-            Roles: []);
+            Roles: [],
+            CustomFields: new JsonObject { [CityKey] = "Kyiv", [SalaryKey] = "4500" });
 
         var userOther = new UserDto(
             Id: otherUserId,
@@ -102,7 +133,8 @@ public class GetUsersQueryHandlerTests
             PronounCategory: PronounCategory.Masculine,
             AvatarUrl: "avatars/other.png",
             IsActive: true,
-            Roles: []);
+            Roles: [],
+            CustomFields: new JsonObject { [CityKey] = "Lviv", [SalaryKey] = "5000" });
 
         var pagedUsers = new PagedResult<UserDto>([userSelf, userOther], 2, 1, 10);
 
@@ -113,13 +145,16 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
+                customFieldSortKey: Arg.Any<string?>(),
+                searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                currentUserId: Arg.Any<Guid?>(),
                 cancellationToken: Arg.Any<CancellationToken>())
             .Returns(pagedUsers);
 
         var adminRole = new RoleDto(Guid.NewGuid(), "Admin", "Adminka", "Admins");
         var volunteerRole = new RoleDto(Guid.NewGuid(), "Volunteer", "Volonterka", "Volunteers");
 
-        // Lookup: userSelf has adminRole, userOther has volunteerRole
         var roleLookup = new[]
         {
             new { UserId = currentUserId, Role = adminRole },
@@ -148,33 +183,43 @@ public class GetUsersQueryHandlerTests
 
         var enrichedSelf = result.Items.First(u => u.Id == currentUserId);
         enrichedSelf.AvatarUrl.ShouldBe("https://api.crm.org/api/v1/users/me/avatar");
-        enrichedSelf.EmergencyContact.ShouldBe("Mom: +380509998877"); // Retained because isSelf == true
+        enrichedSelf.EmergencyContact.ShouldBe("Mom: +380509998877");
         enrichedSelf.IsActive.ShouldBeTrue();
         enrichedSelf.Roles.Count().ShouldBe(1);
-        enrichedSelf.Roles.First().Name.ShouldBe("Adminka"); // Localized using Feminine
+        enrichedSelf.Roles.First().Name.ShouldBe("Adminka");
+        enrichedSelf.CustomFields.Select(kvp => kvp.Key).ShouldBe([CityKey, SalaryKey]);
 
         var enrichedOther = result.Items.First(u => u.Id == otherUserId);
         enrichedOther.AvatarUrl.ShouldBe($"https://api.crm.org/api/v1/users/{otherUserId}/avatar");
-        enrichedOther.EmergencyContact.ShouldBeNull(); // Masked because not self and no global permission
+        enrichedOther.EmergencyContact.ShouldBeNull();
         enrichedOther.IsActive.ShouldBeTrue();
         enrichedOther.Roles.Count().ShouldBe(1);
-        enrichedOther.Roles.First().Name.ShouldBe("Volunteer"); // Localized using Masculine
+        enrichedOther.Roles.First().Name.ShouldBe("Volunteer");
+        enrichedOther.CustomFields.Select(kvp => kvp.Key).ShouldBe([CityKey]);
 
-        // Verify single call to permission service (no N+1 permission calls)
         await _permissionService.Received(1)
             .HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>());
+        await _permissionService.Received(1)
+            .HasAccessAsync(currentUserRoleIds, AccessRight.ViewCustomFields, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleWhenUserHasGlobalPermissionShouldExposeEmergencyContactForEveryone()
+    public async Task HandleWhenUserHasGlobalPermissionShouldExposeEmergencyContactAndPrivateCustomFieldsForEveryone()
     {
         // Arrange
         var currentUserId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
         var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
 
-        // Current user HAS global ViewEmergencyContact permission
+        _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new UserCustomField { Id = SalaryFieldId, Name = "Salary", IsPublic = false, Order = 0 },
+            ]);
+
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
+            .Returns(true);
+        _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewCustomFields, Arg.Any<CancellationToken>())
             .Returns(true);
 
         var userOther = new UserDto(
@@ -190,7 +235,8 @@ public class GetUsersQueryHandlerTests
             PronounCategory: PronounCategory.Masculine,
             AvatarUrl: null,
             IsActive: true,
-            Roles: []);
+            Roles: [],
+            CustomFields: new JsonObject { [SalaryKey] = "5000" });
 
         var pagedUsers = new PagedResult<UserDto>([userOther], 1, 1, 10);
 
@@ -201,6 +247,10 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
+                customFieldSortKey: Arg.Any<string?>(),
+                searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                currentUserId: Arg.Any<Guid?>(),
                 cancellationToken: Arg.Any<CancellationToken>())
             .Returns(pagedUsers);
 
@@ -221,6 +271,7 @@ public class GetUsersQueryHandlerTests
         var enrichedOther = result.Items.Single();
         enrichedOther.EmergencyContact.ShouldBe("Sister: +380679998877");
         enrichedOther.IsActive.ShouldBeTrue();
+        enrichedOther.CustomFields.Select(kvp => kvp.Key).ShouldBe([SalaryKey]);
     }
 
     [Fact]
@@ -248,7 +299,8 @@ public class GetUsersQueryHandlerTests
             PronounCategory: null,
             AvatarUrl: null,
             IsActive: true,
-            Roles: []);
+            Roles: [],
+            CustomFields: []);
 
         var inactiveUser = new UserDto(
             Id: inactiveUserId,
@@ -263,7 +315,8 @@ public class GetUsersQueryHandlerTests
             PronounCategory: null,
             AvatarUrl: null,
             IsActive: false,
-            Roles: []);
+            Roles: [],
+            CustomFields: []);
 
         var pagedUsers = new PagedResult<UserDto>([activeUser, inactiveUser], 2, 1, 10);
 
@@ -274,6 +327,10 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: true,
+                customFieldSortKey: Arg.Any<string?>(),
+                searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                currentUserId: Arg.Any<Guid?>(),
                 cancellationToken: Arg.Any<CancellationToken>())
             .Returns(pagedUsers);
 
@@ -315,6 +372,10 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
+                customFieldSortKey: null,
+                searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                currentUserId: currentUserId,
                 cancellationToken: Arg.Any<CancellationToken>())
             .Returns(emptyPagedResult);
 
@@ -336,6 +397,10 @@ public class GetUsersQueryHandlerTests
             pageNumber: 1,
             pageSize: 10,
             showDeleted: false,
+            customFieldSortKey: null,
+            searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+            searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+            currentUserId: currentUserId,
             cancellationToken: Arg.Any<CancellationToken>());
     }
 
@@ -358,6 +423,10 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
+                customFieldSortKey: null,
+                searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                currentUserId: currentUserId,
                 cancellationToken: Arg.Any<CancellationToken>())
             .Returns(emptyPagedResult);
 
@@ -379,6 +448,110 @@ public class GetUsersQueryHandlerTests
             pageNumber: 1,
             pageSize: 10,
             showDeleted: false,
+            customFieldSortKey: null,
+            searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+            searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+            currentUserId: currentUserId,
             cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("019a0000-0000-7000-8000-000000000203")]
+    [InlineData("  019A0000-0000-7000-8000-000000000203  ")]
+    public async Task HandleWhenOrderByIsCanonicalCustomFieldIdShouldResolveKey(string orderBy)
+    {
+        // Arrange
+        var currentUserId = Guid.NewGuid();
+        var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
+
+        _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewCustomFields, Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
+            .Returns([new UserCustomField { Id = AgeFieldId, Name = "Age", IsPublic = true, Order = 0 }]);
+
+        _userRepository.GetPagedAsync<UserDto>(
+                searchTerm: null,
+                orderBy: null,
+                sortOrder: "desc",
+                pageNumber: 1,
+                pageSize: 10,
+                showDeleted: false,
+                customFieldSortKey: AgeKey,
+                searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+                currentUserId: currentUserId,
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<UserDto>([], 0, 1, 10));
+
+        var query = new GetUsersQuery(OrderBy: orderBy, SortOrder: "desc")
+        {
+            CurrentUserId = currentUserId,
+            CurrentUserRoleIds = currentUserRoleIds,
+        };
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.Items.ShouldBeEmpty();
+        await _userRepository.Received(1).GetPagedAsync<UserDto>(
+            searchTerm: null,
+            orderBy: null,
+            sortOrder: "desc",
+            pageNumber: 1,
+            pageSize: 10,
+            showDeleted: false,
+            customFieldSortKey: AgeKey,
+            searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+            searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
+            currentUserId: currentUserId,
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleWhenSearchTermProvidedShouldPartitionSearchableKeysByVisibility()
+    {
+        // Arrange
+        var currentUserId = Guid.NewGuid();
+        var currentUserRoleIds = new List<Guid> { Guid.NewGuid() };
+
+        _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                new UserCustomField { Id = CityFieldId, Name = "City", IsPublic = true, Order = 0 },
+                new UserCustomField { Id = SecretFieldId, Name = "Secret", IsPublic = false, Order = 1 },
+            ]);
+
+        _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewCustomFields, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        _userRepository.GetPagedAsync<UserDto>(
+                searchTerm: "Kyiv",
+                orderBy: nameof(User.FirstName),
+                sortOrder: Domain.Constants.SortOrderConstants.Ascending,
+                pageNumber: 1,
+                pageSize: 10,
+                showDeleted: false,
+                customFieldSortKey: null,
+                searchablePublicCustomFieldKeys: Arg.Is<IReadOnlyList<string>?>(k => k != null && k.SequenceEqual(CityOnlyKeys)),
+                searchablePrivateCustomFieldKeys: Arg.Is<IReadOnlyList<string>?>(k => k != null && k.SequenceEqual(SecretOnlyKeys)),
+                currentUserId: currentUserId,
+                cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<UserDto>([], 0, 1, 10));
+
+        var query = new GetUsersQuery(SearchTerm: "Kyiv")
+        {
+            CurrentUserId = currentUserId,
+            CurrentUserRoleIds = currentUserRoleIds,
+        };
+
+        // Act
+        var result = await _handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        result.Items.ShouldBeEmpty();
+        await _permissionService.Received(1)
+            .HasAccessAsync(currentUserRoleIds, AccessRight.ViewCustomFields, Arg.Any<CancellationToken>());
     }
 }

@@ -1,4 +1,3 @@
-using Crm.Application.Common.Consts;
 using Crm.Application.Common.Interfaces;
 using Crm.Domain.Constants;
 using FluentValidation;
@@ -13,7 +12,11 @@ public sealed class PagedSearchQueryValidationRules : AbstractValidator<IPagedSe
     /// <summary>
     /// Initializes a new instance of the <see cref="PagedSearchQueryValidationRules"/> class.
     /// </summary>
-    public PagedSearchQueryValidationRules()
+    /// <param name="minSearchTermLength">
+    /// The minimum allowed length for a non-whitespace search term. Defaults to <see cref="SearchValidationConstants.MinSearchTermLength"/>.
+    /// Pass <c>0</c> or <c>1</c> to allow short search terms.
+    /// </param>
+    public PagedSearchQueryValidationRules(int minSearchTermLength = SearchValidationConstants.MinSearchTermLength)
     {
         RuleFor(x => x.PageNumber)
             .GreaterThanOrEqualTo(PaginationConstants.MinPageNumber)
@@ -24,10 +27,9 @@ public sealed class PagedSearchQueryValidationRules : AbstractValidator<IPagedSe
             .WithMessage($"Page size must be between {PaginationConstants.MinPageSize} and {PaginationConstants.MaxPageSize}.");
 
         RuleFor(x => x.OrderBy)
-            .MaximumLength(SearchValidationConstants.MaxSearchTermLength)
-            .WithMessage($"Order by field must not exceed {SearchValidationConstants.MaxSearchTermLength} characters.")
-            .Must(orderBy => orderBy is null || !orderBy.Contains('\0', StringComparison.Ordinal))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
+            .ApplyOptionalTextRules(
+                SearchValidationConstants.MaxSearchTermLength,
+                $"Order by field must not exceed {SearchValidationConstants.MaxSearchTermLength} characters.")
             .When(x => !string.IsNullOrEmpty(x.OrderBy));
 
         RuleFor(x => x.SortOrder)
@@ -36,16 +38,18 @@ public sealed class PagedSearchQueryValidationRules : AbstractValidator<IPagedSe
             .When(x => !string.IsNullOrEmpty(x.SortOrder));
 
         RuleFor(x => x.SearchTerm)
-            .MaximumLength(SearchValidationConstants.MaxSearchTermLength)
-            .WithMessage($"Search term must not exceed {SearchValidationConstants.MaxSearchTermLength} characters.")
-            .Must(term => term is null || !term.Contains('\0', StringComparison.Ordinal))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
+            .ApplyOptionalTextRules(
+                SearchValidationConstants.MaxSearchTermLength,
+                $"Search term must not exceed {SearchValidationConstants.MaxSearchTermLength} characters.")
             .When(x => x.SearchTerm is not null);
 
-        RuleFor(x => x.SearchTerm)
-            .Must(term => term!.Trim().Length >= SearchValidationConstants.MinSearchTermLength)
-            .WithMessage($"Search term must be at least {SearchValidationConstants.MinSearchTermLength} characters long.")
-            .When(x => !string.IsNullOrWhiteSpace(x.SearchTerm));
+        if (minSearchTermLength > 0)
+        {
+            RuleFor(x => x.SearchTerm)
+                .Must(term => term!.Trim().Length >= minSearchTermLength)
+                .WithMessage($"Search term must be at least {minSearchTermLength} characters long.")
+                .When(x => !string.IsNullOrWhiteSpace(x.SearchTerm));
+        }
     }
 
     private static bool IsValidSortOrder(string? sortOrder)

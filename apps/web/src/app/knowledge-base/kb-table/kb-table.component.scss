@@ -1,0 +1,248 @@
+// Шапка — на всю ширину основного блоку й впритул до його верху (виходить за відступи
+// `.kb__body`: 17px згори, 28px з боків), тло й лінія знизу — як у шапки сторінки (`ion-toolbar`,
+// див. `global.scss`), висота — як у шапки бокового меню (65px), тож вони на одному рівні.
+.kb-table__toolbar {
+  display: flex;
+  align-items: center;
+  min-height: 65px;
+  margin: -17px -28px 16px;
+  border-bottom: 1px solid var(--nav-border);
+  background: var(--nav-bg);
+
+  app-search-header {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+// «Зміни збережено»: маленький контурний зелений тег (стан, а не дія) розміром як плашки ролей
+// (`app-role-pill`: відступи 2px 10px, шрифт 14px, іконка 16px); у ряду кнопок шапки — перед ними,
+// по центру їхньої висоти.
+.kb-table__saved {
+  display: inline-flex;
+  align-self: center;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 1.5px solid #32670b;
+  border-radius: 999px;
+  color: #32670b;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+
+  ion-icon {
+    flex: none;
+    font-size: 16px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .kb-table__saved {
+    border-color: #6fb3a5;
+    color: #6fb3a5;
+  }
+}
+
+// «Зберігаємо зміни»: помаранчевий — від зміни до відповіді сервера.
+.kb-table__saved--saving {
+  border-color: #a15c07;
+  color: #a15c07;
+}
+
+// «Оновлюються дані»: синій — поки йде перевірка на зміни чи перезавантаження записів.
+.kb-table__saved--syncing {
+  border-color: #146ef4;
+  color: #146ef4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .kb-table__saved--syncing {
+    border-color: #6da8ff;
+    color: #6da8ff;
+  }
+}
+
+// Заголовок стовпчика (свій вміст у `app-data-table`): відступи як у звичайного заголовка, праворуч
+// місце під кнопку сортування; назву можна змінювати й форматувати.
+.kb-head {
+  display: block;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 22px 44px 22px var(--data-table-head-start, 12px);
+  outline: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+// «Зміни не збережено»: червоний, кнопка — клік повторює збереження.
+.kb-table__saved--failed {
+  border-color: var(--nav-unavailable-icon);
+  background: transparent;
+  color: var(--nav-unavailable-icon);
+  font-family: inherit;
+  cursor: pointer;
+
+  // Клік зберігає одразу (`saver.retry()`), не чекаючи таймера: при наведенні (і фокусі з
+  // клавіатури) плашка синя, як «Оновлюються дані», з підписом «Зберегти зміни».
+  &:hover,
+  &:focus-visible {
+    border-color: #146ef4;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    color: #146ef4;
+
+    .kb-table__saved-label--failed {
+      display: none;
+    }
+
+    .kb-table__saved-label--retry {
+      display: inline;
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+// Підпис «Зберегти зміни» — лише при наведенні й фокусі.
+.kb-table__saved-label--retry {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .kb-table__saved--failed:hover,
+  .kb-table__saved--failed:focus-visible {
+    border-color: #6da8ff;
+    color: #6da8ff;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .kb-table__saved--saving {
+    border-color: #f0a35e;
+    color: #f0a35e;
+  }
+}
+
+// Опис, який можна змінювати: виглядає точнісінько як текст опису — без рамки й виділення ні при
+// наведенні, ні у фокусі (видно лише курсор); висота — за текстом.
+.kb-table__description {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+
+  &::placeholder {
+    color: var(--nav-fg-inactive);
+    opacity: 0.7;
+  }
+}
+
+// Телефон (до 600px): шапка там з відступом 16px, а не 28px, як основний блок, — опис на одному
+// рівні з назвою й лупою.
+@media (max-width: 600px) {
+  .kb-view__description {
+    width: calc(100% + 12px);
+    margin-inline-start: -12px;
+  }
+}
+
+// Клітинка, яку можна змінювати: поле без рамки й без підложки на всю ширину клітинки, як її текст;
+// вибрану видно за курсором і смугою дій знизу сторінки.
+.kb-cell {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  margin: -4px 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+  outline: none;
+
+  // Темна тема: значки дати й часу браузера — світлі.
+  color-scheme: light dark;
+}
+
+// Текст у кілька рядків: висоту задає `appAutoSize` (за текстом), тягнути й прокручувати не треба.
+.kb-cell--text {
+  overflow: hidden;
+  resize: none;
+  overflow-wrap: anywhere;
+}
+
+// Текст із форматуванням: блок росте сам, переноси рядків — як у тексті.
+.kb-cell--rich {
+  min-height: calc(1.4em + 8px);
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+.kb-cell--check {
+  width: auto;
+  margin: 0;
+  accent-color: #32670b;
+}
+
+// Коли відкрито пошук, тег ховається: місце потрібне полю.
+.search-header-host--open .kb-table__saved {
+  display: none;
+}
+
+// Телефон (до 600px, як і кнопки в цій шапці): у тегу лише іконка, щоб назві лишилося місце; текст
+// — для екранних читачів (і в підказці).
+@media (max-width: 600px) {
+  .kb-table__saved {
+    padding: 4px;
+  }
+
+  .kb-table__saved-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+// Таблиця — на всю ширину основного блоку: виходить за його бічні відступи (28px, див.
+// `knowledge-base.page.scss`); перша колонка сама відступає на 28px, тож стоїть під заголовком.
+// Вид — колонка на всю висоту основного блоку (див. `knowledge-base.page.scss`): шапка, опис і
+// повідомлення лишаються своєї висоти, а таблиця займає щонайбільше решту — до низу екрана (чи до
+// смуги дій) — і прокручується всередині. На дуже низькому екрані таблиця не менша за 200px, тоді
+// прокручується вся сторінка.
+:host {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+
+  > * {
+    flex-shrink: 0;
+  }
+}
+
+.kb-table__data {
+  flex-shrink: 1;
+  min-height: 200px;
+  margin-inline: -28px;
+}
+
+.kb-table__error {
+  margin-top: 16px;
+}

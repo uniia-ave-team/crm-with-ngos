@@ -1,0 +1,40 @@
+@if (shown(); as content) {
+  <div class="action-bar" role="toolbar" [attr.aria-label]="content.labelKey | translate">
+    @for (group of content.groups; track $index; let index = $index; let first = $first) {
+      @if (!first) {
+        <!-- Між групами — вертикальна риска посередині вільного місця. Риска посередині списку на
+             телефоні — перенос: групи стають у два рядки порівну. -->
+        <span
+          class="action-bar__divider"
+          [class.action-bar__divider--middle]="index === middle(content.groups.length)"
+          aria-hidden="true"
+        ></span>
+      }
+      <div class="action-bar__group" role="group">
+        @for (item of group; track item.id) {
+          <button
+            type="button"
+            class="action-bar__button"
+            tabindex="0"
+            [disabled]="item.disabled"
+            [attr.aria-label]="item.labelKey | translate"
+            [attr.title]="item.labelKey | translate"
+            (click)="content.choose(item.id, $any($event.currentTarget))"
+          >
+            @if (item.swatch !== undefined) {
+              <!-- Кружок кольору; кольору нема — пунктирне порожнє коло. -->
+              <span
+                class="action-bar__swatch"
+                [class.action-bar__swatch--none]="item.swatch === null"
+                [style.background]="item.swatch ?? null"
+                aria-hidden="true"
+              ></span>
+            } @else {
+              <ion-icon [name]="item.icon" aria-hidden="true"></ion-icon>
+            }
+          </button>
+        }
+      </div>
+    }
+  </div>
+}

@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { isEmail } from '../../shared/email/email';
-import { RolePillComponent } from '../../shared/role-pill/role-pill.component';
+import { RoleChoicesComponent } from '../role-choices/role-choices.component';
 import { RolesView } from '../roles-view';
 
 /** Дані нового колеги з форми. */
@@ -14,8 +14,9 @@ export interface NewColleague {
 }
 
 /**
- * Форма нового колеги (зміст бічного вікна після «Додати»): пошта й ролі (обидва
- * обовʼязкові: сервер вимагає хоча б одну роль), ролі вибирають плашками (`app-role-pill`: вибрана — заливка й `checkmark-circle`,
+ * Форма нового колеги (зміст бічного вікна після «Додати»; заголовок «Додати колегу» стоїть у
+ * шапці вікна, його ставить сторінка): пошта й ролі (обидва обовʼязкові: сервер вимагає хоча б
+ * одну роль), ролі вибирають плашками (`app-role-choices`: вибрана — заливка й `checkmark-circle`,
  * невибрана — рамка й порожнє коло `ellipse-outline`).
  * Ролі приходять входом `roles` (стан запиту, як у вікні «Ролі»). «Додати»
  * перевіряє пошту й роль і віддає дані подією `save`; сама нічого не надсилає. Поки
@@ -26,7 +27,7 @@ export interface NewColleague {
   selector: 'app-colleague-form',
   templateUrl: './colleague-form.component.html',
   styleUrls: ['../../settings/settings-section.scss', './colleague-form.component.scss'],
-  imports: [FormsModule, RolePillComponent, TranslatePipe],
+  imports: [FormsModule, RoleChoicesComponent, TranslatePipe],
 })
 export class ColleagueFormComponent {
   readonly roles = input.required<RolesView>();

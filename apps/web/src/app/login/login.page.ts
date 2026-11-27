@@ -21,7 +21,7 @@ import { CreateNgoResult, NgoService, UploadNgoLogoResult } from '../core/ngo/ng
 import { CreateUserResult, UsersService } from '../core/users/users.service';
 import { isEmail } from '../shared/email/email';
 import { ListTextPipe } from '../shared/list-text/list-text.pipe';
-import { isStrongPassword } from '../shared/password-fields/password-rules';
+import { isPasswordTooLong, isStrongPassword } from '../shared/password-fields/password-rules';
 import { PasswordFieldsComponent } from '../shared/password-fields/password-fields.component';
 import { LoginDemoComponent } from './login-demo/login-demo.component';
 
@@ -310,6 +310,9 @@ export class LoginPage implements OnDestroy {
     const password = this.adminPassword();
     if (!password) {
       return 'passwordRequired';
+    }
+    if (isPasswordTooLong(password)) {
+      return 'passwordTooLong';
     }
     return isStrongPassword(password, this.passwordPolicy()) ? null : 'passwordWeak';
   });

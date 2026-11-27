@@ -298,7 +298,7 @@
         "tags": [
           "CustomRecords"
         ],
-        "summary": "Creates a new dynamic data record inside a target custom table.",
+        "summary": "Creates a new dynamic data record inside a target custom table.\nOptionally accepts `previousRecordId` and `nextRecordId` to insert at a specific position\nin the table's manual row order; when both are omitted, the record is appended at the end.",
         "description": "> 🔒 **Required Permissions:** `Permissions.CreateCustomRecord`",
         "operationId": "CustomRecordsCreate",
         "requestBody": {
@@ -355,6 +355,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -449,11 +459,11 @@
           }
         ]
       },
-      "put": {
+      "patch": {
         "tags": [
           "CustomRecords"
         ],
-        "summary": "Updates the JSON data payload of an existing custom record.",
+        "summary": "Partially updates the JSON data payload of an existing custom record without changing its row position.\nOnly the keys supplied in `data` are merged onto the latest stored payload; omitted keys remain untouched.",
         "description": "> 🔒 **Required Permissions:** `Permissions.UpdateCustomRecord`",
         "operationId": "CustomRecordsUpdate",
         "parameters": [
@@ -584,6 +594,98 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/customrecords/{id}/position": {
+      "patch": {
+        "tags": [
+          "CustomRecords"
+        ],
+        "summary": "Moves an existing custom record to a new position in its table's manual row order (drag-and-drop).\nWhen both `previousRecordId` and `nextRecordId` are `null`, the record is moved to the end of the table.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateCustomRecord`",
+        "operationId": "CustomRecordsMovePosition",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the custom record to move.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveCustomRecordCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -1113,11 +1215,127 @@
       }
     },
     "/api/v1/invitations": {
+      "get": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Retrieves a paginated, filtered, and sorted list of active (unexpired) user invitation tokens.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ManageUserActionTokens`",
+        "operationId": "InvitationsGetActiveInvitations",
+        "parameters": [
+          {
+            "name": "SearchTerm",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "OrderBy",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortOrder",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, and pagination.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, and pagination.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, and pagination.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "CreatedBy",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, and pagination.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfActiveInvitationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
       "post": {
         "tags": [
           "Invitations"
         ],
-        "summary": "Generates an invitation link/token for a new user.",
+        "summary": "Generates a short opaque invitation token for a new user.",
         "description": "> 🔒 **Required Permissions:** `Permissions.CreateUser`",
         "operationId": "InvitationsInviteUser",
         "requestBody": {
@@ -1199,6 +1417,78 @@
         ]
       }
     },
+    "/api/v1/invitations/{id}": {
+      "delete": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Permanently revokes an active invitation token by its identifier so the invitation link can no longer be used.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ManageUserActionTokens`",
+        "operationId": "InvitationsRevokeInvitation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the invitation token to revoke.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/invitations/validate": {
       "get": {
         "tags": [
@@ -1255,7 +1545,7 @@
         "tags": [
           "Invitations"
         ],
-        "summary": "Completes the user registration and onboarding process using a valid invitation token.",
+        "summary": "Completes the user registration and onboarding process using a valid single-use invitation token.",
         "operationId": "InvitationsAcceptInvitation",
         "requestBody": {
           "content": {
@@ -6987,7 +7277,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "Updates the profile details of an existing user.",
+        "summary": "Updates the profile details of an existing user.\nWithout the `ViewEmergencyContact` permission, the `emergencyContact` field\nin the request body is ignored and preserved as-is (except when updating the caller's own profile).",
         "description": "> 🔒 **Required Permissions:** `Permissions.UpdateUser`",
         "operationId": "UsersUpdateUserProfile",
         "parameters": [
@@ -7038,625 +7328,6 @@
           },
           "403": {
             "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/users/me": {
-      "get": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Retrieves the detailed profile of the currently authenticated user.",
-        "operationId": "UsersGetCurrentUserProfile",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserProfileDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Permanently deletes the currently authenticated user's account and all associated personal data (GDPR hard-delete).",
-        "operationId": "UsersDeleteMe",
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "put": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Updates the profile details of the currently authenticated user.",
-        "operationId": "UsersUpdateCurrentUserProfile",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateUserProfileCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/users/reset-password": {
-      "post": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Resets a user's password using a valid restore token and sets a new password.",
-        "operationId": "UsersResetPassword",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/users/me/avatar": {
-      "get": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Retrieves the avatar of the currently authenticated user as a file stream.",
-        "operationId": "UsersGetMyAvatar",
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Uploads or updates the avatar for the currently authenticated user.",
-        "operationId": "UsersUploadMyAvatar",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "file": {
-                    "$ref": "#/components/schemas/IFormFile"
-                  }
-                }
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Payload Too Large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/users/me/password": {
-      "post": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Securely changes the password for the currently authenticated user.\nThe change signs the user out of all other sessions (their refresh tokens are revoked);\nthe calling session must switch to the returned token pair to stay signed in.",
-        "operationId": "UsersUpdateMyPassword",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdatePasswordCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthTokensDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/users/me/permissions": {
-      "get": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Retrieves the list of unique UI permissions for the currently authenticated user.\nUsed by the client application to build the user interface dynamically.",
-        "operationId": "UsersGetMyPermissions",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/users/me/custom-fields": {
-      "post": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Adds a custom key-value field to the currently authenticated user's profile.",
-        "operationId": "UsersAddMyCustomField",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddUserCustomFieldCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/users/me/custom-fields/{customFieldId}": {
-      "delete": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Removes a specific custom field from the currently authenticated user's profile.",
-        "operationId": "UsersRemoveMyCustomField",
-        "parameters": [
-          {
-            "name": "customFieldId",
-            "in": "path",
-            "description": "The unique identifier of the custom field to remove.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "put": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Updates the value of a specific custom field for the currently authenticated user.",
-        "operationId": "UsersUpdateMyCustomField",
-        "parameters": [
-          {
-            "name": "customFieldId",
-            "in": "path",
-            "description": "The unique identifier of the custom field to update.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateUserCustomFieldCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -7994,339 +7665,6 @@
         ]
       }
     },
-    "/api/v1/users/{id}/password-reset-token": {
-      "post": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Generates a secure password reset token for a specific user.",
-        "description": "> 🔒 **Required Permissions:** `Permissions.CanResetPassword`",
-        "operationId": "UsersGeneratePasswordResetToken",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "The unique identifier of the user.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenResultDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/users/{id}/custom-fields": {
-      "post": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Adds a custom key-value field to a specific user's profile.",
-        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateUser`",
-        "operationId": "UsersAddCustomField",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "The unique identifier of the user.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddUserCustomFieldCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/users/{id}/custom-fields/{customFieldId}": {
-      "delete": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Removes a specific custom field from a specific user's profile.",
-        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateUser`",
-        "operationId": "UsersRemoveCustomField",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "The unique identifier of the user.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "customFieldId",
-            "in": "path",
-            "description": "The unique identifier of the custom field to remove.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "put": {
-        "tags": [
-          "Users"
-        ],
-        "summary": "Updates the value of a specific custom field for a specific user.",
-        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateUser`",
-        "operationId": "UsersUpdateCustomField",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "The unique identifier of the user.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "customFieldId",
-            "in": "path",
-            "description": "The unique identifier of the custom field to update.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateUserCustomFieldCommand"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
     "/api/v1/users/{id}/roles/{roleId}": {
       "post": {
         "tags": [
@@ -8488,26 +7826,1138 @@
           }
         ]
       }
+    },
+    "/api/v1/users/custom-fields": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Retrieves the ordered list of global user custom field definitions visible to the current user\n(for rendering dynamic user table column headers and smart sort controls).",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ViewUser`",
+        "operationId": "UsersGetUserCustomFields",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserCustomFieldDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Atomically synchronizes the global user custom field schema (creating, updating, reordering, renaming, or removing columns)\nand updates all users' JSONB custom field payloads in a single transaction.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateUser`",
+        "operationId": "UsersSyncUserCustomFields",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncUserCustomFieldsCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{id}/custom-fields": {
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Validates and partially updates the custom fields JSON payload for a specific user against the global schema.\nOnly the keys supplied in `data` are merged onto the latest stored values; omitted keys remain untouched.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateUser`",
+        "operationId": "UsersUpdateUserCustomFields",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the user.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserCustomFieldsCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Retrieves the detailed profile of the currently authenticated user.",
+        "operationId": "UsersGetCurrentUserProfile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Permanently deletes the currently authenticated user's account and all associated personal data (GDPR hard-delete).",
+        "operationId": "UsersDeleteMe",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Updates the profile details of the currently authenticated user.",
+        "operationId": "UsersUpdateCurrentUserProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserProfileCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/avatar": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Retrieves the avatar of the currently authenticated user as a file stream.",
+        "operationId": "UsersGetMyAvatar",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Uploads or updates the avatar for the currently authenticated user.",
+        "operationId": "UsersUploadMyAvatar",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "$ref": "#/components/schemas/IFormFile"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/password": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Securely changes the password for the currently authenticated user.\nThe change signs the user out of all other sessions (their refresh tokens are revoked);\nthe calling session must switch to the returned token pair to stay signed in.",
+        "operationId": "UsersUpdateMyPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePasswordCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/permissions": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Retrieves the list of unique UI permissions for the currently authenticated user.\nUsed by the client application to build the user interface dynamically.",
+        "operationId": "UsersGetMyPermissions",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/custom-fields": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Retrieves all global user custom field definitions (including private fields) for editing the current user's own profile.",
+        "operationId": "UsersGetMyCustomFieldDefinitions",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserCustomFieldDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Validates and partially updates the custom fields JSON payload for the currently authenticated user against the global schema.\nOnly the keys supplied in `data` are merged onto the latest stored values; omitted keys remain untouched.",
+        "operationId": "UsersUpdateMyCustomFields",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserCustomFieldsCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/reset-password/validate": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Validates a password reset token and returns the target account's identifying details\n(`email`, `firstName`, `lastName`, and `expiresAt`) so the user can confirm\nwhich account's password is being reset before submitting a new password.",
+        "operationId": "UsersValidatePasswordResetToken",
+        "parameters": [
+          {
+            "name": "Token",
+            "in": "query",
+            "description": "The query containing the password reset token.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetDetailsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/reset-password": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Resets a user's password using a valid single-use restore token and sets a new password.",
+        "operationId": "UsersResetPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/password-reset-token": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Generates a short opaque password reset token for a specific user.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.CanResetPassword`",
+        "operationId": "UsersGeneratePasswordResetToken",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the user.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/password-reset-tokens": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Retrieves a paginated, filtered, and sorted list of active (unexpired) password reset tokens.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ManageUserActionTokens`",
+        "operationId": "UsersGetActivePasswordResetTokens",
+        "parameters": [
+          {
+            "name": "SearchTerm",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, pagination, and optional `userId`/`createdBy` filters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "OrderBy",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, pagination, and optional `userId`/`createdBy` filters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "SortOrder",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, pagination, and optional `userId`/`createdBy` filters.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageNumber",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, pagination, and optional `userId`/`createdBy` filters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, pagination, and optional `userId`/`createdBy` filters.",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "UserId",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, pagination, and optional `userId`/`createdBy` filters.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "CreatedBy",
+            "in": "query",
+            "description": "Query parameters for search filtering, sorting, pagination, and optional `userId`/`createdBy` filters.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfActivePasswordResetTokenDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/users/password-reset-tokens/{id}": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Permanently revokes an active password reset token by its identifier so the reset link can no longer be used.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.ManageUserActionTokens`",
+        "operationId": "UsersRevokePasswordResetToken",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the password reset token to revoke.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
-      "AddUserCustomFieldCommand": {
+      "ActiveInvitationDto": {
         "required": [
-          "key",
-          "value",
-          "isPublic"
+          "id",
+          "email",
+          "roleIds",
+          "createdAt",
+          "expiresAt",
+          "createdBy"
         ],
         "type": "object",
         "properties": {
-          "key": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
             "type": "string"
           },
-          "value": {
+          "roleIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "ActivePasswordResetTokenDto": {
+        "required": [
+          "id",
+          "userId",
+          "email",
+          "firstName",
+          "lastName",
+          "avatarUrl",
+          "createdAt",
+          "expiresAt",
+          "createdBy"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
             "type": "string"
           },
-          "isPublic": {
-            "type": "boolean"
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -8596,38 +9046,6 @@
           }
         }
       },
-      "CreateCustomFieldDto": {
-        "required": [
-          "name",
-          "key",
-          "dataType",
-          "isRequired",
-          "order"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
-          },
-          "isRequired": {
-            "type": "boolean"
-          },
-          "order": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "uint8"
-          }
-        }
-      },
       "CreateCustomRecordCommand": {
         "required": [
           "customTableId",
@@ -8641,6 +9059,20 @@
           },
           "data": {
             "$ref": "#/components/schemas/JsonObject"
+          },
+          "previousRecordId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "nextRecordId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -8664,7 +9096,7 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CreateCustomFieldDto"
+              "$ref": "#/components/schemas/FieldDefinitionDto"
             }
           }
         }
@@ -8781,7 +9213,7 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CreateTemplateFieldDto"
+              "$ref": "#/components/schemas/FieldDefinitionDto"
             }
           }
         }
@@ -8890,38 +9322,6 @@
           }
         }
       },
-      "CreateTemplateFieldDto": {
-        "required": [
-          "name",
-          "key",
-          "dataType",
-          "isRequired",
-          "order"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
-          },
-          "isRequired": {
-            "type": "boolean"
-          },
-          "order": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "uint8"
-          }
-        }
-      },
       "CreateTopicCommand": {
         "required": [
           "title",
@@ -8980,8 +9380,6 @@
         "required": [
           "id",
           "name",
-          "key",
-          "dataType",
           "isRequired",
           "order"
         ],
@@ -8993,12 +9391,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
           },
           "isRequired": {
             "type": "boolean"
@@ -9163,8 +9555,29 @@
           }
         }
       },
-      "FieldDataType": {
-        "type": "integer"
+      "FieldDefinitionDto": {
+        "required": [
+          "name",
+          "isRequired",
+          "order"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "order": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint8"
+          }
+        }
       },
       "IdentityOptionsDto": {
         "required": [
@@ -9300,6 +9713,25 @@
           }
         }
       },
+      "MoveCustomRecordCommand": {
+        "type": "object",
+        "properties": {
+          "previousRecordId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "nextRecordId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
       "NgoDto": {
         "required": [
           "id",
@@ -9325,6 +9757,116 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PagedResultOfActiveInvitationDto": {
+        "required": [
+          "items",
+          "totalCount",
+          "pageNumber",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActiveInvitationDto"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PagedResultOfActivePasswordResetTokenDto": {
+        "required": [
+          "items",
+          "totalCount",
+          "pageNumber",
+          "pageSize"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivePasswordResetTokenDto"
+            }
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalPages": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
           }
         }
       },
@@ -9933,6 +10475,37 @@
           }
         }
       },
+      "PasswordResetDetailsDto": {
+        "required": [
+          "email",
+          "firstName",
+          "lastName",
+          "avatarUrl",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ProblemDetails": {
         "type": "object",
         "properties": {
@@ -10284,6 +10857,20 @@
           }
         }
       },
+      "SyncUserCustomFieldsCommand": {
+        "required": [
+          "fields"
+        ],
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdateUserCustomFieldDto"
+            }
+          }
+        }
+      },
       "SystemStatusDto": {
         "required": [
           "hasAdmin",
@@ -10357,7 +10944,7 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TemplateFieldDto"
+              "$ref": "#/components/schemas/FieldDefinitionDto"
             }
           }
         }
@@ -10776,43 +11363,6 @@
           }
         }
       },
-      "TemplateFieldDto": {
-        "required": [
-          "id",
-          "name",
-          "key",
-          "dataType",
-          "isRequired",
-          "order"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
-          },
-          "isRequired": {
-            "type": "boolean"
-          },
-          "order": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "uint8"
-          }
-        }
-      },
       "TokenResultDto": {
         "required": [
           "token",
@@ -10863,8 +11413,6 @@
         "required": [
           "id",
           "name",
-          "key",
-          "dataType",
           "isRequired",
           "order"
         ],
@@ -10879,12 +11427,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
           },
           "isRequired": {
             "type": "boolean"
@@ -11054,7 +11596,7 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/UpdateTemplateFieldDto"
+              "$ref": "#/components/schemas/FieldDefinitionDto"
             }
           }
         }
@@ -11190,46 +11732,6 @@
           }
         }
       },
-      "UpdateTemplateFieldDto": {
-        "required": [
-          "id",
-          "name",
-          "key",
-          "dataType",
-          "isRequired",
-          "order"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
-          },
-          "isRequired": {
-            "type": "boolean"
-          },
-          "order": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "uint8"
-          }
-        }
-      },
       "UpdateTopicCommand": {
         "required": [
           "title",
@@ -11250,18 +11752,50 @@
           }
         }
       },
-      "UpdateUserCustomFieldCommand": {
+      "UpdateUserCustomFieldDto": {
         "required": [
-          "value",
-          "isPublic"
+          "id",
+          "name",
+          "isRequired",
+          "isPublic",
+          "order"
         ],
         "type": "object",
         "properties": {
-          "value": {
+          "id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "name": {
             "type": "string"
+          },
+          "isRequired": {
+            "type": "boolean"
           },
           "isPublic": {
             "type": "boolean"
+          },
+          "order": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint8"
+          }
+        }
+      },
+      "UpdateUserCustomFieldsCommand": {
+        "required": [
+          "data"
+        ],
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JsonObject"
           }
         }
       },
@@ -11336,9 +11870,10 @@
       "UserCustomFieldDto": {
         "required": [
           "id",
-          "key",
-          "value",
-          "isPublic"
+          "name",
+          "isRequired",
+          "isPublic",
+          "order"
         ],
         "type": "object",
         "properties": {
@@ -11346,14 +11881,22 @@
             "type": "string",
             "format": "uuid"
           },
-          "key": {
+          "name": {
             "type": "string"
           },
-          "value": {
-            "type": "string"
+          "isRequired": {
+            "type": "boolean"
           },
           "isPublic": {
             "type": "boolean"
+          },
+          "order": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint8"
           }
         }
       },
@@ -11371,7 +11914,8 @@
           "pronounCategory",
           "avatarUrl",
           "isActive",
-          "roles"
+          "roles",
+          "customFields"
         ],
         "type": "object",
         "properties": {
@@ -11442,6 +11986,9 @@
             "items": {
               "$ref": "#/components/schemas/RoleUserDto"
             }
+          },
+          "customFields": {
+            "$ref": "#/components/schemas/JsonObject"
           }
         }
       },
@@ -11540,10 +12087,7 @@
             }
           },
           "customFields": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UserCustomFieldDto"
-            }
+            "$ref": "#/components/schemas/JsonObject"
           }
         }
       }

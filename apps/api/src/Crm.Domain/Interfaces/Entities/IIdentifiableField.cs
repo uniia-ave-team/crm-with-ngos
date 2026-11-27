@@ -1,12 +1,13 @@
 namespace Crm.Domain.Interfaces.Entities;
 
 /// <summary>
-/// Represents a field schema associated with a unique database identifier.
+/// Represents an incoming field update definition carrying an optional database identifier
+/// to match an existing field (preserving its immutable key) or create a new field when <see cref="Id"/> is <see langword="null"/>.
 /// </summary>
-public interface IIdentifiableField : IFieldSchema
+public interface IIdentifiableField : IFieldDefinition
 {
     /// <summary>
-    /// Gets the unique identifier for the field schema entity, or <see langword="null"/> if the field is not persisted.
+    /// Gets the unique identifier of an existing field to update, or <see langword="null"/> to create a new field.
     /// </summary>
     Guid? Id { get; }
 }

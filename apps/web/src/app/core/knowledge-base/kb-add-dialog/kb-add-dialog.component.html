@@ -1,0 +1,15 @@
+<app-modal width="min(420px, calc(100vw - 32px))" [label]="'knowledgeBase.dialogs.add.title' | translate" (closed)="onClosed()">
+  @if (place(); as current) {
+    <app-dialog-header
+      [title]="(current.folder ? 'knowledgeBase.dialogs.add.titleInFolder' : 'knowledgeBase.dialogs.add.title') | translate: { title: current.folder?.title }"
+      (dismiss)="close()"
+    />
+    <app-kb-item-form
+      submitLabelKey="knowledgeBase.dialogs.add.submit"
+      [templates]="templates()"
+      [busy]="busy()"
+      [error]="error()"
+      (submitted)="create($event)"
+    />
+  }
+</app-modal>

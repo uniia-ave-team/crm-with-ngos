@@ -15,7 +15,7 @@ import { IonIcon, IonSpinner } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { PERMISSIONS } from '../../core/auth/permissions';
-import { RequestFailure } from '../../core/http/request-failure';
+import { UploadFailure } from '../../core/http/request-failure';
 import { IMAGE_MAX_BYTES, IMAGE_MAX_MEGABYTES, IMAGE_TYPES, IMAGE_TYPE_NAMES } from '../../core/images/image-types';
 import { LoginPageImagesService } from '../../core/login-page-images/login-page-images.service';
 import { CurrentUserService } from '../../core/users/current-user.service';
@@ -47,7 +47,7 @@ interface Tile {
  * Чим закінчилося збереження галереї: `saved` — щось змінено на сервері, `nothing` —
  * змін не було (або нема прав їх надсилати), інакше — причина першої невдачі.
  */
-export type GallerySaveResult = 'saved' | 'nothing' | RequestFailure;
+export type GallerySaveResult = 'saved' | 'nothing' | UploadFailure;
 
 /** Скільки зображень просимо в сервера за один запит. */
 const PAGE_SIZE = 20;
@@ -354,7 +354,7 @@ export class AdminImagesGalleryComponent {
 
     this.saving.set(true);
     this.fileError.set(null);
-    let failure: RequestFailure | null = null;
+    let failure: UploadFailure | null = null;
 
     // Видалення (другий список): до першої невдачі.
     for (const image of toDelete) {

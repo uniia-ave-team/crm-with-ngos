@@ -80,9 +80,13 @@ public static class DemoModeExtensions
                 sp.GetRequiredService<IDemoSandboxAccessor>(),
                 sp.GetRequiredService<IHttpContextAccessor>()));
 
-        // Deactivating or deleting a user revokes their tokens only inside the visitor's own sandbox.
+        // Deactivating or deleting a user, or changing their roles, revokes their tokens only inside the
+        // visitor's own sandbox.
         services.Decorate<IRevokedUsersCache>((sp, inner) =>
-            new DemoSandboxRevokedUsersCache(inner, sp.GetRequiredService<IDemoSandboxAccessor>()));
+            new DemoSandboxRevokedUsersCache(
+                inner,
+                sp.GetRequiredService<IDemoSandboxAccessor>(),
+                sp.GetRequiredService<TimeProvider>()));
 
         services.TryAddScoped<DemoSandboxJwtBearerEvents>();
         services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>

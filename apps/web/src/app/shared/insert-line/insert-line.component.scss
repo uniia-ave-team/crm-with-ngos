@@ -1,0 +1,77 @@
+:host {
+  --insert-line-accent: #32670b;
+  --insert-line-gap: 8px;
+  position: relative;
+  display: block;
+  height: 0;
+  margin-block: calc(var(--insert-line-gap) / -2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --insert-line-accent: #478a7f;
+  }
+}
+
+// Смуга наведення висотою з проміжок, посеред нього.
+.insert-line__zone {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(var(--insert-line-gap) / -2);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--insert-line-gap);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset-inline: 6px;
+    top: 50%;
+    height: 2px;
+    margin-top: -1px;
+    border-radius: 2px;
+    background: var(--insert-line-accent);
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+
+  &:hover,
+  &:has(:focus-visible) {
+    &::before,
+    .insert-line__button {
+      opacity: 1;
+    }
+  }
+}
+
+.insert-line__button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: var(--insert-line-accent);
+  box-shadow: 0 0 0 3px var(--nav-bg);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+@media (hover: none) {
+  :host {
+    display: none;
+  }
+}

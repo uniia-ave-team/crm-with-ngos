@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Crm.Application.Dtos.Users;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
@@ -84,11 +85,11 @@ public class AuthUserMappingRegisterTests
         projected.PronounCategory.ShouldBe(authUser.UserProfile.PronounCategory);
         projected.AvatarUrl.ShouldBe(authUser.UserProfile.Avatar);
         projected.IsActive.ShouldBe(isActive);
-        projected.CustomFields.ShouldHaveSingleItem().Key.ShouldBe("City");
+        projected.CustomFields["city"]?.GetValue<string>().ShouldBe("Kyiv");
     }
 
     [Fact]
-    public void ProjectToUserDtoAndUserProfileResultOnDbContextShouldIncludeIsActiveColumnInSql()
+    public void ProjectToUserDtoAndUserProfileResultOnDbContextShouldIncludeIsActiveAndCustomFieldsColumnsInSql()
     {
         // Arrange
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -104,7 +105,9 @@ public class AuthUserMappingRegisterTests
 
         // Assert
         userDtoSql.ShouldContain("\"IsActive\"");
+        userDtoSql.ShouldContain("\"CustomFields\"");
         userProfileSql.ShouldContain("\"IsActive\"");
+        userProfileSql.ShouldContain("\"CustomFields\"");
         userStatusSql.ShouldContain("\"IsActive\"");
     }
 
@@ -151,17 +154,10 @@ public class AuthUserMappingRegisterTests
                 PronounCategory = PronounCategory.Feminine,
                 Avatar = "avatars/user.png",
                 IsActive = isActive,
-                CustomFields =
-                [
-                    new UserCustomField
-                    {
-                        Id = Guid.NewGuid(),
-                        UserId = userId,
-                        Key = "City",
-                        Value = "Kyiv",
-                        IsPublic = true,
-                    },
-                ],
+                CustomFields = new JsonObject
+                {
+                    ["city"] = "Kyiv",
+                },
             },
         };
     }

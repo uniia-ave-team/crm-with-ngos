@@ -6,14 +6,14 @@ import { CreateNgoCommand, NgoDto, UpdateNgoCommand } from '../../api/generated/
 import { AccountsService } from '../accounts/accounts.service';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
-import { RequestFailure, toRequestFailure } from '../http/request-failure';
+import { RequestFailure, UploadFailure, toRequestFailure, toUploadFailure } from '../http/request-failure';
 import { REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from '../http/timeouts';
 
 const API_NGO_PATH = '/api/v1/ngo';
 
 export type CreateNgoResult = 'created' | RequestFailure;
 export type UpdateNgoResult = 'updated' | RequestFailure;
-export type UploadNgoLogoResult = 'uploaded' | RequestFailure;
+export type UploadNgoLogoResult = 'uploaded' | UploadFailure;
 
 /** Організація (`GET /api/v1/ngo`): лише те, що потрібно знімку акаунта. */
 export interface NgoProfile {
@@ -71,7 +71,7 @@ export class NgoService {
       form.append('file', file, file.name);
       await firstValueFrom(this.http.post(url, form).pipe(timeout(UPLOAD_TIMEOUT_MS)));
     } catch (error) {
-      const failure = toRequestFailure(error);
+      const failure = toUploadFailure(error);
       console.warn(`[NgoService] Не вдалося завантажити логотип (${failure})`, error);
       return failure;
     }

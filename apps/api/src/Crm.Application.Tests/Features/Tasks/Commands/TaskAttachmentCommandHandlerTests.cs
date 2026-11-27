@@ -69,7 +69,10 @@ public class TaskAttachmentCommandHandlerTests
 
         using var stream = new MemoryStream([1, 2, 3, 4]);
         var dto = await handler.Handle(
-            new UploadTaskAttachmentCommand(projectId, taskId, stream, @"C:\fakepath\report.pdf", "application/pdf", 4, userId),
+            new UploadTaskAttachmentCommand(projectId, taskId, stream, @"C:\fakepath\report.pdf", "application/pdf", 4)
+            {
+                CurrentUserId = userId,
+            },
             CancellationToken.None);
 
         dto.OriginalFileName.ShouldBe("report.pdf");
@@ -101,14 +104,20 @@ public class TaskAttachmentCommandHandlerTests
             .Returns(new TaskAttachmentStats(TaskValidationConstants.MaxAttachmentsPerTask, 100L));
 
         await Should.ThrowAsync<TaskAttachmentLimitExceededException>(() => handler.Handle(
-            new UploadTaskAttachmentCommand(projectId, taskId, stream, "report.pdf", "application/pdf", 4, userId),
+            new UploadTaskAttachmentCommand(projectId, taskId, stream, "report.pdf", "application/pdf", 4)
+            {
+                CurrentUserId = userId,
+            },
             CancellationToken.None).AsTask());
 
         _attachmentRepository.GetTaskAttachmentStatsAsync(taskId, Arg.Any<CancellationToken>())
             .Returns(new TaskAttachmentStats(5, TaskValidationConstants.MaxTotalAttachmentSizePerTask - 2));
 
         await Should.ThrowAsync<StorageQuotaExceededException>(() => handler.Handle(
-            new UploadTaskAttachmentCommand(projectId, taskId, stream, "report.pdf", "application/pdf", 4, userId),
+            new UploadTaskAttachmentCommand(projectId, taskId, stream, "report.pdf", "application/pdf", 4)
+            {
+                CurrentUserId = userId,
+            },
             CancellationToken.None).AsTask());
 
         await _fileStorageService.DidNotReceiveWithAnyArgs().SaveFileAsync(default!, default!, default!, Arg.Any<CancellationToken>());

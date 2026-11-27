@@ -1,7 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
+import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../assets/i18n/uk.json';
@@ -34,12 +35,14 @@ function fillStorageForAccounts(): void {
 describe('JoinPage', () => {
   let http: HttpTestingController;
   let navigate: ReturnType<typeof vi.spyOn>;
+  let fragment: BehaviorSubject<string | null>;
   // Сервер запрошення шукається за доменом сторінки: спершу її origin, далі порт 5065. У цих
   // тестах сторінку віддає веб-контейнер (на /health — 404), а API — на порту 5065.
   const server = `${location.protocol}//${location.hostname}:5065`;
 
   beforeEach(() => {
     localStorage.clear();
+    fragment = new BehaviorSubject<string | null>(null);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     TestBed.configureTestingModule({
       providers: [
@@ -47,6 +50,8 @@ describe('JoinPage', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
+        // Фрагмент адреси сторінки (`#token=…`) — керований тестом.
+        { provide: ActivatedRoute, useValue: { fragment } },
       ],
     });
     // Тексти сторінки живуть в uk.json — беремо їх звідти, а не дублюємо.
@@ -61,8 +66,8 @@ describe('JoinPage', () => {
   });
 
   function create(token: string | null = 'tok') {
+    fragment.next(token === null ? null : `token=${encodeURIComponent(token)}`);
     const fixture = TestBed.createComponent(JoinPage);
-    fixture.componentRef.setInput('token', token ?? undefined);
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
     const page = fixture.componentInstance as unknown as JoinPageInternals;
@@ -180,6 +185,19 @@ describe('JoinPage', () => {
     http.expectNone((r) => r.url.includes('/invitations/validate'));
   });
 
+  it('says the account already exists, with a link to sign in, when the server answers 409 (the invitation was accepted)', async () => {
+    const { fixture, element } = create();
+    answerHealth(fixture);
+    await answerValidate(fixture, element, {}, 409);
+
+    const error = element.querySelector('.auth-error');
+    expect(error?.textContent).toContain(uk.join.exists);
+    expect(error?.textContent).not.toContain(uk.join.invalid);
+    expect(error?.querySelector('a')?.textContent?.trim()).toBe(uk.join.signIn);
+    expect(error?.querySelector('a')?.getAttribute('href')).toBe('/login');
+    expect(element.querySelector('ion-input')).toBeNull();
+  });
+
   it('says the link is inactive, with a link to the login page, when the server rejects the token', async () => {
     const { fixture, element } = create();
     answerHealth(fixture);
@@ -270,6 +288,18 @@ describe('JoinPage', () => {
     expect(element.textContent).toContain(uk.join.error.passwordMismatch);
   });
 
+  it('does not send a password longer than the server takes (128): it is too long, not too simple', async () => {
+    const { fixture, element, page } = await createForm();
+    const password = 'Aa1!' + 'x'.repeat(125);
+    fill(page, { lastName: 'Другий', firstName: 'Перший', password, passwordRepeat: password });
+    await page.submit();
+    fixture.detectChanges();
+
+    http.expectNone(`${server}/api/v1/invitations/accept`);
+    expect(element.textContent).toContain(uk.join.error.passwordTooLong);
+    expect(element.textContent).not.toContain(uk.join.error.passwordWeak);
+  });
+
   it('accepts the invitation, adds the account as the active one and goes to the first page', async () => {
     const { fixture, page } = await createForm();
     fill(page, { lastName: ' Другий ', firstName: ' Перший ', password: 'Abcde1!x', passwordRepeat: 'Abcde1!x' });
@@ -344,6 +374,7 @@ describe('JoinPage', () => {
 
   it.each([
     [400, uk.join.saveError.invalid],
+    [409, uk.join.saveError.exists],
     [500, uk.join.saveError.error],
     [0, uk.join.saveError.unreachable],
   ])('keeps the form and shows the error above it when the server answers %i, so it can be sent again', async (status, text) => {
@@ -381,7 +412,7 @@ describe('JoinPage', () => {
     answerHealth(fixture);
     const stale = await vi.waitFor(() => http.expectOne((r) => r.params.get('token') === 'first'));
 
-    fixture.componentRef.setInput('token', 'second');
+    fragment.next('token=second');
     fixture.detectChanges();
     answerHealth(fixture);
     const current = await vi.waitFor(() => http.expectOne((r) => r.params.get('token') === 'second'));

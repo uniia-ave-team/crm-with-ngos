@@ -4,9 +4,9 @@ using FluentValidation;
 namespace Crm.Application.Common.Validators;
 
 /// <summary>
-/// Provides validation rules for collections of fields implementing <see cref="IIdentifiableField"/>.
+/// Provides validation rules for collections of identifiable field update DTOs implementing <see cref="IIdentifiableField"/>.
 /// </summary>
-/// <typeparam name="TField">The type of the field schema, implementing <see cref="IIdentifiableField"/>.</typeparam>
+/// <typeparam name="TField">The type of the field update DTO, implementing <see cref="IIdentifiableField"/>.</typeparam>
 public sealed class IdentifiableFieldListValidator<TField> : FieldListValidator<TField>
     where TField : IIdentifiableField
 {

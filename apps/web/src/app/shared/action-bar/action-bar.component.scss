@@ -1,0 +1,124 @@
+// Смуга знизу змісту сторінки, на всю ширину: тло й лінія зверху — як у шапки сторінки (`--nav-bg`,
+// `--nav-border`), висота — як у рядка заголовків таблиці.
+:host {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  display: none;
+}
+
+:host(.action-bar--shown) {
+  display: block;
+}
+
+// Вбудована: у потоці, з рамкою й заокругленням, без відступу під смугу системи внизу екрана.
+:host(.action-bar--inline) {
+  position: static;
+  z-index: auto;
+
+  .action-bar {
+    min-height: 48px;
+    padding: 4px 12px;
+    border: 1px solid var(--nav-border);
+    border-radius: 12px;
+  }
+}
+
+.action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 8px 28px calc(8px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--nav-border);
+  background: var(--nav-bg);
+}
+
+// Група кнопок.
+.action-bar__group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+// Проміжок між групами забирає вільне місце порівну (групи рознесено по всій ширині), а посередині
+// нього — вертикальна риска.
+.action-bar__divider {
+  display: flex;
+  flex: 1 1 0;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 12px;
+
+  &::before {
+    content: '';
+    width: 1px;
+    margin-block: 6px;
+    background: var(--nav-border);
+  }
+}
+
+// Кнопка — лише іконка (назва в підказці й `aria-label`).
+.action-bar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font-size: 20px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--nav-active-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    color: var(--nav-fg-inactive);
+    cursor: default;
+    opacity: 0.45;
+  }
+}
+
+// Кружок кольору (кнопка кольору тла): 18px, як іконка; без кольору — пунктирне порожнє коло.
+.action-bar__swatch {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--nav-border);
+  border-radius: 50%;
+
+  &--none {
+    border: 1.5px dashed currentColor;
+    background: transparent;
+  }
+}
+
+// Телефон: групи у два рядки порівну — риска посередині списку стає переносом на всю ширину.
+@media (max-width: 600px) {
+  .action-bar {
+    padding-inline: 16px;
+  }
+
+  .action-bar__divider--middle {
+    flex-basis: 100%;
+    height: 0;
+
+    &::before {
+      display: none;
+    }
+  }
+}

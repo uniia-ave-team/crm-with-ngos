@@ -1,11 +1,11 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Crm.Api.DemoMode;
 using Crm.Api.DemoMode.DemoData;
 using Crm.Api.Services;
-using Crm.Application.Dtos.TableTemplates;
 using Crm.Application.Extensions;
 using Crm.Application.Features.System.Queries;
 using Crm.Application.Features.Users.Commands;
@@ -19,7 +19,6 @@ using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Extensions;
 using Crm.Infrastructure.Persistence.Seeders.SystemPresets;
-using Mapster;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
@@ -101,7 +100,6 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
             var authUser = await dbContext.Users
                 .AsNoTracking()
                 .Include(u => u.UserProfile)
-                .ThenInclude(p => p.CustomFields)
                 .SingleAsync(u => u.Email == account.Email, ct);
 
             authUser.UserProfile.IsActive.ShouldBeTrue();
@@ -170,9 +168,13 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
         var users = await dbContext.Users
             .AsNoTracking()
             .Include(u => u.UserProfile)
-            .ThenInclude(p => p.CustomFields)
             .Include(u => u.UserRoles)
             .ToListAsync(ct);
+
+        // The shared schema of user custom fields: the demo names, one of them visible only with ViewCustomFields.
+        List<UserCustomField> userFields = [.. await dbContext.Set<UserCustomField>().AsNoTracking().OrderBy(f => f.Order).ToListAsync(ct)];
+        userFields.Select(f => f.Name).ShouldBe(DemoDataContent.CreateUserCustomFields().Select(f => f.Name));
+        userFields.Count(f => !f.IsPublic).ShouldBe(1);
 
         var accountEmails = fixture.Accounts.Select(a => a.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var colleagues = users.Where(u => !accountEmails.Contains(u.Email!)).ToList();
@@ -187,7 +189,9 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
             user.UserProfile.FirstName.ShouldNotBeNullOrWhiteSpace();
             user.UserProfile.LastName.ShouldNotBeNullOrWhiteSpace();
             FakePhoneRegex().IsMatch(user.UserProfile.PhoneNumber!).ShouldBeTrue();
-            user.UserProfile.CustomFields.ShouldNotBeEmpty();
+
+            // Values are keyed by field id and match the schema (throws otherwise).
+            user.UserProfile.CustomFields.ValidateAndBackfillPayload(userFields).Count.ShouldBe(userFields.Count);
             user.UserRoles.Count.ShouldBe(1);
         }
 
@@ -223,25 +227,31 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
 
         tables.Count.ShouldBe(2);
 
+        // The fields of a template are stored with it (JSON), so they come without an Include.
         var systemTemplate = await dbContext.Set<TableTemplate>()
             .AsNoTracking()
-            .Include(t => t.Fields)
             .SingleAsync(t => t.IsSystemPreset && t.Name == DemoDataContent.DonorTemplateName, ct);
 
         var donorTable = tables.Single(t => t.SourceTemplateId is not null);
         donorTable.SourceTemplateId.ShouldBe(systemTemplate.Id);
-        donorTable.Fields.Select(f => f.Key).Order().ShouldBe(systemTemplate.Fields.Select(f => f.Key).Order());
+        donorTable.Fields.OrderBy(f => f.Order).Select(f => f.Name).ShouldBe(systemTemplate.Fields.OrderBy(f => f.Order).Select(f => f.Name));
         donorTable.Records.Count.ShouldBe(ExpectedDonorRecords);
 
         var volunteerTable = tables.Single(t => t.SourceTemplateId is null);
         volunteerTable.Name.ShouldBe(DemoDataContent.VolunteerTableName);
         volunteerTable.Records.Count.ShouldBe(ExpectedVolunteerRecords);
-        volunteerTable.Fields.Select(f => f.DataType).Distinct().Count().ShouldBe(Enum.GetValues<FieldDataType>().Length);
+        volunteerTable.Fields.OrderBy(f => f.Order).Select(f => f.Name).ShouldBe(DemoDataContent.CreateVolunteerFields().Select(f => f.Name));
 
         foreach (var table in tables)
         {
             List<CustomField> fields = [.. table.Fields.OrderBy(f => f.Order)];
             fields.EnsureValidFieldSchema();
+
+            // The manual order (positions) is the authored order, which is also the order of the ids.
+            table.Records.OrderBy(r => r.Position, StringComparer.Ordinal).Select(r => r.Id)
+                .ShouldBe(table.Records.OrderBy(r => r.Id).Select(r => r.Id));
+            table.Records.Select(r => r.Position).ShouldAllBe(p => !string.IsNullOrEmpty(p));
+            table.Records.Select(r => r.Position).Distinct().Count().ShouldBe(table.Records.Count);
 
             foreach (var record in table.Records)
             {
@@ -278,18 +288,11 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
     public async Task SeederShouldResolveFromTheRealServiceProviderWithoutHttpContextOrDatabase()
     {
         // No connection is opened: this only proves that the container the application builds can construct
-        // the seeder outside a request, and that the template mapping the seeder relies on is registered.
+        // the seeder outside a request.
         await using var app = DemoDatabaseFixture.BuildApplication("Host=localhost;Database=unused");
         await using var scope = app.Services.CreateAsyncScope();
 
         scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().ShouldNotBeNull();
-
-        var template = new DonorBaseSystemTableTemplate().GetTemplate();
-        var table = template.Adapt<TableTemplateDto>().Adapt<CustomTable>();
-
-        table.SourceTemplateId.ShouldBe(template.Id);
-        table.Name.ShouldBe(DemoDataContent.DonorTemplateName);
-        table.Fields.Select(f => f.Key).ShouldBe(template.Fields.OrderBy(f => f.Order).Select(f => f.Key));
     }
 
     [Fact]
@@ -322,38 +325,46 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
         [
             .. new DonorBaseSystemTableTemplate().GetTemplate().Fields
                 .OrderBy(f => f.Order)
-                .Select(f => new CustomField { Name = f.Name, Key = f.Key, DataType = f.DataType, IsRequired = f.IsRequired, Order = f.Order }),
+                .Select(f => new CustomField { Name = f.Name, IsRequired = f.IsRequired, Order = f.Order }),
         ];
         var volunteerFields = DemoDataContent.CreateVolunteerFields();
         volunteerFields.EnsureValidFieldSchema();
 
-        var donorRecords = DemoDataContent.CreateDonorRecords();
-        var volunteerRecords = DemoDataContent.CreateVolunteerRecords(now);
+        var donorRows = DemoDataContent.CreateDonorRows();
+        var volunteerRows = DemoDataContent.CreateVolunteerRows(now);
 
-        donorRecords.Count.ShouldBe(ExpectedDonorRecords);
-        volunteerRecords.Count.ShouldBe(ExpectedVolunteerRecords);
+        donorRows.Count.ShouldBe(ExpectedDonorRecords);
+        volunteerRows.Count.ShouldBe(ExpectedVolunteerRecords);
 
-        foreach (var record in donorRecords)
+        foreach (var row in donorRows)
         {
-            record.ValidateAndBackfillPayload(donorFields).Count.ShouldBe(donorFields.Count);
+            // Every value names a field of the template (throws otherwise) and is valid for it.
+            DemoDataContent.ToFieldValues(donorFields, row).ValidateAndBackfillPayload(donorFields).Count.ShouldBe(donorFields.Count);
         }
 
-        foreach (var record in volunteerRecords)
+        foreach (var row in volunteerRows)
         {
-            record.ValidateAndBackfillPayload(volunteerFields).Count.ShouldBe(volunteerFields.Count);
-            FakePhoneRegex().IsMatch(record["phone"]!.GetValue<string>()).ShouldBeTrue();
-            record["email"]!.GetValue<string>().ShouldEndWith(DemoEmailSuffix);
+            DemoDataContent.ToFieldValues(volunteerFields, row).ValidateAndBackfillPayload(volunteerFields).Count.ShouldBe(volunteerFields.Count);
+            FakePhoneRegex().IsMatch(row["Телефон"]!).ShouldBeTrue();
+            row["Електронна пошта"]!.ShouldEndWith(DemoEmailSuffix);
+
+            // Dates are written so they sort as text.
+            DateOnly.TryParseExact(row["Дата приєднання"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _).ShouldBeTrue();
         }
+
+        var userFields = DemoDataContent.CreateUserCustomFields();
+        userFields.EnsureValidFieldSchema();
 
         DemoDataContent.Colleagues.Count.ShouldBeInRange(MinColleagues, MaxColleagues);
         foreach (var colleague in DemoDataContent.Colleagues)
         {
-            var profile = DemoDataContent.CreateProfile(colleague, Guid.NewGuid(), now);
+            var profile = DemoDataContent.CreateProfile(colleague, Guid.NewGuid(), now, userFields);
 
             DemoDataContent.Email(colleague.EmailLocalPart).ShouldEndWith(DemoEmailSuffix);
             FakePhoneRegex().IsMatch(profile.PhoneNumber!).ShouldBeTrue();
             profile.CreatedAt.Kind.ShouldBe(DateTimeKind.Utc);
-            profile.CustomFields.ShouldAllBe(f => UserCustomFieldKeyRegex().IsMatch(f.Key) && f.Value.Length > 0);
+            profile.CustomFields.ValidateAndBackfillPayload(userFields).Count.ShouldBe(userFields.Count);
+            userFields.ShouldAllBe(f => !string.IsNullOrWhiteSpace(profile.CustomFields[f.Id.ToString()]!.GetValue<string>()));
         }
     }
 
@@ -371,10 +382,6 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
 
         return await services.GetRequiredService<IRoleIdentityService>().GetRolePermissionsAsync(roleId, cancellationToken);
     }
-
-    // Same rule as AddUserCustomFieldCommandValidator.
-    [GeneratedRegex("^[a-zA-Z0-9_а-яА-ЯіІїЇєЄґҐ-]+$")]
-    private static partial Regex UserCustomFieldKeyRegex();
 
     // E.164 numbers in the non-existent +380 00 000 00 xx range.
     [GeneratedRegex(@"^\+3800000000[0-9]{2}\z")]

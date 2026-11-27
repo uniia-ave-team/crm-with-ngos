@@ -7,6 +7,8 @@ using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
+using Crm.Infrastructure.Persistence.Extensions;
+using Crm.Infrastructure.Persistence.Sorting;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 
@@ -143,59 +145,54 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
             ? query.Where(t => t.ProjectId == projectId)
             : query.Where(ProjectVisibilityExpressions.HasVisibleProject<ProjectTask>(t => t.Project, currentUserId));
 
-        if (filter.IsMine)
-        {
-            query = query.Where(t => t.AssignedUsers.Any(u => u.Id == currentUserId));
-        }
-
-        if (filter.TopicId is { } topicId)
-        {
-            query = query.Where(t => t.TopicId == topicId);
-        }
-
-        if (filter.Status is { } status)
-        {
-            query = query.Where(t => t.Status == status);
-        }
-
-        if (filter.Priority is { } priority)
-        {
-            query = query.Where(t => t.Priority == priority);
-        }
-
-        if (filter.TagIds is { Count: > 0 })
-        {
-            List<Guid> tagFilterList = [.. filter.TagIds.Distinct()];
-            query = query.Where(t => t.Tags.Any(tag => tagFilterList.Contains(tag.Id)));
-        }
-
-        if (filter.StartDateFrom is { } startFrom)
-        {
-            query = query.Where(t => t.StartDate >= startFrom);
-        }
-
-        if (filter.StartDateTo is { } startTo)
-        {
-            query = query.Where(t => t.StartDate <= startTo);
-        }
-
-        if (filter.EndDateFrom is { } endFrom)
-        {
-            query = query.Where(t => t.EndDate.HasValue && t.EndDate.Value >= endFrom);
-        }
-
-        if (filter.EndDateTo is { } endTo)
-        {
-            query = query.Where(t => t.EndDate.HasValue && t.EndDate.Value <= endTo);
-        }
-
-        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
-        {
-            query = query.Where(QueryFilterExpressions.ContainsIgnoreCase<ProjectTask>(
-                filter.SearchTerm,
-                t => t.Title,
-                t => t.Description));
-        }
+        query = query
+            .WhereIf(filter.IsMine, t => t.AssignedUsers.Any(u => u.Id == currentUserId))
+            .WhereIf(filter.TopicId.HasValue, () =>
+            {
+                Guid topicId = filter.TopicId!.Value;
+                return t => t.TopicId == topicId;
+            })
+            .WhereIf(filter.Status.HasValue, () =>
+            {
+                var status = filter.Status!.Value;
+                return t => t.Status == status;
+            })
+            .WhereIf(filter.Priority.HasValue, () =>
+            {
+                var priority = filter.Priority!.Value;
+                return t => t.Priority == priority;
+            })
+            .WhereIf(filter.TagIds is { Count: > 0 }, () =>
+            {
+                List<Guid> tagFilterList = [.. filter.TagIds!.Distinct()];
+                return t => t.Tags.Any(tag => tagFilterList.Contains(tag.Id));
+            })
+            .WhereIf(filter.StartDateFrom.HasValue, () =>
+            {
+                DateTime startFrom = filter.StartDateFrom!.Value;
+                return t => t.StartDate >= startFrom;
+            })
+            .WhereIf(filter.StartDateTo.HasValue, () =>
+            {
+                DateTime startTo = filter.StartDateTo!.Value;
+                return t => t.StartDate <= startTo;
+            })
+            .WhereIf(filter.EndDateFrom.HasValue, () =>
+            {
+                DateTime endFrom = filter.EndDateFrom!.Value;
+                return t => t.EndDate.HasValue && t.EndDate.Value >= endFrom;
+            })
+            .WhereIf(filter.EndDateTo.HasValue, () =>
+            {
+                DateTime endTo = filter.EndDateTo!.Value;
+                return t => t.EndDate.HasValue && t.EndDate.Value <= endTo;
+            })
+            .WhereIf(
+                !string.IsNullOrWhiteSpace(filter.SearchTerm),
+                () => QueryFilterExpressions.ContainsIgnoreCase<ProjectTask>(
+                    filter.SearchTerm!,
+                    t => t.Title,
+                    t => t.Description));
 
         return query;
     }
@@ -216,10 +213,7 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
     {
         string normalized = orderBy.Trim();
         return string.Equals(normalized, nameof(TaskSummaryDto.EndDate), StringComparison.OrdinalIgnoreCase)
-            ? (IsDescending(sortOrder)
-                    ? query.OrderBy(t => t.EndDate == null).ThenByDescending(t => t.EndDate)
-                    : query.OrderBy(t => t.EndDate == null).ThenBy(t => t.EndDate))
-                .ThenBy(t => t.Id)
+            ? query.ApplyNullsLastOrdering(t => t.EndDate, t => t.Id, sortOrder.IsDescending(), nullsLastInAscending: true)
             : base.ApplyOrdering<TResult>(query, normalized, sortOrder);
     }
 
@@ -256,7 +250,7 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
         }
 
         string normalized = orderBy.Trim();
-        bool descending = IsDescending(sortOrder);
+        bool descending = sortOrder.IsDescending();
 
         return normalized switch
         {
@@ -271,9 +265,6 @@ public class ProjectTaskRepository(ApplicationDbContext appDbContext)
             _ => ApplyOrdering<TResult>(query, normalized, sortOrder),
         };
     }
-
-    private static bool IsDescending(string? sortOrder)
-        => string.Equals(sortOrder?.Trim(), SortOrderConstants.Descending, StringComparison.OrdinalIgnoreCase);
 
     private static Expression<Func<ProjectTask, int>> UnreadCountExpression(Guid currentUserId)
         => t => t.Comments.Count(c => c.ReadStates.Any(rs => rs.UserId == currentUserId));

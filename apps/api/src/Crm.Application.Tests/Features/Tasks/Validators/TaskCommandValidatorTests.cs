@@ -170,8 +170,10 @@ public class TaskCommandValidatorTests
             stream,
             fileName,
             contentType,
-            stream.Length,
-            Guid.NewGuid());
+            stream.Length)
+        {
+            CurrentUserId = Guid.NewGuid(),
+        };
 
         var result = _uploadAttachmentValidator.Validate(command);
         result.IsValid.ShouldBeFalse();
@@ -188,8 +190,10 @@ public class TaskCommandValidatorTests
             stream,
             "report.pdf",
             "application/pdf",
-            stream.Length,
-            Guid.NewGuid());
+            stream.Length)
+        {
+            CurrentUserId = Guid.NewGuid(),
+        };
         _uploadAttachmentValidator.Validate(validCommand).IsValid.ShouldBeTrue();
 
         var fallbackCommand = validCommand with { ContentType = "application/octet-stream" };
@@ -236,8 +240,10 @@ public class TaskCommandValidatorTests
             stream,
             fileName,
             contentType,
-            stream.Length,
-            Guid.NewGuid());
+            stream.Length)
+        {
+            CurrentUserId = Guid.NewGuid(),
+        };
 
         _uploadAttachmentValidator.Validate(command).IsValid.ShouldBeTrue();
     }
@@ -287,8 +293,10 @@ public class TaskCommandValidatorTests
             stream,
             "bad\0.pdf",
             "application/pdf",
-            3,
-            Guid.NewGuid())).IsValid.ShouldBeFalse();
+            3)
+        {
+            CurrentUserId = Guid.NewGuid(),
+        }).IsValid.ShouldBeFalse();
     }
 
     [Fact]

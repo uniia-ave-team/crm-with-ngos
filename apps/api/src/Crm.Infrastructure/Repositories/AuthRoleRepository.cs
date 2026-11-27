@@ -7,7 +7,6 @@ using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
 using Mapster;
-using Mapster.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -67,30 +66,15 @@ public sealed class AuthRoleRepository(
         CancellationToken cancellationToken = default)
     {
         var distinctUserIds = userIds.Distinct().ToList();
-        if (distinctUserIds.Count == 0)
-        {
-            return Enumerable.Empty<TRole>().ToLookup(_ => Guid.Empty);
-        }
-
-        var projection = BuildUserRoleProjection<TRole>();
-        if (projection is not null)
-        {
-            var projectedPairs = await Context.Set<AuthUserRole>()
+        return distinctUserIds.Count == 0
+            ? Enumerable.Empty<TRole>().ToLookup(_ => Guid.Empty)
+            : await Context.Set<AuthUserRole>()
                 .AsNoTracking()
                 .Where(ur => distinctUserIds.Contains(ur.UserId))
-                .Select(projection)
-                .ToListAsync(cancellationToken);
-
-            return projectedPairs.ToLookup(static pair => pair.Key, static pair => pair.Value);
-        }
-
-        var userRoles = await Context.Set<AuthUserRole>()
-            .AsNoTracking()
-            .Where(ur => distinctUserIds.Contains(ur.UserId))
-            .Select(ur => new { ur.UserId, ur.Role })
-            .ToListAsync(cancellationToken);
-
-        return userRoles.ToLookup(static ur => ur.UserId, static ur => ur.Role.Adapt<TRole>());
+                .ToProjectedLookupAsync<AuthUserRole, AuthRole, Guid, TRole>(
+                    ur => ur.UserId,
+                    ur => ur.Role,
+                    cancellationToken);
     }
 
     /// <inheritdoc />
@@ -198,39 +182,4 @@ public sealed class AuthRoleRepository(
                 role => role.Name,
                 role => role.FeminitiveName,
                 role => role.PluralName);
-
-    private static Expression<Func<AuthUserRole, KeyValuePair<Guid, TRole>>>? BuildUserRoleProjection<TRole>()
-    {
-        if (typeof(TRole) == typeof(AuthRole))
-        {
-            return null;
-        }
-
-        try
-        {
-            var roleMapExpression = TypeAdapterConfig.GlobalSettings.CreateMapExpression(
-                new TypeTuple(typeof(AuthRole), typeof(TRole)),
-                MapType.Projection);
-
-            if (roleMapExpression is null)
-            {
-                return null;
-            }
-
-            ParameterExpression userRoleParam = Expression.Parameter(typeof(AuthUserRole), "ur");
-            MemberExpression roleProperty = Expression.Property(userRoleParam, nameof(AuthUserRole.Role));
-            MemberExpression userIdProperty = Expression.Property(userRoleParam, nameof(AuthUserRole.UserId));
-            Expression projectedRoleBody = new ParameterReplacer(roleMapExpression.Parameters[0], roleProperty)
-                .Visit(roleMapExpression.Body);
-
-            var ctor = typeof(KeyValuePair<Guid, TRole>).GetConstructor([typeof(Guid), typeof(TRole)])!;
-            NewExpression newPair = Expression.New(ctor, userIdProperty, projectedRoleBody);
-
-            return Expression.Lambda<Func<AuthUserRole, KeyValuePair<Guid, TRole>>>(newPair, userRoleParam);
-        }
-        catch
-        {
-            return null;
-        }
-    }
 }

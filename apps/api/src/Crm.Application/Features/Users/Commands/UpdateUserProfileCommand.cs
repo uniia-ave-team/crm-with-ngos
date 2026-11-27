@@ -26,11 +26,27 @@ public record UpdateUserProfileCommand(
     string? EmergencyContact,
     string? PreferredLanguage,
     string? Pronouns,
-    PronounCategory? PronounCategory) : ICommand, ITransactionalCommand
+    PronounCategory? PronounCategory) : ICommand, ITransactionalCommand, ICurrentUserAware, ICurrentUserRolesAware, ISelfTargetableUserRequest
 {
     /// <summary>
-    /// Gets the unique identifier of the user to update, populated from the route or authentication context.
+    /// Gets or sets the unique identifier of the user to update, populated from the route or request pipeline.
     /// </summary>
     [JsonIgnore]
-    public Guid UserId { get; init; }
+    public Guid UserId { get; set; }
+
+    /// <inheritdoc />
+    [JsonIgnore]
+    public bool TargetCurrentUser { get; init; }
+
+    /// <summary>
+    /// Gets or sets the unique identifier of the currently authenticated user, populated by the request pipeline.
+    /// </summary>
+    [JsonIgnore]
+    public Guid CurrentUserId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the role identifiers of the currently authenticated user, populated by the request pipeline.
+    /// </summary>
+    [JsonIgnore]
+    public List<Guid> CurrentUserRoleIds { get; set; } = [];
 }

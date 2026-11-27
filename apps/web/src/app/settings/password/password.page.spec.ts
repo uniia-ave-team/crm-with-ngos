@@ -141,6 +141,14 @@ describe('PasswordPage', () => {
       http.expectNone(passwordUrl);
     });
 
+    it('rejects a new password longer than the server takes (128) as too long, not as too simple', async () => {
+      const password = 'Aa1!' + 'x'.repeat(125);
+      fill({ current: 'Old1!aaa', password, repeat: password });
+      await submit();
+      expect(errors()).toEqual([text.error.passwordTooLong]);
+      http.expectNone(passwordUrl);
+    });
+
     it('checks the new password by the policy of the server: a longer length there, and no special character needed', async () => {
       const options = http.expectOne(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/system/identity-options`);
       options.flush({ requiredLength: 10, requireDigit: true, requireNonAlphanumeric: false, requireUppercase: true, requireLowercase: true, requireUniqueEmail: true });

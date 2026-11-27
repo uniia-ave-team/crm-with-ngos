@@ -1,0 +1,32 @@
+[
+  {
+    "id": "policies",
+    "type": "folder",
+    "title": "Політики",
+    "items": [
+      { "id": "policy-membership", "type": "page", "title": "Про членство" },
+      { "id": "policy-conflict-of-interest", "type": "page", "title": "Про запобігання конфлікту інтересів" },
+      { "id": "policy-remote-work", "type": "page", "title": "Про дистанційну роботу" },
+      { "id": "policy-procurement", "type": "page", "title": "Про порядок закупівель" }
+    ]
+  },
+  {
+    "id": "memoranda",
+    "type": "folder",
+    "title": "Меморандуми",
+    "items": [
+      { "id": "memorandum-1", "type": "page", "title": "Про співпрацю" },
+      { "id": "memorandum-2", "type": "page", "title": "Про співпрацю" }
+    ]
+  },
+  {
+    "id": "opportunities",
+    "type": "folder",
+    "title": "Можливості",
+    "items": [
+      { "id": "resources", "type": "page", "title": "Ресурси" },
+      { "id": "subscriptions", "type": "page", "title": "Підписки" }
+    ]
+  },
+  { "id": "donors", "type": "customtable", "title": "База донорів" }
+]

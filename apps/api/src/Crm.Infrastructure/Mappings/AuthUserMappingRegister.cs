@@ -14,18 +14,21 @@ public sealed class AuthUserMappingRegister : IRegister
     public void Register(TypeAdapterConfig config)
     {
         config.NewConfig<AuthUser, UserDto>()
-            .Map(dest => dest.Email, src => src.Email ?? string.Empty)
-            .Map(dest => dest.FirstName, src => src.UserProfile.FirstName)
-            .Map(dest => dest.LastName, src => src.UserProfile.LastName)
-            .Map(dest => dest.Patronymic, src => src.UserProfile.Patronymic)
-            .Map(dest => dest.PhoneNumber, src => src.UserProfile.PhoneNumber)
-            .Map(dest => dest.Country, src => src.UserProfile.Country)
-            .Map(dest => dest.EmergencyContact, src => src.UserProfile.EmergencyContact)
-            .Map(dest => dest.Pronouns, src => src.UserProfile.Pronouns)
-            .Map(dest => dest.PronounCategory, src => src.UserProfile.PronounCategory)
-            .Map(dest => dest.AvatarUrl, src => src.UserProfile.Avatar)
-            .Map(dest => dest.IsActive, src => src.UserProfile.IsActive)
-            .Ignore(dest => dest.Roles);
+            .MapWith(src => new UserDto(
+                src.Id,
+                src.Email ?? string.Empty,
+                src.UserProfile.FirstName,
+                src.UserProfile.LastName,
+                src.UserProfile.Patronymic,
+                src.UserProfile.PhoneNumber,
+                src.UserProfile.Country,
+                src.UserProfile.EmergencyContact,
+                src.UserProfile.Pronouns,
+                src.UserProfile.PronounCategory,
+                src.UserProfile.Avatar,
+                src.UserProfile.IsActive,
+                Array.Empty<RoleUserDto>(),
+                src.UserProfile.CustomFields));
 
         config.NewConfig<AuthUser, UserStatusDto>()
             .Map(dest => dest.Email, src => src.Email ?? string.Empty)
@@ -50,13 +53,6 @@ public sealed class AuthUserMappingRegister : IRegister
                 src.UserProfile.Avatar,
                 src.UserProfile.IsActive,
                 Array.Empty<RoleUserDto>(),
-                src.UserProfile.CustomFields
-                    .OrderBy(cf => cf.Id)
-                    .Select(cf => new UserCustomFieldDto(
-                        cf.Id,
-                        cf.Key,
-                        cf.Value,
-                        cf.IsPublic))
-                    .ToList()));
+                src.UserProfile.CustomFields));
     }
 }

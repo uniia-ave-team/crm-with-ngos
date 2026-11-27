@@ -2,10 +2,11 @@ using Crm.Application.Dtos.CustomRecords;
 using Crm.Application.Features.CustomRecords.Mappings;
 using Crm.Domain.Constants;
 using Crm.Domain.Entities;
-using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Consts;
 using Crm.Infrastructure.Persistence.Extensions;
+using Crm.Infrastructure.Persistence.Sorting;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
@@ -13,41 +14,37 @@ using Shouldly;
 namespace Crm.Infrastructure.Tests.Features.CustomTables;
 
 /// <summary>
-/// Unit and integration tests verifying dynamic ordering translation, database functions,
-/// key extraction, security validation, and concurrency safety for <see cref="CustomRecordQueryExtensions"/>.
+/// Unit tests verifying dynamic smart ordering translation via PostgreSQL safe-cast SQL functions,
+/// language-agnostic text ordering, GUID field-ID validation, security validation, and concurrency safety.
 /// </summary>
 public class CustomRecordOrderingTests
 {
+    private const string SampleFieldId = "019a0000-0000-7000-8000-000000000001";
+
     static CustomRecordOrderingTests()
     {
         new CustomRecordMappingRegister().Register(TypeAdapterConfig.GlobalSettings);
     }
 
     [Fact]
-    public void DbContextModelCreationShouldNotThrowWhenValidatingJsonbExtractFunctions()
+    public void DbContextModelCreationShouldNotThrowWhenValidatingCustomDbFunctions()
     {
-        // Arrange
         using var context = CreateContext();
 
-        // Act
         Action act = () => _ = context.Model;
 
-        // Assert
         Should.NotThrow(act);
     }
 
     [Fact]
     public void OrderByCustomRecordWhenOrderByIdDescendingShouldOrderByIdDescending()
     {
-        // Arrange
         using var context = CreateContext();
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
-        // Act
         var orderedQuery = baseQuery.OrderByCustomRecord("Id", SortOrderConstants.Descending);
         var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
 
-        // Assert
         sql.ShouldNotContain("jsonb_extract_path_text");
         sql.ShouldContain("\"Id\" DESC");
     }
@@ -55,249 +52,127 @@ public class CustomRecordOrderingTests
     [Fact]
     public void OrderByCustomRecordWhenStandardPropertyUsedShouldRouteToEntityPropertyOrdering()
     {
-        // Arrange
         using var context = CreateContext();
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
-        // Act
-        var orderedQuery = baseQuery.OrderByCustomRecord(nameof(CustomRecord.CustomTableId), SortOrderConstants.Descending, fieldDataType: null);
+        var orderedQuery = baseQuery.OrderByCustomRecord(nameof(CustomRecord.CustomTableId), SortOrderConstants.Descending);
         var sql = orderedQuery.ToQueryString();
 
-        // Assert
         sql.ShouldNotContain("jsonb_extract_path_text");
         sql.ShouldContain("\"CustomTableId\" DESC");
     }
 
     [Fact]
-    public void OrderByCustomRecordWhenOrderByCustomTableIdWithDtoShouldGenerateCustomTableIdDesc()
+    public void OrderByCustomRecordWhenOrderByPositionShouldRouteToPositionColumnOrdering()
     {
-        // Arrange
         using var context = CreateContext();
         var query = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
-        // Act
         var orderedQuery = query.OrderByCustomRecord(
-            nameof(CustomRecord.CustomTableId),
-            SortOrderConstants.Descending,
-            fieldDataType: null);
+            nameof(CustomRecord.Position),
+            SortOrderConstants.Descending);
 
         var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
 
-        // Assert
-        sql.ShouldContain("\"CustomTableId\" DESC");
+        sql.ShouldNotContain("jsonb_extract_path_text");
+        sql.ShouldContain("\"Position\" DESC");
         sql.ShouldContain("ORDER BY");
     }
 
     [Fact]
     public void SortablePropertiesMapShouldCaptureAllScalarPropertiesOfCustomRecord()
     {
-        // Arrange
         var scalarProps = typeof(CustomRecord)
             .GetProperties()
             .Where(p => p.Name != nameof(CustomRecord.Data) && p.PropertyType.IsScalarType())
             .Select(p => p.Name)
             .ToList();
 
-        // Act
         var missingSortable = scalarProps.Where(p => !CustomRecordExtensions.SortablePropertiesMap.ContainsKey(p)).ToList();
-        var missingReserved = scalarProps.Where(p => !CustomFieldExtensions.IsReservedKey(p)).ToList();
 
-        // Assert
         missingSortable.ShouldBeEmpty();
-        missingReserved.ShouldBeEmpty();
+        CustomRecordExtensions.SortablePropertiesMap.ContainsKey(nameof(CustomRecord.Position)).ShouldBeTrue();
     }
 
     [Fact]
-    public void OrderByCustomRecordWhenOrderByJsonKeyAscendingShouldGenerateParameterizedJsonbExtractPathTextAscending()
+    public void OrderByCustomRecordWhenOrderByFieldIdAscendingShouldGenerateLanguageAgnosticParameterizedSql()
     {
-        // Arrange
         using var context = CreateContext();
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
-        // Act
-        var orderedQuery = baseQuery.OrderByCustomRecord("name", SortOrderConstants.Ascending);
+        var orderedQuery = baseQuery.OrderByCustomRecord(SampleFieldId.ToUpperInvariant(), SortOrderConstants.Ascending);
         var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
 
-        // Assert
         sql.ShouldContain("jsonb_extract_path_text");
-        sql.ShouldContain("-- @jsonKey='name'");
-        sql.ShouldContain("@jsonKey");
+        sql.ShouldNotContain("COLLATE");
+        sql.ShouldContain(SampleFieldId);
         sql.ShouldContain("ORDER BY");
         sql.ShouldNotContain("DESC");
     }
 
-    [Fact]
-    public void OrderByCustomRecordWhenOrderByJsonKeyDescendingWithDataPrefixShouldGenerateJsonbExtractPathTextDescending()
-    {
-        // Arrange
-        using var context = CreateContext();
-        var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
-
-        // Act
-        var orderedQuery = baseQuery.OrderByCustomRecord("data.age", SortOrderConstants.Descending);
-        var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
-
-        // Assert
-        sql.ShouldContain("jsonb_extract_path_text");
-        sql.ShouldContain("'age'");
-        sql.ShouldContain("DESC");
-    }
-
-    [Fact]
-    public void OrderByCustomRecordWhenOrderByIndexerNotationShouldExtractKeyCorrectly()
-    {
-        // Arrange
-        using var context = CreateContext();
-        var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
-
-        // Act
-        var orderedQuery = baseQuery.OrderByCustomRecord("data[\"status\"]", SortOrderConstants.Descending);
-        var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
-
-        // Assert
-        sql.ShouldContain("jsonb_extract_path_text");
-        sql.ShouldContain("'status'");
-        sql.ShouldContain("DESC");
-    }
-
     [Theory]
-    [InlineData(FieldDataType.Number, "numeric")]
-    [InlineData(FieldDataType.Boolean, "boolean")]
-    [InlineData(FieldDataType.Date, "date")]
-    [InlineData(FieldDataType.DateTime, "timestamp with time zone")]
-    public void OrderByCustomRecordWhenTypedFieldShouldGeneratePgInputIsValidAndCorrectCast(
-        FieldDataType dataType,
-        string expectedSqlStoreType)
+    [InlineData(InferredSortKind.Number, PostgresConstants.TryNumericFunction)]
+    [InlineData(InferredSortKind.Boolean, PostgresConstants.TryBooleanFunction)]
+    [InlineData(InferredSortKind.Date, PostgresConstants.TryDateFunction)]
+    [InlineData(InferredSortKind.DateTime, PostgresConstants.TryTimestampTzFunction)]
+    public void OrderByCustomRecordWhenInferredTypedSortShouldInvokeDedicatedPostgresSafeCastFunctionWithoutLanguageCollation(
+        InferredSortKind sortKind,
+        string expectedFunctionName)
     {
-        // Arrange
         using var context = CreateContext();
         var baseQuery = context.Set<CustomRecord>().Where(r => r.CustomTableId == Guid.NewGuid());
 
-        // Act
         var orderedQuery = baseQuery.OrderByCustomRecord(
-            "data.custom_val",
+            SampleFieldId,
             SortOrderConstants.Ascending,
-            dataType);
+            sortKind);
         var sql = orderedQuery.ProjectToType<CustomRecordDto>().ToQueryString();
 
-        // Assert
-        sql.ShouldContain("pg_input_is_valid");
+        sql.ShouldContain(expectedFunctionName);
         sql.ShouldContain("jsonb_extract_path_text");
-
-        if (dataType == FieldDataType.Date)
-        {
-            sql.ShouldContain("timestamp with time zone");
-            sql.ShouldContain("timezone('UTC'");
-            sql.ShouldContain("date");
-        }
-        else
-        {
-            sql.ShouldContain($"'{expectedSqlStoreType}'");
-        }
-
-        if (dataType is FieldDataType.Number or FieldDataType.Date or FieldDataType.DateTime)
-        {
-            sql.ShouldContain("regexp_like");
-            sql.ShouldContain("Infinity");
-        }
+        sql.ShouldNotContain("pg_input_is_valid");
+        sql.ShouldNotContain("COLLATE");
     }
 
     [Theory]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    [InlineData("f_status")]
     [InlineData("invalid key; DROP TABLE Users;")]
+    [InlineData("data.key")]
+    [InlineData("data['status']")]
     [InlineData("data.key; DROP TABLE Users;")]
-    [InlineData("data['key--comment']")]
-    [InlineData("data.key/*comment*/")]
     [InlineData("data.nested.path.value")]
-    [InlineData("data[0]")]
-    [InlineData("_status")]
-    [InlineData("data['_status']")]
-    public void OrderByCustomRecordWithMaliciousOrDeepKeysShouldFallbackSafelyToOrderById(string maliciousOrderBy)
+    public void OrderByCustomRecordWithMaliciousOrNonGuidKeysShouldFallbackSafelyToOrderById(string maliciousOrderBy)
     {
-        // Arrange
         using var context = CreateContext();
         var query = context.Set<CustomRecord>().AsQueryable();
 
-        // Act
-        var result = query.OrderByCustomRecord(maliciousOrderBy, SortOrderConstants.Ascending, FieldDataType.Text);
+        var result = query.OrderByCustomRecord(maliciousOrderBy, SortOrderConstants.Ascending, InferredSortKind.Text);
         var sql = result.ToQueryString();
 
-        // Assert
         sql.ShouldNotContain("DROP TABLE");
         sql.ShouldNotContain("jsonb_extract_path_text");
         sql.ShouldContain("\"Id\"");
     }
 
-    [Theory]
-    [InlineData("data['valid_field']", "valid_field")]
-    [InlineData("data[\"valid_field\"]", "valid_field")]
-    [InlineData("data.valid_field", "valid_field")]
-    [InlineData("data[ 'valid_field' ]", "valid_field")]
-    [InlineData("data [ \"valid_field\" ]", "valid_field")]
-    [InlineData("data [ 'priority' ]", "priority")]
-    [InlineData("data[  \"priority\"  ]", "priority")]
-    [InlineData("priority", "priority")]
-    [InlineData("valid_field", "valid_field")]
-    public void ExtractKeyValidInputsShouldExtractCorrectly(string input, string expected)
-    {
-        // Arrange
-        var targetInput = input;
-
-        // Act
-        var result = CustomFieldExtensions.ExtractKey(targetInput);
-
-        // Assert
-        result.ShouldBe(expected);
-    }
-
-    [Theory]
-    [InlineData("data['_leading_underscore']")]
-    [InlineData("data['123_starts_with_digit']")]
-    [InlineData("data['ім_я']")]
-    [InlineData("data.key; DROP TABLE Users;")]
-    [InlineData("data.nested.path.val")]
-    [InlineData("Id")]
-    [InlineData("CustomTableId")]
-    [InlineData("Data")]
-    public void ExtractKeyInvalidOrReservedKeysShouldReturnNull(string input)
-    {
-        // Arrange
-        var targetInput = input;
-
-        // Act
-        var result = CustomFieldExtensions.ExtractKey(targetInput);
-
-        // Assert
-        result.ShouldBeNull();
-    }
-
     [Fact]
-    public void FindFieldByOrderByShouldMatchTolerantly()
+    public void FindFieldByIdShouldMatchGuidCaseInsensitively()
     {
-        // Arrange
-        var fields = new List<CustomField>
-        {
-            new() { Key = "priority", DataType = FieldDataType.Number },
-            new() { Key = "status_code", DataType = FieldDataType.Text },
-        };
+        var priorityField = new CustomField { Name = "Priority" };
+        var statusField = new CustomField { Name = "Status" };
+        var fields = new List<CustomField> { priorityField, statusField };
 
-        // Act
-        var priorityField = fields.FindFieldByOrderBy("data['priority']");
-        var statusCodeField = fields.FindFieldByOrderBy("data[  \"status_code\"  ]");
-        var nonExistentField = fields.FindFieldByOrderBy("non_existent");
-
-        // Assert
-        priorityField?.Key.ShouldBe("priority");
-        statusCodeField?.Key.ShouldBe("status_code");
-        nonExistentField.ShouldBeNull();
+        fields.FindFieldById(priorityField.Id.ToString())?.Id.ShouldBe(priorityField.Id);
+        fields.FindFieldById(statusField.Id.ToString().ToUpperInvariant())?.Id.ShouldBe(statusField.Id);
+        fields.FindFieldById($"data['{priorityField.Id}']").ShouldBeNull();
+        fields.FindFieldById(Guid.CreateVersion7().ToString()).ShouldBeNull();
     }
 
     [Fact]
     public void OrderByCustomRecordConcurrentCallsShouldSafelyGenerateParameterizedSql()
     {
-        // Arrange
         var exceptions = new System.Collections.Concurrent.ConcurrentBag<Exception>();
 
-        // Act
         Parallel.For(0, 50, _ =>
         {
             try
@@ -305,10 +180,10 @@ public class CustomRecordOrderingTests
                 using var context = CreateContext();
                 var query = context.Set<CustomRecord>().AsQueryable();
 
-                var orderedQuery = query.OrderByCustomRecord("data.priority", SortOrderConstants.Descending, FieldDataType.Number);
+                var orderedQuery = query.OrderByCustomRecord(SampleFieldId, SortOrderConstants.Descending, InferredSortKind.Number);
                 var sql = orderedQuery.ToQueryString();
 
-                if (!sql.Contains("jsonb_extract_path_text") || !sql.Contains("\"Id\""))
+                if (!sql.Contains("jsonb_extract_path_text") || !sql.Contains(PostgresConstants.TryNumericFunction) || !sql.Contains("\"Id\""))
                 {
                     exceptions.Add(new InvalidOperationException($"Unexpected SQL generated: {sql}"));
                 }
@@ -319,24 +194,44 @@ public class CustomRecordOrderingTests
             }
         });
 
-        // Assert
         exceptions.ShouldBeEmpty();
     }
 
     [Fact]
     public void FilterByTableAndSearchWhenSearchTermProvidedShouldGenerateToTsQueryWithPrefix()
     {
-        // Arrange
         using var context = CreateContext();
         var query = context.Set<CustomRecord>().AsQueryable();
 
-        // Act
         var filtered = query.FilterByTableAndSearch(Guid.NewGuid(), "Kyi");
         var sql = filtered.ToQueryString();
 
-        // Assert
         sql.ShouldContain("to_tsquery('simple'");
         sql.ShouldContain("kyi:*");
+    }
+
+    [Fact]
+    public void BuildSampleQueryShouldPreserveDeterministicOrderingBeforeLimit()
+    {
+        using var context = CreateContext();
+        var tableId = Guid.CreateVersion7();
+
+        IOrderedQueryable<CustomRecord> ordered = context.Set<CustomRecord>()
+            .AsNoTracking()
+            .Where(r => r.CustomTableId == tableId)
+            .OrderBy(r => r.Position)
+            .ThenBy(r => r.Id);
+
+        string sql = ordered
+            .BuildSampleQuery(r => JsonbFunctionsExtensions.JsonbExtractPathText(r.Data, SampleFieldId))
+            .ToQueryString();
+
+        sql.ShouldContain("jsonb_extract_path_text");
+        sql.ShouldContain("IS NOT NULL");
+        sql.ShouldContain("ORDER BY");
+        sql.ShouldContain("\"Position\"");
+        sql.ShouldContain("\"Id\"");
+        sql.ShouldContain("LIMIT");
     }
 
     private static ApplicationDbContext CreateContext()

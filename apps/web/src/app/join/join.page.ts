@@ -1,5 +1,6 @@
-import { Component, computed, effect, inject, input, signal, untracked, WritableSignal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Component, computed, effect, inject, signal, untracked, WritableSignal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { IonButton, IonContent, IonInput } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -7,20 +8,20 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { AuthService, REDIRECT_URL } from '../core/auth/auth.service';
 import { PasswordPolicyService } from '../core/auth/password-policy.service';
 import { ConnectionService } from '../core/connection/connection.service';
-import { RequestFailure } from '../core/http/request-failure';
-import { InvitationsService } from '../core/invitations/invitations.service';
-import { DEFAULT_PASSWORD_POLICY, isStrongPassword } from '../shared/password-fields/password-rules';
+import { InvitationFailure, InvitationsService } from '../core/invitations/invitations.service';
+import { DEFAULT_PASSWORD_POLICY, isPasswordTooLong, isStrongPassword } from '../shared/password-fields/password-rules';
 import { PasswordFieldsComponent } from '../shared/password-fields/password-fields.component';
+import { tokenFromFragment } from '../core/auth/link-token';
 
 /**
  * Що показує сторінка: перевірку сервера й токена, помилку «сервера не знайдено», помилку
  * «посилання неактивне» (сервер відхилив токен), помилку «не вдалося перевірити» (збій мережі чи
  * сервера, з кнопкою повтору) або форму реєстрації.
  */
-type JoinView = 'loading' | 'no-server' | 'invalid' | 'check-failed' | 'form';
+type JoinView = 'loading' | 'no-server' | 'invalid' | 'exists' | 'check-failed' | 'form';
 
 /**
- * Сторінка запрошення (`/join?token=…`): колега переходить за посиланням із
+ * Сторінка запрошення (`/join#token=…`): колега переходить за посиланням із
  * діалогу «Додати колегу», завершує реєстрацію й одразу входить. Без стражів і
  * без бічного меню. Сервер — той, на домен якого веде посилання (`ConnectionService.findPageServer`:
  * origin сторінки, далі порт 5065), а не сервер активного акаунта.
@@ -51,8 +52,10 @@ export class JoinPage {
     return server ? untracked(() => this.passwordPolicies.policy(server))() : DEFAULT_PASSWORD_POLICY;
   });
 
-  /** Токен із query-параметра `?token=…` (прив'язується роутером через bindToComponentInputs). */
-  readonly token = input<string | undefined>();
+  /** Фрагмент адреси сторінки (`#token=…`). */
+  private readonly fragment = toSignal(inject(ActivatedRoute).fragment, { initialValue: null });
+  /** Токен із фрагмента адреси (`#token=…`, див. `link-token.ts`). */
+  protected readonly token = computed(() => tokenFromFragment(this.fragment()));
 
   protected readonly view = signal<JoinView>('loading');
 
@@ -84,6 +87,9 @@ export class JoinPage {
     const password = this.password();
     if (!password) {
       return 'passwordRequired';
+    }
+    if (isPasswordTooLong(password)) {
+      return 'passwordTooLong';
     }
     return isStrongPassword(password, this.passwordPolicy()) ? null : 'passwordWeak';
   });
@@ -120,8 +126,8 @@ export class JoinPage {
   /**
    * Спершу шукає сервер за доменом сторінки (`GET /health`: origin сторінки, далі порт 5065), тоді — токен
    * (`GET /api/v1/invitations/validate`). Сервер відхилив токен (400) або токена в посиланні
-   * нема — «посилання неактивне»: причини (прострочений, використаний, зіпсований) людині не
-   * розрізнити. Інша невдача (сервер не відповів, помилка сервера, відповідь не за контрактом) —
+   * нема — «посилання неактивне»: причини (прострочений, зіпсований) людині не розрізнити.
+   * Акаунт із поштою запрошення вже є (409, зокрема запрошення вже прийняли) — «увійдіть». Інша невдача (сервер не відповів, помилка сервера, відповідь не за контрактом) —
    * про токен нічого не каже, тож «не вдалося перевірити» з кнопкою повтору (`retry`).
    */
   private async load(token: string | undefined): Promise<void> {
@@ -143,7 +149,7 @@ export class JoinPage {
       return;
     }
     if (typeof details === 'string') {
-      this.view.set(details === 'invalid' ? 'invalid' : 'check-failed');
+      this.view.set(details === 'invalid' || details === 'exists' ? details : 'check-failed');
       return;
     }
     this.email.set(details.email);
@@ -203,10 +209,12 @@ export class JoinPage {
 }
 
 /** Ключ помилки реєстрації (`join.saveError.<ключ>`) за відповіддю сервера. */
-function saveErrorKey(result: RequestFailure): string {
+function saveErrorKey(result: InvitationFailure): string {
   switch (result) {
     case 'invalid':
       return 'invalid';
+    case 'exists':
+      return 'exists';
     case 'unreachable':
       return 'unreachable';
     default:

@@ -18,5 +18,9 @@ public sealed class CreateCustomRecordCommandValidator : AbstractValidator<Creat
 
         RuleFor(x => x.Data)
             .ApplyCustomRecordDataRules();
+
+        this.ApplyRecordPlacementRules(
+            x => x.PreviousRecordId,
+            x => x.NextRecordId);
     }
 }

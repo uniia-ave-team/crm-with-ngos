@@ -1,15 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
-using System.Text.Json.Nodes;
 using Crm.Application.Dtos.TableTemplates;
 using Crm.Application.Interfaces;
+using Crm.Domain.Common;
 using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
-using Mapster;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Api.DemoMode.DemoData;
@@ -41,6 +40,7 @@ public sealed partial class DemoDataSeeder(
     IAuthRoleRepository roleRepository,
     IRoleIdentityService roleIdentityService,
     IIdentityService identityService,
+    IUserCustomFieldRepository userCustomFieldRepository,
     ITableTemplateRepository tableTemplateRepository,
     ICustomTableRepository customTableRepository,
     ICustomRecordRepository customRecordRepository,
@@ -121,7 +121,8 @@ public sealed partial class DemoDataSeeder(
 
             var ngoId = await EnsureNgoAsync(now, cancellationToken);
             await EnsureRolesAsync(accounts, cancellationToken);
-            await CreateUsersAsync(accounts, ngoId, now, cancellationToken);
+            var userFields = await EnsureUserCustomFieldsAsync(cancellationToken);
+            await CreateUsersAsync(accounts, ngoId, now, userFields, cancellationToken);
             await CreateDonorTableAsync(ngoId, now, cancellationToken);
             await CreateVolunteerTableAsync(ngoId, now, cancellationToken);
 
@@ -206,10 +207,36 @@ public sealed partial class DemoDataSeeder(
         }
     }
 
+    /// <summary>
+    /// Creates the shared schema of user custom fields, unless the database already has one: then the demo profiles
+    /// fill in only those of its fields that have the demo names.
+    /// </summary>
+    private async Task<IReadOnlyList<UserCustomField>> EnsureUserCustomFieldsAsync(CancellationToken cancellationToken)
+    {
+        var existing = await userCustomFieldRepository.GetAllOrderedAsync(cancellationToken);
+
+        if (existing.Count > 0)
+        {
+            LogDemoUserCustomFieldsAlreadyExist(logger, existing.Count);
+            return existing;
+        }
+
+        var fields = DemoDataContent.CreateUserCustomFields();
+        fields.EnsureValidFieldSchema();
+
+        await userCustomFieldRepository.ApplySchemaChangesAsync(addedFields: fields, removedFields: [], cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        LogDemoUserCustomFieldsCreated(logger, fields.Count);
+
+        return fields;
+    }
+
     private async Task CreateUsersAsync(
         IReadOnlyList<DemoAccountOptions> accounts,
         Guid ngoId,
         DateTimeOffset now,
+        IReadOnlyList<UserCustomField> userFields,
         CancellationToken cancellationToken)
     {
         for (int i = 0; i < accounts.Count; i++)
@@ -217,7 +244,7 @@ public sealed partial class DemoDataSeeder(
             cancellationToken.ThrowIfCancellationRequested();
 
             var account = accounts[i];
-            var profile = DemoDataContent.CreateAccountProfile(i, account.Name, ngoId, now);
+            var profile = DemoDataContent.CreateAccountProfile(i, account.Name, ngoId, now, userFields);
 
             var user = await identityService.CreateUserAsync(account.Email, account.Password, profile, cancellationToken);
             await identityService.AddToRoleAsync(user.Id, account.Role, cancellationToken);
@@ -244,7 +271,7 @@ public sealed partial class DemoDataSeeder(
                 continue;
             }
 
-            var profile = DemoDataContent.CreateProfile(colleague, ngoId, now);
+            var profile = DemoDataContent.CreateProfile(colleague, ngoId, now, userFields);
             var user = await identityService.CreateUserAsync(email, CreateUnusablePassword(), profile, cancellationToken);
 
             if (colleagueRoles.Count > 0)
@@ -270,11 +297,25 @@ public sealed partial class DemoDataSeeder(
             ?? throw new InvalidOperationException(
                 $"System table template '{DemoDataContent.DonorTemplateName}' does not exist. Run the regular database seeders before seeding demo data.");
 
-        // Same instantiation as CreateCustomTableFromTemplateCommandHandler: the template's name and description are kept.
-        var table = template.Adapt<CustomTable>();
-        table.NgoId = ngoId;
+        // Same instantiation as CreateCustomTableFromTemplateCommandHandler: the template's name, description and fields.
+        var table = new CustomTable
+        {
+            NgoId = ngoId,
+            Name = template.Name,
+            Description = template.Description,
+            SourceTemplateId = template.Id,
+            Fields =
+            [
+                .. template.Fields.Select(f => new CustomField
+                {
+                    Name = f.Name,
+                    IsRequired = f.IsRequired,
+                    Order = f.Order,
+                }),
+            ],
+        };
 
-        await CreateTableWithRecordsAsync(table, DemoDataContent.CreateDonorRecords(), now, cancellationToken);
+        await CreateTableWithRecordsAsync(table, DemoDataContent.CreateDonorRows(), now, cancellationToken);
     }
 
     private Task CreateVolunteerTableAsync(Guid ngoId, DateTimeOffset now, CancellationToken cancellationToken)
@@ -287,12 +328,12 @@ public sealed partial class DemoDataSeeder(
             Fields = DemoDataContent.CreateVolunteerFields(),
         };
 
-        return CreateTableWithRecordsAsync(table, DemoDataContent.CreateVolunteerRecords(now), now, cancellationToken);
+        return CreateTableWithRecordsAsync(table, DemoDataContent.CreateVolunteerRows(now), now, cancellationToken);
     }
 
     private async Task CreateTableWithRecordsAsync(
         CustomTable table,
-        List<JsonObject> rows,
+        List<Dictionary<string, string?>> rows,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -302,7 +343,9 @@ public sealed partial class DemoDataSeeder(
 
         List<CustomField> fields = [.. table.Fields.OrderBy(f => f.Order)];
 
-        // Explicit, increasing UUIDv7 values keep the default "by Id" listing in the authored order.
+        // Rows keep the authored order: in the manual order (evenly spaced positions, as after a rebalance)
+        // and when sorted by Id (explicit, increasing UUIDv7 values).
+        var positions = FractionalIndex.GenerateEvenlySpaced(rows.Count);
         var firstRecordTime = now.AddMinutes(-rows.Count);
 
         var records = rows
@@ -310,7 +353,8 @@ public sealed partial class DemoDataSeeder(
             {
                 Id = Guid.CreateVersion7(firstRecordTime.AddMinutes(index)),
                 CustomTableId = table.Id,
-                Data = row.ValidateAndBackfillPayload(fields),
+                Position = positions[index],
+                Data = DemoDataContent.ToFieldValues(fields, row).ValidateAndBackfillPayload(fields),
             })
             .ToList();
 
@@ -343,4 +387,10 @@ public sealed partial class DemoDataSeeder(
 
     [LoggerMessage(EventId = EventIdBase + 8, Level = LogLevel.Information, Message = "Demo data seeded successfully.")]
     private static partial void LogDemoDataSeeded(ILogger logger);
+
+    [LoggerMessage(EventId = EventIdBase + 9, Level = LogLevel.Information, Message = "The user custom fields schema already has {FieldCount} field(s) and is left unchanged.")]
+    private static partial void LogDemoUserCustomFieldsAlreadyExist(ILogger logger, int fieldCount);
+
+    [LoggerMessage(EventId = EventIdBase + 10, Level = LogLevel.Information, Message = "Demo user custom fields schema created with {FieldCount} field(s).")]
+    private static partial void LogDemoUserCustomFieldsCreated(ILogger logger, int fieldCount);
 }

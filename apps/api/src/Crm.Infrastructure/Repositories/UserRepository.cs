@@ -1,9 +1,11 @@
 using System.Text.Json.Nodes;
+using Crm.Domain.Common;
 using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Auditing;
 using Crm.Infrastructure.Persistence;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -93,4 +95,14 @@ public sealed class UserRepository(
         => DbSet
             .Where(u => u.Id == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.LastLoginAt, lastLoginAt), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<int> SyncCustomFieldsSchemaAsync(SchemaSyncPlan plan, CancellationToken cancellationToken = default)
+        => !plan.RequiresJsonbSync
+            ? Task.FromResult(0)
+            : DbSet.ExecuteUpdateAsync(
+                s => s.SetProperty(
+                    u => u.CustomFields,
+                    u => JsonbFunctionsExtensions.SyncJsonbKeys(u.CustomFields, plan.KeysToDrop, plan.KeysToBackfill)),
+                cancellationToken);
 }

@@ -175,7 +175,7 @@ public sealed class DemoSandboxDecoratorsTests
     {
         var other = new DemoSandbox("def456", "crm_demo_def456", "Host=localhost;Database=crm_demo_def456", DateTimeOffset.UtcNow);
         var inner = Substitute.For<IRevokedUsersCache>();
-        var cache = new DemoSandboxRevokedUsersCache(inner, _accessor);
+        var cache = new DemoSandboxRevokedUsersCache(inner, _accessor, TimeProvider.System);
         var userId = Guid.NewGuid();
         var ct = TestContext.Current.CancellationToken;
 
@@ -199,17 +199,69 @@ public sealed class DemoSandboxDecoratorsTests
     public async Task RevokedUsersWithoutSandboxShouldUseTheRegularCache()
     {
         var inner = Substitute.For<IRevokedUsersCache>();
-        var cache = new DemoSandboxRevokedUsersCache(inner, _accessor);
+        var cache = new DemoSandboxRevokedUsersCache(inner, _accessor, TimeProvider.System);
         var userId = Guid.NewGuid();
+        var issuedAt = DateTimeOffset.UtcNow;
         var ct = TestContext.Current.CancellationToken;
         inner.IsUserRevokedAsync(userId, Arg.Any<CancellationToken>()).Returns(true);
+        inner.IsTokenRevokedAsync(userId, issuedAt, Arg.Any<CancellationToken>()).Returns(true);
 
         await cache.RevokeUserAsync(userId, ct);
+        await cache.RevokeTokensIssuedBeforeAsync(userId, ct);
         await cache.UnrevokeUserAsync(userId, ct);
 
         (await cache.IsUserRevokedAsync(userId, ct)).ShouldBeTrue();
+        (await cache.IsTokenRevokedAsync(userId, issuedAt, ct)).ShouldBeTrue();
         await inner.Received(1).RevokeUserAsync(userId, Arg.Any<CancellationToken>());
+        await inner.Received(1).RevokeTokensIssuedBeforeAsync(userId, Arg.Any<CancellationToken>());
         await inner.Received(1).UnrevokeUserAsync(userId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TokensIssuedBeforeARoleChangeInSandboxShouldBeRejectedOnlyInThatSandbox()
+    {
+        var other = new DemoSandbox("def456", "crm_demo_def456", "Host=localhost;Database=crm_demo_def456", DateTimeOffset.UtcNow);
+        var inner = Substitute.For<IRevokedUsersCache>();
+        var changedAt = new DateTimeOffset(2026, 11, 27, 12, 0, 0, TimeSpan.Zero);
+        var cache = new DemoSandboxRevokedUsersCache(inner, _accessor, new FixedClock(changedAt));
+        var userId = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+
+        UseSandbox();
+        await cache.RevokeTokensIssuedBeforeAsync(userId, ct);
+
+        (await cache.IsTokenRevokedAsync(userId, changedAt.AddSeconds(-1), ct)).ShouldBeTrue();
+        (await cache.IsTokenRevokedAsync(userId, changedAt, ct)).ShouldBeTrue();
+        (await cache.IsTokenRevokedAsync(userId, null, ct)).ShouldBeTrue();
+        (await cache.IsTokenRevokedAsync(userId, changedAt.AddTicks(1), ct)).ShouldBeFalse();
+
+        // A role change is not a deactivation: the user keeps working with a refreshed token.
+        (await cache.IsUserRevokedAsync(userId, ct)).ShouldBeFalse();
+
+        _accessor.Current.Returns(other);
+        (await cache.IsTokenRevokedAsync(userId, changedAt.AddSeconds(-1), ct)).ShouldBeFalse();
+
+        UseSandbox();
+        await cache.UnrevokeUserAsync(userId, ct);
+        (await cache.IsTokenRevokedAsync(userId, changedAt.AddSeconds(-1), ct)).ShouldBeFalse();
+
+        await inner.DidNotReceiveWithAnyArgs().RevokeTokensIssuedBeforeAsync(default, ct);
+        await inner.DidNotReceiveWithAnyArgs().IsTokenRevokedAsync(default, default, ct);
+    }
+
+    [Fact]
+    public async Task DeactivationInSandboxShouldRejectTokensOfAnyIssueTime()
+    {
+        var cache = new DemoSandboxRevokedUsersCache(Substitute.For<IRevokedUsersCache>(), _accessor, TimeProvider.System);
+        var userId = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+
+        UseSandbox();
+        await cache.RevokeUserAsync(userId, ct);
+        await cache.RevokeTokensIssuedBeforeAsync(userId, ct);
+
+        (await cache.IsTokenRevokedAsync(userId, DateTimeOffset.UtcNow.AddHours(1), ct)).ShouldBeTrue();
+        (await cache.IsUserRevokedAsync(userId, ct)).ShouldBeTrue();
     }
 
     [Fact]
@@ -304,5 +356,11 @@ public sealed class DemoSandboxDecoratorsTests
         httpContextAccessor.HttpContext.Returns(new DefaultHttpContext { RequestServices = services });
 
         return new DemoSandboxRolePermissionsCache(_innerCache, _accessor, httpContextAccessor);
+    }
+
+    /// <summary>A clock that always shows the same moment.</summary>
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }

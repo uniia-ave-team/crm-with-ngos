@@ -18,7 +18,7 @@ public record UpdateProjectCommand(
     string? Description,
     ProjectVisibility Visibility,
     DateTime StartDate,
-    DateTime? EndDate = null) : ICommand, ITransactionalCommand, IProjectScoped
+    DateTime? EndDate = null) : ICommand, ITransactionalCommand, IProjectScoped, ICurrentUserAware
 {
     /// <summary>
     /// Gets the unique identifier of the project to update, populated from the route parameter.
@@ -27,10 +27,10 @@ public record UpdateProjectCommand(
     public Guid Id { get; init; }
 
     /// <summary>
-    /// Gets the unique identifier of the currently authenticated user performing the update, populated by the controller.
+    /// Gets or sets the unique identifier of the currently authenticated user performing the update, populated by the request pipeline.
     /// </summary>
     [JsonIgnore]
-    public Guid CurrentUserId { get; init; }
+    public Guid CurrentUserId { get; set; }
 
     /// <inheritdoc />
     Guid? IProjectScoped.ProjectId => Id;

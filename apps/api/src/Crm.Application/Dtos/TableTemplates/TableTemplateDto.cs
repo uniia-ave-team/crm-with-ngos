@@ -1,16 +1,18 @@
+using Crm.Application.Dtos.Common;
+
 namespace Crm.Application.Dtos.TableTemplates;
 
 /// <summary>
-/// Represents the full DTO of a reusable table template blueprint.
+/// Data transfer object representing a reusable table template blueprint and its ordered field definitions.
 /// </summary>
 /// <param name="Id">The unique identifier of the table template.</param>
-/// <param name="Name">The display name of the template preset.</param>
-/// <param name="Description">An optional explanation of intended use cases.</param>
-/// <param name="IsSystemPreset">Indicates whether this template is a global default preset provided by the system.</param>
-/// <param name="Fields">The collection of field blueprints making up this template schema.</param>
-public record TableTemplateDto(
+/// <param name="Name">The display name of the template.</param>
+/// <param name="Description">An optional description of the template.</param>
+/// <param name="IsSystemPreset">Whether the template is a read-only system preset.</param>
+/// <param name="Fields">The ordered field blueprint definitions included in this template.</param>
+public sealed record TableTemplateDto(
     Guid Id,
     string Name,
     string? Description,
     bool IsSystemPreset,
-    List<TemplateFieldDto> Fields);
+    List<FieldDefinitionDto> Fields);

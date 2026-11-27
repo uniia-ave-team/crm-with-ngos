@@ -214,6 +214,7 @@ describe('PersonalDataPage', () => {
       email: 'a@b.org',
       preferredLanguage: 'uk',
       pronouns: uk.settings.personal.pronounShe,
+      pronounCategory: 2,
       avatarUrl: '/files/old.png',
     };
 
@@ -278,32 +279,25 @@ describe('PersonalDataPage', () => {
 
     describe('prefilling the pronouns from the profile', () => {
       it.each([
-        [uk.settings.personal.pronounShe, 0],
-        [uk.settings.personal.pronounHe, 1],
-        [uk.settings.personal.pronounThey, 2],
-      ])('turns "%s" into its radio button', async (pronouns, index) => {
-        const { fixture, element } = await open({ pronouns });
+        [2, 0],
+        [1, 1],
+        [3, 2],
+      ])('chooses the radio button by the category %i, not by the text (saved in another language here)', async (pronounCategory, index) => {
+        const { fixture, element } = await open({ pronouns: 'she/her', pronounCategory });
         fixture.detectChanges();
         expect(chosenPronoun(element)).toBe(index);
         expect((element.querySelector('.settings-input--small') as HTMLInputElement).value).toBe('');
       });
 
-      it('puts anything else into "Other" with that text', async () => {
-        const { fixture, element } = await open({ pronouns: 'ze/zir' });
+      it('puts the text without a category into "Other", even when it matches a ready option', async () => {
+        const { fixture, element } = await open({ pronouns: uk.settings.personal.pronounShe, pronounCategory: null });
         fixture.detectChanges();
         expect(chosenPronoun(element)).toBe(3);
-        expect((element.querySelector('.settings-input--small') as HTMLInputElement).value).toBe('ze/zir');
-      });
-
-      it('puts several saved values (from the time of checkboxes) into "Other" as one text', async () => {
-        const { fixture, element } = await open({ pronouns: `${uk.settings.personal.pronounShe}, ${uk.settings.personal.pronounThey}` });
-        fixture.detectChanges();
-        expect(chosenPronoun(element)).toBe(3);
-        expect((element.querySelector('.settings-input--small') as HTMLInputElement).value).toBe(`${uk.settings.personal.pronounShe}, ${uk.settings.personal.pronounThey}`);
+        expect((element.querySelector('.settings-input--small') as HTMLInputElement).value).toBe(uk.settings.personal.pronounShe);
       });
 
       it('leaves nothing chosen when the profile has no pronouns', async () => {
-        const { fixture, element } = await open({ pronouns: null });
+        const { fixture, element } = await open({ pronouns: null, pronounCategory: null });
         fixture.detectChanges();
         expect(chosenPronoun(element)).toBe(-1);
       });
@@ -311,7 +305,7 @@ describe('PersonalDataPage', () => {
 
     describe('validation', () => {
       it('shows errors under the empty required fields and sends nothing', async () => {
-        const { fixture, element } = await open({ pronouns: null });
+        const { fixture, element } = await open({ pronouns: null, pronounCategory: null });
         setText(element, 'settings-last-name', '');
         setText(element, 'settings-first-name', '  ');
         save(fixture, element);
@@ -370,7 +364,7 @@ describe('PersonalDataPage', () => {
       });
 
       it('asks for the own pronouns when "Other" is chosen and left empty', async () => {
-        const { fixture, element } = await open({ pronouns: null });
+        const { fixture, element } = await open({ pronouns: null, pronounCategory: null });
         choosePronoun(element, 3);
         save(fixture, element);
         expect(errors(element)).toEqual([uk.settings.personal.error.pronounOtherRequired]);
@@ -456,7 +450,7 @@ describe('PersonalDataPage', () => {
         ['"They"', 2, '', uk.settings.personal.pronounThey, 3],
         ['"Other" with a text', 3, ' ze/zir ', 'ze/zir', null],
       ])('maps %s to the pronouns text and the category', async (_name, index, other, text, category) => {
-        const { fixture, element } = await open({ pronouns: null });
+        const { fixture, element } = await open({ pronouns: null, pronounCategory: null });
         choosePronoun(element, index);
         if (other) {
           const small = element.querySelector('.settings-input--small') as HTMLInputElement;
@@ -888,7 +882,7 @@ describe('PersonalDataPage', () => {
         return hints[1] as HTMLElement;
       };
 
-      it('is in the layout under the size hint from the start, but hidden until an image is chosen', () => {
+      it('is under the size hint from the start, but hidden until an image is chosen', () => {
         const { element } = render();
         expect(note(element).textContent?.trim()).toBe(uk.settings.personal.avatarSaveHint);
         expect(note(element).classList).toContain('settings-avatar__hint--hidden');

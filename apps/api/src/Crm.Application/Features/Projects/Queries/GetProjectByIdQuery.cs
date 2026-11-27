@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Crm.Application.Common.Interfaces;
 using Crm.Application.Dtos.Projects;
 using Crm.Domain.Enums;
@@ -9,11 +10,12 @@ namespace Crm.Application.Features.Projects.Queries;
 /// Represents a query to retrieve detailed project information by its unique identifier.
 /// </summary>
 /// <param name="Id">The unique identifier of the project to retrieve.</param>
-/// <param name="CurrentUserId">The unique identifier of the currently authenticated user.</param>
-public record GetProjectByIdQuery(
-    Guid Id,
-    Guid CurrentUserId) : IQuery<ProjectDto>, IProjectScoped
+public record GetProjectByIdQuery(Guid Id) : IQuery<ProjectDto>, IProjectScoped, ICurrentUserAware
 {
+    /// <inheritdoc />
+    [JsonIgnore]
+    public Guid CurrentUserId { get; set; }
+
     /// <inheritdoc />
     Guid? IProjectScoped.ProjectId => Id;
 

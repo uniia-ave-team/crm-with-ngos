@@ -2,7 +2,7 @@ using Crm.Domain.Entities;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Services.Caching;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Shouldly;
@@ -32,12 +32,11 @@ public class MaintenanceNoticeCacheTests
             new DateTime(2026, 11, 20, 23, 30, 0, DateTimeKind.Utc),
             clock.GetUtcNow().UtcDateTime);
 
-        repository.GetAsync(ct).Returns(firstNotice, updatedNotice);
+        repository.GetAsync(Arg.Any<CancellationToken>()).Returns(firstNotice, updatedNotice);
 
-        using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         using var serviceProvider = BuildServiceProvider(repository);
-        using var cache = new MaintenanceNoticeCache(
-            memoryCache,
+        var cache = new MaintenanceNoticeCache(
+            serviceProvider.GetRequiredService<HybridCache>(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             clock);
 
@@ -49,13 +48,13 @@ public class MaintenanceNoticeCacheTests
         var stillCached = await cache.GetActiveNoticeAsync(ct);
         stillCached.ShouldNotBeNull();
         stillCached.Message.ShouldBe("First notice");
-        await repository.Received(1).GetAsync(ct);
+        await repository.Received(1).GetAsync(Arg.Any<CancellationToken>());
 
         clock.Advance(TimeSpan.FromSeconds(1));
         var refreshed = await cache.GetActiveNoticeAsync(ct);
         refreshed.ShouldNotBeNull();
         refreshed.Message.ShouldBe("Updated notice");
-        await repository.Received(2).GetAsync(ct);
+        await repository.Received(2).GetAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -65,16 +64,15 @@ public class MaintenanceNoticeCacheTests
         var clock = new TestTimeProvider(new DateTimeOffset(2026, 11, 20, 22, 59, 50, TimeSpan.Zero));
         var repository = Substitute.For<IMaintenanceNoticeRepository>();
 
-        repository.GetAsync(ct).Returns(new MaintenanceNotice().Update(
+        repository.GetAsync(Arg.Any<CancellationToken>()).Returns(new MaintenanceNotice().Update(
             "Ending soon",
             new DateTime(2026, 11, 20, 22, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 11, 20, 23, 0, 0, DateTimeKind.Utc),
             clock.GetUtcNow().UtcDateTime));
 
-        using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         using var serviceProvider = BuildServiceProvider(repository);
-        using var cache = new MaintenanceNoticeCache(
-            memoryCache,
+        var cache = new MaintenanceNoticeCache(
+            serviceProvider.GetRequiredService<HybridCache>(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             clock);
 
@@ -88,7 +86,7 @@ public class MaintenanceNoticeCacheTests
         atEnd.ShouldBeNull();
 
         // Cache hit without re-querying DB.
-        await repository.Received(1).GetAsync(ct);
+        await repository.Received(1).GetAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -98,7 +96,7 @@ public class MaintenanceNoticeCacheTests
         var clock = new TestTimeProvider(new DateTimeOffset(2026, 11, 20, 21, 0, 0, TimeSpan.Zero));
         var repository = Substitute.For<IMaintenanceNoticeRepository>();
 
-        repository.GetAsync(ct).Returns(
+        repository.GetAsync(Arg.Any<CancellationToken>()).Returns(
             null,
             new MaintenanceNotice().Update(
                 "New notice",
@@ -106,10 +104,9 @@ public class MaintenanceNoticeCacheTests
                 new DateTime(2026, 11, 20, 23, 0, 0, DateTimeKind.Utc),
                 clock.GetUtcNow().UtcDateTime));
 
-        using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         using var serviceProvider = BuildServiceProvider(repository);
-        using var cache = new MaintenanceNoticeCache(
-            memoryCache,
+        var cache = new MaintenanceNoticeCache(
+            serviceProvider.GetRequiredService<HybridCache>(),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             clock);
 
@@ -117,18 +114,19 @@ public class MaintenanceNoticeCacheTests
 
         clock.Advance(TimeSpan.FromSeconds(15));
         (await cache.GetActiveNoticeAsync(ct)).ShouldBeNull();
-        await repository.Received(1).GetAsync(ct);
+        await repository.Received(1).GetAsync(Arg.Any<CancellationToken>());
 
         clock.Advance(TimeSpan.FromSeconds(15));
         var loaded = await cache.GetActiveNoticeAsync(ct);
         loaded.ShouldNotBeNull();
         loaded.Message.ShouldBe("New notice");
-        await repository.Received(2).GetAsync(ct);
+        await repository.Received(2).GetAsync(Arg.Any<CancellationToken>());
     }
 
     private static ServiceProvider BuildServiceProvider(IMaintenanceNoticeRepository repository)
     {
         var services = new ServiceCollection();
+        services.AddHybridCache();
         services.AddScoped(_ => repository);
         return services.BuildServiceProvider();
     }

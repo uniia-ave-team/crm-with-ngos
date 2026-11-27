@@ -43,6 +43,7 @@ public static class LogEventIds
     public const int InvalidClaimToRemoveAttempt = 1044;
     public const int UserAddedToRevokedCache = 1045;
     public const int UserRemovedFromRevokedCache = 1046;
+    public const int UserTokensRevokedBefore = 1047;
 
     // 2000s: Users, Authentication, and Profiles
     public const int ActivatingUser = 2001;
@@ -91,14 +92,8 @@ public static class LogEventIds
     public const int FetchingUserPermissions = 2064;
     public const int NoRoleIdsProvidedForPermissions = 2065;
     public const int PermissionsFetchedSuccessfully = 2066;
-    public const int AddingUserCustomField = 2067;
-    public const int UserCustomFieldAddedSuccessfully = 2068;
-    public const int RemovingUserCustomField = 2069;
-    public const int UserCustomFieldRemovedSuccessfully = 2070;
-    public const int UnauthorizedCustomFieldRemoval = 2071;
     public const int UpdatingUserCustomField = 2072;
     public const int UserCustomFieldUpdatedSuccessfully = 2073;
-    public const int UnauthorizedCustomFieldUpdate = 2074;
     public const int DeletingUser = 2075;
     public const int CannotDeleteLastAdmin = 2076;
     public const int UserDeletedSuccessfully = 2077;
@@ -118,6 +113,18 @@ public static class LogEventIds
     public const int TransferredSoleManagedProjectsOnDeactivation = 2091;
     public const int CannotDeleteSoleProjectManager = 2092;
     public const int TransferredSoleManagedProjectsOnDeletion = 2093;
+    public const int SyncingUserCustomFields = 2094;
+    public const int UserCustomFieldsSyncedSuccessfully = 2095;
+    public const int FetchingUserCustomFields = 2100;
+    public const int UserCustomFieldsFetched = 2101;
+    public const int FetchingActiveInvitations = 2102;
+    public const int ActiveInvitationsFetched = 2103;
+    public const int RevokingActionToken = 2104;
+    public const int ActionTokenRevokedSuccessfully = 2105;
+    public const int ValidatingPasswordResetToken = 2106;
+    public const int PasswordResetTokenValidatedSuccessfully = 2107;
+    public const int FetchingActivePasswordResetTokens = 2108;
+    public const int ActivePasswordResetTokensFetched = 2109;
 
     // 3000s: NGOs
     public const int CreatingNgo = 3001;
@@ -147,12 +154,10 @@ public static class LogEventIds
     public const int MissingRoleIdClaim = 5001;
     public const int AccessDenied = 5002;
     public const int AccessTokenGenerated = 5003;
-    public const int InvitationTokenGenerated = 5004;
-    public const int TokenValidationFailed = 5005;
+    public const int ActionTokenGenerated = 5004;
     public const int RefreshTokenGenerated = 5006;
     public const int InvalidExpiredToken = 5007;
     public const int ExpiredTokenValidationFailed = 5008;
-    public const int PasswordResetTokenGenerated = 5009;
     public const int RevokedUserAccessTokenRejected = 5010;
 
     // 6000s: Global Errors and Middlewares
@@ -225,6 +230,9 @@ public static class LogEventIds
     public const int CheckingTableTemplates = 9035;
     public const int TableTemplatesAlreadySeeded = 9036;
     public const int TableTemplatesSeededSuccessfully = 9037;
+    public const int MovingCustomRecord = 9038;
+    public const int CustomRecordMovedSuccessfully = 9039;
+    public const int TableTemplatesUpdatedSuccessfully = 9040;
 
     // 10000s: Projects, Members, Topics, Tags, Tasks, Comments, and Attachments
     public const int CreatingProject = 10001;

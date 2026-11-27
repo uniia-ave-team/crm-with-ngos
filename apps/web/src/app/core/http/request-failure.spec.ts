@@ -1,7 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError } from 'rxjs';
 
-import { DEMO_SESSION_EXPIRED, readBlobErrorCode, readErrorCode, toRequestFailure } from './request-failure';
+import { DEMO_SESSION_EXPIRED, readBlobErrorCode, readErrorCode, toRequestFailure, toUploadFailure } from './request-failure';
+import uk from '../../../assets/i18n/uk.json';
 
 describe('toRequestFailure', () => {
   it.each([
@@ -67,5 +68,27 @@ describe('readBlobErrorCode', () => {
 
   it('gives null for a Blob that is not JSON', async () => {
     expect(await readBlobErrorCode(new Blob(['\u0089PNG']))).toBeNull();
+  });
+});
+
+describe('toUploadFailure', () => {
+  it('reads HTTP 413 as quotaExceeded: the storage of the server is full', () => {
+    expect(toUploadFailure(new HttpErrorResponse({ status: 413 }))).toBe('quotaExceeded');
+  });
+
+  it.each([400, 401, 403, 500, 0])('reads HTTP %i as an ordinary request would', (status) => {
+    expect(toUploadFailure(new HttpErrorResponse({ status }))).toBe(toRequestFailure(new HttpErrorResponse({ status })));
+  });
+
+  it('has a text for the full storage in every place that shows the failure of an upload', () => {
+    const groups = [
+      uk.settings.personal.result.avatar,
+      uk.admin.result.logoFailed,
+      uk.admin.result.imagesFailed,
+      uk.login.ngo.logoUploadError,
+    ] as Record<string, string>[];
+    for (const group of groups) {
+      expect(group['quotaExceeded']).toBeTruthy();
+    }
   });
 });

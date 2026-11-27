@@ -1,0 +1,41 @@
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <div class="settings-field">
+    <label class="settings-field__label" for="kb-move-from">{{ 'knowledgeBase.dialogs.move.from' | translate }}</label>
+    <span class="settings-select-wrap">
+      <select id="kb-move-from" class="settings-select" tabindex="0" disabled>
+        <ng-container *ngTemplateOutlet="options; context: { $implicit: fromValue() }" />
+      </select>
+      <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+    </span>
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="kb-move-to">{{ 'knowledgeBase.dialogs.move.to' | translate }}</label>
+    <span class="settings-select-wrap">
+      <select
+        id="kb-move-to"
+        class="settings-select"
+        tabindex="0"
+        [attr.aria-invalid]="error() ? true : null"
+        [attr.aria-describedby]="error() ? 'kb-move-error' : null"
+        (change)="onChange($event)"
+      >
+        <ng-container *ngTemplateOutlet="options; context: { $implicit: toValue() }" />
+      </select>
+      <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+    </span>
+    @if (error(); as errorKey) {
+      <p id="kb-move-error" class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <button type="submit" class="settings-submit" tabindex="0">{{ 'knowledgeBase.dialogs.move.submit' | translate }}</button>
+</form>
+
+<!-- Опції обох списків: «Без папки» й усі папки; `selected` — вибрана. -->
+<ng-template #options let-selected>
+  <option [value]="noFolder" [selected]="selected === noFolder">{{ 'knowledgeBase.dialogs.move.noFolder' | translate }}</option>
+  @for (folder of folders(); track folder.id) {
+    <option [value]="folder.id" [selected]="selected === folder.id">{{ folder.title }}</option>
+  }
+</ng-template>

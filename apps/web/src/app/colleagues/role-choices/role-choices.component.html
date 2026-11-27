@@ -1,0 +1,29 @@
+<fieldset class="role-choices">
+  <legend class="settings-field__label">{{ 'colleagues.colleagueForm.roles' | translate }}@if (required()) {<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span>}</legend>
+  @if (roles().failure; as failure) {
+    <p class="role-choices__message role-choices__message--error" role="alert">{{ 'colleagues.rolesPanel.error.' + failure | translate }}</p>
+  }
+  @if (roles().roles.length > 0) {
+    <div class="role-choices__choices">
+      @for (role of roles().roles; track role.id) {
+        <button
+          type="button"
+          class="role-choices__choice"
+          role="checkbox"
+          tabindex="0"
+          [attr.aria-checked]="selected().has(role.id)"
+          (click)="roleToggle.emit(role.id)"
+        >
+          <app-role-pill [name]="role.name" [active]="selected().has(role.id)" [icon]="selected().has(role.id) ? 'checkmark-circle' : 'ellipse-outline'" />
+        </button>
+      }
+    </div>
+  } @else if (roles().status === 'loading') {
+    <p class="role-choices__message" role="status">{{ 'colleagues.rolesPanel.loading' | translate }}</p>
+  } @else if (roles().status === 'ready') {
+    <p class="role-choices__message">{{ 'colleagues.rolesPanel.empty' | translate }}</p>
+  }
+  @if (error(); as errorKey) {
+    <p class="settings-field__error role-choices__error" role="alert">{{ errorKey | translate }}</p>
+  }
+</fieldset>

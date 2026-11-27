@@ -34,6 +34,18 @@ export function toRequestFailure(error: unknown): RequestFailure {
 }
 
 /**
+ * Невдача завантаження файлу (аватар, логотип ГО, зображення входу): як у будь-якого запиту, а ще
+ * `quotaExceeded` — сервер відповів 413, бо на ньому закінчилось місце для файлів. Розмір самого
+ * файлу клієнт перевіряє до надсилання, тож 413 тут означає саме квоту сховища: повтор не
+ * допоможе, потрібен адміністратор.
+ */
+export type UploadFailure = RequestFailure | 'quotaExceeded';
+
+export function toUploadFailure(error: unknown): UploadFailure {
+  return error instanceof HttpErrorResponse && error.status === 413 ? 'quotaExceeded' : toRequestFailure(error);
+}
+
+/**
  * Коди помилок демо-режиму: поле `errorCode` у тілі відповіді сервера (problem JSON, RFC 7807).
  * - `DEMO_MODE_RESTRICTED` (403) — дію в демо вимкнено;
  * - `DEMO_QUOTA_EXCEEDED` (403) — вичерпано ліміт демо (наприклад, завантажень);

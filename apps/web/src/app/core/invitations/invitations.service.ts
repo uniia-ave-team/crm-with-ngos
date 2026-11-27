@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
@@ -14,6 +14,18 @@ import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
 import { RequestFailure, toRequestFailure } from '../http/request-failure';
 import { REQUEST_TIMEOUT_MS } from '../http/timeouts';
+
+/**
+ * Невдача запиту запрошення: як у будь-якого запиту (`RequestFailure`), а ще `exists` — сервер
+ * відповів 409, бо користувач з поштою запрошення вже є. Так відповідають і створення
+ * запрошення, і перевірка токена, і завершення реєстрації: повтор тут не допоможе, людині
+ * треба увійти, а не реєструватися.
+ */
+export type InvitationFailure = RequestFailure | 'exists';
+
+function toInvitationFailure(error: unknown): InvitationFailure {
+  return error instanceof HttpErrorResponse && error.status === 409 ? 'exists' : toRequestFailure(error);
+}
 
 const API_INVITATIONS_PATH = '/api/v1/invitations';
 
@@ -50,10 +62,10 @@ export class InvitationsService {
    * `POST <сервер>/api/v1/invitations` — запрошує колегу (потрібне право `CreateUser`; тіло
    * `{email, roleIds}`, ролей має бути хоча б одна). Користувача це ще не створює: сервер
    * віддає токен, за яким колега завершує реєстрацію (`POST /invitations/accept`). Повертає
-   * токен або причину невдачі (`invalid` — 400, зокрема коли пошта вже зайнята, а
-   * `error` — ще й відповідь без токена).
+   * токен або причину невдачі (`exists` — 409: колега з такою поштою вже має акаунт; `invalid`
+   * — 400: сервер не прийняв дані; `error` — ще й відповідь без токена).
    */
-  async invite(email: string, roleIds: readonly string[]): Promise<Invitation | RequestFailure> {
+  async invite(email: string, roleIds: readonly string[]): Promise<Invitation | InvitationFailure> {
     const url = `${this.connection.serverUrl()}${API_INVITATIONS_PATH}`;
     try {
       const body = await firstValueFrom(this.http.post<Untrusted<TokenResultDto>>(url, { email, roleIds: [...roleIds] } satisfies InviteUserCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
@@ -65,7 +77,7 @@ export class InvitationsService {
       const expiresAt = body?.expiresAt;
       return { token, expiresAt: typeof expiresAt === 'string' ? expiresAt : '' };
     } catch (error) {
-      const failure = toRequestFailure(error);
+      const failure = toInvitationFailure(error);
       console.warn(`[InvitationsService] Не вдалося створити запрошення (${failure})`, error);
       return failure;
     }
@@ -75,9 +87,10 @@ export class InvitationsService {
    * `GET <server>/api/v1/invitations/validate?token=…` (без авторизації) — перевіряє токен
    * із посилання й віддає пошту, на яку його видано. Сервер явний: колега відкриває
    * запрошення, ще не маючи акаунта на цьому сервері (див. `ConnectionService.pageServerUrl`).
-   * Повертає дані або причину невдачі (недійсний чи прострочений токен — `invalid`).
+   * Повертає дані або причину невдачі (недійсний чи прострочений токен — `invalid`; акаунт із
+   * поштою запрошення вже є, зокрема запрошення вже прийняли — `exists`).
    */
-  async validate(server: string, token: string): Promise<InvitationDetails | RequestFailure> {
+  async validate(server: string, token: string): Promise<InvitationDetails | InvitationFailure> {
     const url = `${server}${API_INVITATIONS_PATH}/validate`;
     try {
       const body = await firstValueFrom(
@@ -90,7 +103,7 @@ export class InvitationsService {
       }
       return { email };
     } catch (error) {
-      const failure = toRequestFailure(error);
+      const failure = toInvitationFailure(error);
       console.warn(`[InvitationsService] Запрошення не пройшло перевірку (${failure})`, error);
       return failure;
     }
@@ -99,9 +112,10 @@ export class InvitationsService {
   /**
    * `POST <server>/api/v1/invitations/accept` (без авторизації) — завершує реєстрацію
    * колеги за токеном запрошення. Повертає пару токенів уже створеного користувача або
-   * причину невдачі (`invalid` — 400: токен недійсний чи дані не пройшли перевірку).
+   * причину невдачі (`invalid` — 400: токен недійсний чи дані не пройшли перевірку; `exists` —
+   * 409: акаунт із поштою запрошення вже є).
    */
-  async accept(server: string, token: string, registration: InvitationRegistration): Promise<AuthTokens | RequestFailure> {
+  async accept(server: string, token: string, registration: InvitationRegistration): Promise<AuthTokens | InvitationFailure> {
     const url = `${server}${API_INVITATIONS_PATH}/accept`;
     try {
       const body = await firstValueFrom(
@@ -116,7 +130,7 @@ export class InvitationsService {
       }
       return tokens;
     } catch (error) {
-      const failure = toRequestFailure(error);
+      const failure = toInvitationFailure(error);
       console.warn(`[InvitationsService] Не вдалося завершити реєстрацію (${failure})`, error);
       return failure;
     }

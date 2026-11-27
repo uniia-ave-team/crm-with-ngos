@@ -19,7 +19,7 @@ namespace Crm.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.14")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -36,18 +36,8 @@ namespace Crm.Infrastructure.Migrations
                     b.Property<Guid>("CustomTableId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("DataType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
                     b.Property<bool>("IsRequired")
                         .HasColumnType("boolean");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -61,9 +51,6 @@ namespace Crm.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CustomTableId", "Key")
-                        .IsUnique();
 
                     b.HasIndex("CustomTableId", "Order");
 
@@ -87,12 +74,20 @@ namespace Crm.Infrastructure.Migrations
 
                     b.Property<JsonObject>("Data")
                         .IsRequired()
-                        .HasColumnType("jsonb");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<string>("Position")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
 
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("jsonb_to_tsvector('simple', \"Data\", '[\"string\",\"numeric\"]')", true);
+                        .HasComputedColumnSql("jsonb_to_tsvector('simple', \"Data\", '[\"string\"]')", true);
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -110,9 +105,13 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasIndex("UpdatedBy");
 
-                    b.HasIndex("CustomTableId", "Id");
+                    b.HasIndex("CustomTableId", "Position")
+                        .IsUnique();
 
-                    b.ToTable("CustomRecord");
+                    b.ToTable("CustomRecord", t =>
+                        {
+                            t.HasCheckConstraint("CK_CustomRecord_Position_NotEmpty", "\"Position\" <> ''");
+                        });
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.CustomTable", b =>
@@ -467,7 +466,10 @@ namespace Crm.Infrastructure.Migrations
 
                     b.HasIndex("UpdatedBy");
 
-                    b.ToTable("TableTemplate");
+                    b.ToTable("TableTemplate", t =>
+                        {
+                            t.HasCheckConstraint("CK_TableTemplate_Fields_IsArray", "\"Fields\" IS NOT NULL AND jsonb_typeof(\"Fields\") = 'array'");
+                        });
                 });
 
             modelBuilder.Entity("Crm.Domain.Entities.Tag", b =>
@@ -622,52 +624,6 @@ namespace Crm.Infrastructure.Migrations
                     b.ToTable("TaskUser", (string)null);
                 });
 
-            modelBuilder.Entity("Crm.Domain.Entities.TemplateField", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DataType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<bool>("IsRequired")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<byte>("Order")
-                        .HasColumnType("smallint");
-
-                    b.Property<Guid>("TemplateId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TemplateId", "Key")
-                        .IsUnique();
-
-                    b.HasIndex("TemplateId", "Order");
-
-                    b.ToTable("TemplateField");
-                });
-
             modelBuilder.Entity("Crm.Domain.Entities.Topic", b =>
                 {
                     b.Property<Guid>("Id")
@@ -723,6 +679,12 @@ namespace Crm.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<JsonObject>("CustomFields")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
                     b.Property<string>("EmergencyContact")
                         .HasMaxLength(250)
                         .HasColumnType("character varying(250)");
@@ -775,6 +737,65 @@ namespace Crm.Infrastructure.Migrations
                     b.ToTable("User");
                 });
 
+            modelBuilder.Entity("Crm.Domain.Entities.UserActionToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EncryptedMetadata")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NormalizedTargetEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("TargetEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("TargetUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<byte>("Type")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("TargetUserId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("Type", "ExpiresAt");
+
+                    b.HasIndex("Type", "NormalizedTargetEmail");
+
+                    b.ToTable("UserActionTokens", (string)null);
+                });
+
             modelBuilder.Entity("Crm.Domain.Entities.UserCustomField", b =>
                 {
                     b.Property<Guid>("Id")
@@ -787,26 +808,23 @@ namespace Crm.Infrastructure.Migrations
                     b.Property<bool>("IsPublic")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("Key")
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<byte>("Order")
+                        .HasColumnType("smallint");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "Key")
-                        .IsUnique();
+                    b.HasIndex("Order");
 
                     b.ToTable("UserCustomField");
                 });
@@ -1289,7 +1307,35 @@ namespace Crm.Infrastructure.Migrations
                         .HasForeignKey("UpdatedBy")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.OwnsMany("Crm.Domain.ValueObjects.TemplateFieldDefinition", "Fields", b1 =>
+                        {
+                            b1.Property<Guid>("TableTemplateId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<bool>("IsRequired");
+
+                            b1.Property<string>("Name")
+                                .IsRequired();
+
+                            b1.Property<byte>("Order");
+
+                            b1.HasKey("TableTemplateId", "__synthesizedOrdinal");
+
+                            b1.ToTable("TableTemplate");
+
+                            b1
+                                .ToJson("Fields")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TableTemplateId");
+                        });
+
                     b.Navigation("Creator");
+
+                    b.Navigation("Fields");
 
                     b.Navigation("Updater");
                 });
@@ -1398,17 +1444,6 @@ namespace Crm.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Crm.Domain.Entities.TemplateField", b =>
-                {
-                    b.HasOne("Crm.Domain.Entities.TableTemplate", "Template")
-                        .WithMany("Fields")
-                        .HasForeignKey("TemplateId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Template");
-                });
-
             modelBuilder.Entity("Crm.Domain.Entities.Topic", b =>
                 {
                     b.HasOne("Crm.Domain.Entities.Project", "Project")
@@ -1436,15 +1471,21 @@ namespace Crm.Infrastructure.Migrations
                     b.Navigation("Ngo");
                 });
 
-            modelBuilder.Entity("Crm.Domain.Entities.UserCustomField", b =>
+            modelBuilder.Entity("Crm.Domain.Entities.UserActionToken", b =>
                 {
-                    b.HasOne("Crm.Domain.Entities.User", "User")
-                        .WithMany("CustomFields")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.HasOne("Crm.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("User");
+                    b.HasOne("Crm.Domain.Entities.User", "TargetUser")
+                        .WithMany()
+                        .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("TargetUser");
                 });
 
             modelBuilder.Entity("Crm.Infrastructure.Entities.AuthRoleClaim", b =>
@@ -1547,11 +1588,6 @@ namespace Crm.Infrastructure.Migrations
                     b.Navigation("Comments");
                 });
 
-            modelBuilder.Entity("Crm.Domain.Entities.TableTemplate", b =>
-                {
-                    b.Navigation("Fields");
-                });
-
             modelBuilder.Entity("Crm.Domain.Entities.TaskComment", b =>
                 {
                     b.Navigation("ReadStates");
@@ -1560,11 +1596,6 @@ namespace Crm.Infrastructure.Migrations
             modelBuilder.Entity("Crm.Domain.Entities.Topic", b =>
                 {
                     b.Navigation("Tasks");
-                });
-
-            modelBuilder.Entity("Crm.Domain.Entities.User", b =>
-                {
-                    b.Navigation("CustomFields");
                 });
 
             modelBuilder.Entity("Crm.Infrastructure.Entities.AuthRole", b =>

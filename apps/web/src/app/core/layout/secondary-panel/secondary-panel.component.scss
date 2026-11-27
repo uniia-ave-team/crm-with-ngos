@@ -36,6 +36,54 @@
   }
 }
 
+// Групи (папки) бази знань відступають від сусідів більше, ніж пункти між собою.
+// Перший пункт дерева бази знань («Головна») — на одній висоті з вітальним блоком «Посібника».
+.tree--kb > li:first-child {
+  margin-top: 6px;
+}
+
+.tree--kb > .tree__group {
+  margin-block: 8px;
+}
+
+// Назва групи — кнопка згортання на всю ширину рядка (поряд лише три крапки).
+.tree__toggle {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+}
+
+// Папка групи; при наведенні чи фокусі — стрілка на її місці.
+.tree__chevron {
+  display: none;
+}
+
+.tree__group-label:hover,
+.tree__group-label:has(:focus-visible) {
+  .tree__folder {
+    display: none;
+  }
+
+  .tree__chevron {
+    display: block;
+  }
+}
+
 .tree__group ul {
   list-style: none;
   margin: 0;
@@ -43,6 +91,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+
+  // Згорнута група: сторінок не видно (display: flex вище перебив би атрибут `hidden`).
+  &[hidden] {
+    display: none;
+  }
 }
 
 .tree__link {
@@ -72,6 +125,105 @@ a.tree__link {
 
   &:hover {
     background: var(--nav-active-bg);
+  }
+}
+
+// Розділ і сторінка бази знань: при наведенні (чи фокусі в рядку) — підложка й три крапки біля
+// назви; назва обрізається трикрапкою, тож панель не ширшає.
+// Фокус — лише з клавіатури (`:focus-visible`): після кліку мишею підсвітка не лишається.
+.tree__row {
+  border-radius: 8px;
+
+  &:hover,
+  &:has(:focus-visible) {
+    background: var(--nav-active-bg);
+
+    .tree__menu {
+      width: 24px;
+      opacity: 1;
+    }
+  }
+}
+
+// Рядок таблиці чи сторінки: посилання на її вид на всю ширину й три крапки поряд (кнопку не можна
+// класти в посилання). Підложку дає сам рядок (наведення, фокус, відкритий вид).
+.tree__row--item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+
+  > .tree__link {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: 0;
+    color: inherit;
+
+    &:hover {
+      background: none;
+    }
+
+    &:focus-visible {
+      outline: none;
+    }
+  }
+
+  &:not(.tree__link--active) {
+    color: var(--nav-fg-inactive);
+  }
+}
+
+.tree__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Три крапки: поки рядок не наведений, кнопка нульової ширини й прозора, але досяжна з клавіатури
+// (фокус у рядку її й показує). На телефоні її видно завжди (див. нижче).
+.tree__menu {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: 24px;
+  margin: -4px 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0;
+
+  &:hover {
+    background: var(--nav-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 1px;
+  }
+}
+
+// Телефон і планшет (до 992px): у рядку лише три крапки — завжди видимі й більші (зручно пальцем);
+// «+» папки там — пункт «Додати в папку» в меню трьох крапок.
+@media (max-width: 991px) {
+  .tree__menu {
+    width: 32px;
+    height: 32px;
+    margin-block: -8px;
+    font-size: 18px;
+    opacity: 1;
+  }
+
+  .tree__add {
+    display: none;
   }
 }
 

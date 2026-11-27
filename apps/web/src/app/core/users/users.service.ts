@@ -1,15 +1,15 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { CreateUserCommand, PagedResultOfUserDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto } from '../../api/generated/models';
+import { CreateUserCommand, PagedResultOfUserDto, PasswordResetDetailsDto, ResetPasswordCommand, TokenResultDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto, UserProfileDto } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService, AuthTokens, toAuthTokens } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
 import { Untrusted } from '../http/api-contract';
-import { RequestFailure, toRequestFailure } from '../http/request-failure';
+import { RequestFailure, UploadFailure, toRequestFailure, toUploadFailure } from '../http/request-failure';
 import { REQUEST_TIMEOUT_MS, UPLOAD_TIMEOUT_MS } from '../http/timeouts';
-import { UserRole, sanitizeRoles } from './user-profile';
+import { UserProfile, UserRole, sanitizeRoles, toUserProfile } from './user-profile';
 
 const API_USERS_PATH = '/api/v1/users';
 
@@ -60,8 +60,18 @@ export interface UsersPage {
 export type CreateUserResult = 'created' | RequestFailure;
 export type ChangePasswordResult = 'changed' | RequestFailure;
 export type UpdateProfileResult = 'updated' | RequestFailure;
-export type UploadAvatarResult = 'uploaded' | RequestFailure;
-/** Результат дії з акаунтом колеги (вимкнення, ввімкнення, видалення). */
+export type UploadAvatarResult = 'uploaded' | UploadFailure;
+/** Найкоротший і найдовший пошуковий рядок, який приймає сервер (`SearchValidationConstants`). */
+export const SEARCH_MIN_LENGTH = 3;
+export const SEARCH_MAX_LENGTH = 100;
+
+/** Посилання для скидання пароля колеги: токен і до коли він діє (ISO-дата; порожньо — сервер не віддав). */
+export interface PasswordResetToken {
+  readonly token: string;
+  readonly expiresAt: string;
+}
+
+/** Результат дії з акаунтом колеги (вимкнення, ввімкнення, видалення, зміна ролі). */
 export type ColleagueAccountResult = 'done' | RequestFailure;
 
 /**
@@ -114,11 +124,101 @@ export class UsersService {
     return this.accountAction('delete', id, '', 'видалити колегу');
   }
 
+  /**
+   * `POST <сервер>/api/v1/users/{id}/password-reset-token` — токен для скидання пароля колеги
+   * (право `CanResetPassword`; 200 з `token` і `expiresAt`). За ним колега задає новий пароль на
+   * сторінці `/reset-password`; поточний пароль діє, доки його не змінять. Повертає токен або
+   * причину невдачі (відповідь без токена — `error`).
+   */
+  async createPasswordResetToken(id: string): Promise<PasswordResetToken | RequestFailure> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}/password-reset-token`;
+    try {
+      const body = await firstValueFrom(this.http.post<Untrusted<TokenResultDto>>(url, null).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      const token = body?.token;
+      if (typeof token !== 'string' || !token) {
+        console.warn('[UsersService] Відповідь без токена скидання пароля', body);
+        return 'error';
+      }
+      const expiresAt = body?.expiresAt;
+      return { token, expiresAt: typeof expiresAt === 'string' ? expiresAt : '' };
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося створити посилання для скидання пароля (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
+   * `GET <server>/api/v1/users/reset-password/validate?Token=…` (без авторизації) — перевіряє
+   * токен із посилання для скидання пароля, перш ніж показати форму, і віддає пошту акаунта, пароль
+   * якого скидають. Сервер явний — як у `resetPassword`. Недійсний, прострочений чи вже використаний
+   * токен — 400 (`invalid`); відповідь без пошти — `error`.
+   */
+  async validatePasswordReset(server: string, token: string): Promise<{ readonly email: string } | RequestFailure> {
+    const url = `${server}${API_USERS_PATH}/reset-password/validate`;
+    try {
+      const body = await firstValueFrom(
+        this.http.get<Untrusted<PasswordResetDetailsDto>>(url, { params: new HttpParams().set('Token', token) }).pipe(timeout(REQUEST_TIMEOUT_MS)),
+      );
+      const email = body?.email;
+      if (typeof email !== 'string' || !email) {
+        console.warn('[UsersService] Відповідь перевірки посилання без пошти');
+        return 'error';
+      }
+      return { email };
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Посилання для скидання пароля не пройшло перевірку (${failure})`);
+      return failure;
+    }
+  }
+
+  /**
+   * `POST <server>/api/v1/users/reset-password` (без авторизації) — новий пароль за токеном із
+   * посилання для скидання пароля (204). Сервер явний: колега відкриває посилання на сторінці
+   * `/reset-password`, можливо, не маючи в браузері акаунта на цьому сервері. 401 — токен
+   * недійсний чи прострочений. 400 буває з двох причин, і їх розрізняємо за тілом відповіді:
+   * - сервер не прийняв пароль (`passwordRejected`): помилка перевірки поля пароля (`errors` з
+   *   `NewPassword`) чи вимог Identity до пароля — форма лишається, пароль можна змінити;
+   * - посиланням уже скористалися (`invalid`): Identity відхилив токен скидання («Invalid token»).
+   * Пароль не логується.
+   */
+  async resetPassword(server: string, token: string, newPassword: string): Promise<'reset' | 'passwordRejected' | RequestFailure> {
+    const url = `${server}${API_USERS_PATH}/reset-password`;
+    try {
+      await firstValueFrom(this.http.post(url, { token, newPassword } satisfies ResetPasswordCommand).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      return 'reset';
+    } catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 400 && isPasswordRejection(error.error)) {
+        return 'passwordRejected';
+      }
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося задати новий пароль (${failure})`);
+      return failure;
+    }
+  }
+
+  /**
+   * `POST <сервер>/api/v1/users/{id}/roles/{roleId}` — дає колезі роль (право
+   * `AssignRoleToUser`; 204).
+   */
+  assignRole(id: string, roleId: string): Promise<ColleagueAccountResult> {
+    return this.accountAction('post', id, `/roles/${encodeURIComponent(roleId)}`, 'дати роль колезі');
+  }
+
+  /**
+   * `DELETE <сервер>/api/v1/users/{id}/roles/{roleId}` — забирає в колеги роль (право
+   * `AssignRoleToUser`; 204).
+   */
+  removeRole(id: string, roleId: string): Promise<ColleagueAccountResult> {
+    return this.accountAction('delete', id, `/roles/${encodeURIComponent(roleId)}`, 'забрати роль у колеги');
+  }
+
   /** Запит дії з акаунтом колеги `id` (`suffix` — що після `/users/{id}`); `what` — для попередження в консолі. */
   private async accountAction(
     method: 'post' | 'delete',
     id: string,
-    suffix: '' | '/deactivate' | '/activate',
+    suffix: '' | '/deactivate' | '/activate' | `/roles/${string}`,
     what: string,
   ): Promise<ColleagueAccountResult> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}${suffix}`;
@@ -137,19 +237,30 @@ export class UsersService {
    * `GET <сервер>/api/v1/users?PageNumber=&PageSize=&ShowDeleted=true[&OrderBy=&SortOrder=]` —
    * одна сторінка колег (потрібне право `ViewUser`) разом із вимкненими акаунтами
    * (`ShowDeleted=true`; без нього сервер їх не віддає, і їх не було б як ввімкнути знову).
+   * Пошук (`searchTerm`, `SearchTerm`) — лише непорожній; сервер шукає за імʼям, прізвищем, по
+   * батькові, телефоном, країною й поштою і приймає від `SEARCH_MIN_LENGTH` до
+   * `SEARCH_MAX_LENGTH` символів (коротший — 400, і це приходить як `invalid`).
    * Сортування (`sort`) передається лише коли воно є й має непорожній `orderBy`. Без
    * нього сервер сортує за `id`, тобто у випадковому для людини порядку, тож сторінка
    * колег завжди передає своє (за замовчуванням — за ПІБ). Елементи без `id`
    * пропускаються; відсутні імена й пошта — порожні рядки. Повертає сторінку або причину невдачі; відповідь без списку
    * `items` вважається помилкою. Токен додає `authInterceptor`.
    */
-  async list(pageNumber: number, pageSize: number, sort: UsersSort | null = null): Promise<UsersPage | RequestFailure> {
+  async list(
+    pageNumber: number,
+    pageSize: number,
+    sort: UsersSort | null = null,
+    searchTerm: string | null = null,
+  ): Promise<UsersPage | RequestFailure> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}`;
 
     try {
       let params = new HttpParams().set('PageNumber', pageNumber).set('PageSize', pageSize).set('ShowDeleted', true);
       if (sort?.orderBy.trim()) {
         params = params.set('OrderBy', sort.orderBy.trim()).set('SortOrder', sort.sortOrder);
+      }
+      if (searchTerm?.trim()) {
+        params = params.set('SearchTerm', searchTerm.trim());
       }
       const body = await firstValueFrom(this.http.get<Untrusted<PagedResultOfUserDto>>(url, { params }).pipe(timeout(REQUEST_TIMEOUT_MS)));
       if (!Array.isArray(body?.items)) {
@@ -164,6 +275,29 @@ export class UsersService {
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[UsersService] Не вдалося отримати колег (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
+   * `GET <сервер>/api/v1/users/{id}` — профіль колеги (право `ViewUser`): ті самі поля, що
+   * й `/users/me`. Екстрений контакт сервер віддає лише з правом `ViewEmergencyContact`
+   * (інакше `null`). Повертає профіль або причину невдачі (`error` — зокрема 404 і відповідь не
+   * за контрактом, див. `toUserProfile`).
+   */
+  async get(id: string): Promise<UserProfile | RequestFailure> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${encodeURIComponent(id)}`;
+    try {
+      const body = await firstValueFrom(this.http.get<Untrusted<UserProfileDto>>(url).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      const profile = toUserProfile(body);
+      if (!profile) {
+        console.warn('[UsersService] Профіль колеги не за контрактом', body);
+        return 'error';
+      }
+      return profile;
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Не вдалося отримати профіль колеги (${failure})`, error);
       return failure;
     }
   }
@@ -193,11 +327,14 @@ export class UsersService {
 
   /**
    * `PUT <сервер>/api/v1/users/me` — оновлення профілю поточного користувача
-   * (лише авторизація, права `UpdateUser` не потрібно; 204 без тіла). Токен
-   * додає `authInterceptor`.
+   * (лише авторизація, права `UpdateUser` не потрібно; 204 без тіла). З `userId` —
+   * `PUT /api/v1/users/{id}`, профіль колеги (право `UpdateUser`); екстрений контакт колеги
+   * сервер змінює лише з правом `ViewEmergencyContact`, інакше лишає наявний (поле з запиту не
+   * бере, тож `null` контакт не стирає). Свій контакт змінити можна завжди. Токен додає
+   * `authInterceptor`.
    */
-  async updateProfile(profile: ProfileUpdate): Promise<UpdateProfileResult> {
-    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me`;
+  async updateProfile(profile: ProfileUpdate, userId: string | null = null): Promise<UpdateProfileResult> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${userPath(userId)}`;
 
     try {
       await firstValueFrom(this.http.put(url, profile).pipe(timeout(REQUEST_TIMEOUT_MS)));
@@ -213,10 +350,11 @@ export class UsersService {
    * `POST <сервер>/api/v1/users/me/avatar` — завантаження аватара поточного
    * користувача (`multipart/form-data`, поле `file`; лише авторизація; 200 без
    * тіла). Передається саме зображення, а не посилання: посилання на нього
-   * призначає сервер, тож новий `avatarUrl` читається з профілю (`GET /users/me`).
+   * призначає сервер, тож новий `avatarUrl` читається з профілю (`GET /users/me`). З `userId` —
+   * `POST /api/v1/users/{id}/avatar`, аватар колеги (право `UpdateUser`).
    */
-  async uploadAvatar(file: File): Promise<UploadAvatarResult> {
-    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/me/avatar`;
+  async uploadAvatar(file: File, userId: string | null = null): Promise<UploadAvatarResult> {
+    const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${userPath(userId)}/avatar`;
 
     try {
       const form = new FormData();
@@ -224,7 +362,7 @@ export class UsersService {
       await firstValueFrom(this.http.post(url, form).pipe(timeout(UPLOAD_TIMEOUT_MS)));
       return 'uploaded';
     } catch (error) {
-      const failure = toRequestFailure(error);
+      const failure = toUploadFailure(error);
       console.warn(`[UsersService] Не вдалося завантажити аватар (${failure})`, error);
       return failure;
     }
@@ -295,4 +433,22 @@ function toUserSummary(item: Untrusted<UserDto>): UserSummary | null {
     roles: sanitizeRoles(item.roles),
     isActive: item.isActive !== false,
   };
+}
+
+/** Частина шляху після `/users/`: власний профіль (`me`) чи колеги (`id`). */
+function userPath(userId: string | null): string {
+  return userId === null ? 'me' : encodeURIComponent(userId);
+}
+
+/**
+ * Відповідь 400 на скидання пароля — через сам пароль, а не через посилання: помилка перевірки, що
+ * стосується пароля (`errors` з ключем на кшталт `NewPassword`), або помилка Identity, що не про
+ * токен (вимоги до пароля). Помилка токена («Invalid token») — посиланням уже скористалися.
+ */
+function isPasswordRejection(body: unknown): boolean {
+  const problem = (body ?? {}) as { errors?: unknown; detail?: unknown };
+  if (problem.errors && typeof problem.errors === 'object') {
+    return Object.keys(problem.errors).some((key) => /password/i.test(key));
+  }
+  return typeof problem.detail === 'string' && !/token/i.test(problem.detail);
 }

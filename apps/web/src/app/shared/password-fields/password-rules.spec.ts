@@ -1,4 +1,4 @@
-import { DEFAULT_PASSWORD_POLICY, PasswordPolicy, isStrongPassword, passwordRules } from './password-rules';
+import { PASSWORD_MAX_LENGTH, isPasswordTooLong, DEFAULT_PASSWORD_POLICY, PasswordPolicy, isStrongPassword, passwordRules } from './password-rules';
 
 describe('password rules', () => {
   const met = (password: string, policy?: PasswordPolicy) =>
@@ -63,6 +63,14 @@ describe('password rules', () => {
       expect(passwordRules(lengthOnly).map((rule) => rule.key)).toEqual(['length']);
       expect(isStrongPassword('x', lengthOnly)).toBe(true);
       expect(isStrongPassword('', lengthOnly)).toBe(false);
+    });
+  });
+
+  describe('the maximum length (the server rejects longer passwords, but does not give the limit)', () => {
+    it('is 128, and a password of exactly that length is not too long', () => {
+      expect(PASSWORD_MAX_LENGTH).toBe(128);
+      expect(isPasswordTooLong('x'.repeat(128))).toBe(false);
+      expect(isPasswordTooLong('x'.repeat(129))).toBe(true);
     });
   });
 });

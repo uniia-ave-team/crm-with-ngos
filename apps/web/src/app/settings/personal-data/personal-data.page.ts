@@ -1,18 +1,10 @@
-import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { TranslateService, TranslatePipe } from '@ngx-translate/core';
-import { IonIcon } from '@ionic/angular';
+import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { AccountsService } from '../../core/accounts/accounts.service';
-import { IMAGE_MAX_BYTES, IMAGE_MAX_MEGABYTES, IMAGE_TYPES, IMAGE_TYPE_NAMES } from '../../core/images/image-types';
 import { CurrentUserService } from '../../core/users/current-user.service';
-import { PRONOUN_CATEGORY } from '../../core/users/pronouns';
-import { UserProfile } from '../../core/users/user-profile';
-import { ProfileUpdate, UsersService } from '../../core/users/users.service';
-import { LANGUAGES, LanguageOption } from '../../core/i18n/languages.generated';
-import { isPhoneNumber } from '../../shared/phone/phone-number';
-import { AvatarComponent } from '../../shared/avatar/avatar.component';
-import { ListTextPipe } from '../../shared/list-text/list-text.pipe';
+import { UsersService } from '../../core/users/users.service';
+import { ProfileFormComponent, ProfileFormValue } from '../../shared/profile-form/profile-form.component';
 
 /**
  * Що показати в блоці над формою за результатом останнього збереження. `avatar.*` —
@@ -28,106 +20,38 @@ type SaveResult =
   | 'avatar.unauthorized'
   | 'avatar.forbidden'
   | 'avatar.unreachable'
-  | 'avatar.error';
-
-const ERROR_PREFIX = 'settings.personal.error.';
-
-/** Вибір у займенниках: один із трьох готових варіантів або «Інше» з власним текстом. */
-export type PronounChoice = 'she' | 'he' | 'they' | 'other';
-
-/** Ключі підписів готових варіантів у мовному файлі. */
-const PRONOUN_LABELS = { she: 'pronounShe', he: 'pronounHe', they: 'pronounThey' } as const;
+  | 'avatar.error'
+  | 'avatar.quotaExceeded';
 
 /**
- * Вкладка «Дані профілю» (`/settings/personal-data`). Поля заповнюються з
- * профілю поточного користувача (`GET /users/me`, його перепитує `authGuard` при
- * кожній зміні сторінки); «Зберегти» перевіряє обовʼязкові поля й шле
- * `PUT /users/me`. Жодних прав для цього не потрібно.
+ * Вкладка «Дані профілю» (`/settings/personal-data`): спільна форма профілю
+ * (`app-profile-form`), заповнена з профілю поточного користувача (`GET /users/me`, його
+ * перепитує `authGuard` при кожній зміні сторінки). «Зберегти» шле `PUT /users/me`. Жодних прав
+ * для цього не потрібно.
  *
- * Аватар у `PUT` завжди `null` (посилання призначає сервер): якщо обрано файл,
+ * Аватар у `PUT` не передається (посилання призначає сервер): якщо обрано файл,
  * після збереження даних іде додатковий запит `POST /users/me/avatar` із самим
  * зображенням; не обрано — цього запиту нема.
  */
 @Component({
   selector: 'app-settings-personal-data',
   templateUrl: './personal-data.page.html',
-  styleUrls: ['../settings-section.scss', '../avatar-block.scss', './personal-data.page.scss'],
-  imports: [FormsModule, AvatarComponent, IonIcon, ListTextPipe, TranslatePipe],
+  styleUrls: ['../settings-section.scss'],
+  imports: [ProfileFormComponent, TranslatePipe],
 })
 export class PersonalDataPage {
   private readonly accounts = inject(AccountsService);
   private readonly currentUser = inject(CurrentUserService);
   private readonly users = inject(UsersService);
-  private readonly translate = inject(TranslateService);
   private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
+  private readonly form = viewChild.required(ProfileFormComponent);
 
   /** Поточний користувач (профіль із `GET /api/v1/users/me`); `null`, доки не завантажено. */
   protected readonly user = this.currentUser.user;
 
-  // Значення полів форми. Заповнюються з профілю (див. effect нижче), доки користувач
-  // нічого не змінив, далі їх змінює він.
-  protected readonly lastName = signal('');
-  protected readonly firstName = signal('');
-  protected readonly patronymic = signal('');
-  protected readonly phone = signal('');
-  protected readonly emergencyContact = signal('');
-  protected readonly country = signal('');
-  /** Код обраної мови інтерфейсу (імʼя файлу перекладів); порожньо — не обрано. */
-  protected readonly preferredLanguage = signal('');
-
-  /**
-   * Мови для списку: усі, для яких є файл перекладів. Якщо в профілі збережено
-   * код, якого в цьому списку нема, він додається як є (назва — сам код), щоб
-   * збереження не стерло чужий вибір.
-   */
-  protected readonly languageOptions = computed<readonly LanguageOption[]>(() => {
-    const current = this.preferredLanguage();
-    return current && !LANGUAGES.some((language) => language.code === current)
-      ? [...LANGUAGES, { code: current, name: current }]
-      : LANGUAGES;
-  });
-
-  // Займенники: один варіант (радіокнопки); «Інше» має власний текст.
-  protected readonly pronounChoice = signal<PronounChoice | null>(null);
-  protected readonly otherPronounsText = signal('');
-  /** Вибрано «Інше» у займенниках: показуємо поле для власних займенників. */
-  protected readonly otherPronouns = computed(() => this.pronounChoice() === 'other');
-
-  /**
-   * Користувач уже змінив щось у полях: свіжий профіль (його перепитують у фоні при кожній
-   * зміні сторінки) поля більше не перезаписує, щоб не стерти введене. Після вдалого
-   * збереження знімається — тоді поля знову показують профіль.
-   */
-  private readonly edited = signal(false);
-
-  /** Була спроба збереження: помилки обовʼязкових полів показуємо лише після неї. */
-  private readonly attempted = signal(false);
   protected readonly saving = signal(false);
   /** Результат останнього збереження (блок над формою); `null` — ще не було. */
   protected readonly result = signal<SaveResult | null>(null);
-
-  // Помилки обовʼязкових полів (ключі перекладу; `null` — помилки нема).
-  private readonly requiredError = (value: () => string) =>
-    computed(() => (this.attempted() && !value().trim() ? `${ERROR_PREFIX}required` : null));
-  protected readonly lastNameError = this.requiredError(() => this.lastName());
-  protected readonly firstNameError = this.requiredError(() => this.firstName());
-
-  /** Телефон необовʼязковий, але якщо вказаний — має бути схожим на номер. */
-  protected readonly phoneError = computed(() => {
-    const phone = this.phone().trim();
-    return this.attempted() && phone && !isPhoneNumber(phone) ? `${ERROR_PREFIX}phoneInvalid` : null;
-  });
-
-  /** Не обрано жодних займенників (обовʼязкове поле — група). */
-  protected readonly pronounsError = computed(() =>
-    this.attempted() && !this.hasAnyPronoun() ? `${ERROR_PREFIX}pronounsRequired` : null,
-  );
-  /** Вибрано «Інше», але власних займенників не вказано. */
-  protected readonly otherPronounsError = computed(() =>
-    this.attempted() && this.otherPronouns() && !this.otherPronounsText().trim()
-      ? `${ERROR_PREFIX}pronounOtherRequired`
-      : null,
-  );
 
   /** Ключ тексту блока над формою. */
   protected readonly resultKey = computed(() => {
@@ -138,113 +62,21 @@ export class PersonalDataPage {
   /** Назва ГО активного акаунта: входить у колір аватара, як і в боковому меню. */
   protected readonly ngoName = computed(() => this.accounts.active()?.ngoName ?? '');
 
-  /** Значення `accept` вибору файлу аватара (типи з `core/images/image-types.ts`). */
-  protected readonly avatarTypes = IMAGE_TYPES.join(',');
-  /** Назви дозволених форматів для підказки й помилки (зʼєднує канал `listText`). */
-  protected readonly imageTypeNames = IMAGE_TYPE_NAMES;
-  /** Найбільший розмір зображення в мегабайтах для підказки й помилки (`{{size}}`). */
-  protected readonly imageMaxMegabytes = IMAGE_MAX_MEGABYTES;
-  /** Ключ помилки під блоком аватара (файл не підійшов); `null` — помилки нема. */
-  protected readonly avatarError = signal<string | null>(null);
-  /** Імʼя обраного файлу аватара; `null` — файл не обрано. */
-  protected readonly fileName = signal<string | null>(null);
-  /** Обраний файл аватара (його надсилає збереження); `null` — файл не обрано. */
-  private readonly chosenAvatar = signal<File | null>(null);
-  private readonly avatarInput = viewChild<ElementRef<HTMLInputElement>>('avatarFile');
-
   /**
-   * Прев'ю обраного зображення (`blob:`-посилання на файл у браузері); `null` —
-   * файл не обрано. Поки воно є, аватар показує його замість поточного.
+   * «Зберегти» (поля форма вже перевірила): `PUT /users/me`. Якщо після цього обрано файл
+   * аватара — додатковий запит `POST /users/me/avatar` із самим зображенням (файл не обрано —
+   * запиту нема); невдача завантаження показується окремим червоним блоком, а файл лишається
+   * обраним для повторної спроби.
    */
-  protected readonly previewUrl = signal<string | null>(null);
-
-  /** Що показує аватар: обране зображення, інакше аватар із профілю. */
-  protected readonly avatarUrl = computed(() => this.previewUrl() ?? this.user()?.avatarUrl);
-
-  constructor() {
-    // Посилання на обране зображення живе, поки відкрита вкладка.
-    inject(DestroyRef).onDestroy(() => this.releasePreview());
-
-    // Профіль (з /users/me чи після збереження) — у поля форми, доки в них нічого не змінювали.
-    effect(() => {
-      const user = this.user();
-      untracked(() => {
-        if (!this.edited()) {
-          this.fillFrom(user);
-        }
-      });
-    });
-  }
-
-  protected onFieldChange(field: { set(value: string): void }, event: Event): void {
-    field.set((event.target as HTMLInputElement).value);
-    this.edited.set(true);
-    this.result.set(null);
-  }
-
-  protected onPronounChange(choice: PronounChoice, event: Event): void {
-    if ((event.target as HTMLInputElement).checked) {
-      this.pronounChoice.set(choice);
-      this.edited.set(true);
-      this.result.set(null);
-    }
-  }
-
-  protected onFileChosen(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0] ?? null;
-    this.releasePreview();
-
-    this.avatarError.set(null);
-
-    // Файл не обрано, він не з дозволених типів (фільтр діалогу можна обійти) або завеликий
-    // для сервера: лишається поточний аватар, а напис «Файлу не обрано.»; для невідповідного
-    // файлу — ще й помилка під блоком.
-    const problem = !file ? null : !IMAGE_TYPES.includes(file.type) ? 'avatarType' : file.size > IMAGE_MAX_BYTES ? 'avatarSize' : null;
-    if (!file || problem) {
-      this.fileName.set(null);
-      this.chosenAvatar.set(null);
-      if (problem) {
-        this.avatarError.set(`${ERROR_PREFIX}${problem}`);
-      }
-      input.value = '';
-      return;
-    }
-    this.fileName.set(file.name);
-    this.chosenAvatar.set(file);
-    this.previewUrl.set(URL.createObjectURL(file));
-  }
-
-  /**
-   * «Зберегти»: перевіряє обовʼязкові поля й, якщо все гаразд, шле `PUT
-   * /users/me`. Порожні необовʼязкові поля йдуть як `null`. Якщо після цього обрано файл
-   * аватара — додатковий запит `POST /users/me/avatar` із самим зображенням
-   * (файл не обрано — запиту нема); невдача завантаження показується окремим
-   * червоним блоком, а файл лишається обраним для повторної спроби.
-   */
-  protected async submit(): Promise<void> {
+  protected async onSave({ profile: body, avatar }: ProfileFormValue): Promise<void> {
     if (this.saving()) {
       return;
     }
-    this.attempted.set(true);
     this.result.set(null);
-    if (
-      this.lastNameError() ||
-      this.firstNameError() ||
-      this.phoneError() ||
-      this.pronounsError() ||
-      this.otherPronounsError()
-    ) {
-      return;
-    }
-    const body = this.buildBody();
     this.saving.set(true);
     const outcome = await this.users.updateProfile(body);
 
     if (outcome === 'updated') {
-      this.attempted.set(false);
-      // Збережене — тепер і є профіль: далі поля знову йдуть за ним.
-      this.edited.set(false);
       // Те, що збережено, одразу видно в меню й знімку акаунта, без нового запиту.
       this.currentUser.applyLocal({
         firstName: body.firstName,
@@ -255,9 +87,12 @@ export class PersonalDataPage {
         emergencyContact: body.emergencyContact,
         preferredLanguage: body.preferredLanguage,
         pronouns: body.pronouns,
+        pronounCategory: body.pronounCategory,
       });
+      // Збережене — тепер і є профіль: далі поля знову йдуть за ним.
+      this.form().markSaved();
       // Результат показуємо після обох запитів: успіх — лише якщо й аватар (за наявності файлу) завантажено.
-      this.result.set((await this.uploadAvatar()) ?? 'success');
+      this.result.set((await this.uploadAvatar(avatar)) ?? 'success');
       this.saving.set(false);
       this.scrollToTop();
       return;
@@ -272,33 +107,20 @@ export class PersonalDataPage {
   /**
    * Другий запит збереження: обраний файл аватара (`POST /users/me/avatar`).
    * Успіх — профіль читається заново (`GET /users/me`: нове посилання на аватар
-   * призначив сервер),
-   * обраний файл і його превʼю забуваються. Повертає результат невдачі (червоний
-   * блок із причиною) або `null`, якщо завантажено чи файлу не було.
+   * призначив сервер), обраний файл і його превʼю забуваються. Повертає результат невдачі
+   * (червоний блок із причиною) або `null`, якщо завантажено чи файлу не було.
    */
-  private async uploadAvatar(): Promise<SaveResult | null> {
-    const file = this.chosenAvatar();
+  private async uploadAvatar(file: File | null): Promise<SaveResult | null> {
     if (!file) {
       return null;
     }
     const outcome = await this.users.uploadAvatar(file);
     if (outcome === 'uploaded') {
-      this.clearAvatarSelection();
+      this.form().clearAvatar();
       await this.currentUser.reload();
       return null;
     }
     return `avatar.${outcome}`;
-  }
-
-  /** Аватар завантажено: обраний файл і превʼю більше не потрібні (тепер аватар — з сервера). */
-  private clearAvatarSelection(): void {
-    this.releasePreview();
-    this.fileName.set(null);
-    this.chosenAvatar.set(null);
-    const input = this.avatarInput()?.nativeElement;
-    if (input) {
-      input.value = '';
-    }
   }
 
   /**
@@ -308,107 +130,5 @@ export class PersonalDataPage {
   private scrollToTop(): void {
     const content = this.host.nativeElement.closest('ion-content') as HTMLIonContentElement | null;
     void content?.scrollToTop?.(300);
-  }
-
-  /** Тіло запиту: порожні рядки — `null`; фото йде окремим запитом. */
-  private buildBody(): ProfileUpdate {
-    const nullable = (value: string) => value.trim() || null;
-    return {
-      // Імʼя й прізвище обовʼязкові (форму без них не надіслати), і сервер приймає їх лише рядками.
-      firstName: this.firstName().trim(),
-      lastName: this.lastName().trim(),
-      patronymic: nullable(this.patronymic()),
-      phoneNumber: nullable(this.phone()),
-      country: nullable(this.country()),
-      emergencyContact: nullable(this.emergencyContact()),
-      preferredLanguage: nullable(this.preferredLanguage()),
-      pronouns: this.pronounsText(),
-      pronounCategory: this.pronounCategory(),
-    };
-  }
-
-  private hasAnyPronoun(): boolean {
-    return this.pronounChoice() !== null;
-  }
-
-  /**
-   * Текст займенників для сервера: підпис обраного варіанта або власний текст
-   * «Інше»; `null`, якщо нічого не обрано чи «Інше» без тексту.
-   */
-  private pronounsText(): string | null {
-    const choice = this.pronounChoice();
-    if (choice === null) {
-      return null;
-    }
-    if (choice === 'other') {
-      return this.otherPronounsText().trim() || null;
-    }
-    return this.label(choice);
-  }
-
-  /** Категорія займенників: за готовим варіантом; «Інше» категорії не має (`null`). */
-  private pronounCategory(): number | null {
-    switch (this.pronounChoice()) {
-      case 'she':
-        return PRONOUN_CATEGORY.feminine;
-      case 'he':
-        return PRONOUN_CATEGORY.masculine;
-      case 'they':
-        return PRONOUN_CATEGORY.neutral;
-      default:
-        return null;
-    }
-  }
-
-  private label(choice: Exclude<PronounChoice, 'other'>): string {
-    return this.translate.instant(`settings.personal.${PRONOUN_LABELS[choice]}`);
-  }
-
-  /** Заповнює поля з профілю; без профілю нічого не робить. */
-  private fillFrom(user: UserProfile | null): void {
-    if (!user) {
-      return;
-    }
-    this.lastName.set(user.lastName ?? '');
-    this.firstName.set(user.firstName ?? '');
-    this.patronymic.set(user.patronymic ?? '');
-    this.phone.set(user.phoneNumber ?? '');
-    this.emergencyContact.set(user.emergencyContact ?? '');
-    this.country.set(user.country ?? '');
-    this.preferredLanguage.set(user.preferredLanguage ?? '');
-    this.fillPronouns(user.pronouns ?? '');
-  }
-
-  /**
-   * Розкладає рядок `pronouns` профілю назад у радіокнопки: точний збіг із
-   * підписом готового варіанта вибирає його, будь-що інше (зокрема кілька
-   * значень, збережених раніше) іде в «Інше» як власний текст.
-   */
-  private fillPronouns(pronouns: string): void {
-    const text = pronouns.trim();
-    if (!text) {
-      this.pronounChoice.set(null);
-      this.otherPronounsText.set('');
-      return;
-    }
-    const known = (Object.keys(PRONOUN_LABELS) as Exclude<PronounChoice, 'other'>[]).find(
-      (choice) => this.label(choice) === text,
-    );
-    if (known) {
-      this.pronounChoice.set(known);
-      this.otherPronounsText.set('');
-    } else {
-      this.pronounChoice.set('other');
-      this.otherPronounsText.set(text);
-    }
-  }
-
-  /** Звільняє памʼять, яку тримає посилання на попереднє обране зображення. */
-  private releasePreview(): void {
-    const url = this.previewUrl();
-    if (url) {
-      URL.revokeObjectURL(url);
-      this.previewUrl.set(null);
-    }
   }
 }

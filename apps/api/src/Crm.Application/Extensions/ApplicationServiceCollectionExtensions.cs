@@ -1,5 +1,6 @@
 using Crm.Application.Common.Behaviors;
 using Crm.Application.Common.Security;
+using Crm.Application.Features.CustomRecords.Services;
 using Crm.Application.Features.Tasks.Services;
 using Crm.Application.Interfaces;
 using FluentValidation;
@@ -20,7 +21,8 @@ public static class ApplicationServiceCollectionExtensions
     /// <remarks>
     /// Pipeline behaviors are executed in the order they are registered:
     /// <list type="number">
-    /// <item><description><see cref="ProjectAuthorizationBehavior{TRequest, TResponse}"/> — enforces project-level permissions and task scoping first.</description></item>
+    /// <item><description><see cref="CurrentUserContextBehavior{TRequest, TResponse}"/> — populates authenticated user ID and role IDs from verified claims first.</description></item>
+    /// <item><description><see cref="ProjectAuthorizationBehavior{TRequest, TResponse}"/> — enforces project-level permissions and task scoping.</description></item>
     /// <item><description><see cref="ValidationBehavior{TRequest, TResponse}"/> — validates authorized requests before execution.</description></item>
     /// <item><description><see cref="TransactionalBehavior{TRequest, TResponse}"/> — handles database transactions for valid, authorized requests.</description></item>
     /// </list>
@@ -31,12 +33,14 @@ public static class ApplicationServiceCollectionExtensions
     {
         services.AddScoped<IProjectAccessService, ProjectAccessService>();
         services.AddScoped<ITaskAssigneeValidator, TaskAssigneeValidator>();
+        services.AddScoped<ICustomRecordPositionService, CustomRecordPositionService>();
 
         services.AddMediator(options =>
         {
             options.ServiceLifetime = ServiceLifetime.Scoped;
             options.PipelineBehaviors =
             [
+                typeof(CurrentUserContextBehavior<,>),
                 typeof(ProjectAuthorizationBehavior<,>),
                 typeof(ValidationBehavior<,>),
                 typeof(TransactionalBehavior<,>),

@@ -1,6 +1,6 @@
 <div class="invitation">
   <header class="invitation__header">
-    <h2 class="invitation__title">{{ 'colleagues.invitation.title' | translate }}</h2>
+    <h2 class="invitation__title">{{ text('title') | translate }}</h2>
     <button
       type="button"
       class="invitation__close"
@@ -13,11 +13,11 @@
     </button>
   </header>
 
-  <p class="invitation__hint">{{ 'colleagues.invitation.hint' | translate }}</p>
+  <p class="invitation__hint">{{ text('hint') | translate }}</p>
 
   <!-- Посилання в один рядок із прокруткою; кнопки копіювання й «Поділитися» стоять після нього й не прокручуються. -->
   <div class="invitation__link-row">
-    <div class="invitation__link" tabindex="0" role="textbox" aria-readonly="true" [attr.aria-label]="'colleagues.invitation.link' | translate">{{ link() }}</div>
+    <div class="invitation__link" tabindex="0" role="textbox" aria-readonly="true" [attr.aria-label]="text('link') | translate">{{ link() }}</div>
     <button
       type="button"
       class="invitation__copy"

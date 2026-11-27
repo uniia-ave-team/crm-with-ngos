@@ -50,6 +50,24 @@ ion-menu {
 
   ion-title {
     font-family: var(--font-secondary-title);
+    // Справа відступ менший: місце біля кнопок шапки потрібне назві (щоб «База знань» з трьома
+    // кнопками стояла в один рядок).
+    padding-inline-end: 4px;
+  }
+
+  // Кнопки шапки («+», менеджер шаблонів, згортання): при наведенні — підложка, як у пунктів меню.
+  // Квадрат 36px (а не 48px Ionic), щоб із трьома кнопками «База знань» уміщалася в один рядок.
+  ion-buttons ion-button {
+    --padding-start: 0;
+    --padding-end: 0;
+    width: 36px;
+    min-width: 0;
+    height: 36px;
+    min-height: 0;
+    --background-hover: var(--nav-active-bg);
+    --background-hover-opacity: 1;
+    --border-radius: 10px;
+    --color-hover: var(--nav-fg-active);
   }
 
   // Довга назва (наприклад, «Мої налаштування») переноситься на другий рядок
@@ -91,6 +109,61 @@ ion-menu {
   // (згортання — суто десктопна поведінка для економії місця під контент).
   ion-menu ion-header {
     display: none;
+  }
+}
+
+// Плаваючі кнопки бази знань — лише на телефоні й планшеті (до 992px), поки бокове меню відкрите: у
+// правому нижньому куті екрана над нижнім меню (76px) і над затемненням меню, менеджер шаблонів над
+// «+». На десктопі вони стоять у шапці поряд із кнопкою згортання. Колір «+» — зелений кнопок
+// «Додати», менеджера шаблонів — синій.
+.shell__menu-fabs {
+  position: fixed;
+  right: 16px;
+  bottom: calc(76px + 16px + env(safe-area-inset-bottom, 0px));
+  z-index: 1100;
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shell__menu-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #32670b;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+}
+
+.shell__menu-fab--templates {
+  background: #146ef4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .shell__menu-fab {
+    background: #478a7f;
+  }
+
+  .shell__menu-fab--templates {
+    background: #2f6fcc;
+  }
+}
+
+@media (max-width: 991px) {
+  .shell__menu-fabs {
+    display: flex;
   }
 }
 

@@ -1,21 +1,18 @@
-using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Entities;
 
 namespace Crm.Application.Dtos.CustomTables;
 
 /// <summary>
-/// Represents a DTO for updating a field definition inside an existing custom table.
+/// Data transfer object for creating or updating a custom table field within a schema synchronization request.
+/// Existing fields are matched by <paramref name="Id"/> while preserving their server-generated immutable key;
+/// new fields omit <paramref name="Id"/> and receive a newly generated key.
 /// </summary>
-/// <param name="Id">The unique identifier of the custom field, or <c>null</c> if appending a new field during table schema update.</param>
-/// <param name="Name">The updated display name of the custom field.</param>
-/// <param name="Key">The unique dictionary key used for internal JSON data serialization and mapping.</param>
-/// <param name="DataType">The designated data type specifying validation rules and UI rendering.</param>
-/// <param name="IsRequired">Indicates whether filling this field is mandatory when creating or updating records.</param>
-/// <param name="Order">The display order sequence position of the field within the custom table schema.</param>
-public record UpdateCustomFieldDto(
+/// <param name="Id">The unique identifier of an existing field to update, or <see langword="null"/> for a new field.</param>
+/// <param name="Name">The human-readable display name of the field.</param>
+/// <param name="IsRequired">Whether a non-null string value is required for this field.</param>
+/// <param name="Order">The zero-based display order of the field.</param>
+public sealed record UpdateCustomFieldDto(
     Guid? Id,
     string Name,
-    string Key,
-    FieldDataType DataType,
     bool IsRequired,
     byte Order) : IIdentifiableField;

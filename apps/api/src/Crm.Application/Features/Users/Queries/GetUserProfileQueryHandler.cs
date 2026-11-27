@@ -4,6 +4,7 @@ using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Extensions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Enums;
+using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,7 @@ namespace Crm.Application.Features.Users.Queries;
 public sealed partial class GetUserProfileQueryHandler(
     IAuthUserRepository authUserRepository,
     IAuthRoleRepository authRoleRepository,
+    IUserCustomFieldRepository userCustomFieldRepository,
     IPermissionService permissionService,
     IFileUrlProvider fileUrlProvider,
     ILogger<GetUserProfileQueryHandler> logger) : IQueryHandler<GetUserProfileQuery, UserProfileDto>
@@ -26,6 +28,8 @@ public sealed partial class GetUserProfileQueryHandler(
 
         var user = await authUserRepository.GetAsync<UserProfileResult>(query.UserId, cancellationToken);
         var roles = await authRoleRepository.GetRolesByUserAsync<RoleDto>(query.UserId, cancellationToken);
+        var schemaFields = await userCustomFieldRepository.GetAllOrderedAsync(cancellationToken);
+        var (allKeys, publicKeys, _) = schemaFields.PartitionSchemaKeys();
 
         LogUserProfileFetched(logger, query.UserId);
 
@@ -41,14 +45,19 @@ public sealed partial class GetUserProfileQueryHandler(
                 AccessRight.ViewEmergencyContact,
                 cancellationToken);
 
-            hasGlobalCustomFieldsAccess = await permissionService.HasAccessAsync(
-                query.CurrentUserRoleIds,
-                AccessRight.ViewCustomFields,
-                cancellationToken);
+            if (allKeys.Length > publicKeys.Length)
+            {
+                hasGlobalCustomFieldsAccess = await permissionService.HasAccessAsync(
+                    query.CurrentUserRoleIds,
+                    AccessRight.ViewCustomFields,
+                    cancellationToken);
+            }
         }
 
         return user.SecureAndEnrich(
             roles,
+            allKeys,
+            publicKeys,
             fileUrlProvider,
             query.CurrentUserId,
             hasGlobalEmergencyContactAccess,

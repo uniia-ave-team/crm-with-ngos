@@ -157,6 +157,41 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
     }
 
     [Fact]
+    public async Task ChangingTheRolesOfAColleagueShouldEndTheirOlderTokensOnlyInThatSandbox()
+    {
+        SkipWithoutDocker();
+        var ct = TestContext.Current.CancellationToken;
+        var coordinator = DemoAccountOptions.Defaults[1];
+
+        // Visitor A signs in as the coordinator and then, in the same browser, as the administrator.
+        using var visitorA = fixture.CreateClient();
+        var coordinatorTokensA = await SignInAsync(visitorA, coordinator);
+        await SignInAsync(visitorA, Admin);
+        Guid coordinatorId = ReadUserId(coordinatorTokensA.AccessToken);
+        using var coordinatorA = fixture.CreateClient();
+        coordinatorA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", coordinatorTokensA.AccessToken);
+
+        // Visitor B works as the same coordinator (the same user id) in a sandbox of their own.
+        using var visitorB = fixture.CreateClient();
+        await SignInAsync(visitorB, coordinator);
+
+        Guid volunteerRoleId = await FindRoleIdAsync(visitorA, DemoAccountOptions.VolunteerRole);
+        (await visitorA.PostAsync($"/api/v1/users/{coordinatorId}/roles/{volunteerRoleId}", content: null, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // The token issued before the change no longer works in sandbox A, a refreshed one does.
+        (await coordinatorA.GetAsync("/api/v1/users/me", ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        coordinatorA.DefaultRequestHeaders.Authorization = null;
+        var refreshed = await coordinatorA.PostAsJsonAsync("/api/v1/auth/refresh-token", coordinatorTokensA, ct);
+        refreshed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var newTokens = (await refreshed.Content.ReadFromJsonAsync<AuthTokensDto>(ct)).ShouldNotBeNull();
+        coordinatorA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", newTokens.AccessToken);
+        (await coordinatorA.GetAsync("/api/v1/users/me", ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // In sandbox B nothing changed for the same user.
+        (await visitorB.GetAsync("/api/v1/users/me", ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task MaintenanceNoticeShouldReachVisitorsFromTheSharedDatabase()
     {
         SkipWithoutDocker();
@@ -250,6 +285,16 @@ public sealed class DemoModeEndToEndTests(DemoModeEndToEndTests.DemoApiFixture f
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         return await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<Guid> FindRoleIdAsync(HttpClient client, string roleName)
+    {
+        using var roles = JsonDocument.Parse(await ListRolesAsync(client));
+
+        return roles.RootElement.GetProperty("items").EnumerateArray()
+            .Where(role => role.GetProperty("name").GetString() == roleName)
+            .Select(role => role.GetProperty("id").GetGuid())
+            .Single();
     }
 
     private static async Task<AuthTokensDto> SignInAsync(HttpClient client, DemoAccountOptions account)

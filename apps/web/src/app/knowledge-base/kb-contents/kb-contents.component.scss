@@ -1,0 +1,204 @@
+// Розміри шрифтів — як на сторінці «Адмін» (`settings-section.scss`): заголовок 24px, заголовки
+// блоків (жирні, шрифт заголовків) і текст — 15px.
+:host {
+  display: block;
+  color: var(--nav-fg-active);
+  font-family: var(--font-menu);
+}
+
+.kb-contents__title {
+  margin: 0 0 28px;
+  font-family: var(--font-login-title);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.kb-contents__intro {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 30px;
+  padding: 18px 16px;
+  border: 1px solid var(--nav-border);
+  border-radius: 20px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.kb-contents__wave {
+  flex: none;
+  font-size: 16px;
+}
+
+// Порожній зміст: ілюстрація й підпис посередині.
+.kb-contents__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin: 48px 0 0;
+  text-align: center;
+}
+
+.kb-contents__empty-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.kb-contents__empty-text {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+// Колонки щонайменше 280px, скільки вміщується; блок не ширший за 360px.
+.kb-contents__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  align-items: start;
+  gap: 30px 48px;
+}
+
+.kb-contents__section {
+  min-width: 0;
+  max-width: 360px;
+}
+
+.kb-contents__section-title {
+  margin: 0 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--nav-fg-inactive);
+  font-family: var(--font-login-title);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.kb-contents__items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 360px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kb-contents__item {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+// Рядок сторінки чи заголовка групи: іконка, назва, три крапки (видно при наведенні чи фокусі).
+// Місце під три крапки є завжди, тож назва переноситься однаково з наведенням і без: блок не
+// ширшає, а довга назва в кілька рядків не стрибає.
+.kb-contents__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 8px;
+
+  // Фокус — лише з клавіатури (`:focus-visible`): після кліку мишею підсвітка не лишається.
+  &:hover,
+  &:has(:focus-visible) {
+    background: var(--nav-active-bg);
+
+    .kb-contents__menu {
+      opacity: 1;
+    }
+  }
+}
+
+// У заголовка групи підложка лише вгорі: лінія під ним лишається на місці.
+.kb-contents__section-title.kb-contents__row {
+  border-radius: 8px 8px 0 0;
+}
+
+// Назва папки завжди виглядає наведеною: підложка, обрис згори й з боків (знизу — та сама лінія)
+// і видимі «+» та три крапки.
+.kb-contents__row--folder {
+  border-top: 1px solid var(--nav-border);
+  border-inline: 1px solid var(--nav-border);
+  background: var(--nav-active-bg);
+
+  .kb-contents__menu {
+    opacity: 1;
+  }
+}
+
+// Посилання на вид таблиці чи сторінки: іконка й назва, на всю ширину рядка (до трьох крапок).
+.kb-contents__link {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+
+  // Фокус видно підложкою всього рядка (`:has(:focus-visible)` вище).
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.kb-contents__icon {
+  flex: none;
+  font-size: 20px;
+}
+
+.kb-contents__name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// Три крапки: поки рядок не наведений, кнопка прозора (місце за нею лишається), але досяжна з
+// клавіатури (фокус у рядку її й показує).
+.kb-contents__menu {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0;
+
+  &:hover {
+    background: var(--nav-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 1px;
+  }
+}
+
+// Телефон і планшет (до 992px): три крапки видно завжди, вони більші (зручно пальцем); «+» папки
+// там нема — це пункт «Додати в папку» в меню трьох крапок.
+@media (max-width: 991px) {
+  .kb-contents__menu {
+    width: 32px;
+    height: 32px;
+    margin-block: -3px;
+    font-size: 20px;
+    opacity: 1;
+  }
+
+  .kb-contents__add {
+    display: none;
+  }
+}

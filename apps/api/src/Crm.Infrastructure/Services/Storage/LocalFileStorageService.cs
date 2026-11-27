@@ -115,11 +115,7 @@ public sealed class LocalFileStorageService(
             ? uploadDirectory
             : Path.Combine(AppContext.BaseDirectory, uploadDirectory);
 
-        string normalized = Path.GetFullPath(resolved);
-
-        return normalized.EndsWith(Path.DirectorySeparatorChar)
-            ? normalized
-            : normalized + Path.DirectorySeparatorChar;
+        return EnsureTrailingSeparator(Path.GetFullPath(resolved));
     }
 
     private async Task<string> SaveValidatedAsync(Stream stream, string name, string folder, CancellationToken cancellationToken)
@@ -160,19 +156,16 @@ public sealed class LocalFileStorageService(
     private string GetSecureFilePath(string folderName, string fileName)
     {
         string baseDirectory = GetTargetDirectory(folderName, NormalizeUploadDirectory(options.Value.UploadDirectory));
-        string fullBaseDirectory = Path.GetFullPath(baseDirectory);
-
-        if (!fullBaseDirectory.EndsWith(Path.DirectorySeparatorChar))
-        {
-            fullBaseDirectory += Path.DirectorySeparatorChar;
-        }
-
+        string fullBaseDirectory = EnsureTrailingSeparator(Path.GetFullPath(baseDirectory));
         string fullFilePath = Path.GetFullPath(Path.Combine(fullBaseDirectory, fileName));
 
         return !fullFilePath.StartsWith(fullBaseDirectory, PathComparison)
             ? throw new UnauthorizedAccessException("Path traversal attempt detected in file name.")
             : fullFilePath;
     }
+
+    private static string EnsureTrailingSeparator(string path)
+        => path.EndsWith(Path.DirectorySeparatorChar) ? path : path + Path.DirectorySeparatorChar;
 
     private static string GetTargetDirectory(string folderName, string normalizedUploadDir)
     {

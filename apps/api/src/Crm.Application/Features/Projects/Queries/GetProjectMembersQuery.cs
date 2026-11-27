@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Crm.Application.Common.Interfaces;
 using Crm.Application.Dtos.Projects;
 using Crm.Domain.Enums;
@@ -9,11 +10,13 @@ namespace Crm.Application.Features.Projects.Queries;
 /// Represents a query to retrieve all members assigned to a project.
 /// </summary>
 /// <param name="ProjectId">The unique identifier of the project.</param>
-/// <param name="CurrentUserId">The unique identifier of the currently authenticated user.</param>
-public record GetProjectMembersQuery(
-    Guid ProjectId,
-    Guid CurrentUserId) : IQuery<List<ProjectMemberDto>>, IProjectScoped
+public record GetProjectMembersQuery(Guid ProjectId)
+    : IQuery<List<ProjectMemberDto>>, IProjectScoped, ICurrentUserAware
 {
+    /// <inheritdoc />
+    [JsonIgnore]
+    public Guid CurrentUserId { get; set; }
+
     /// <inheritdoc />
     Guid? IProjectScoped.ProjectId => ProjectId;
 

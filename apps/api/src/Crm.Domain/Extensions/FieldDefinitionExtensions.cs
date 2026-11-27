@@ -4,42 +4,33 @@ using Crm.Domain.Interfaces.Entities;
 namespace Crm.Domain.Extensions;
 
 /// <summary>
-/// Contains extension methods for validating and normalizing collections of <see cref="IFieldSchema"/>.
+/// Contains extension methods for validating collections of <see cref="IFieldDefinition"/>.
 /// </summary>
 public static class FieldDefinitionExtensions
 {
     /// <summary>
-    /// Validates that the field collection is non-empty, contains unique display orders starting from 0, and has unique keys.
+    /// Validates that the field collection contains unique display orders starting from 0,
+    /// optionally allowing an empty schema collection.
     /// </summary>
-    /// <typeparam name="T">The type of entity implementing <see cref="IFieldSchema"/>.</typeparam>
-    /// <param name="entities">The collection of ordered entities to validate.</param>
-    /// <exception cref="EmptyFieldSchemaException">Thrown when the collection is null or contains no elements.</exception>
+    /// <typeparam name="T">The type implementing <see cref="IFieldDefinition"/>.</typeparam>
+    /// <param name="entities">The collection of ordered field definitions to validate.</param>
+    /// <param name="allowEmpty">When <see langword="true"/>, an empty collection is considered valid.</param>
+    /// <exception cref="DomainValidationException">Thrown when <paramref name="allowEmpty"/> is <see langword="false"/> and the collection is null or empty.</exception>
     /// <exception cref="DuplicateFieldOrderException">Thrown when duplicate display order values are found.</exception>
     /// <exception cref="NonSequentialFieldOrderException">Thrown when order numbers are not sequential starting from zero.</exception>
-    /// <exception cref="DuplicateFieldKeyException">Thrown when duplicate key values are found.</exception>
-    public static void EnsureValidFieldSchema<T>(this IEnumerable<T>? entities)
-        where T : IFieldSchema
+    public static void EnsureValidFieldSchema<T>(this IEnumerable<T>? entities, bool allowEmpty = false)
+        where T : IFieldDefinition
     {
-        if (entities is null)
-        {
-            throw new EmptyFieldSchemaException();
-        }
+        var list = entities as IReadOnlyCollection<T> ?? (entities is null ? [] : [.. entities]);
 
-        var list = entities as IReadOnlyCollection<T> ?? [.. entities];
-        var count = list.Count;
-
-        if (count == 0)
+        if (list.Count == 0)
         {
-            throw new EmptyFieldSchemaException();
-        }
-
-        var keys = new HashSet<string>(count, StringComparer.Ordinal);
-        foreach (var field in list)
-        {
-            if (!keys.Add(field.Key))
+            if (allowEmpty)
             {
-                throw new DuplicateFieldKeyException();
+                return;
             }
+
+            throw new DomainValidationException("A field schema must contain at least one field.");
         }
 
         list.EnsureSequentialOrders(

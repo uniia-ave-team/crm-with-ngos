@@ -1,5 +1,6 @@
 using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
+using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -46,6 +47,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.Avatar)
             .HasMaxLength(UserValidationConstants.MaxAvatarUrlLength);
+
+        builder.Property(u => u.CustomFields)
+            .ConfigureJsonbColumn()
+            .HasDefaultValueSql("'{}'::jsonb");
 
         builder.HasOne(u => u.Ngo)
             .WithMany(n => n.Users)

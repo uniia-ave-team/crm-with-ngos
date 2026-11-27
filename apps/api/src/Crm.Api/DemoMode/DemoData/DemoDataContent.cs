@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Crm.Domain.Entities;
+using Crm.Domain.Entities.Base;
 using Crm.Domain.Enums;
+using Crm.Domain.Extensions;
 
 namespace Crm.Api.DemoMode.DemoData;
 
@@ -29,18 +31,44 @@ internal static class DemoDataContent
     public const string VolunteerTableDescription =
         "Облік волонтерів організації: контакти, навички, зайнятість і статус участі.";
 
-    public const string CityFieldKey = "Місто";
+    /// <summary>
+    /// The name of a user custom field of the shared schema (see <see cref="CreateUserCustomFields"/>).
+    /// </summary>
+    public const string CityFieldName = "Місто";
 
-    public const string FocusFieldKey = "Напрям";
+    /// <inheritdoc cref="CityFieldName"/>
+    public const string FocusFieldName = "Напрям";
 
-    public const string AvailabilityFieldKey = "Доступність";
+    /// <inheritdoc cref="CityFieldName"/>
+    public const string AvailabilityFieldName = "Доступність";
 
-    public const string ShirtSizeFieldKey = "Розмір_футболки";
+    /// <inheritdoc cref="CityFieldName"/>
+    public const string ShirtSizeFieldName = "Розмір футболки";
 
     /// <summary>
     /// How long before the seeding moment the demo organisation was "founded".
     /// </summary>
     public const int NgoAgeDays = 540;
+
+    // The fields of the "База донорів" system template, by name.
+    private const string DonorNameField = "Назва";
+    private const string DonorPrioritiesField = "Напрямки та пріоритети";
+    private const string DonorSubmissionField = "Особливості подання";
+    private const string DonorTermsField = "Терміни";
+    private const string DonorContactsField = "Контакти";
+
+    // The fields of the hand-built volunteer table, by name.
+    private const string VolunteerNameField = "ПІБ";
+    private const string VolunteerPhoneField = "Телефон";
+    private const string VolunteerEmailField = "Електронна пошта";
+    private const string VolunteerCityField = "Місто";
+    private const string VolunteerSkillsField = "Навички";
+    private const string VolunteerJoinedField = "Дата приєднання";
+    private const string VolunteerHoursField = "Годин на тиждень";
+    private const string VolunteerStatusField = "Статус";
+    private const string VolunteerTrainingField = "Пройшов навчання";
+    private const string VolunteerLastContactField = "Останній контакт";
+    private const string VolunteerProfileField = "Анкета";
 
     private const string Country = "Україна";
 
@@ -173,13 +201,30 @@ internal static class DemoDataContent
             : new RoleBlueprint(null, null, VolunteerRights);
 
     /// <summary>
+    /// Builds the shared schema of user custom fields: three fields every colleague sees and one (the shirt size)
+    /// only for those with <c>ViewCustomFields</c>. Every field id is new, so it is created once per database.
+    /// </summary>
+    public static List<UserCustomField> CreateUserCustomFields() =>
+    [
+        new() { Name = CityFieldName, IsRequired = false, IsPublic = true, Order = 0 },
+        new() { Name = FocusFieldName, IsRequired = false, IsPublic = true, Order = 1 },
+        new() { Name = AvailabilityFieldName, IsRequired = false, IsPublic = true, Order = 2 },
+        new() { Name = ShirtSizeFieldName, IsRequired = false, IsPublic = false, Order = 3 },
+    ];
+
+    /// <summary>
     /// Builds the profile of the demo account at the given position in the configured account list.
     /// </summary>
-    public static User CreateAccountProfile(int accountIndex, string accountName, Guid ngoId, DateTimeOffset now)
+    public static User CreateAccountProfile(
+        int accountIndex,
+        string accountName,
+        Guid ngoId,
+        DateTimeOffset now,
+        IReadOnlyList<UserCustomField> userFields)
     {
         if (accountIndex < AccountPersons.Length)
         {
-            return CreateProfile(AccountPersons[accountIndex], ngoId, now);
+            return CreateProfile(AccountPersons[accountIndex], ngoId, now, userFields);
         }
 
         string firstName = accountName.Trim();
@@ -193,13 +238,15 @@ internal static class DemoDataContent
             IsActive = true,
             CreatedAt = now.UtcDateTime,
             NgoId = ngoId,
+            CustomFields = userFields.CreateDefaultPayload(),
         };
     }
 
     /// <summary>
-    /// Builds a filled user profile, including its custom fields, for a fictional person.
+    /// Builds a filled user profile, including its values of the shared custom fields (keyed by field id, as the
+    /// API stores them), for a fictional person.
     /// </summary>
-    public static User CreateProfile(DemoPerson person, Guid ngoId, DateTimeOffset now) => new()
+    public static User CreateProfile(DemoPerson person, Guid ngoId, DateTimeOffset now, IReadOnlyList<UserCustomField> userFields) => new()
     {
         FirstName = person.FirstName,
         LastName = person.LastName,
@@ -219,14 +266,34 @@ internal static class DemoDataContent
         IsActive = person.IsActive,
         CreatedAt = now.UtcDateTime.AddDays(-person.JoinedDaysAgo),
         NgoId = ngoId,
-        CustomFields =
-        [
-            new() { Key = CityFieldKey, Value = person.City, IsPublic = true },
-            new() { Key = FocusFieldKey, Value = person.Focus, IsPublic = true },
-            new() { Key = AvailabilityFieldKey, Value = person.Availability, IsPublic = true },
-            new() { Key = ShirtSizeFieldKey, Value = person.ShirtSize, IsPublic = false },
-        ],
+        CustomFields = ProfileFieldValues(userFields, person),
     };
+
+    /// <summary>
+    /// Turns the values of a table row given by field name into the stored form, keyed by field id (the id as the
+    /// API writes it). Fields without a value are left out, so the payload validation fills them in.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when a value names a field the schema does not have.</exception>
+    public static JsonObject ToFieldValues(IEnumerable<FieldDefinitionBase> fields, IReadOnlyDictionary<string, string?> valuesByName)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        ArgumentNullException.ThrowIfNull(valuesByName);
+
+        var idsByName = fields.ToDictionary(f => f.Name, f => f.Id.ToString(), StringComparer.Ordinal);
+        var data = new JsonObject();
+
+        foreach (var (name, value) in valuesByName)
+        {
+            if (!idsByName.TryGetValue(name, out string? id))
+            {
+                throw new InvalidOperationException($"The demo data fills in the field '{name}', which the schema does not have.");
+            }
+
+            data[id] = value;
+        }
+
+        return data;
+    }
 
     /// <summary>
     /// Builds the e-mail address of a fictional person or organisation under the reserved demo domain.
@@ -239,67 +306,97 @@ internal static class DemoDataContent
     public static string FakePhone(int number) => string.Create(CultureInfo.InvariantCulture, $"+3800000000{number:00}");
 
     /// <summary>
-    /// Builds the rows of the donor table. Keys match the fields of the "База донорів" system template.
+    /// Builds the rows of the donor table: values by the field names of the "База донорів" system template.
     /// </summary>
-    public static List<JsonObject> CreateDonorRecords() =>
+    public static List<Dictionary<string, string?>> CreateDonorRows() =>
     [
-        .. Donors.Select((donor, index) => new JsonObject
+        .. Donors.Select((donor, index) => new Dictionary<string, string?>
         {
-            ["name"] = donor.Name,
-            ["priorities"] = donor.Priorities,
-            ["submission_features"] = donor.SubmissionFeatures,
-            ["terms"] = donor.Terms,
-            ["contacts"] = $"{Email(donor.EmailLocalPart)}, {FakePhone(FirstDonorPhoneNumber + index)}",
+            [DonorNameField] = donor.Name,
+            [DonorPrioritiesField] = donor.Priorities,
+            [DonorSubmissionField] = donor.SubmissionFeatures,
+            [DonorTermsField] = donor.Terms,
+            [DonorContactsField] = $"{Email(donor.EmailLocalPart)}, {FakePhone(FirstDonorPhoneNumber + index)}",
         }),
     ];
 
     /// <summary>
-    /// Builds the schema of the hand-built volunteer table. It uses every field data type the domain supports.
+    /// Builds the schema of the hand-built volunteer table. Every value is text, as the API stores them; the names
+    /// and the order show what each column holds.
     /// </summary>
     public static List<CustomField> CreateVolunteerFields() =>
     [
-        new() { Name = "ПІБ", Key = "full_name", DataType = FieldDataType.Text, IsRequired = true, Order = 0 },
-        new() { Name = "Телефон", Key = "phone", DataType = FieldDataType.PhoneNumber, IsRequired = true, Order = 1 },
-        new() { Name = "Електронна пошта", Key = "email", DataType = FieldDataType.Email, IsRequired = false, Order = 2 },
-        new() { Name = "Місто", Key = "city", DataType = FieldDataType.Text, IsRequired = false, Order = 3 },
-        new() { Name = "Навички", Key = "skills", DataType = FieldDataType.Text, IsRequired = false, Order = 4 },
-        new() { Name = "Дата приєднання", Key = "joined_on", DataType = FieldDataType.Date, IsRequired = true, Order = 5 },
-        new() { Name = "Годин на тиждень", Key = "hours_per_week", DataType = FieldDataType.Number, IsRequired = false, Order = 6 },
-        new() { Name = "Статус", Key = "status", DataType = FieldDataType.Text, IsRequired = true, Order = 7 },
-        new() { Name = "Пройшов навчання", Key = "has_training", DataType = FieldDataType.Boolean, IsRequired = false, Order = 8 },
-        new() { Name = "Останній контакт", Key = "last_contact_at", DataType = FieldDataType.DateTime, IsRequired = false, Order = 9 },
-        new() { Name = "Анкета", Key = "profile_url", DataType = FieldDataType.Url, IsRequired = false, Order = 10 },
+        new() { Name = VolunteerNameField, IsRequired = true, Order = 0 },
+        new() { Name = VolunteerPhoneField, IsRequired = true, Order = 1 },
+        new() { Name = VolunteerEmailField, IsRequired = false, Order = 2 },
+        new() { Name = VolunteerCityField, IsRequired = false, Order = 3 },
+        new() { Name = VolunteerSkillsField, IsRequired = false, Order = 4 },
+        new() { Name = VolunteerJoinedField, IsRequired = true, Order = 5 },
+        new() { Name = VolunteerHoursField, IsRequired = false, Order = 6 },
+        new() { Name = VolunteerStatusField, IsRequired = true, Order = 7 },
+        new() { Name = VolunteerTrainingField, IsRequired = false, Order = 8 },
+        new() { Name = VolunteerLastContactField, IsRequired = false, Order = 9 },
+        new() { Name = VolunteerProfileField, IsRequired = false, Order = 10 },
     ];
 
     /// <summary>
-    /// Builds the rows of the volunteer table. Dates are relative to <paramref name="now"/> so the data never looks stale.
+    /// Builds the rows of the volunteer table: values by field name. Dates are relative to <paramref name="now"/>
+    /// so the data never looks stale, and written as <c>yyyy-MM-dd</c> so they sort as text.
     /// </summary>
-    public static List<JsonObject> CreateVolunteerRecords(DateTimeOffset now)
+    public static List<Dictionary<string, string?>> CreateVolunteerRows(DateTimeOffset now)
     {
         var today = DateOnly.FromDateTime(now.UtcDateTime);
         var lastContactBase = new DateTimeOffset(today.Year, today.Month, today.Day, 10, 30, 0, TimeSpan.Zero);
 
         return
         [
-            .. Volunteers.Select((volunteer, index) => new JsonObject
+            .. Volunteers.Select((volunteer, index) => new Dictionary<string, string?>
             {
-                ["full_name"] = volunteer.FullName,
-                ["phone"] = FakePhone(FirstVolunteerPhoneNumber + index),
-                ["email"] = Email(volunteer.EmailLocalPart),
-                ["city"] = volunteer.City,
-                ["skills"] = volunteer.Skills,
-                ["joined_on"] = today.AddDays(-volunteer.JoinedDaysAgo).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                ["hours_per_week"] = volunteer.HoursPerWeek,
-                ["status"] = volunteer.Status,
-                ["has_training"] = volunteer.HasTraining,
-                ["last_contact_at"] = volunteer.LastContactDaysAgo is { } daysAgo
-                    ? lastContactBase.AddDays(-daysAgo).ToString("O", CultureInfo.InvariantCulture)
+                [VolunteerNameField] = volunteer.FullName,
+                [VolunteerPhoneField] = FakePhone(FirstVolunteerPhoneNumber + index),
+                [VolunteerEmailField] = Email(volunteer.EmailLocalPart),
+                [VolunteerCityField] = volunteer.City,
+                [VolunteerSkillsField] = volunteer.Skills,
+                [VolunteerJoinedField] = today.AddDays(-volunteer.JoinedDaysAgo).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                [VolunteerHoursField] = volunteer.HoursPerWeek.ToString(CultureInfo.InvariantCulture),
+                [VolunteerStatusField] = volunteer.Status,
+                [VolunteerTrainingField] = volunteer.HasTraining ? "Так" : "Ні",
+                [VolunteerLastContactField] = volunteer.LastContactDaysAgo is { } daysAgo
+                    ? lastContactBase.AddDays(-daysAgo).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
                     : null,
-                ["profile_url"] = volunteer.HasProfilePage
+                [VolunteerProfileField] = volunteer.HasProfilePage
                     ? string.Create(CultureInfo.InvariantCulture, $"https://{EmailDomain}/volunteers/{index + 1:00}")
                     : null,
             }),
         ];
+    }
+
+    /// <summary>
+    /// The values of a person for every field of the schema: the demo fields by name, the defaults of the API for
+    /// any other field (an empty text if required, otherwise nothing).
+    /// </summary>
+    private static JsonObject ProfileFieldValues(IReadOnlyList<UserCustomField> userFields, DemoPerson person)
+    {
+        var values = userFields.CreateDefaultPayload();
+
+        foreach (var field in userFields)
+        {
+            string? value = field.Name switch
+            {
+                CityFieldName => person.City,
+                FocusFieldName => person.Focus,
+                AvailabilityFieldName => person.Availability,
+                ShirtSizeFieldName => person.ShirtSize,
+                _ => null,
+            };
+
+            if (value is not null)
+            {
+                values[field.Id.ToString()] = value;
+            }
+        }
+
+        return values;
     }
 
     /// <summary>
