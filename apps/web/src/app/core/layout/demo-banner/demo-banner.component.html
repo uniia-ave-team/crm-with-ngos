@@ -1,10 +1,15 @@
 @if (demo(); as info) {
   <p class="demo-banner" [class.demo-banner--ending]="ending()">
     {{ 'demo.banner' | translate }}
+    <!-- Система ще в розробці: попередження стоїть до відліку, щоб час лишався в кінці рядка. -->
+    {{ 'demo.inDevelopment' | translate }}
     @if (timeLeft(); as time) {
-      <!-- role="timer": екранний диктор не зачитує кожну секунду, але значення доступне. -->
-      {{ 'demo.bannerCountdown' | translate }}
-      <span class="demo-banner__time" role="timer">{{ time }}</span>
+      <!-- Підпис і час не розриваються між рядками. role="timer": екранний диктор не зачитує
+           кожну секунду, але значення доступне. -->
+      <span class="demo-banner__countdown">
+        {{ 'demo.bannerCountdown' | translate }}
+        <span class="demo-banner__time" role="timer">{{ time }}</span>
+      </span>
     } @else {
       {{ 'demo.bannerNoTimer' | translate: { minutes: info.sessionMinutes } }}
     }

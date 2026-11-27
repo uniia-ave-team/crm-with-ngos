@@ -1738,7 +1738,7 @@ describe('LoginPage', () => {
     const demoButtons = (element: HTMLElement) => Array.from(element.querySelectorAll<HTMLIonButtonElement>('.login-demo__account'));
     const formError = (element: HTMLElement) => element.querySelector('.sign-in-form__error')?.textContent?.trim() ?? null;
 
-    it('shows a separate demo block with an explanation and a button for every demo account', () => {
+    it('shows a separate demo block with an explanation, a warning that development goes on and a button for every demo account', () => {
       const { element } = createLogin();
       const block = element.querySelector('.login-demo')!;
 
@@ -1747,6 +1747,10 @@ describe('LoginPage', () => {
       expect(block.querySelector('.login-demo__text')?.textContent?.trim()).toBe(
         uk.demo.login.description.replace('{{minutes}}', '60'),
       );
+      // Попередження — після пояснення, перед кнопками.
+      const note = block.querySelector('.login-demo__note');
+      expect(note?.textContent?.trim()).toBe(uk.demo.inDevelopment);
+      expect(note?.compareDocumentPosition(block.querySelector('.login-demo__account')!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(demoButtons(element).map((button) => button.textContent?.trim())).toEqual(
         demo.accounts.map((account) => uk.demo.login.signInAs.replace('{{name}}', account.name)),
       );
