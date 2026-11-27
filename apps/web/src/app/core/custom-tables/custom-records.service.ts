@@ -33,8 +33,11 @@ export type CustomRecordData = Readonly<Record<string, unknown>>;
 export type CreateCustomRecordResult = { readonly id: string } | RequestFailure;
 /** Запис змінено; `gone` — його вже видалили (404). */
 export type UpdateCustomRecordResult = 'done' | Gone | RequestFailure;
-/** Запис з сервера; `gone` — його вже видалили (404). */
-export type GetCustomRecordResult = CustomRecord | Gone | RequestFailure;
+/** Місце нового запису: між якими записами (`id`); обох нема — у кінці таблиці. */
+export interface CustomRecordPlace {
+  readonly previousRecordId?: string | null;
+  readonly nextRecordId?: string | null;
+}
 
 /**
  * Записи таблиць (`/api/v1/customrecords`): перегляд (`ViewCustomRecord`), створення
@@ -79,9 +82,17 @@ export class CustomRecordsService {
     }
   }
 
-  /** `POST /api/v1/customrecords`: новий запис таблиці `tableId` з даними `data` (усі поля). */
-  async create(tableId: string, data: CustomRecordData): Promise<CreateCustomRecordResult> {
-    const body = { customTableId: tableId, data: { ...data } } satisfies CreateCustomRecordCommand;
+  /**
+   * `POST /api/v1/customrecords`: новий запис таблиці `tableId` з даними `data` (ключі — `id` полів) на
+   * своєму місці: між записами `place.previousRecordId` і `place.nextRecordId` (обох нема — у кінці).
+   */
+  async create(tableId: string, data: CustomRecordData, place: CustomRecordPlace = {}): Promise<CreateCustomRecordResult> {
+    const body = {
+      customTableId: tableId,
+      data: { ...data },
+      previousRecordId: place.previousRecordId ?? null,
+      nextRecordId: place.nextRecordId ?? null,
+    } satisfies CreateCustomRecordCommand;
     try {
       const id = await firstValueFrom(this.http.post<unknown>(this.url(), body, writeRequestOptions()).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return { id: text(id) };
@@ -92,11 +103,14 @@ export class CustomRecordsService {
     }
   }
 
-  /** `PUT /api/v1/customrecords/{id}`: сервер замінює дані запису цілком, тож передаються всі поля. */
+  /**
+   * `PATCH /api/v1/customrecords/{id}`: лише змінені значення (`data`, ключі — `id` полів) — решту
+   * запису сервер лишає як є, тож чужі зміни інших клітинок того самого рядка не затираються.
+   */
   async update(id: string, data: CustomRecordData): Promise<UpdateCustomRecordResult> {
     const body = { data: { ...data } } satisfies UpdateCustomRecordCommand;
     try {
-      await firstValueFrom(this.http.put(`${this.url()}/${encodeURIComponent(id)}`, body, writeRequestOptions()).pipe(timeout(REQUEST_TIMEOUT_MS)));
+      await firstValueFrom(this.http.patch(`${this.url()}/${encodeURIComponent(id)}`, body, writeRequestOptions()).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return 'done';
     } catch (error) {
       if (isGone(error)) {
@@ -104,24 +118,6 @@ export class CustomRecordsService {
       }
       const failure = toRequestFailure(error);
       console.warn(`[CustomRecordsService] Не вдалося змінити запис (${failure})`, error);
-      return failure;
-    }
-  }
-
-  /**
-   * `GET /api/v1/customrecords/{id}`: запис, як він зараз на сервері (перед зміною — щоб не затерти
-   * чужих змін у тому самому рядку). Відповідь, з якої не скласти запис, — `error`.
-   */
-  async get(id: string): Promise<GetCustomRecordResult> {
-    try {
-      const body = await firstValueFrom(this.http.get<Untrusted<CustomRecordDto>>(`${this.url()}/${encodeURIComponent(id)}`).pipe(timeout(REQUEST_TIMEOUT_MS)));
-      return toRecord(body)[0] ?? 'error';
-    } catch (error) {
-      if (isGone(error)) {
-        return 'gone';
-      }
-      const failure = toRequestFailure(error);
-      console.warn(`[CustomRecordsService] Не вдалося отримати запис (${failure})`, error);
       return failure;
     }
   }

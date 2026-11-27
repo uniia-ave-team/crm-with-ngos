@@ -13,7 +13,7 @@ import {
   DataTableSort,
 } from '../../shared/data-table/data-table.component';
 import { PERMISSIONS } from '../../core/auth/permissions';
-import { CustomRecordData, CustomRecordsService, CustomRecordsSort } from '../../core/custom-tables/custom-records.service';
+import { CustomRecordData, CustomRecordPlace, CustomRecordsService, CustomRecordsSort } from '../../core/custom-tables/custom-records.service';
 import {
   CUSTOM_FIELD_NAME_MAX_LENGTH,
   CUSTOM_RECORD_VALUE_MAX_LENGTH,
@@ -24,7 +24,6 @@ import {
   CustomTableUpdate,
   CustomTablesService,
 } from '../../core/custom-tables/custom-tables.service';
-import { uniqueFieldKey } from '../../core/custom-tables/field-keys';
 import { TableTemplatesService } from '../../core/custom-tables/table-templates.service';
 import { KbItemFormComponent, KbItemFormValue } from '../../core/knowledge-base/kb-item-form/kb-item-form.component';
 import { SuccessNoticeService } from '../../core/notice/success-notice.service';
@@ -99,9 +98,8 @@ const cellAction = (item: {
 });
 
 /**
- * Порожня клітинка — порожній рядок: усі значення трактуємо як рядки (тип поля `dataType` і
- * обовʼязковість `isRequired` не враховуємо — на сервері їх приберуть), а порожній рядок сервер
- * приймає й в обовʼязковому текстовому полі.
+ * Порожня клітинка — порожній рядок: значення — рядки, обовʼязковість `isRequired` не враховуємо
+ * (на сервері її приберуть), а порожній рядок сервер приймає й в обовʼязковому полі.
  */
 const EMPTY_VALUE = '';
 
@@ -156,8 +154,9 @@ interface SelectedCell {
  * росте разом із текстом; поки вибрано клітинку, знизу сторінки — смуга дій «Копіювати» й
  * «Очистити», `ActionBarService`) (з `CreateCustomRecord` у порожньому
  * рядку — новий запис, з `UpdateCustomRecord` — наявні записи). Після кожної зміни — 2 секунди тиші
- * (`DebouncedSaver`), тоді запити: опис — `PUT /api/v1/customtables/{id}` (з назвою й незмінною
- * структурою), записи — `POST`/`PUT /api/v1/customrecords` (сервер замінює дані запису цілком).
+ * (`DebouncedSaver`), тоді запити: опис і стовпчики — `PUT /api/v1/customtables/{id}` (поверх
+ * свіжої структури), записи — `POST` (новий — на своєму місці) і `PATCH /api/v1/customrecords/{id}`
+ * (лише змінені клітинки). Значення в записі — за `id` поля.
  * Тег у шапці: від зміни до відповіді — помаранчевий «Зберігаємо зміни» (`cloud-upload-outline`),
  * невдача — червоний «Зміни не збережено» (клік — повторити), потім знову «Зміни збережено».
  * Перед перезавантаженням записів (пошук, сортування), переходом на іншу таблицю й закриттям виду
@@ -235,8 +234,8 @@ export class KbTableComponent {
   /** Ключі записів (`LocalRecord.key`), змінених після останнього збереження. */
   private readonly dirtyRecords = new Set<string>();
   /**
-   * Які саме клітинки змінено тут (ключ запису → ключі полів): перед `PUT` запису беремо свіжий з
-   * сервера й накладаємо лише їх, тож чужі зміни в тому самому рядку не затираються.
+   * Які саме клітинки змінено тут (ключ запису → ключі полів): `PATCH` запису надсилає лише їх, тож
+   * чужі зміни інших клітинок того самого рядка не затираються.
    */
   private readonly dirtyCells = new Map<string, Set<string>>();
   /**
@@ -244,6 +243,8 @@ export class KbTableComponent {
    * (`mergeFields`), щоб накласти їх на свіжу структуру, не видаливши чужих колонок.
    */
   private baseFields: readonly CustomTableField[] = [];
+  /** Надіслана структура з новими полями, справжніх `id` яких ще не дізналися (див. `afterTableSaved`). */
+  private unadoptedFields: readonly CustomTableField[] | null = null;
   /** Номер останнього запиту записів: відповідь на старіший (наприклад, на «фон» після «фонд») відкидається. */
   private recordsRequest = 0;
   private searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -328,6 +329,8 @@ export class KbTableComponent {
   private readonly deleteDialog = viewChild<ModalComponent>('deleteDialog');
   /** Нові рядки (кнопка «Додати рядок знизу»): лічильник для їхніх ключів. */
   private newRowCount = 0;
+  /** Нові стовпчики: лічильник для їхніх тимчасових `id` (`new:N`). */
+  private newFieldCount = 0;
   /** Структуру (поля) змінено: піде з наступним збереженням (`PUT` таблиці). */
   private fieldsDirty = false;
   /** `id` записів на видалення (`DELETE` з наступним збереженням). */
@@ -490,7 +493,7 @@ export class KbTableComponent {
 
   /**
    * Надіслали назву й опис: шаблон зі стовпчиків таблиці (`POST /api/v1/tabletemplates`) — назви
-   * заголовків як є (з форматуванням і кольором тла), ключі й порядок. Успіх — вікно закривається,
+   * заголовків як є (з форматуванням і кольором тла) у їхньому порядку. Успіх — вікно закривається,
    * угорі плашка «Шаблон створено…»; невдача — причина у вікні, воно лишається відкритим.
    */
   protected async submitTemplate(value: KbItemFormValue): Promise<void> {
@@ -501,7 +504,7 @@ export class KbTableComponent {
       name: value.title,
       description: value.description,
       // Порожньої назви сервер не прийме (поки людина ще пише в заголовку).
-      fields: this.fields().map((field) => ({ name: richTextToPlain(field.name).trim() ? field.name : newColumn, key: field.key })),
+      fields: this.fields().map((field) => ({ name: richTextToPlain(field.name).trim() ? field.name : newColumn })),
     });
     this.templateBusy.set(false);
     if (typeof result === 'string') {
@@ -888,18 +891,18 @@ export class KbTableComponent {
   /**
    * Новий текстовий стовпчик праворуч чи ліворуч від поля `field` (з `UpdateCustomTable`): одразу в
    * таблиці, на сервер — з наступним збереженням (`PUT` таблиці з усією структурою; `id` нового поля
-   * — `null`, ключ — унікальний `column_…`).
+   * — `null`). До того поле має тимчасовий `id`, він же ключ значень у записах (`new:N`); після
+   * збереження — справжній `id` з сервера (`adoptFieldIds`).
    */
   private addColumn(field: CustomTableField, side: 'left' | 'right'): void {
     const fields = this.fields();
     const index = fields.findIndex((candidate) => candidate.key === field.key) + (side === 'right' ? 1 : 0);
-    const key = uniqueFieldKey(fields);
+    const key = `${NEW_FIELD_PREFIX}${++this.newFieldCount}`;
     const added: CustomTableField = {
-      id: NEW_FIELD_PREFIX + key,
+      id: key,
       name: this.translate.instant('knowledgeBase.table.newColumn') as string,
       key,
-      // Сервер ще вимагає тип і обовʼязковість: текст, необовʼязкове.
-      dataType: 0,
+      // Обовʼязковість сервер ще вимагає: необовʼязкове.
       isRequired: false,
       order: 0,
     };
@@ -1059,8 +1062,8 @@ export class KbTableComponent {
    *   перейменовані й нові стовпчики; опис — якщо змінювали тут), тоді `PUT`; після нього —
    *   справжні `id` нових полів;
    * - видалені записи — `DELETE`;
-   * - нові записи — `POST`; змінені — свіжий запис з `GET`, на нього — лише змінені тут клітинки,
-   *   тоді `PUT`.
+   * - нові записи — `POST` між своїми сусідами (`placeOf`); змінені — `PATCH` лише змінених тут
+   *   клітинок.
    * Таблицю чи запис уже видалили (404) — повторювати нема чого: таблиця — повідомлення, запис —
    * рядок зникає. Інша невдача лишається незбереженою і піде з наступною зміною (чи повтором з
    * тегу). Повертає, чи вдалося все.
@@ -1098,7 +1101,7 @@ export class KbTableComponent {
       const cells = this.dirtyCells.get(key) ?? new Set<string>();
       this.dirtyCells.delete(key);
       if (record.serverId === null) {
-        const created = await this.recordsService.create(state.table.id, this.recordData(record));
+        const created = await this.recordsService.create(state.table.id, this.recordData(record), this.placeOf(key));
         if (typeof created === 'string' || !created.id) {
           this.requeue(key, cells);
           ok = false;
@@ -1134,13 +1137,14 @@ export class KbTableComponent {
       restore();
       return false;
     }
-    const merged = fieldsChanged ? mergeFields(this.baseFields, this.fields(), fresh.fields) : { fields: fresh.fields, keyChanges: new Map<string, string>() };
-    if (merged.keyChanges.size) {
-      this.renameNewKeys(merged.keyChanges);
+    // Попереднє збереження не дізналося справжніх `id` своїх нових полів — спершу вони.
+    if (this.unadoptedFields) {
+      this.adoptFieldIds(this.unadoptedFields, fresh.fields);
+      this.unadoptedFields = null;
+      this.baseFields = fresh.fields;
     }
-    const result = await this.tables.update(
-      this.tableUpdate({ ...fresh, description: descriptionChanged ? local.description : fresh.description, fields: merged.fields }),
-    );
+    const merged = fieldsChanged ? mergeFields(this.baseFields, this.fields(), fresh.fields) : fresh.fields;
+    const result = await this.tables.update(this.tableUpdate({ ...fresh, description: descriptionChanged ? local.description : fresh.description, fields: merged }));
     if (result === 'gone') {
       return 'gone';
     }
@@ -1148,57 +1152,37 @@ export class KbTableComponent {
       restore();
       return false;
     }
-    await this.afterTableSaved(id, merged.fields);
+    await this.afterTableSaved(id, merged);
     return true;
   }
 
   /**
-   * Запис: свіжий з сервера, на нього — лише змінені тут клітинки (`cells`), тоді `PUT`; показане —
-   * чужими значеннями решти клітинок. Запис уже видалили — рядок зникає. Повертає, чи вдалося.
+   * Запис: лише змінені тут клітинки (`cells`) — `PATCH` (решту запису сервер лишає як є, тож чужі
+   * зміни інших клітинок того самого рядка не затираються). Клітинки нових стовпчиків, яких на
+   * сервері ще нема, лишаються незбереженими до збереження структури. Запис уже видалили — рядок
+   * зникає. Повертає, чи вдалося.
    */
   private async saveRecord(key: string, serverId: string, cells: ReadonlySet<string>): Promise<boolean> {
-    if (!cells.size) {
-      return true;
+    const saved = new Set(this.fields().filter((field) => !isNewField(field)).map((field) => field.key));
+    const sending = [...cells].filter((field) => saved.has(field));
+    const waiting = [...cells].filter((field) => !saved.has(field) && this.fields().some((candidate) => candidate.key === field));
+    if (waiting.length) {
+      this.requeue(key, new Set(waiting));
     }
-    const fresh = await this.recordsService.get(serverId);
-    if (fresh === 'gone') {
-      this.dropRecord(key);
-      return true;
-    }
-    if (typeof fresh === 'string') {
-      this.requeue(key, cells);
-      return false;
+    if (!sending.length) {
+      return !waiting.length;
     }
     const own = this.recordByKey().get(key)?.data ?? {};
-    const data = Object.fromEntries(this.fields().map((field) => [field.key, (cells.has(field.key) ? own[field.key] : fresh.data[field.key]) ?? null]));
-    const result = await this.recordsService.update(serverId, data);
+    const result = await this.recordsService.update(serverId, Object.fromEntries(sending.map((field) => [field, own[field] ?? null])));
     if (result === 'gone') {
       this.dropRecord(key);
       return true;
     }
     if (result !== 'done') {
-      this.requeue(key, cells);
+      this.requeue(key, new Set(sending));
       return false;
     }
-    // Чужі значення решти клітинок — у показане (крім тих, що змінили тут тим часом, і клітинки з курсором).
-    const pending = this.dirtyCells.get(key);
-    const selected = this.selectedCell();
-    this.records.update((records) =>
-      records.map((record) => {
-        if (record.key !== key) {
-          return record;
-        }
-        const next = { ...record.data };
-        for (const [field, value] of Object.entries(data)) {
-          const focused = selected?.key === key && selected.field.key === field;
-          if (!cells.has(field) && !pending?.has(field) && !focused) {
-            next[field] = value;
-          }
-        }
-        return { ...record, data: next };
-      }),
-    );
-    return true;
+    return !waiting.length;
   }
 
   /** Незбережене — назад у чергу (клітинки, змінені тим часом, теж лишаються). */
@@ -1231,19 +1215,39 @@ export class KbTableComponent {
   }
 
   /**
-   * Новим стовпчикам довелося змінити ключ (його тим часом зайняв хтось інший): новий ключ — у
-   * структурі, у даних записів і у вибраній клітинці.
+   * Нові стовпчики отримали справжні `id` на сервері: тимчасовий `id` (`new:N`) нового поля з
+   * надісланого (`sent`) — справжній із `fresh`. Зіставляються за позицією (сервер зберігає порядок,
+   * який надіслали); якщо тим часом структуру змінив ще хтось і позиції не збігаються — за назвою
+   * серед полів, яких у надісланому не було. Новий `id` — у структурі, у ключах даних записів, у
+   * змінених клітинках, у вибраній клітинці й у сортуванні.
    */
-  private renameNewKeys(changes: ReadonlyMap<string, string>): void {
-    const state = this.state();
-    if (state.status !== 'ready') {
+  private adoptFieldIds(sent: readonly CustomTableField[], fresh: readonly CustomTableField[]): void {
+    const ordered = [...fresh].sort((a, b) => Number(a.order) - Number(b.order));
+    const known = new Set(sent.filter((field) => !isNewField(field)).map((field) => field.id));
+    const samePlaces = ordered.length === sent.length && sent.every((field, index) => isNewField(field) || ordered[index].id === field.id);
+    const unclaimed = ordered.filter((field) => !known.has(field.id));
+    const ids = new Map<string, string>();
+    sent.forEach((field, index) => {
+      if (!isNewField(field)) {
+        return;
+      }
+      const match = samePlaces ? ordered[index] : unclaimed.find((candidate) => candidate.name === field.name);
+      if (match) {
+        ids.set(field.key, match.id);
+        unclaimed.splice(unclaimed.indexOf(match), 1);
+      }
+    });
+    if (!ids.size) {
       return;
     }
-    const renamed = (key: string) => changes.get(key) ?? key;
-    this.state.set({
-      status: 'ready',
-      table: { ...state.table, fields: state.table.fields.map((field) => (isNewField(field) ? { ...field, key: renamed(field.key) } : field)) },
-    });
+    const renamed = (key: string) => ids.get(key) ?? key;
+    const state = this.state();
+    if (state.status === 'ready') {
+      this.state.set({
+        status: 'ready',
+        table: { ...state.table, fields: state.table.fields.map((field) => (ids.has(field.key) ? { ...field, id: renamed(field.key), key: renamed(field.key) } : field)) },
+      });
+    }
     this.records.update((records) =>
       records.map((record) => ({ ...record, data: Object.fromEntries(Object.entries(record.data).map(([key, value]) => [renamed(key), value])) })),
     );
@@ -1251,28 +1255,35 @@ export class KbTableComponent {
       this.dirtyCells.set(record, new Set([...cells].map(renamed)));
     }
     const selected = this.selectedCell();
-    if (selected && changes.has(selected.field.key)) {
-      this.selectedCell.set({ ...selected, field: { ...selected.field, key: renamed(selected.field.key) } });
+    if (selected && ids.has(selected.field.key)) {
+      const key = renamed(selected.field.key);
+      this.selectedCell.set({ ...selected, field: { ...selected.field, id: key, key } });
+    }
+    const sort = this.sort();
+    if (sort && ids.has(sort.orderBy)) {
+      this.sort.set({ ...sort, orderBy: renamed(sort.orderBy) });
     }
   }
 
   /**
-   * Після збереження структури: справжні `id` нових полів (без них наступний `PUT` створив би їх
-   * знову) і структура сервера як основа для наступних змін. Стовпчики тут тим часом не змінювали —
-   * показується структура сервера (з чужими змінами); змінювали — лишаються свої, з новими `id`.
+   * Після збереження структури: справжні `id` нових полів (`adoptFieldIds`; без них наступний `PUT`
+   * створив би їх знову) і структура сервера як основа для наступних змін. Стовпчики тут тим часом
+   * не змінювали — показується структура сервера (з чужими змінами); змінювали — лишаються свої.
+   * Свіжої структури отримати не вдалося — `id` нових полів дізнаємося перед наступним збереженням.
    */
   private async afterTableSaved(id: string, sent: readonly CustomTableField[]): Promise<void> {
     const fresh = await this.tables.get(id);
-    const current = this.state();
-    if (typeof fresh === 'string' || current.status !== 'ready') {
-      // Без свіжої структури основа — те, що надіслали (нові поля — ще без `id`, як і в показаному).
+    if (typeof fresh === 'string' || this.state().status !== 'ready') {
+      this.unadoptedFields = sent.some(isNewField) ? sent : null;
       this.baseFields = sent;
       return;
     }
+    this.adoptFieldIds(sent, fresh.fields);
     this.baseFields = fresh.fields;
-    const ids = new Map(fresh.fields.map((field) => [field.key, field.id]));
-    const fields = this.fieldsDirty ? current.table.fields.map((field) => ({ ...field, id: ids.get(field.key) ?? field.id })) : fresh.fields;
-    this.state.set({ status: 'ready', table: { ...current.table, fields } });
+    const current = this.state();
+    if (current.status === 'ready' && !this.fieldsDirty) {
+      this.state.set({ status: 'ready', table: { ...current.table, fields: fresh.fields } });
+    }
   }
 
   /**
@@ -1283,8 +1294,8 @@ export class KbTableComponent {
    * Свіжого запису чи таблиці тут уже не запитати, тож:
    * - структура й опис таблиці при закритті не надсилаються: зі старим списком полів `PUT` міг би
    *   видалити чужі колонки (браузер і так спитав, чи залишити сайт, — `beforeunload`);
-   * - змінений запис — показаний рядок з усіма його клітинками (інші клітинки там — з останньої
-   *   перевірки на зміни).
+   * - змінений запис — лише змінені клітинки (`PATCH`, як і звичайне збереження); новий — на своєму
+   *   місці (`placeOf`).
    * Якщо сторінку не закрили, а відновили з кешу браузера, `id` нових записів приходять як завжди.
    */
   private sendRemainingOnClose(): void {
@@ -1309,19 +1320,21 @@ export class KbTableComponent {
       if (!record) {
         continue;
       }
-      const data = this.recordData(record);
+      const saved = new Set(this.fields().filter((field) => !isNewField(field)).map((field) => field.key));
+      const cells = [...(this.dirtyCells.get(key) ?? [])].filter((field) => saved.has(field));
+      const data = record.serverId === null ? this.recordData(record) : Object.fromEntries(cells.map((field) => [field, record.data[field] ?? null]));
       if (!fits(data)) {
         return;
       }
       this.dirtyRecords.delete(key);
       this.dirtyCells.delete(key);
       if (record.serverId === null) {
-        void this.recordsService.create(state.table.id, data).then((created) => {
+        void this.recordsService.create(state.table.id, data, this.placeOf(key)).then((created) => {
           if (typeof created !== 'string' && created.id) {
             this.records.update((records) => records.map((candidate) => (candidate.key === key ? { ...candidate, serverId: created.id } : candidate)));
           }
         });
-      } else {
+      } else if (cells.length) {
         void this.recordsService.update(record.serverId, data);
       }
     }
@@ -1342,9 +1355,24 @@ export class KbTableComponent {
     };
   }
 
-  /** Дані запису для сервера — лише поля таблиці (значення видаленого стовпчика сервер не прийняв би). */
+  /**
+   * Дані нового запису для сервера — лише поля, що вже є на сервері (значень видаленого чи ще не
+   * збереженого стовпчика сервер не прийняв би).
+   */
   private recordData(record: LocalRecord): CustomRecordData {
-    return Object.fromEntries(this.fields().map((field) => [field.key, record.data[field.key] ?? null]));
+    return Object.fromEntries(this.fields().filter((field) => !isNewField(field)).map((field) => [field.key, record.data[field.key] ?? null]));
+  }
+
+  /**
+   * Місце нового запису на сервері — між найближчими збереженими сусідами в показаному порядку
+   * (новий рядок під вибраним лишається там і після перезавантаження).
+   */
+  private placeOf(key: string): CustomRecordPlace {
+    const records = this.records();
+    const index = records.findIndex((record) => record.key === key);
+    const previous = records.slice(0, Math.max(index, 0)).reverse().find((record) => record.serverId !== null);
+    const next = index < 0 ? undefined : records.slice(index + 1).find((record) => record.serverId !== null);
+    return { previousRecordId: previous?.serverId ?? null, nextRecordId: next?.serverId ?? null };
   }
 
   private currentTable(): CustomTableDetails | null {

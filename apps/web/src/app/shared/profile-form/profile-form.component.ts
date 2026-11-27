@@ -263,7 +263,8 @@ export class ProfileFormComponent {
       patronymic: nullable(this.patronymic()),
       phoneNumber: nullable(this.phone()),
       country: nullable(this.country()),
-      // Без поля (нема права бачити контакт) — `null`: сервер тоді контакт не змінює.
+      // Без поля (нема права `ViewEmergencyContact`) — `null`: у профілі колеги сервер тоді лишає
+      // наявний контакт (без цього права чужий контакт не змінити; свій — завжди можна).
       emergencyContact: this.showEmergencyContact() ? nullable(this.emergencyContact()) : null,
       preferredLanguage: nullable(this.preferredLanguage()),
       pronouns: this.pronounsText(),

@@ -60,11 +60,10 @@ const KNOWLEDGE_BASE_RIGHTS: Record<KnowledgeBaseItemType, { create: Permission;
   folder: null,
 };
 
-/** Ключ першого (й поки єдиного) стовпчика таблиці без шаблону: сервер вимагає хоча б один. */
-export const EMPTY_TABLE_FIELD_KEY = 'name';
-
-/** Результат дії: виконано, не вдалося (як у запиту) чи тип ще не підтримується (`unsupported`). */
-/** `gone` — матеріал уже видалили (наприклад, на іншому пристрої). */
+/**
+ * Результат дії: виконано, не вдалося (як у запиту), тип ще не підтримується (`unsupported`) чи
+ * матеріал уже видалили, наприклад на іншому пристрої (`gone`).
+ */
 export type KnowledgeBaseResult = 'done' | RequestFailure | 'unsupported' | 'gone';
 
 /**
@@ -223,13 +222,7 @@ export class KnowledgeBaseService {
               name: draft.title,
               description: draft.description,
               fields: [
-                {
-                  name: this.translate.instant('knowledgeBase.dialogs.add.emptyTableField') as string,
-                  key: EMPTY_TABLE_FIELD_KEY,
-                  dataType: 0,
-                  isRequired: false,
-                  order: 0,
-                },
+                { name: this.translate.instant('knowledgeBase.dialogs.add.emptyTableField') as string, isRequired: false, order: 0 },
               ],
             });
         result = typeof created === 'string' ? created : 'done';

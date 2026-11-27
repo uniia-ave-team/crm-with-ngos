@@ -24,7 +24,8 @@ export interface MergeGuard {
  * лишається тим самим обʼєктом, а в зміненому — лише змінені значення (тож перемальовуються лише
  * змінені клітинки). Порядок — як на сервері; нові записи додаються, видалені на сервері зникають.
  * Рядки з незбереженими змінами лишаються як є, клітинка з курсором — теж, новий рядок, ще не
- * створений на сервері (`serverId` — `null`), — у кінці.
+ * створений на сервері (`serverId` — `null`), — після свого сусіда згори (як у показаному; сусіда
+ * нема — у кінці).
  */
 export function mergeRecords(local: readonly LocalRecord[], server: readonly CustomRecord[], guard: MergeGuard): readonly LocalRecord[] {
   const byServerId = new Map(local.filter((record) => record.serverId !== null).map((record) => [record.serverId!, record]));
@@ -49,8 +50,14 @@ export function mergeRecords(local: readonly LocalRecord[], server: readonly Cus
   // Видалений на сервері рядок із незбереженими змінами лишається (зміна піде, і сервер відповість).
   const serverIds = new Set(server.map((record) => record.id));
   const keptDirty = local.filter((record) => record.serverId !== null && !serverIds.has(record.serverId) && guard.dirtyKeys.has(record.key));
-  const unsaved = local.filter((record) => record.serverId === null);
-  const result = [...merged, ...keptDirty, ...unsaved];
+  const result = [...merged, ...keptDirty];
+  local.forEach((record, index) => {
+    if (record.serverId !== null) {
+      return;
+    }
+    const above = index > 0 ? result.findIndex((candidate) => candidate.key === local[index - 1].key) : -1;
+    result.splice(above >= 0 ? above + 1 : result.length, 0, record);
+  });
   // Нічого не змінилося — той самий масив (без зайвого перемальовування).
   return result.length === local.length && result.every((record, index) => record === local[index]) ? local : result;
 }

@@ -70,6 +70,7 @@ describe('authInterceptor', () => {
     ['POST', '/api/v1/users'],
     ['GET', '/api/v1/invitations/validate'],
     ['POST', '/api/v1/invitations/accept'],
+    ['GET', '/api/v1/users/reset-password/validate'],
     ['POST', '/api/v1/users/reset-password'],
   ])('leaves %s %s anonymous', async (method, path) => {
     storeTokens(jwt(600), 'refresh');

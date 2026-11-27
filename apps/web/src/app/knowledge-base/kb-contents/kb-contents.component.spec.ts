@@ -62,6 +62,18 @@ describe('KbContentsComponent', () => {
     expect(intro.querySelector('.kb-contents__wave')?.getAttribute('aria-hidden')).toBe('true');
   });
 
+  it('says it is empty yet, with the light and the dark picture, when there is nothing but the home page', () => {
+    const { element, host } = renderWithHost();
+    expect(element.querySelector('.kb-contents__empty')).toBeNull();
+    host.entries.set([{ id: 'h', type: 'home', title: '' }]);
+    TestBed.tick();
+    const empty = element.querySelector('.kb-contents__empty')!;
+    expect(text(empty.querySelector('.kb-contents__empty-text'))).toBe(uk.knowledgeBase.empty);
+    expect(empty.querySelector('img')?.getAttribute('src')).toBe('assets/empty_light.svg');
+    expect(empty.querySelector('source')?.getAttribute('srcset')).toBe('assets/empty_dark.svg');
+    expect(empty.querySelector('source')?.getAttribute('media')).toBe('(prefers-color-scheme: dark)');
+  });
+
   it('puts the groups into the grid in their order and all the materials without a folder into one column, without the home page', () => {
     const fixture = TestBed.createComponent(HostComponent);
     fixture.componentInstance.entries.update((entries) => [

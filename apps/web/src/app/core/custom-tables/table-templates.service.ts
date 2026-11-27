@@ -6,7 +6,7 @@ import {
   CreateTableTemplateCommand,
   PagedResultOfTableTemplateDto,
   TableTemplateDto,
-  TemplateFieldDto,
+  FieldDefinitionDto,
   UpdateTableTemplateCommand,
 } from '../../api/generated/models';
 import { ConnectionService } from '../connection/connection.service';
@@ -25,11 +25,9 @@ export interface TableTemplateOption {
   readonly name: string;
 }
 
-/** Поле (стовпчик) шаблону: назва, ключ і позиція. */
+/** Поле (стовпчик) шаблону: назва й позиція (окремого `id` чи ключа поля в шаблоні сервер не має). */
 export interface TableTemplateField {
-  readonly id: string;
   readonly name: string;
-  readonly key: string;
   readonly order: number;
 }
 
@@ -40,21 +38,21 @@ export interface TableTemplate extends TableTemplateOption {
   readonly fields: readonly TableTemplateField[];
 }
 
-/** Новий шаблон: назва, опис і назви стовпчиків з ключами в їхньому порядку. */
+/** Новий шаблон: назва, опис і назви стовпчиків у їхньому порядку. */
 export interface NewTableTemplate {
   readonly name: string;
   readonly description: string | null;
-  readonly fields: readonly { readonly name: string; readonly key: string }[];
+  readonly fields: readonly { readonly name: string }[];
 }
 
 /** Створено шаблон (його `id`) чи ні. */
 export type CreateTableTemplateResult = { readonly id: string } | RequestFailure;
 
-/** Шаблон для `PUT`: назва, опис і всі стовпчики в їхньому порядку (новий — з `id: null`). */
+/** Шаблон для `PUT`: назва, опис і всі стовпчики в їхньому порядку (структура замінюється цілком). */
 export interface TableTemplateUpdate {
   readonly name: string;
   readonly description: string | null;
-  readonly fields: readonly { readonly id: string | null; readonly name: string; readonly key: string }[];
+  readonly fields: readonly { readonly name: string }[];
 }
 
 export type TableTemplateResult = 'done' | RequestFailure;
@@ -98,15 +96,14 @@ export class TableTemplatesService {
   }
 
   /**
-   * `POST /api/v1/tabletemplates`: шаблон зі стовпчиками `fields` у їхньому порядку. Тип і
-   * обовʼязковість сервер ще вимагає — усі поля текстові й необовʼязкові (на сервері їх приберуть,
-   * усе — рядки).
+   * `POST /api/v1/tabletemplates`: шаблон зі стовпчиками `fields` у їхньому порядку; обовʼязковість
+   * сервер ще вимагає — усі поля необовʼязкові (на сервері її приберуть).
    */
   async create(template: NewTableTemplate): Promise<CreateTableTemplateResult> {
     const body = {
       name: template.name,
       description: template.description,
-      fields: template.fields.map((field, order) => ({ name: field.name, key: field.key, dataType: 0, isRequired: false, order })),
+      fields: template.fields.map((field, order) => ({ name: field.name, isRequired: false, order })),
     } satisfies CreateTableTemplateCommand;
     try {
       const id = await firstValueFrom(
@@ -121,15 +118,14 @@ export class TableTemplatesService {
   }
 
   /**
-   * `PUT /api/v1/tabletemplates/{id}`: назва, опис і всі стовпчики (наявні — з `id`, нові — з
-   * `id: null`; стовпчика, якого нема в списку, сервер видаляє). Тип і обовʼязковість — як у
-   * `create`: текстові, необовʼязкові.
+   * `PUT /api/v1/tabletemplates/{id}`: назва, опис і всі стовпчики в їхньому порядку — структура
+   * шаблону замінюється цілком (`id` у полів шаблону нема). Обовʼязковість — як у `create`.
    */
   async update(id: string, template: TableTemplateUpdate): Promise<TableTemplateResult> {
     const body = {
       name: template.name,
       description: template.description,
-      fields: template.fields.map((field, order) => ({ id: field.id, name: field.name, key: field.key, dataType: 0, isRequired: false, order })),
+      fields: template.fields.map((field, order) => ({ name: field.name, isRequired: false, order })),
     } satisfies UpdateTableTemplateCommand;
     try {
       await firstValueFrom(this.http.put(this.url(id), body, writeRequestOptions()).pipe(timeout(REQUEST_TIMEOUT_MS)));
@@ -164,13 +160,11 @@ function toTemplate(value: Untrusted<TableTemplateDto>): TableTemplate[] {
   if (!id || !name) {
     return [];
   }
-  const fields = (Array.isArray(value?.fields) ? (value.fields as Untrusted<TemplateFieldDto>[]) : [])
+  const fields = (Array.isArray(value?.fields) ? (value.fields as Untrusted<FieldDefinitionDto>[]) : [])
     .flatMap((field): TableTemplateField[] => {
-      const fieldId = text(field?.id);
       const fieldName = text(field?.name);
-      const key = text(field?.key);
       const order = Number(field?.order);
-      return fieldId && fieldName && key && Number.isFinite(order) ? [{ id: fieldId, name: fieldName, key, order }] : [];
+      return fieldName && Number.isFinite(order) ? [{ name: fieldName, order }] : [];
     })
     .sort((a, b) => a.order - b.order);
   return [{ id, name, description: text(value?.description) || null, isSystemPreset: value?.isSystemPreset === true, fields }];

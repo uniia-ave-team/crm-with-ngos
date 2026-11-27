@@ -27,8 +27,9 @@ describe('KbTableComponent', () => {
     name: 'Назва з сервера',
     description: 'Опис таблиці',
     fields: [
-      { id: 'c2', name: 'Підписано', key: 'signed', dataType: 2, isRequired: false, order: 1 },
-      { id: 'c1', name: 'Назва', key: 'name', dataType: 0, isRequired: true, order: 0 },
+      // Значення в записі — за `id` поля (тож `key` — це `id`).
+      { id: 'signed', name: 'Підписано', key: 'signed', isRequired: false, order: 1 },
+      { id: 'name', name: 'Назва', key: 'name', isRequired: true, order: 0 },
     ],
   };
 
@@ -61,12 +62,6 @@ describe('KbTableComponent', () => {
     TestBed.inject(HttpTestingController).expectOne(KNOWLEDGE_BASE_SAMPLE_URL).flush(entries);
     await loading;
     const fixture = TestBed.createComponent(KbTableComponent);
-    // Свіжий запис перед збереженням — за замовчуванням такий, як зараз у виді (чужих змін нема).
-    const view = fixture.componentInstance as unknown as { records(): readonly { serverId: string | null; data: Record<string, unknown> }[] };
-    vi.spyOn(TestBed.inject(CustomRecordsService), 'get').mockImplementation(async (recordId) => {
-      const record = view.records().find((candidate) => candidate.serverId === recordId);
-      return record ? { id: recordId, data: record.data } : 'gone';
-    });
     fixture.componentRef.setInput('id', id);
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
@@ -321,13 +316,13 @@ describe('KbTableComponent', () => {
       await saver.flush();
       await settle();
       // Незаповнені поля — порожні рядки.
-      expect(create).toHaveBeenCalledWith('t1', { name: 'Фонд', signed: '' });
+      expect(create).toHaveBeenCalledWith('t1', { name: 'Фонд', signed: '' }, { previousRecordId: null, nextRecordId: null });
 
       type(inputs()[1], 'Так');
       await saver.flush();
       await settle();
       expect(create).toHaveBeenCalledTimes(1);
-      expect(update).toHaveBeenCalledWith('r1', { name: 'Фонд', signed: 'Так' });
+      expect(update).toHaveBeenCalledWith('r1', { signed: 'Так' });
     });
 
     it('saves at once when the tab is hidden, sends what is left at once when the page is closed, and asks before leaving unsaved', async () => {
@@ -349,7 +344,7 @@ describe('KbTableComponent', () => {
       try {
         // Вкладку сховали — зберігаємо одразу, не чекаючи двох секунд.
         document.dispatchEvent(new Event('visibilitychange'));
-        await vi.waitFor(() => expect(create).toHaveBeenCalledWith('t1', { name: 'Фонд', signed: '' }));
+        await vi.waitFor(() => expect(create).toHaveBeenCalledWith('t1', { name: 'Фонд', signed: '' }, { previousRecordId: null, nextRecordId: null }));
         await saver.flush();
         await settle();
         expect(leave()).toBe(false);
@@ -357,7 +352,7 @@ describe('KbTableComponent', () => {
         // Сторінку закривають — решта йде одразу (тут же, а не з наступним збереженням).
         type(inputs()[1], 'Так');
         window.dispatchEvent(new Event('pagehide'));
-        expect(update).toHaveBeenCalledWith('r1', { name: 'Фонд', signed: 'Так' });
+        expect(update).toHaveBeenCalledWith('r1', { signed: 'Так' });
         await saver.flush();
         expect(update).toHaveBeenCalledTimes(1);
       } finally {
@@ -366,7 +361,7 @@ describe('KbTableComponent', () => {
     });
 
     describe('changes made meanwhile elsewhere are not lost', () => {
-      const email = { id: 'c3', name: 'Email', key: 'email', dataType: 0, isRequired: false, order: 2 };
+      const email = { id: 'email', name: 'Email', key: 'email', isRequired: false, order: 2 };
 
       it('keeps a column added by somebody else when only the description changed here', async () => {
         const update = vi.spyOn(TestBed.inject(CustomTablesService), 'update').mockResolvedValue('done');
@@ -375,7 +370,7 @@ describe('KbTableComponent', () => {
         type(element.querySelector<HTMLTextAreaElement>('textarea.kb-table__description')!, 'Новий опис');
         await saver.flush();
         await settle();
-        expect(update.mock.lastCall![0].fields.map((field) => field.key)).toEqual(['signed', 'name', 'email']);
+        expect(update.mock.lastCall![0].fields.map((field) => field.id)).toEqual(['signed', 'name', 'email']);
       });
 
       it('puts a new column here next to its neighbour, keeping a column added by somebody else', async () => {
@@ -387,35 +382,47 @@ describe('KbTableComponent', () => {
         TestBed.inject(ActionBarService).content()!.choose('addColumnRight', document.createElement('button'));
         await saver.flush();
         await settle();
-        expect(update.mock.lastCall![0].fields.map((field) => [field.id, field.key])).toEqual([
-          ['c1', 'name'],
-          [null, 'column_3'],
-          ['c2', 'signed'],
-          ['c3', 'email'],
+        expect(update.mock.lastCall![0].fields.map((field) => [field.id, field.name])).toEqual([
+          ['name', 'Назва'],
+          [null, uk.knowledgeBase.table.newColumn],
+          ['signed', 'Підписано'],
+          ['email', 'Email'],
         ]);
       });
 
-      it('changes only the cells changed here, keeping a cell somebody else changed in the same row', async () => {
+      it('sends only the cells changed here (PATCH), so a cell somebody else changed in the same row stays', async () => {
         const update = vi.spyOn(TestBed.inject(CustomRecordsService), 'update').mockResolvedValue('done');
         const { element, type, saver, settle } = await renderEditable(editor, [{ id: 'r1', data: { name: 'Фонд', signed: '' } }]);
-        // Тим часом інший змінив «Підписано».
-        vi.mocked(TestBed.inject(CustomRecordsService).get).mockResolvedValue({ id: 'r1', data: { name: 'Фонд', signed: 'Так' } });
         type(element.querySelector<HTMLElement>('tbody .kb-cell')!, 'Фонд «Надія»');
         await saver.flush();
         await settle();
-        expect(update).toHaveBeenCalledWith('r1', { name: 'Фонд «Надія»', signed: 'Так' });
-        // Чуже значення — і в показаному.
-        expect(element.querySelectorAll('tbody .kb-cell')[1].textContent).toBe('Так');
+        expect(update).toHaveBeenCalledWith('r1', { name: 'Фонд «Надія»' });
+      });
+
+      it('creates a new row between its saved neighbours, so it keeps its place after a reload', async () => {
+        const create = vi.spyOn(TestBed.inject(CustomRecordsService), 'create').mockResolvedValue({ id: 'r3' });
+        const { element, saver, settle, fixture } = await renderEditable(
+          [...editor, 'Permissions.DeleteCustomRecord'],
+          [
+            { id: 'r1', data: { name: 'Перший', signed: '' } },
+            { id: 'r2', data: { name: 'Другий', signed: '' } },
+          ],
+        );
+        element.querySelector<HTMLElement>('tbody .kb-cell')!.dispatchEvent(new FocusEvent('focus'));
+        fixture.detectChanges();
+        TestBed.inject(ActionBarService).content()!.choose('addRowBelow', document.createElement('button'));
+        await saver.flush();
+        await settle();
+        expect(create).toHaveBeenCalledWith('t1', { name: '', signed: '' }, { previousRecordId: 'r1', nextRecordId: 'r2' });
       });
 
       it('takes a row deleted elsewhere off the table instead of trying it again', async () => {
-        const update = vi.spyOn(TestBed.inject(CustomRecordsService), 'update');
+        const update = vi.spyOn(TestBed.inject(CustomRecordsService), 'update').mockResolvedValue('gone');
         const { element, type, saver, settle } = await renderEditable(editor, [{ id: 'r1', data: { name: 'Фонд', signed: '' } }]);
-        vi.mocked(TestBed.inject(CustomRecordsService).get).mockResolvedValue('gone');
         type(element.querySelector<HTMLElement>('tbody .kb-cell')!, 'Фонд «Надія»');
         await saver.flush();
         await settle();
-        expect(update).not.toHaveBeenCalled();
+        expect(update).toHaveBeenCalledTimes(1);
         expect(saver.state()).toBe('saved');
         // Записів не лишилося — під заголовками порожній рядок.
         expect(element.querySelector('tbody .kb-cell')?.textContent).toBe('');
@@ -462,7 +469,7 @@ describe('KbTableComponent', () => {
     });
 
     it('turns off adding columns at 50 (the server takes no more)', async () => {
-      const many = Array.from({ length: 50 }, (_, order) => ({ id: `f${order}`, name: `Поле ${order}`, key: `field_${order}`, dataType: 0, isRequired: false, order }));
+      const many = Array.from({ length: 50 }, (_, order) => ({ id: `f${order}`, name: `Поле ${order}`, key: `f${order}`, isRequired: false, order }));
       vi.spyOn(TestBed.inject(CustomTablesService), 'get').mockResolvedValue({ ...table, fields: many });
       vi.spyOn(TestBed.inject(CustomRecordsService), 'listAll').mockResolvedValue([]);
       const { element, settle, fixture } = await render('t1', editor);
@@ -491,7 +498,7 @@ describe('KbTableComponent', () => {
       await saver.flush();
       await settle();
       expect(update).toHaveBeenCalledTimes(2);
-      expect(update).toHaveBeenLastCalledWith('r1', { name: 'Фонд 2', signed: false });
+      expect(update).toHaveBeenLastCalledWith('r1', { name: 'Фонд 2' });
       expect(tag(element).textContent?.trim()).toBe(uk.knowledgeBase.table.saved);
     });
 
@@ -644,7 +651,7 @@ describe('KbTableComponent', () => {
       fixture.detectChanges();
       await saver.flush();
       await settle();
-      expect(update).toHaveBeenLastCalledWith('r1', { name: '☐', signed: true });
+      expect(update).toHaveBeenLastCalledWith('r1', { name: '☐' });
       const box = element.querySelector<HTMLInputElement>('tbody td:nth-child(1) input.kb-cell--check')!;
       expect(box.checked).toBe(false);
 
@@ -652,7 +659,7 @@ describe('KbTableComponent', () => {
       box.dispatchEvent(new Event('change'));
       await saver.flush();
       await settle();
-      expect(update).toHaveBeenLastCalledWith('r1', { name: '☑', signed: true });
+      expect(update).toHaveBeenLastCalledWith('r1', { name: '☑' });
 
       select(box);
       expect(item('checkbox').labelKey).toBe('knowledgeBase.table.cellActions.removeCheckbox');
@@ -661,7 +668,7 @@ describe('KbTableComponent', () => {
       await saver.flush();
       await settle();
       // «Назва» обовʼязкова — порожній рядок.
-      expect(update).toHaveBeenLastCalledWith('r1', { name: '', signed: true });
+      expect(update).toHaveBeenLastCalledWith('r1', { name: '' });
       expect(element.querySelector('tbody td:nth-child(1) input.kb-cell--check')).toBeNull();
     });
 
@@ -723,7 +730,7 @@ describe('KbTableComponent', () => {
       await saver.flush();
       await settle();
       // «Назва» обовʼязкова — порожній рядок, а не `null`.
-      expect(update).toHaveBeenCalledWith('r1', { name: '', signed: true });
+      expect(update).toHaveBeenCalledWith('r1', { name: '' });
       expect(cell.innerHTML).toBe('');
     });
 
@@ -735,7 +742,7 @@ describe('KbTableComponent', () => {
       expect(element.querySelectorAll('tbody tr')).toHaveLength(2);
       await saver.flush();
       await settle();
-      expect(create).toHaveBeenCalledWith('t1', { name: '', signed: '' });
+      expect(create).toHaveBeenCalledWith('t1', { name: '', signed: '' }, { previousRecordId: 'r1', nextRecordId: null });
     });
 
     it('asks before deleting the row, then deletes it on the server with the next save', async () => {
@@ -767,11 +774,11 @@ describe('KbTableComponent', () => {
       await saver.flush();
       await settle();
       const fields = update.mock.lastCall![0].fields;
-      expect(fields.map((field) => [field.id, field.key, field.order])).toEqual([
-        [null, 'column_3', 0],
-        ['c1', 'name', 1],
-        [null, 'column_4', 2],
-        ['c2', 'signed', 3],
+      expect(fields.map((field) => [field.id, field.name, field.order])).toEqual([
+        [null, uk.knowledgeBase.table.newColumn, 0],
+        ['name', 'Назва', 1],
+        [null, uk.knowledgeBase.table.newColumn, 2],
+        ['signed', 'Підписано', 3],
       ]);
 
       choose('deleteColumn');
@@ -861,7 +868,7 @@ describe('KbTableComponent', () => {
       expect(cell.innerHTML).toBe('Фонд');
       await component.saver.flush();
       await settle();
-      expect(update).toHaveBeenCalledWith('r1', { name: '<div style="background-color: #fde2e4">Фонд</div>', signed: true });
+      expect(update).toHaveBeenCalledWith('r1', { name: '<div style="background-color: #fde2e4">Фонд</div>' });
     });
 
     it('colours and formats a cell with a check box as a whole, and keeps that when it is switched', async () => {
@@ -881,7 +888,7 @@ describe('KbTableComponent', () => {
       box().dispatchEvent(new Event('change'));
       await component.saver.flush();
       await settle();
-      expect(update).toHaveBeenLastCalledWith('r1', { name: 'Фонд', signed: '<div style="background-color: #fde2e4"><b>☐</b></div>' });
+      expect(update).toHaveBeenLastCalledWith('r1', { signed: '<div style="background-color: #fde2e4"><b>☐</b></div>' });
       expect(box().checked).toBe(false);
     });
   });
@@ -973,7 +980,7 @@ describe('KbTableComponent', () => {
     async function renderWithTemplateDialog() {
       vi.spyOn(TestBed.inject(CustomTablesService), 'get').mockResolvedValue({
         ...table,
-        fields: [...table.fields, { id: 'c3', name: '<b>Сума</b>', key: 'amount', dataType: 1, isRequired: true, order: 2 }],
+        fields: [...table.fields, { id: 'amount', name: '<b>Сума</b>', key: 'amount', isRequired: true, order: 2 }],
       });
       vi.spyOn(TestBed.inject(CustomRecordsService), 'listAll').mockResolvedValue([]);
       const rendered = await render('t1', ['Permissions.ViewCustomRecord', 'Permissions.CreateTableTemplate']);
@@ -1006,9 +1013,9 @@ describe('KbTableComponent', () => {
         name: 'Донори',
         description: null,
         fields: [
-          { name: 'Назва', key: 'name' },
-          { name: 'Підписано', key: 'signed' },
-          { name: '<b>Сума</b>', key: 'amount' },
+          { name: 'Назва' },
+          { name: 'Підписано' },
+          { name: '<b>Сума</b>' },
         ],
       });
       fixture.detectChanges();

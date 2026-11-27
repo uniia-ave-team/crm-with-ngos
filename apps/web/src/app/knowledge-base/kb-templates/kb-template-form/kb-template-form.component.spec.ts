@@ -15,8 +15,8 @@ describe('KbTemplateFormComponent', () => {
     description: 'Опис',
     isSystemPreset: false,
     fields: [
-      { id: 'c1', name: 'Назва', key: 'name', order: 0 },
-      { id: 'c2', name: 'Терміни', key: 'terms', order: 1 },
+      { name: 'Назва', order: 0 },
+      { name: 'Терміни', order: 1 },
     ],
   };
 
@@ -104,9 +104,9 @@ describe('KbTemplateFormComponent', () => {
         name: 'Своя',
         description: 'Опис',
         fields: [
-          { id: 'c1', name: '<b>Назва</b> фонду', key: 'name' },
-          { id: null, name: `<div style="background-color: #fde2e4">${uk.knowledgeBase.table.newColumn}</div>`, key: 'column_4' },
-          { id: null, name: uk.knowledgeBase.table.newColumn, key: 'column_3' },
+          { name: '<b>Назва</b> фонду' },
+          { name: `<div style="background-color: #fde2e4">${uk.knowledgeBase.table.newColumn}</div>` },
+          { name: uk.knowledgeBase.table.newColumn },
         ],
       },
     ]);
@@ -127,7 +127,7 @@ describe('KbTemplateFormComponent', () => {
 
   it('cleans the column names from the server before they get into the headers', () => {
     const fixture = TestBed.createComponent(KbTemplateFormComponent);
-    fixture.componentRef.setInput('template', { ...template, fields: [{ id: 'c1', name: '<img src="x" onerror="alert(1)"><i style="color:red">Назва</i>', key: 'name', order: 0 }] });
+    fixture.componentRef.setInput('template', { ...template, fields: [{ name: '<img src="x" onerror="alert(1)"><i style="color:red">Назва</i>', order: 0 }] });
     fixture.detectChanges();
     const head = (fixture.nativeElement as HTMLElement).querySelector('.kb-template-form__head')!;
     expect(head.innerHTML).toBe('<i>Назва</i>');

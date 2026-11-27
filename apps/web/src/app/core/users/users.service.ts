@@ -2,7 +2,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
-import { CreateUserCommand, PagedResultOfUserDto, ResetPasswordCommand, TokenResultDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto, UserProfileDto } from '../../api/generated/models';
+import { CreateUserCommand, PagedResultOfUserDto, PasswordResetDetailsDto, ResetPasswordCommand, TokenResultDto, UpdatePasswordCommand, UpdateUserProfileCommand, UserDto, UserProfileDto } from '../../api/generated/models';
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService, AuthTokens, toAuthTokens } from '../auth/auth.service';
 import { ConnectionService } from '../connection/connection.service';
@@ -144,6 +144,31 @@ export class UsersService {
     } catch (error) {
       const failure = toRequestFailure(error);
       console.warn(`[UsersService] Не вдалося створити посилання для скидання пароля (${failure})`, error);
+      return failure;
+    }
+  }
+
+  /**
+   * `GET <server>/api/v1/users/reset-password/validate?Token=…` (без авторизації) — перевіряє
+   * токен із посилання для скидання пароля, перш ніж показати форму, і віддає пошту акаунта, пароль
+   * якого скидають. Сервер явний — як у `resetPassword`. Недійсний, прострочений чи вже використаний
+   * токен — 400 (`invalid`); відповідь без пошти — `error`.
+   */
+  async validatePasswordReset(server: string, token: string): Promise<{ readonly email: string } | RequestFailure> {
+    const url = `${server}${API_USERS_PATH}/reset-password/validate`;
+    try {
+      const body = await firstValueFrom(
+        this.http.get<Untrusted<PasswordResetDetailsDto>>(url, { params: new HttpParams().set('Token', token) }).pipe(timeout(REQUEST_TIMEOUT_MS)),
+      );
+      const email = body?.email;
+      if (typeof email !== 'string' || !email) {
+        console.warn('[UsersService] Відповідь перевірки посилання без пошти');
+        return 'error';
+      }
+      return { email };
+    } catch (error) {
+      const failure = toRequestFailure(error);
+      console.warn(`[UsersService] Посилання для скидання пароля не пройшло перевірку (${failure})`);
       return failure;
     }
   }
@@ -304,8 +329,9 @@ export class UsersService {
    * `PUT <сервер>/api/v1/users/me` — оновлення профілю поточного користувача
    * (лише авторизація, права `UpdateUser` не потрібно; 204 без тіла). З `userId` —
    * `PUT /api/v1/users/{id}`, профіль колеги (право `UpdateUser`); екстрений контакт колеги
-   * сервер змінює лише з правом `ViewEmergencyContact`, інакше поле ігнорує. Токен
-   * додає `authInterceptor`.
+   * сервер змінює лише з правом `ViewEmergencyContact`, інакше лишає наявний (поле з запиту не
+   * бере, тож `null` контакт не стирає). Свій контакт змінити можна завжди. Токен додає
+   * `authInterceptor`.
    */
   async updateProfile(profile: ProfileUpdate, userId: string | null = null): Promise<UpdateProfileResult> {
     const url = `${this.connection.serverUrl()}${API_USERS_PATH}/${userPath(userId)}`;

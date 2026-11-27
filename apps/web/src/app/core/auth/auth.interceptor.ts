@@ -26,6 +26,7 @@ const ANONYMOUS_REQUESTS: ReadonlyArray<{ method?: string; path: string }> = [
   { method: 'GET', path: '/api/v1/invitations/validate' },
   { method: 'POST', path: '/api/v1/invitations/accept' },
   // Новий пароль за посиланням: колега відкриває його без входу в акаунт.
+  { method: 'GET', path: '/api/v1/users/reset-password/validate' },
   { method: 'POST', path: '/api/v1/users/reset-password' },
 ];
 

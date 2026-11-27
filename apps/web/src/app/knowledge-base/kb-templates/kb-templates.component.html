@@ -41,7 +41,7 @@
               <table class="kb-template__grid" [attr.aria-label]="template.name">
                 <thead>
                   <tr>
-                    @for (field of template.fields; track field.id) {
+                    @for (field of template.fields; track $index) {
                       @let colors = headerColors(field.name);
                       <th
                         scope="col"

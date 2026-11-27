@@ -7,7 +7,6 @@ import {
   CUSTOM_TABLE_MAX_FIELDS,
   CUSTOM_TABLE_NAME_MAX_LENGTH,
 } from '../../../core/custom-tables/custom-tables.service';
-import { uniqueFieldKey } from '../../../core/custom-tables/field-keys';
 import { TableTemplate, TableTemplateUpdate } from '../../../core/custom-tables/table-templates.service';
 import { ActionBarComponent } from '../../../shared/action-bar/action-bar.component';
 import { ActionBarContent, ActionBarItem } from '../../../shared/action-bar/action-bar.service';
@@ -17,12 +16,10 @@ import { PopoverComponent } from '../../../shared/popover/popover.component';
 import { RichTextDirective, RichTextFormat, formatSelection } from '../../../shared/rich-text/rich-text.directive';
 import { joinBackground, richTextToPlain, sanitizeRichText, splitBackground } from '../../../shared/rich-text/rich-text';
 
-/** Стовпчик у формі: сталий ключ рядка `uid` (курсор не злітає), `id` на сервері (`null` — новий). */
+/** Стовпчик у формі: сталий локальний ключ `uid` (курсор не злітає) і назва (`id` у полів шаблону нема). */
 interface EditableField {
   readonly uid: string;
-  readonly id: string | null;
   readonly name: string;
-  readonly key: string;
 }
 
 /**
@@ -47,8 +44,9 @@ const ICONS: Readonly<Record<ColumnAction, string>> = {
  * (редагований блок із форматуванням виділеного, `appRichText`); порожня після виходу — «Новий
  * стовпчик». Над рядком — вбудована смуга дій (`app-action-bar`) для вибраного стовпчика, як у
  * таблиці: колір тла (кружок, вікно вибору кольору), курсив, підкреслення, закреслення
- * («Напівжирного» нема: заголовки й так напівжирні); «Додати стовпчик справа», «… зліва» (ключ `column_N`), «Видалити стовпчик»
- * (останній — ні: сервер вимагає хоча б одне поле). Зміни йдуть на сервер лише з «Зберегти»
+ * («Напівжирного» нема: заголовки й так напівжирні); «Додати стовпчик справа», «… зліва», «Видалити стовпчик»
+ * (останній — ні: сервер вимагає хоча б одне поле). Структура шаблону замінюється цілком (`id` у
+ * полів шаблону нема). Зміни йдуть на сервер лише з «Зберегти»
  * (`submitted`), тож видалення стовпчика не перепитується: вікно можна закрити без збереження.
  */
 @Component({
@@ -80,7 +78,7 @@ export class KbTemplateFormComponent {
   protected readonly title = linkedSignal(() => this.template().name);
   protected readonly description = linkedSignal(() => this.template().description ?? '');
   protected readonly fields = linkedSignal<readonly EditableField[]>(() =>
-    this.template().fields.map((field) => ({ uid: field.id, id: field.id, name: field.name, key: field.key })),
+    this.template().fields.map((field, index) => ({ uid: `field-${index}`, name: field.name })),
   );
   /** Вибраний стовпчик (`uid`) і його заголовок; `null` — нічого. */
   protected readonly selected = signal<{ readonly uid: string; readonly element: HTMLElement } | null>(null);
@@ -183,11 +181,7 @@ export class KbTemplateFormComponent {
       name: this.title().trim(),
       description: this.description().trim() || null,
       // Порожньої назви сервер не прийме.
-      fields: this.fields().map((field) => ({
-        id: field.id,
-        name: richTextToPlain(field.name).trim() ? field.name : this.newColumnName(),
-        key: field.key,
-      })),
+      fields: this.fields().map((field) => ({ name: richTextToPlain(field.name).trim() ? field.name : this.newColumnName() })),
     });
   }
 
@@ -222,7 +216,7 @@ export class KbTemplateFormComponent {
   private addColumn(uid: string, offset: number): void {
     const fields = this.fields();
     const index = fields.findIndex((field) => field.uid === uid) + offset;
-    const added: EditableField = { uid: `new-${++this.newCount}`, id: null, name: this.newColumnName(), key: uniqueFieldKey(fields) };
+    const added: EditableField = { uid: `new-${++this.newCount}`, name: this.newColumnName() };
     this.fields.set([...fields.slice(0, index), added, ...fields.slice(index)]);
     afterNextRender(() => this.host.querySelectorAll<HTMLElement>('.kb-template-form__head')[index]?.focus(), { injector: this.injector });
   }

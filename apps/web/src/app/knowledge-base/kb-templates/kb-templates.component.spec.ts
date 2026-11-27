@@ -21,8 +21,8 @@ describe('KbTemplatesComponent', () => {
     description: 'Опис шаблону',
     isSystemPreset: true,
     fields: [
-      { id: 'c1', name: 'Назва', key: 'name', order: 0 },
-      { id: 'c2', name: 'Терміни', key: 'terms', order: 1 },
+      { name: 'Назва', order: 0 },
+      { name: 'Терміни', order: 1 },
     ],
   };
 
@@ -84,7 +84,7 @@ describe('KbTemplatesComponent', () => {
 
   it('shows the column names with their formatting and background colour, as in the table', async () => {
     vi.spyOn(TestBed.inject(TableTemplatesService), 'listAll').mockResolvedValue([
-      { ...donors, fields: [{ id: 'c1', name: '<div style="background-color: #fde2e4"><b>Назва</b> фонду</div>', key: 'name', order: 0 }] },
+      { ...donors, fields: [{ name: '<div style="background-color: #fde2e4"><b>Назва</b> фонду</div>', order: 0 }] },
     ]);
     const { element, settle } = await render();
     await settle();
@@ -125,7 +125,7 @@ describe('KbTemplatesComponent', () => {
       const form = await dialog(KbTemplateFormComponent);
       expect(form.template()).toEqual(own);
 
-      const value = { name: 'Нова', description: null, fields: [{ id: 'c1', name: 'Назва', key: 'name' }] };
+      const value = { name: 'Нова', description: null, fields: [{ name: 'Назва' }] };
       form.submitted.emit(value);
       await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
       expect(update).toHaveBeenCalledWith('tpl2', value);

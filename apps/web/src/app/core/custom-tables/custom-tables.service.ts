@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 
 import {
-  CreateCustomFieldDto,
+  FieldDefinitionDto,
   CreateCustomTableCommand,
   CreateCustomTableFromTemplateCommand,
   CustomFieldDto,
@@ -43,7 +43,18 @@ export interface CustomTableSummary {
 }
 
 /** Поле (стовпчик) таблиці в тому вигляді, у якому його повертають серверу в `PUT` без змін. */
-export type CustomTableField = UpdateCustomFieldDto & { readonly id: string };
+/**
+ * Поле (стовпчик) таблиці: `id` на сервері, назва, обовʼязковість і позиція. `key` — ключ значень поля
+ * в даних запису: сервер ключує їх `id` поля, тож для поля з сервера `key` — це його `id`; новому
+ * полю, ще не створеному на сервері, клієнт дає тимчасовий ключ, а після збереження — справжній `id`.
+ */
+export interface CustomTableField {
+  readonly id: string;
+  readonly name: string;
+  readonly key: string;
+  readonly isRequired: boolean;
+  readonly order: number;
+}
 
 /** Таблиця з `GET /api/v1/customtables/{id}`: назва, опис і структура (поля). */
 export interface CustomTableDetails {
@@ -58,6 +69,7 @@ export interface CustomTableUpdate {
   readonly id: string;
   readonly name: string;
   readonly description: string | null;
+  /** Усі поля в їхньому порядку; нове — з `id: null`. */
   readonly fields: readonly UpdateCustomFieldDto[];
 }
 
@@ -65,7 +77,7 @@ export interface CustomTableUpdate {
 export interface NewCustomTable {
   readonly name: string;
   readonly description: string | null;
-  readonly fields: readonly CreateCustomFieldDto[];
+  readonly fields: readonly FieldDefinitionDto[];
 }
 
 /** Нова таблиця за шаблоном. */
@@ -166,7 +178,9 @@ export class CustomTablesService {
    * сервер видаляє).
    */
   async update(table: CustomTableUpdate): Promise<UpdateCustomTableResult> {
-    const body = { name: table.name, description: table.description, fields: [...table.fields] } satisfies UpdateCustomTableCommand;
+    // Лише поля контракту (локальний ключ значень `key` серверу не потрібен).
+    const fields = table.fields.map(({ id, name, isRequired, order }) => ({ id, name, isRequired, order }));
+    const body = { name: table.name, description: table.description, fields } satisfies UpdateCustomTableCommand;
     try {
       await firstValueFrom(this.http.put(this.url(table.id), body, writeRequestOptions()).pipe(timeout(REQUEST_TIMEOUT_MS)));
       return 'done';
@@ -223,18 +237,13 @@ function toDetails(value: Untrusted<CustomTableDto>): CustomTableDetails | null 
   return { id, name, description: text(value?.description) || null, fields: fields as CustomTableField[] };
 }
 
-/** Поле таблиці, як його треба віддати в `PUT`; щось не того типу — `null` (структуру не відправляємо). */
+/** Поле таблиці з відповіді сервера; щось не того типу — `null` (структуру не відправляємо). */
 function toField(value: Untrusted<CustomFieldDto>): CustomTableField | null {
-  const { id, name, key, dataType, isRequired, order } = value ?? {};
-  if (
-    typeof id !== 'string' ||
-    typeof name !== 'string' ||
-    typeof key !== 'string' ||
-    typeof dataType !== 'number' ||
-    typeof isRequired !== 'boolean' ||
-    typeof order !== 'number'
-  ) {
+  const { id, name, isRequired, order } = value ?? {};
+  const position = Number(order);
+  if (typeof id !== 'string' || !id || typeof name !== 'string' || typeof isRequired !== 'boolean' || !Number.isFinite(position)) {
     return null;
   }
-  return { id, name, key, dataType, isRequired, order };
+  // Значення поля в даних запису — за його `id`.
+  return { id, name, key: id, isRequired, order: position };
 }

@@ -24,6 +24,8 @@ describe('ResetPasswordPage', () => {
   let fragment: BehaviorSubject<string | null>;
   const server = `${location.protocol}//${location.hostname}:5065`;
   const resetUrl = `${server}/api/v1/users/reset-password`;
+  const validateUrl = `${resetUrl}/validate`;
+  const EMAIL = 'a@b.org';
   const PASSWORD = 'Abcde1!x';
 
   beforeEach(() => {
@@ -50,7 +52,25 @@ describe('ResetPasswordPage', () => {
     localStorage.clear();
   });
 
-  function create(token: string | null = 'tok') {
+  /** Сторінка з токеном `token`; посилання вже перевірено (форма з поштою). */
+  async function create(token: string | null = 'tok') {
+    const opened = open(token);
+    if (token !== null) {
+      await answerCheck(opened.fixture, { email: EMAIL, firstName: ' ', lastName: ' ', avatarUrl: null, expiresAt: '2030-01-01T00:00:00Z' });
+    }
+    return opened;
+  }
+
+  /** Відповідь на перевірку посилання (тіло або помилка зі статусом `status`). */
+  async function answerCheck(fixture: { detectChanges(): void }, body: object | null, status = 200) {
+    const request = http.expectOne((candidate) => candidate.url === validateUrl);
+    request.flush(body, { status, statusText: 'x' });
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+    return request;
+  }
+
+  function open(token: string | null) {
     fragment.next(token === null ? null : `token=${encodeURIComponent(token)}`);
     const fixture = TestBed.createComponent(ResetPasswordPage);
     fixture.detectChanges();
@@ -66,24 +86,28 @@ describe('ResetPasswordPage', () => {
   const buttonByText = (element: HTMLElement, text: string) =>
     Array.from(element.querySelectorAll<HTMLElement>('button, ion-button')).find((button) => button.textContent?.trim() === text)!;
 
-  it('shows the form like the sign-in one: the title, the password and its repeat, "Send" and "Cancel"', () => {
-    const { element } = create();
+  it('shows the form like the sign-in one: the title, the email of the account, the password and its repeat, "Send" and "Cancel"', async () => {
+    const { element } = await create();
     expect(element.querySelector('.join__card .join__title')?.textContent?.trim()).toBe(uk.resetPassword.title);
+    // Перше поле — пошта акаунта, пароль якого скидають; змінити її не можна.
+    const email = element.querySelector<HTMLElement & { disabled: boolean; value: string }>('ion-input')!;
+    expect(email.value).toBe(EMAIL);
+    expect(email.disabled).toBe(true);
     expect(element.querySelector('app-password-fields')).not.toBeNull();
     expect(buttonByText(element, uk.resetPassword.submit)).toBeTruthy();
     expect(buttonByText(element, uk.common.cancel)).toBeTruthy();
     expect(element.querySelector('.auth-error')).toBeNull();
   });
 
-  it('"Cancel" goes to /relogin and sends nothing', () => {
-    const { element } = create();
+  it('"Cancel" goes to /relogin and sends nothing', async () => {
+    const { element } = await create();
     buttonByText(element, uk.common.cancel).click();
     expect(navigate).toHaveBeenCalledWith(RELOGIN_URL);
     http.expectNone(resetUrl);
   });
 
   it('does not send an empty, a weak, a too long or a mismatching password', async () => {
-    const { fixture, element, page, fill } = create();
+    const { fixture, element, page, fill } = await create();
     await page.submit();
     fixture.detectChanges();
     expect(element.textContent).toContain(uk.resetPassword.error.passwordRequired);
@@ -103,7 +127,7 @@ describe('ResetPasswordPage', () => {
   });
 
   it('sends the token and the new password to the server of the link without a session, then goes to /relogin', async () => {
-    const { fixture, element, page, fill } = create('tok 1');
+    const { fixture, element, page, fill } = await create('tok 1');
     fill(PASSWORD);
     const done = page.submit();
     fixture.detectChanges();
@@ -126,7 +150,7 @@ describe('ResetPasswordPage', () => {
     ['unauthorized', 401],
     ['error', 404],
   ] as const)('replaces the form by the reason (%s) and "Back" to /relogin when the server says no', async (failure, status) => {
-    const { fixture, element, page, fill } = create();
+    const { fixture, element, page, fill } = await create();
     fill(PASSWORD);
     const done = page.submit();
     http.expectOne(resetUrl).flush({}, { status, statusText: 'x' });
@@ -145,7 +169,7 @@ describe('ResetPasswordPage', () => {
     ['the check of the field', { errors: { NewPassword: ['Password is too weak.'] } }],
     ['the rules of the password', { detail: "User operation 'ChangePassword' failed: Passwords must have at least one digit ('0'-'9')." }],
   ])('keeps the form with the error under the password when the server did not take the password (%s)', async (_, body) => {
-    const { fixture, element, page, fill } = create();
+    const { fixture, element, page, fill } = await create();
     fill(PASSWORD);
     const done = page.submit();
     http.expectOne(resetUrl).flush(body, { status: 400, statusText: 'Bad Request' });
@@ -162,7 +186,7 @@ describe('ResetPasswordPage', () => {
   });
 
   it('says the link was already used when the server rejected its token', async () => {
-    const { fixture, element, page, fill } = create();
+    const { fixture, element, page, fill } = await create();
     fill(PASSWORD);
     const done = page.submit();
     http.expectOne(resetUrl).flush({ detail: "User operation 'ChangePassword' failed: Invalid token." }, { status: 400, statusText: 'Bad Request' });
@@ -171,9 +195,34 @@ describe('ResetPasswordPage', () => {
     expect(element.querySelector('.auth-error')?.textContent).toContain(uk.resetPassword.failure.invalid);
   });
 
-  it('says the link is inactive when it has no token', () => {
-    const { element } = create(null);
-    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.resetPassword.failure.unauthorized);
+  it('says the link is inactive when it has no token, asking the server nothing', async () => {
+    const { element } = await create(null);
+    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.resetPassword.inactive);
     expect(element.querySelector('app-password-fields')).toBeNull();
+    http.expectNone((candidate) => candidate.url === validateUrl);
+  });
+
+  it('checks the token of the link without a session before the form, and says the link is inactive when the server rejected it', async () => {
+    const { fixture, element } = open('tok 1');
+    expect(element.querySelector('.join__status')?.textContent?.trim()).toBe(uk.resetPassword.loading);
+    expect(element.querySelector('app-password-fields')).toBeNull();
+    const request = await answerCheck(fixture, { detail: 'Invalid or expired password reset token.' }, 400);
+    expect(request.request.params.get('Token')).toBe('tok 1');
+    expect(request.request.headers.has('Authorization')).toBe(false);
+    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.resetPassword.inactive);
+    expect(element.querySelector('app-password-fields')).toBeNull();
+    buttonByText(element, uk.common.back).click();
+    expect(navigate).toHaveBeenCalledWith(RELOGIN_URL);
+  });
+
+  it('offers to check again when the check failed for another reason, and shows the form after that', async () => {
+    const { fixture, element } = open('tok');
+    await answerCheck(fixture, null, 500);
+    expect(element.querySelector('.auth-error')?.textContent).toContain(uk.resetPassword.checkFailed);
+    buttonByText(element, uk.resetPassword.retry).click();
+    fixture.detectChanges();
+    expect(element.querySelector('.join__status')).not.toBeNull();
+    await answerCheck(fixture, { email: EMAIL });
+    expect(element.querySelector('app-password-fields')).not.toBeNull();
   });
 });

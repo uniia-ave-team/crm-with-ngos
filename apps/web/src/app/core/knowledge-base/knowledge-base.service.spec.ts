@@ -11,7 +11,6 @@ import uk from '../../../assets/i18n/uk.json';
 import { AccountsService } from '../accounts/accounts.service';
 import { AuthService } from '../auth/auth.service';
 import {
-  EMPTY_TABLE_FIELD_KEY,
   KNOWLEDGE_BASE_SAMPLE_URL,
   KNOWLEDGE_BASE_SOURCE,
   KNOWLEDGE_BASE_TREE_PATH,
@@ -248,7 +247,7 @@ describe('KnowledgeBaseService', () => {
       expect(request.request.body).toEqual({
         name: 'Нотатки',
         description: 'Опис',
-        fields: [{ name: uk.knowledgeBase.dialogs.add.emptyTableField, key: EMPTY_TABLE_FIELD_KEY, dataType: 0, isRequired: false, order: 0 }],
+        fields: [{ name: uk.knowledgeBase.dialogs.add.emptyTableField, isRequired: false, order: 0 }],
       });
       request.flush('t2');
       await vi.waitFor(() => answerList([]));
@@ -275,8 +274,8 @@ describe('KnowledgeBaseService', () => {
       const service = await ready();
       const opening = service.openForEdit(table);
       const fields = [
-        { id: 'c1', name: 'Назва', key: 'name', dataType: 0, isRequired: true, order: 0 },
-        { id: 'c2', name: 'Терміни', key: 'terms', dataType: 3, isRequired: false, order: 1 },
+        { id: 'c1', name: 'Назва', isRequired: true, order: 0 },
+        { id: 'c2', name: 'Терміни', isRequired: false, order: 1 },
       ];
       http.expectOne(`${tablesUrl()}/t1`).flush({ id: 't1', ngoId: 'n1', name: 'Таблиця', description: 'Старий опис', sourceTemplateId: null, fields });
       const editing = await opening;
@@ -287,7 +286,7 @@ describe('KnowledgeBaseService', () => {
 
       const saving = service.saveEdit(editing, { title: 'Нова назва', description: null });
       // Перед збереженням — свіжа структура: тим часом хтось додав «Email», його не можна видалити.
-      const withEmail = [...fields, { id: 'c3', name: 'Email', key: 'email', dataType: 0, isRequired: false, order: 2 }];
+      const withEmail = [...fields, { id: 'c3', name: 'Email', isRequired: false, order: 2 }];
       http.expectOne({ method: 'GET', url: `${tablesUrl()}/t1` }).flush({ id: 't1', ngoId: 'n1', name: 'Таблиця', description: 'Старий опис', sourceTemplateId: null, fields: withEmail });
       await new Promise((resolve) => setTimeout(resolve));
       const request = http.expectOne({ method: 'PUT', url: `${tablesUrl()}/t1` });
@@ -300,7 +299,7 @@ describe('KnowledgeBaseService', () => {
     it('does not open a table for editing whose columns came in an unknown form', async () => {
       const service = await ready();
       const opening = service.openForEdit(table);
-      http.expectOne(`${tablesUrl()}/t1`).flush({ id: 't1', name: 'Таблиця', fields: [{ id: 'c1', name: 'Назва', key: 'name', dataType: 'Text' }] });
+      http.expectOne(`${tablesUrl()}/t1`).flush({ id: 't1', name: 'Таблиця', fields: [{ id: 'c1', name: 'Назва', isRequired: 'так' }] });
       expect(await opening).toBe('error');
     });
 

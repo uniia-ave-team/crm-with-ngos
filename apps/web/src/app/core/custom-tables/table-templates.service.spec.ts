@@ -13,25 +13,25 @@ describe('TableTemplatesService', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('sends the columns in their order as text fields that are not required, and gives the new id', async () => {
+  it('sends the columns in their order as not required, and gives the new id', async () => {
     const service = TestBed.inject(TableTemplatesService);
     const creating = service.create({
       name: 'Донори',
       description: null,
       fields: [
-        { name: '<b>Назва</b>', key: 'name' },
-        { name: 'Сума', key: 'amount' },
+        { name: '<b>Назва</b>' },
+        { name: 'Сума' },
       ],
     });
     const request = TestBed.inject(HttpTestingController).expectOne(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/tabletemplates`);
     expect(request.request.method).toBe('POST');
-    // Тип і обовʼязковість сервер ще вимагає: усе — рядки, необовʼязкові.
+    // Обовʼязковість сервер ще вимагає: необовʼязкові.
     expect(request.request.body).toEqual({
       name: 'Донори',
       description: null,
       fields: [
-        { name: '<b>Назва</b>', key: 'name', dataType: 0, isRequired: false, order: 0 },
-        { name: 'Сума', key: 'amount', dataType: 0, isRequired: false, order: 1 },
+        { name: '<b>Назва</b>', isRequired: false, order: 0 },
+        { name: 'Сума', isRequired: false, order: 1 },
       ],
     });
     request.flush('tpl9');
@@ -39,14 +39,14 @@ describe('TableTemplatesService', () => {
   });
 
   it('gives the reason when the server did not create the template', async () => {
-    const creating = TestBed.inject(TableTemplatesService).create({ name: 'Донори', description: null, fields: [{ name: 'Назва', key: 'name' }] });
+    const creating = TestBed.inject(TableTemplatesService).create({ name: 'Донори', description: null, fields: [{ name: 'Назва' }] });
     TestBed.inject(HttpTestingController)
       .expectOne(`${TestBed.inject(ConnectionService).serverUrl()}/api/v1/tabletemplates`)
       .flush(null, { status: 400, statusText: 'Bad Request' });
     expect(await creating).toBe('invalid');
   });
 
-  it('saves a template with all its columns (a new one with no id) as text fields, and deletes one', async () => {
+  it('saves a template with all its columns in their order, and deletes one', async () => {
     const service = TestBed.inject(TableTemplatesService);
     const http = TestBed.inject(HttpTestingController);
     const url = `${TestBed.inject(ConnectionService).serverUrl()}/api/v1/tabletemplates/tpl2`;
@@ -54,8 +54,8 @@ describe('TableTemplatesService', () => {
       name: 'Своя',
       description: null,
       fields: [
-        { id: 'c1', name: 'Назва', key: 'name' },
-        { id: null, name: 'Новий стовпчик', key: 'column_2' },
+        { name: 'Назва' },
+        { name: 'Новий стовпчик' },
       ],
     });
     const put = http.expectOne(url);
@@ -64,8 +64,8 @@ describe('TableTemplatesService', () => {
       name: 'Своя',
       description: null,
       fields: [
-        { id: 'c1', name: 'Назва', key: 'name', dataType: 0, isRequired: false, order: 0 },
-        { id: null, name: 'Новий стовпчик', key: 'column_2', dataType: 0, isRequired: false, order: 1 },
+        { name: 'Назва', isRequired: false, order: 0 },
+        { name: 'Новий стовпчик', isRequired: false, order: 1 },
       ],
     });
     put.flush(null, { status: 204, statusText: 'No Content' });
