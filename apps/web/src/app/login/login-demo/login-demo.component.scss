@@ -24,13 +24,20 @@
   color: #6b4e00;
 }
 
-.login-demo__text {
-  margin: 0 0 4px;
+.login-demo__text,
+.login-demo__note {
+  margin: 0;
   font-family: var(--font-login-body);
   font-weight: 300;
   font-size: 13px;
   line-height: 1.4;
   color: #6b4e00;
+}
+
+// Попередження, що система ще в розробці: трохи помітніше за пояснення й з відступом перед кнопками.
+.login-demo__note {
+  margin-bottom: 4px;
+  font-weight: 500;
 }
 
 .login-demo__account {
@@ -55,7 +62,8 @@
   }
 
   .login-demo__title,
-  .login-demo__text {
+  .login-demo__text,
+  .login-demo__note {
     color: #f0d68a;
   }
 

@@ -82,9 +82,9 @@ describe('DemoBannerComponent', () => {
   /** Текст банера одним рядком (у шаблоні його частини стоять на окремих рядках). */
   const text = (element: HTMLElement) => element.querySelector('.demo-banner')?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
   const time = (element: HTMLElement) => element.querySelector('.demo-banner__time')?.textContent?.trim() ?? null;
-  const withCountdown = (value: string) => `${uk.demo.banner} ${uk.demo.bannerCountdown} ${value}`;
+  const withCountdown = (value: string) => `${uk.demo.banner} ${uk.demo.inDevelopment} ${uk.demo.bannerCountdown} ${value}`;
 
-  it('says it is a demo, that only the visitor sees the changes, and counts down to the reset of the data', () => {
+  it('says it is a demo, that only the visitor sees the changes and that development goes on, and counts down to the reset of the data', () => {
     const { element, answer } = render(jwt(3552));
     // Статус системи ще не отримано — банера нема.
     expect(element.querySelector('.demo-banner')).toBeNull();
@@ -155,7 +155,7 @@ describe('DemoBannerComponent', () => {
   it('falls back to the static text with the length of the session when the token has no demo_exp', async () => {
     const { element, answer, wait } = render(jwt(null));
     answer();
-    const expected = `${uk.demo.banner} ${uk.demo.bannerNoTimer.replace('{{minutes}}', '60')}`;
+    const expected = `${uk.demo.banner} ${uk.demo.inDevelopment} ${uk.demo.bannerNoTimer.replace('{{minutes}}', '60')}`;
 
     expect(text(element)).toBe(expected);
     expect(time(element)).toBeNull();

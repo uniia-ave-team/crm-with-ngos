@@ -9,6 +9,7 @@
   },
   "demo": {
     "banner": "This is a demo. Only you see your changes.",
+    "inDevelopment": "Development is still in progress: you may run into errors, and some services may not be available yet.",
     "bannerCountdown": "Data resets in:",
     "bannerNoTimer": "The data is reset {{minutes}} minutes after sign-in.",
     "sessionEnded": "Your demo session has ended. Sign in again to start with fresh demo data.",
