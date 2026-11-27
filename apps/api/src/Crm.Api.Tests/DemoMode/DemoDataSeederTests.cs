@@ -11,6 +11,7 @@ using Crm.Application.Features.System.Queries;
 using Crm.Application.Features.Users.Commands;
 using Crm.Application.Interfaces;
 using Crm.Domain.Constants;
+using Crm.Domain.Constants.Validation;
 using Crm.Domain.Entities;
 using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
@@ -46,6 +47,9 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
     private const int ExpectedVolunteerRecords = 12;
     private const int MinColleagues = 6;
     private const int MaxColleagues = 8;
+    private const int MinTopicTables = 10;
+    private const int MinTopicTableRows = 8;
+    private const int MaxTopicTableRows = 20;
 
     [Fact]
     public async Task SeedAsyncShouldCompleteSystemSetup()
@@ -225,7 +229,7 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
             .Include(t => t.Records)
             .ToListAsync(ct);
 
-        tables.Count.ShouldBe(2);
+        tables.Count.ShouldBe(2 + DemoTables.All.Count);
 
         // The fields of a template are stored with it (JSON), so they come without an Include.
         var systemTemplate = await dbContext.Set<TableTemplate>()
@@ -237,10 +241,19 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
         donorTable.Fields.OrderBy(f => f.Order).Select(f => f.Name).ShouldBe(systemTemplate.Fields.OrderBy(f => f.Order).Select(f => f.Name));
         donorTable.Records.Count.ShouldBe(ExpectedDonorRecords);
 
-        var volunteerTable = tables.Single(t => t.SourceTemplateId is null);
+        var volunteerTable = tables.Single(t => t.Name == DemoDataContent.VolunteerTableName);
         volunteerTable.Name.ShouldBe(DemoDataContent.VolunteerTableName);
         volunteerTable.Records.Count.ShouldBe(ExpectedVolunteerRecords);
         volunteerTable.Fields.OrderBy(f => f.Order).Select(f => f.Name).ShouldBe(DemoDataContent.CreateVolunteerFields().Select(f => f.Name));
+
+        foreach (var definition in DemoTables.All)
+        {
+            var topicTable = tables.Single(t => t.Name == definition.Name);
+            topicTable.SourceTemplateId.ShouldBeNull();
+            topicTable.Description.ShouldBe(definition.Description);
+            topicTable.Fields.OrderBy(f => f.Order).Select(f => f.Name).ShouldBe(definition.Columns.Select(c => c.Name));
+            topicTable.Records.Count.ShouldBe(definition.CreateRows(DateTimeOffset.UtcNow).Count);
+        }
 
         foreach (var table in tables)
         {
@@ -281,7 +294,7 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
 
         after.ShouldBe(before);
         before.Users.ShouldBeGreaterThan(fixture.Accounts.Count);
-        before.Records.ShouldBe(ExpectedDonorRecords + ExpectedVolunteerRecords);
+        before.Records.ShouldBe(ExpectedDonorRecords + ExpectedVolunteerRecords + TopicRecordCount());
     }
 
     [Fact]
@@ -368,6 +381,86 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
         }
     }
 
+    [Fact]
+    public void TopicTablesShouldBeValidAndClearlyFictional()
+    {
+        var now = new DateTimeOffset(2026, 3, 1, 8, 0, 0, TimeSpan.Zero);
+
+        DemoTables.All.Count.ShouldBeGreaterThanOrEqualTo(MinTopicTables);
+        DemoTables.All.Select(t => t.Name)
+            .Concat([DemoDataContent.DonorTemplateName, DemoDataContent.VolunteerTableName])
+            .ShouldBeUnique();
+
+        // Fake numbers must not repeat: a phone of the demo data belongs to one fictional person or organisation.
+        List<string> phones = [.. DemoDataContent.CreateVolunteerRows(now).Select(r => r["Телефон"]!)];
+
+        foreach (var definition in DemoTables.All)
+        {
+            definition.Name.Length.ShouldBeLessThanOrEqualTo(CustomTableValidationConstants.MaxNameLength);
+            definition.Description.ShouldNotBeNullOrWhiteSpace();
+            definition.Description.Length.ShouldBeLessThanOrEqualTo(CustomTableValidationConstants.MaxDescriptionLength);
+
+            var fields = definition.CreateFields();
+            fields.EnsureValidFieldSchema();
+            fields.Count.ShouldBeLessThanOrEqualTo(CustomRecordValidationConstants.MaxFields);
+            fields.Select(f => f.Name).ShouldBeUnique();
+
+            var rows = definition.CreateRows(now);
+            rows.Count.ShouldBeInRange(MinTopicTableRows, MaxTopicTableRows);
+
+            foreach (var row in rows)
+            {
+                // Every value names a field of the schema (throws otherwise) and is valid for it.
+                DemoDataContent.ToFieldValues(fields, row).ValidateAndBackfillPayload(fields).Count.ShouldBe(fields.Count);
+
+                foreach (var column in definition.Columns)
+                {
+                    string? value = row[column.Name];
+
+                    if (value is null)
+                    {
+                        column.IsRequired.ShouldBeFalse($"'{definition.Name}' / '{column.Name}' is required.");
+                        continue;
+                    }
+
+                    value.ShouldNotBeNullOrWhiteSpace();
+                    value.ShouldBe(value.Trim());
+
+                    if (value.Contains('@', StringComparison.Ordinal))
+                    {
+                        value.ShouldEndWith(DemoEmailSuffix);
+                    }
+
+                    switch (column.Kind)
+                    {
+                        case DemoTables.ValueKind.Date:
+                            DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
+                                .ShouldBeTrue($"'{definition.Name}' / '{column.Name}': {value}");
+                            break;
+                        case DemoTables.ValueKind.Number:
+                            DemoNumberRegex().IsMatch(value).ShouldBeTrue($"'{definition.Name}' / '{column.Name}': {value}");
+                            break;
+                        case DemoTables.ValueKind.Phone:
+                            FakePhoneRegex().IsMatch(value).ShouldBeTrue($"'{definition.Name}' / '{column.Name}': {value}");
+                            phones.Add(value);
+                            break;
+                        case DemoTables.ValueKind.Email:
+                            value.ShouldEndWith(DemoEmailSuffix);
+                            break;
+                        case DemoTables.ValueKind.YesNo:
+                            value.ShouldBeOneOf("Так", "Ні");
+                            break;
+                        case DemoTables.ValueKind.Text:
+                        default:
+                            break;
+                    }
+                }
+            }
+        }
+
+        phones.ShouldBeUnique();
+    }
+
     private static async Task<HashSet<string>> GetRolePermissionsAsync(
         IServiceProvider services,
         string roleName,
@@ -386,6 +479,12 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
     // E.164 numbers in the non-existent +380 00 000 00 xx range.
     [GeneratedRegex(@"^\+3800000000[0-9]{2}\z")]
     private static partial Regex FakePhoneRegex();
+
+    // Digits, optionally with a decimal comma (as written in Ukrainian).
+    [GeneratedRegex(@"^[0-9]+(,[0-9]+)?\z")]
+    private static partial Regex DemoNumberRegex();
+
+    private static int TopicRecordCount() => DemoTables.All.Sum(t => t.CreateRows(DateTimeOffset.UtcNow).Count);
 
     private async Task<DatabaseSnapshot> TakeSnapshotAsync(CancellationToken cancellationToken)
     {
