@@ -4,6 +4,7 @@ using Crm.Application.Enums;
 using Crm.Application.Exceptions;
 using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
+using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Entities;
@@ -18,9 +19,11 @@ namespace Crm.Infrastructure.Services.Identity;
 /// </summary>
 /// <param name="userManager">The ASP.NET Core Identity API for managing users in the underlying store.</param>
 /// <param name="userRefreshTokenRepository">The repository for managing user refresh tokens in the database.</param>
+/// <param name="userActionTokenRepository">The repository for managing user action tokens (invitations and password resets) in the database.</param>
 public sealed class IdentityService(
     UserManager<AuthUser> userManager,
-    IUserRefreshTokenRepository userRefreshTokenRepository) : IIdentityService
+    IUserRefreshTokenRepository userRefreshTokenRepository,
+    IUserActionTokenRepository userActionTokenRepository) : IIdentityService
 {
     /// <inheritdoc />
     public async Task<UserBasicDto> CreateUserAsync(string email, string password, User userProfile, CancellationToken cancellationToken = default)
@@ -136,18 +139,20 @@ public sealed class IdentityService(
             throw new UserOperationException(UserOperation.ChangePassword, result.FormatErrors());
         }
 
-        await userRefreshTokenRepository.RevokeAllUserTokensAsync(userId, cancellationToken);
+        await RevokeUserSecurityTokensAsync(userId, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task<string> GetResetTokenAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<IdentityPasswordResetTokenResult> GetResetTokenAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var user = await userManager.FindByIdAsync(userId.ToString())
             ?? throw new EntityNotFoundException<AuthUser>(userId);
 
-        return await userManager.GeneratePasswordResetTokenAsync(user);
+        string resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+
+        return new IdentityPasswordResetTokenResult(user.Email ?? string.Empty, resetToken);
     }
 
     /// <inheritdoc />
@@ -165,7 +170,7 @@ public sealed class IdentityService(
             throw new UserOperationException(UserOperation.ChangePassword, result.FormatErrors());
         }
 
-        await userRefreshTokenRepository.RevokeAllUserTokensAsync(userId, cancellationToken);
+        await RevokeUserSecurityTokensAsync(userId, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -185,7 +190,7 @@ public sealed class IdentityService(
             throw new UserOperationException(UserOperation.ChangePassword, result.FormatErrors());
         }
 
-        await userRefreshTokenRepository.RevokeAllUserTokensAsync(userId, cancellationToken);
+        await RevokeUserSecurityTokensAsync(userId, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -202,5 +207,11 @@ public sealed class IdentityService(
         {
             throw new UserOperationException(UserOperation.Delete, result.FormatErrors());
         }
+    }
+
+    private async Task RevokeUserSecurityTokensAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        await userRefreshTokenRepository.RevokeAllUserTokensAsync(userId, cancellationToken);
+        await userActionTokenRepository.RevokeAllByTargetUserIdAsync(userId, ActionTokenType.PasswordReset, cancellationToken);
     }
 }

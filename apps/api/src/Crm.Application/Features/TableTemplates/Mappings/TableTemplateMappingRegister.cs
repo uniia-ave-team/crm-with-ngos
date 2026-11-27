@@ -1,12 +1,12 @@
+using Crm.Application.Dtos.Common;
 using Crm.Application.Dtos.TableTemplates;
-using Crm.Application.Features.TableTemplates.Commands;
 using Crm.Domain.Entities;
 using Mapster;
 
 namespace Crm.Application.Features.TableTemplates.Mappings;
 
 /// <summary>
-/// Registers Mapster mapping rules for <see cref="TableTemplate"/> and <see cref="TemplateField"/> entities, DTOs, and commands.
+/// Registers Mapster mapping rules for <see cref="TableTemplate"/> entities and DTOs.
 /// </summary>
 public sealed class TableTemplateMappingRegister : IRegister
 {
@@ -21,21 +21,10 @@ public sealed class TableTemplateMappingRegister : IRegister
                 src.IsSystemPreset,
                 src.Fields
                     .OrderBy(f => f.Order)
-                    .ThenBy(f => f.Id)
-                    .Select(f => new TemplateFieldDto(
-                        f.Id,
+                    .Select(f => new FieldDefinitionDto(
                         f.Name,
-                        f.Key,
-                        f.DataType,
                         f.IsRequired,
                         f.Order))
                     .ToList()));
-
-        config.NewConfig<UpdateTableTemplateCommand, TableTemplate>()
-            .Ignore(dest => dest.Id)
-            .Ignore(dest => dest.Fields);
-
-        config.NewConfig<UpdateTemplateFieldDto, TemplateField>()
-            .Ignore(dest => dest.Id);
     }
 }

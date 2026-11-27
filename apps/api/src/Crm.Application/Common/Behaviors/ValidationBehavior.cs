@@ -1,3 +1,4 @@
+using Crm.Application.Common.Interfaces;
 using FluentValidation;
 using FluentValidation.Results;
 using Mediator;
@@ -6,7 +7,7 @@ namespace Crm.Application.Common.Behaviors;
 
 /// <summary>
 /// Represents a Mediator pipeline behavior that intercepts incoming requests
-/// and automatically validates them using all registered <see cref="IValidator{T}"/> instances
+/// and automatically validates <see cref="IHasEntityId"/> identifiers and all registered <see cref="IValidator{T}"/> instances
 /// for the given request type.
 /// </summary>
 /// <typeparam name="TRequest">The type of the request being handled.</typeparam>
@@ -17,7 +18,7 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
     where TRequest : IMessage
 {
     /// <summary>
-    /// Handles the incoming request by executing all associated validators asynchronously.
+    /// Handles the incoming request by validating entity IDs and executing all associated validators asynchronously.
     /// If any validation rules fail, a <see cref="ValidationException"/> containing all error details is thrown.
     /// Otherwise, the execution proceeds to the next handler in the pipeline.
     /// </summary>
@@ -31,6 +32,11 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
         MessageHandlerDelegate<TRequest, TResponse> next,
         CancellationToken cancellationToken)
     {
+        if (message is IHasEntityId { Id: var id } && id == Guid.Empty)
+        {
+            throw new ValidationException([new ValidationFailure(nameof(IHasEntityId.Id), "Identifier is required.")]);
+        }
+
         if (validators is ICollection<IValidator<TRequest>> { Count: 0 })
         {
             return await next(message, cancellationToken);

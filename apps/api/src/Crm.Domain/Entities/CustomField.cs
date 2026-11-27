@@ -5,7 +5,7 @@ namespace Crm.Domain.Entities;
 
 /// <summary>
 /// Represents a specific field (column) definition inside an NGO's <see cref="CustomTable"/>.
-/// While initially copied from a <see cref="TemplateField"/>, NGOs can modify these or add entirely new custom fields.
+/// While initially instantiated from a <see cref="ValueObjects.TemplateFieldDefinition"/>, NGOs can modify these or add entirely new custom fields.
 /// </summary>
 [Auditable]
 public class CustomField : FieldDefinitionBase

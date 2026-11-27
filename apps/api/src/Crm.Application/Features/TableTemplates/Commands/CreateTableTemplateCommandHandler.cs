@@ -2,7 +2,7 @@ using Crm.Application.Common.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using Mapster;
+using Crm.Domain.ValueObjects;
 using Mediator;
 using Microsoft.Extensions.Logging;
 
@@ -22,7 +22,12 @@ public sealed partial class CreateTableTemplateCommandHandler(
     {
         LogCreatingTableTemplate(logger, command.Name);
 
-        var template = command.Adapt<TableTemplate>();
+        var template = new TableTemplate
+        {
+            Name = command.Name,
+            Description = command.Description,
+            Fields = [.. command.Fields.Select(f => new TemplateFieldDefinition(f.Name, f.IsRequired, f.Order))],
+        };
 
         template.Fields.EnsureValidFieldSchema();
 

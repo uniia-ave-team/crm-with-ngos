@@ -9,4 +9,4 @@ namespace Crm.Application.Features.CustomTables.Commands;
 /// <param name="Id">The unique identifier of the table to delete.</param>
 /// <returns>Unit signaling command completion.</returns>
 public record DeleteCustomTableCommand(
-    Guid Id) : ICommand, ITransactionalCommand;
+    Guid Id) : ICommand, ITransactionalCommand, IHasEntityId;

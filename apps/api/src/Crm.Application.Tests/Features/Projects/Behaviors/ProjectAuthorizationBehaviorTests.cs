@@ -49,7 +49,7 @@ public class ProjectAuthorizationBehaviorTests
 
         await Should.ThrowAsync<EntityNotFoundException<Project>>(() =>
             behavior.Handle(
-                new GetProjectByIdQuery(projectId, userId),
+                new GetProjectByIdQuery(projectId) { CurrentUserId = userId },
                 (_, _) => ValueTask.FromResult<ProjectDto>(default!),
                 CancellationToken.None).AsTask());
     }
@@ -69,7 +69,7 @@ public class ProjectAuthorizationBehaviorTests
 
         await Should.ThrowAsync<UnauthorizedAccessException>(() =>
             behavior.Handle(
-                new DeleteProjectCommand(projectId, userId),
+                new DeleteProjectCommand(projectId) { CurrentUserId = userId },
                 (_, _) => ValueTask.FromResult(Unit.Value),
                 CancellationToken.None).AsTask());
     }

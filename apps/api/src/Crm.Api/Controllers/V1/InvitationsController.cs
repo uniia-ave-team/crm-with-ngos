@@ -5,6 +5,7 @@ using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Commands;
 using Crm.Application.Features.Users.Queries;
+using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
@@ -21,11 +22,31 @@ namespace Crm.Api.Controllers.V1;
 public sealed class InvitationsController(IMediator mediator) : ControllerBase
 {
     /// <summary>
-    /// Generates an invitation link/token for a new user.
+    /// Retrieves a paginated, filtered, and sorted list of active (unexpired) user invitation tokens.
     /// </summary>
-    /// <param name="command">The email and role for the invited user.</param>
+    /// <param name="query">Query parameters for search filtering, sorting, and pagination.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The generated invitation token.</returns>
+    /// <returns>A paginated list of active invitations.</returns>
+    [HttpGet]
+    [HasAccessRight(AccessRight.ManageUserActionTokens)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PagedResult<ActiveInvitationDto>>> GetActiveInvitations(
+        [FromQuery] GetActiveInvitationsQuery query,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(query, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Generates a short opaque invitation token for a new user.
+    /// </summary>
+    /// <param name="command">The email and role identifiers for the invited user.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The generated invitation token and its expiration timestamp.</returns>
     [HttpPost]
     [HasAccessRight(AccessRight.CreateUser)]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -40,6 +61,27 @@ public sealed class InvitationsController(IMediator mediator) : ControllerBase
     {
         var result = await mediator.Send(command, cancellationToken);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Permanently revokes an active invitation token by its identifier so the invitation link can no longer be used.
+    /// </summary>
+    /// <param name="id">The unique identifier of the invitation token to revoke.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A status indicating the outcome of the operation.</returns>
+    [HttpDelete("{id:guid}")]
+    [HasAccessRight(AccessRight.ManageUserActionTokens)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RevokeInvitation(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        await mediator.Send(new RevokeActionTokenCommand(id, ActionTokenType.Invitation), cancellationToken);
+        return NoContent();
     }
 
     /// <summary>
@@ -62,7 +104,7 @@ public sealed class InvitationsController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Completes the user registration and onboarding process using a valid invitation token.
+    /// Completes the user registration and onboarding process using a valid single-use invitation token.
     /// </summary>
     /// <param name="command">The registration details and invitation token.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>

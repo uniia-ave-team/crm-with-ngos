@@ -10,7 +10,7 @@ namespace Crm.Application.Features.Tasks.Commands;
 /// </summary>
 /// <param name="Content">The updated text content of the comment.</param>
 public record UpdateTaskCommentCommand(
-    string Content) : ICommand, ITransactionalCommand, ITaskScoped
+    string Content) : ICommand, ITransactionalCommand, ITaskScoped, ICurrentUserAware
 {
     /// <summary>
     /// Gets the unique identifier of the parent project, populated from the route parameter.
@@ -31,10 +31,10 @@ public record UpdateTaskCommentCommand(
     public Guid CommentId { get; init; }
 
     /// <summary>
-    /// Gets the unique identifier of the currently authenticated user editing the comment, populated by the controller.
+    /// Gets or sets the unique identifier of the currently authenticated user editing the comment, populated by the request pipeline.
     /// </summary>
     [JsonIgnore]
-    public Guid CurrentUserId { get; init; }
+    public Guid CurrentUserId { get; set; }
 
     /// <inheritdoc />
     Guid? IProjectScoped.ProjectId => ProjectId;

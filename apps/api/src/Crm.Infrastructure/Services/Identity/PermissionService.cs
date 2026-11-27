@@ -12,8 +12,26 @@ namespace Crm.Infrastructure.Services.Identity;
 public sealed class PermissionService(IRolePermissionsCache permissionsCache) : IPermissionService
 {
     /// <inheritdoc />
-    public Task<bool> HasAccessAsync(List<Guid> roleIds, AccessRight requiredRight, CancellationToken cancellationToken = default)
-        => HasAccessAsync(roleIds, [requiredRight], cancellationToken);
+    public async Task<bool> HasAccessAsync(List<Guid> roleIds, AccessRight requiredRight, CancellationToken cancellationToken = default)
+    {
+        if (roleIds is null || roleIds.Count == 0)
+        {
+            return false;
+        }
+
+        string requiredClaim = requiredRight.ToClaimValue();
+
+        for (int i = 0; i < roleIds.Count; i++)
+        {
+            var permissions = await permissionsCache.GetRolePermissionsAsync(roleIds[i], cancellationToken);
+            if (permissions.Contains(requiredClaim))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <inheritdoc />
     public async Task<bool> HasAccessAsync(List<Guid> roleIds, IEnumerable<AccessRight> requiredRights, CancellationToken cancellationToken = default)

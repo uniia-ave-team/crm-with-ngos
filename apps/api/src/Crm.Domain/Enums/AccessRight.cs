@@ -52,149 +52,154 @@ public enum AccessRight : byte
     /// </summary>
     CanResetPassword = 8,
 
+    /// <summary>
+    /// Allows viewing and revoking active user action tokens (invitations and password reset tokens).
+    /// </summary>
+    ManageUserActionTokens = 9,
+
     // --- Role ---
 
     /// <summary>
     /// Allows creating, updating, deleting roles and managing their permissions.
     /// </summary>
-    ManageRole = 9,
+    ManageRole = 10,
 
     // --- Ngo ---
 
     /// <summary>
     /// Allows creating the primary NGO instance during initial setup.
     /// </summary>
-    CreateNgo = 10,
+    CreateNgo = 11,
 
     /// <summary>
     /// Allows updating the NGO name and logo.
     /// </summary>
-    UpdateNgo = 11,
+    UpdateNgo = 12,
 
     // --- Login Page Images ---
 
     /// <summary>
     /// Allows viewing login page background images.
     /// </summary>
-    ViewLoginPageImages = 12,
+    ViewLoginPageImages = 13,
 
     /// <summary>
     /// Allows uploading new login page background images.
     /// </summary>
-    CreateLoginPageImages = 13,
+    CreateLoginPageImages = 14,
 
     /// <summary>
     /// Allows deleting login page background images.
     /// </summary>
-    DeleteLoginPageImages = 14,
+    DeleteLoginPageImages = 15,
 
     // --- Table Templates ---
 
     /// <summary>
     /// Allows viewing reusable table templates.
     /// </summary>
-    ViewTableTemplate = 15,
+    ViewTableTemplate = 16,
 
     /// <summary>
     /// Allows creating custom table templates.
     /// </summary>
-    CreateTableTemplate = 16,
+    CreateTableTemplate = 17,
 
     /// <summary>
     /// Allows updating non-system table templates.
     /// </summary>
-    UpdateTableTemplate = 17,
+    UpdateTableTemplate = 18,
 
     /// <summary>
     /// Allows deleting non-system table templates.
     /// </summary>
-    DeleteTableTemplate = 18,
+    DeleteTableTemplate = 19,
 
     // --- Custom Tables & Schema ---
 
     /// <summary>
     /// Allows viewing NGO custom tables and their schemas.
     /// </summary>
-    ViewCustomTable = 19,
+    ViewCustomTable = 20,
 
     /// <summary>
     /// Allows creating new custom tables.
     /// </summary>
-    CreateCustomTable = 20,
+    CreateCustomTable = 21,
 
     /// <summary>
     /// Allows modifying custom table details and field schemas.
     /// </summary>
-    UpdateCustomTable = 21,
+    UpdateCustomTable = 22,
 
     /// <summary>
     /// Allows deleting custom tables and all their records.
     /// </summary>
-    DeleteCustomTable = 22,
+    DeleteCustomTable = 23,
 
     // --- Custom Records ---
 
     /// <summary>
     /// Allows viewing records stored inside custom tables.
     /// </summary>
-    ViewCustomRecord = 23,
+    ViewCustomRecord = 24,
 
     /// <summary>
     /// Allows creating new records inside custom tables.
     /// </summary>
-    CreateCustomRecord = 24,
+    CreateCustomRecord = 25,
 
     /// <summary>
     /// Allows updating records inside custom tables.
     /// </summary>
-    UpdateCustomRecord = 25,
+    UpdateCustomRecord = 26,
 
     /// <summary>
     /// Allows deleting records from custom tables.
     /// </summary>
-    DeleteCustomRecord = 26,
+    DeleteCustomRecord = 27,
 
     // --- Projects ---
 
     /// <summary>
     /// Allows viewing projects accessible to the user.
     /// </summary>
-    ViewProject = 27,
+    ViewProject = 28,
 
     /// <summary>
     /// Allows creating new projects.
     /// </summary>
-    CreateProject = 28,
+    CreateProject = 29,
 
     /// <summary>
     /// Allows updating projects where the user has edit or manage access.
     /// </summary>
-    UpdateProject = 29,
+    UpdateProject = 30,
 
     /// <summary>
     /// Allows deleting projects where the user has manage access.
     /// </summary>
-    DeleteProject = 30,
+    DeleteProject = 31,
 
     // --- Tasks ---
 
     /// <summary>
     /// Allows viewing tasks, comments, and attachments in accessible projects.
     /// </summary>
-    ViewTask = 31,
+    ViewTask = 32,
 
     /// <summary>
     /// Allows creating tasks within editable projects.
     /// </summary>
-    CreateTask = 32,
+    CreateTask = 33,
 
     /// <summary>
     /// Allows updating tasks, statuses, assignees, tags, comments, and attachments.
     /// </summary>
-    UpdateTask = 33,
+    UpdateTask = 34,
 
     /// <summary>
     /// Allows deleting tasks within editable projects.
     /// </summary>
-    DeleteTask = 34,
+    DeleteTask = 35,
 }

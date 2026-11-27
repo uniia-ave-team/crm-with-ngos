@@ -1,3 +1,4 @@
+using Crm.Application.Common.Interfaces;
 using Crm.Application.Dtos.CustomRecords;
 using Mediator;
 
@@ -9,4 +10,4 @@ namespace Crm.Application.Features.CustomRecords.Queries;
 /// <param name="Id">The unique identifier of the custom record.</param>
 /// <returns>The detailed DTO representation of the custom record.</returns>
 public record GetCustomRecordByIdQuery(
-    Guid Id) : IQuery<CustomRecordDto>;
+    Guid Id) : IQuery<CustomRecordDto>, IHasEntityId;

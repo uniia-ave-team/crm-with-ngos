@@ -1,3 +1,4 @@
+using Crm.Application.Common.Interfaces;
 using Crm.Application.Dtos.TableTemplates;
 using Mediator;
 
@@ -9,4 +10,4 @@ namespace Crm.Application.Features.TableTemplates.Queries;
 /// <param name="Id">The unique identifier of the table template.</param>
 /// <returns>The detailed DTO containing template properties and field blueprints.</returns>
 public record GetTableTemplateByIdQuery(
-    Guid Id) : IQuery<TableTemplateDto>;
+    Guid Id) : IQuery<TableTemplateDto>, IHasEntityId;

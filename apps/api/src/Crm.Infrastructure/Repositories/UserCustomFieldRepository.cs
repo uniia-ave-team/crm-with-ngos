@@ -1,5 +1,4 @@
 using Crm.Domain.Entities;
-using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -7,8 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Crm.Infrastructure.Repositories;
 
 /// <summary>
-/// Implements the repository for managing <see cref="UserCustomField"/> entities.
-/// Inherits standard data access operations from <see cref="GenericRepository{T}"/>.
+/// Implements the repository for managing global <see cref="UserCustomField"/> schema entities.
 /// </summary>
 /// <param name="appDbContext">The application database context.</param>
 public sealed class UserCustomFieldRepository(
@@ -16,25 +14,37 @@ public sealed class UserCustomFieldRepository(
     : GenericRepository<UserCustomField>(appDbContext),
     IUserCustomFieldRepository
 {
-    /// <summary>
-    /// Asynchronously checks if a custom field with the specified key already exists for the user.
-    /// Throws an exception if the key is found.
-    /// </summary>
-    /// <param name="userId">The unique identifier of the user.</param>
-    /// <param name="key">The key to check.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <exception cref="EntityAlreadyExistsException">Thrown if the key already exists for the user.</exception>
-    public async Task EnsureKeyDoesNotExistAsync(Guid userId, string key, CancellationToken cancellationToken = default)
-    {
-        bool exists = await DbSet
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<UserCustomField>> GetAllOrderedAsync(CancellationToken cancellationToken = default)
+        => await DbSet
             .AsNoTracking()
-            .AnyAsync(cf => cf.UserId == userId && cf.Key == key, cancellationToken);
+            .OrderBy(f => f.Order)
+            .ThenBy(f => f.Id)
+            .ToListAsync(cancellationToken);
 
-        if (exists)
+    /// <inheritdoc />
+    public Task<List<UserCustomField>> GetAllForUpdateAsync(CancellationToken cancellationToken = default)
+        => DbSet
+            .OrderBy(f => f.Order)
+            .ThenBy(f => f.Id)
+            .ToListAsync(cancellationToken);
+
+    /// <inheritdoc />
+    public async Task ApplySchemaChangesAsync(
+        IEnumerable<UserCustomField> addedFields,
+        IEnumerable<UserCustomField> removedFields,
+        CancellationToken cancellationToken = default)
+    {
+        var removed = removedFields as IReadOnlyCollection<UserCustomField> ?? [.. removedFields];
+        if (removed.Count > 0)
         {
-            throw new EntityAlreadyExistsException(nameof(UserCustomField), key);
+            DbSet.RemoveRange(removed);
+        }
+
+        var added = addedFields as IReadOnlyCollection<UserCustomField> ?? [.. addedFields];
+        if (added.Count > 0)
+        {
+            await DbSet.AddRangeAsync(added, cancellationToken);
         }
     }
-
-    // TODO: Implement Task<IReadOnlyList<string>> GetDistinctKeysAsync(CancellationToken cancellationToken = default) => await DbSet.AsNoTracking().Select(cf => cf.Key).Distinct().ToListAsync(cancellationToken);
 }

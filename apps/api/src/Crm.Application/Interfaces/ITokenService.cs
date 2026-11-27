@@ -1,12 +1,13 @@
 using System.Security.Claims;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Dtos.Users;
+using Crm.Domain.Enums;
 
 namespace Crm.Application.Interfaces;
 
 /// <summary>
-/// Defines a service for generating and validating JSON Web Tokens (JWT).
-/// Designed to produce minimalistic tokens, relying on server-side caching for detailed permissions.
+/// Defines a service for generating and validating JWT access tokens, cryptographic refresh tokens,
+/// and short opaque action tokens (such as invitations and password resets).
 /// </summary>
 public interface ITokenService
 {
@@ -24,7 +25,7 @@ public interface ITokenService
     /// Generates a cryptographically secure random string to be used as a Refresh Token,
     /// along with its exact expiration timestamp.
     /// </summary>
-    /// <returns>A <see cref="TokenResult"/> containing the base64-encoded refresh token string and its expiration time.</returns>
+    /// <returns>A <see cref="TokenResult"/> containing the Base64Url-encoded refresh token string and its expiration time.</returns>
     TokenResult GenerateRefreshToken();
 
     /// <summary>
@@ -34,43 +35,15 @@ public interface ITokenService
     /// <param name="token">The expired JWT access token.</param>
     /// <returns>
     /// A <see cref="ClaimsPrincipal"/> containing the token's claims if validation (ignoring expiration) is successful;
-    /// otherwise, <c>null</c>.
+    /// otherwise, <see langword="null"/>.
     /// </returns>
     ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
 
     /// <summary>
-    /// Generates a time-limited invitation token along with its expiration time used for secure user onboarding and registration.
+    /// Generates a short, URL-safe, cryptographically random opaque token along with its configured UTC expiration timestamp
+    /// for the specified <see cref="ActionTokenType"/>.
     /// </summary>
-    /// <param name="dto">The data transfer object containing the email, organization identifier, and role identifiers for the invited user.</param>
-    /// <returns>An <see cref="TokenResultDto"/> containing the generated JWT token string and its exact expiration timestamp.</returns>
-    TokenResultDto GenerateInvitationToken(GenerateInvitationDto dto);
-
-    /// <summary>
-    /// Asynchronously validates a provided invitation token and extracts its embedded claims.
-    /// </summary>
-    /// <param name="token">The JWT invitation token to validate.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation, containing a <see cref="ClaimsPrincipal"/> with the token's claims if validation is successful;
-    /// otherwise, <c>null</c> if the token is invalid, expired, or lacks the required registration claims.
-    /// </returns>
-    Task<ClaimsPrincipal?> ValidateInvitationTokenAsync(string token, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Generates a time-limited password restore token along with its expiration time used for securely resetting a user's password.
-    /// </summary>
-    /// <param name="dto">The data transfer object containing the user identifier and the underlying password reset token.</param>
-    /// <returns>A <see cref="TokenResultDto"/> containing the generated JWT token string and its exact expiration timestamp.</returns>
-    TokenResultDto GenerateRestorePasswordToken(PasswordResetTokenDto dto);
-
-    /// <summary>
-    /// Asynchronously validates a provided password restore token and extracts its embedded claims.
-    /// </summary>
-    /// <param name="token">The JWT password restore token to validate.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task representing the asynchronous operation, containing a <see cref="ClaimsPrincipal"/> with the token's claims if validation is successful;
-    /// otherwise, <c>null</c> if the token is invalid, expired, or lacks the required password reset claim.
-    /// </returns>
-    Task<ClaimsPrincipal?> ValidateRestorePasswordTokenAsync(string token, CancellationToken cancellationToken = default);
+    /// <param name="tokenType">The functional category of action token to generate.</param>
+    /// <returns>A <see cref="TokenResultDto"/> containing the opaque token string and its UTC+0 expiration timestamp.</returns>
+    TokenResultDto GenerateActionToken(ActionTokenType tokenType);
 }

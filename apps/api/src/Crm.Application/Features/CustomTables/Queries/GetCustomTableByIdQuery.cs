@@ -1,3 +1,4 @@
+using Crm.Application.Common.Interfaces;
 using Crm.Application.Dtos.CustomTables;
 using Mediator;
 
@@ -9,4 +10,4 @@ namespace Crm.Application.Features.CustomTables.Queries;
 /// <param name="Id">The unique identifier of the custom table.</param>
 /// <returns>The schema DTO containing table properties and field definitions.</returns>
 public record GetCustomTableByIdQuery(
-    Guid Id) : IQuery<CustomTableDto>;
+    Guid Id) : IQuery<CustomTableDto>, IHasEntityId;

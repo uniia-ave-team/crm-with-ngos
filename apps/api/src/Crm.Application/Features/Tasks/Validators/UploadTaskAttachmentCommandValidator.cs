@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using System.Net.Mime;
 using Crm.Application.Common.Consts;
+using Crm.Application.Common.Validators;
 using Crm.Application.Features.Tasks.Commands;
 using Crm.Domain.Constants.Validation;
 using Crm.Domain.Extensions;
@@ -28,8 +29,7 @@ public sealed class UploadTaskAttachmentCommandValidator : AbstractValidator<Upl
         RuleFor(x => x.OriginalFileName)
             .Cascade(CascadeMode.Stop)
             .NotEmpty().WithMessage(ValidationMessages.AttachmentFileNameRequired)
-            .Must(name => !name.Contains('\0', StringComparison.Ordinal))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
+            .NotContainNullChars()
             .MaximumLength(TaskValidationConstants.MaxAttachmentFileNameLength)
             .WithMessage(ValidationMessages.AttachmentFileNameMaxLength)
             .Must(HasAllowedExtension)
@@ -37,8 +37,7 @@ public sealed class UploadTaskAttachmentCommandValidator : AbstractValidator<Upl
 
         RuleFor(x => x.ContentType)
             .MaximumLength(TaskValidationConstants.MaxAttachmentContentTypeLength)
-            .Must(ct => ct is null || !ct.Contains('\0', StringComparison.Ordinal))
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed)
+            .NotContainNullChars()
             .When(x => !string.IsNullOrEmpty(x.ContentType));
 
         RuleFor(x => x)
@@ -48,10 +47,9 @@ public sealed class UploadTaskAttachmentCommandValidator : AbstractValidator<Upl
             .When(x => !string.IsNullOrWhiteSpace(x.OriginalFileName) && HasAllowedExtension(x.OriginalFileName));
 
         RuleFor(x => x.ContentStream)
-            .Cascade(CascadeMode.Stop)
-            .NotNull().WithMessage(ValidationMessages.AttachmentStreamNull)
-            .Must(stream => stream is not null && stream.CanRead && stream.CanSeek && stream.Length > 0)
-            .WithMessage(ValidationMessages.AttachmentStreamEmpty);
+            .ApplyNonEmptyStreamRules(
+                ValidationMessages.AttachmentStreamNull,
+                ValidationMessages.AttachmentStreamEmpty);
 
         RuleFor(x => x.FileSize)
             .GreaterThan(0).WithMessage(ValidationMessages.AttachmentFileEmpty)

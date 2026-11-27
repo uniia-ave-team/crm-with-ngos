@@ -1,4 +1,6 @@
 using Crm.Application.Common.Consts;
+using Crm.Domain.Entities;
+using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -7,34 +9,33 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.CustomRecords.Commands;
 
 /// <summary>
-/// Handles the <see cref="UpdateCustomRecordCommand"/> to validate the payload against the table schema,
-/// backfill default values for missing required fields, and update an existing custom record's JSON payload in the database.
+/// Handles the <see cref="UpdateCustomRecordCommand"/> to acquire the parent table and record write locks,
+/// merge only the provided cell values onto the latest stored payload, validate against the current table schema,
+/// and persist the result without overwriting concurrent edits to other columns.
 /// </summary>
 /// <param name="customRecordRepository">The repository used for fetching and updating custom record entities.</param>
-/// <param name="customFieldRepository">The repository used for retrieving custom field definitions.</param>
+/// <param name="customTableRepository">The repository used for locking tables and retrieving custom table field definitions.</param>
 /// <param name="logger">The logger instance for tracking execution flow.</param>
 public sealed partial class UpdateCustomRecordCommandHandler(
     ICustomRecordRepository customRecordRepository,
-    ICustomFieldRepository customFieldRepository,
+    ICustomTableRepository customTableRepository,
     ILogger<UpdateCustomRecordCommandHandler> logger) : ICommandHandler<UpdateCustomRecordCommand>
 {
-    /// <summary>
-    /// Handles the execution of <see cref="UpdateCustomRecordCommand"/> to validate, backfill, and update the custom record payload.
-    /// </summary>
-    /// <param name="command">The command instance containing record ID and updated data payload.</param>
-    /// <param name="cancellationToken">A token to observe for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <inheritdoc />
     public async ValueTask<Unit> Handle(UpdateCustomRecordCommand command, CancellationToken cancellationToken)
     {
         LogUpdatingCustomRecord(logger, command.Id);
 
+        var recordInfo = await customRecordRepository.GetPositionInfoAsync(command.Id, cancellationToken)
+            ?? throw new EntityNotFoundException<CustomRecord>(command.Id);
+
+        await customTableRepository.LockForUpdateAsync(recordInfo.CustomTableId, cancellationToken);
+
         var record = await customRecordRepository.GetForUpdateAsync(command.Id, cancellationToken);
 
-        var customFields = await customFieldRepository.GetByCustomTableIdAsync(record.CustomTableId, cancellationToken);
+        var customFields = await customTableRepository.GetFieldsByCustomTableIdAsync(record.CustomTableId, cancellationToken);
 
-        var alignedData = command.Data.ValidateAndBackfillPayload(customFields);
-
-        record.Data = alignedData;
+        record.Data = command.Data.ValidateAndApplyPatch(record.Data, customFields);
 
         LogCustomRecordUpdatedSuccessfully(logger, record.Id, record.CustomTableId);
 

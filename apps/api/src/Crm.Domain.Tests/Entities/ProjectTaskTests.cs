@@ -285,19 +285,25 @@ public class ProjectTaskTests
     }
 
     [Fact]
-    public void JsonObjectValidateAndBackfillShouldNormalizeDateTimeFieldsToUtcZero()
+    public void JsonObjectValidateAndBackfillShouldPreserveStringValuesAndRejectNonStringValues()
     {
-        var fields = new List<CustomField>
-        {
-            new() { Key = "event_at", DataType = FieldDataType.DateTime, IsRequired = true, Order = 0 },
-        };
+        var eventField = new CustomField { Name = "Event At", IsRequired = true, Order = 0 };
+        string eventKey = eventField.Id.ToString();
+        var fields = new List<CustomField> { eventField };
         var payload = new JsonObject
         {
-            ["event_at"] = "2026-11-21T12:00:00.0000000+02:00",
+            [eventKey] = "2026-11-21T12:00:00.0000000+02:00",
         };
 
-        var normalized = payload.ValidateAndBackfillPayload(fields);
+        var validated = payload.ValidateAndBackfillPayload(fields);
 
-        normalized["event_at"]!.GetValue<string>().ShouldBe("2026-11-21T10:00:00.0000000+00:00");
+        validated[eventKey]!.GetValue<string>().ShouldBe("2026-11-21T12:00:00.0000000+02:00");
+
+        var invalidPayload = new JsonObject
+        {
+            [eventKey] = 42,
+        };
+
+        Should.Throw<InvalidCustomRecordPayloadException>(() => invalidPayload.ValidateAndBackfillPayload(fields));
     }
 }

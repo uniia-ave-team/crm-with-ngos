@@ -6,24 +6,36 @@ namespace Crm.Infrastructure.Persistence.Extensions;
 public static class PostgresSearchStringExtensions
 {
     /// <summary>
+    /// The default escape character used in PostgreSQL <c>ILIKE</c> pattern escaping.
+    /// </summary>
+    public const string DefaultLikeEscapeChar = "\\";
+
+    /// <summary>
+    /// Formats a value into an escaped exact-match SQL <c>ILIKE</c> pattern without surrounding wildcards.
+    /// </summary>
+    /// <param name="term">The input exact match string.</param>
+    /// <param name="escapeChar">The escape character used in the SQL <c>ILIKE</c> clause.</param>
+    /// <returns>An escaped pattern matching the string case-insensitively without wildcards, or empty string if blank.</returns>
+    public static string ToExactLikePattern(this string? term, string escapeChar = DefaultLikeEscapeChar)
+    {
+        return string.IsNullOrWhiteSpace(term)
+            ? string.Empty
+            : term.Trim()
+                .Replace(escapeChar, $"{escapeChar}{escapeChar}")
+                .Replace("%", $"{escapeChar}%")
+                .Replace("_", $"{escapeChar}_");
+    }
+
+    /// <summary>
     /// Formats a search term into an escaped SQL <c>ILIKE</c> contains wildcard pattern.
     /// </summary>
     /// <param name="term">The input search phrase.</param>
     /// <param name="escapeChar">The escape character used in the SQL <c>ILIKE</c> clause.</param>
     /// <returns>A formatted pattern string with leading and trailing percent signs, or empty string if blank.</returns>
-    public static string ToContainsLikePattern(this string? term, string escapeChar = "\\")
+    public static string ToContainsLikePattern(this string? term, string escapeChar = DefaultLikeEscapeChar)
     {
-        if (string.IsNullOrWhiteSpace(term))
-        {
-            return string.Empty;
-        }
-
-        var escaped = term.Trim()
-            .Replace(escapeChar, $"{escapeChar}{escapeChar}")
-            .Replace("%", $"{escapeChar}%")
-            .Replace("_", $"{escapeChar}_");
-
-        return $"%{escaped}%";
+        string escaped = term.ToExactLikePattern(escapeChar);
+        return escaped.Length == 0 ? string.Empty : $"%{escaped}%";
     }
 
     /// <summary>

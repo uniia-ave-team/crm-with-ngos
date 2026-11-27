@@ -11,11 +11,11 @@ namespace Crm.Application.Features.CustomRecords.Queries;
 /// Handles the <see cref="GetCustomRecordByIdQuery"/> to retrieve a single custom record DTO by its unique identifier.
 /// </summary>
 /// <param name="customRecordRepository">The repository used for fetching custom record entities.</param>
-/// <param name="customFieldRepository">The repository used for retrieving custom field definitions.</param>
+/// <param name="customTableRepository">The repository used for retrieving custom table field definitions.</param>
 /// <param name="logger">The logger instance for tracking execution flow.</param>
 public sealed partial class GetCustomRecordByIdQueryHandler(
     ICustomRecordRepository customRecordRepository,
-    ICustomFieldRepository customFieldRepository,
+    ICustomTableRepository customTableRepository,
     ILogger<GetCustomRecordByIdQueryHandler> logger) : IQueryHandler<GetCustomRecordByIdQuery, CustomRecordDto>
 {
     /// <inheritdoc />
@@ -25,13 +25,15 @@ public sealed partial class GetCustomRecordByIdQueryHandler(
 
         var record = await customRecordRepository.GetAsync(query.Id, cancellationToken);
 
-        var customFields = await customFieldRepository.GetByCustomTableIdAsync(record.CustomTableId, cancellationToken);
+        var customFields = await customTableRepository.GetFieldsByCustomTableIdAsync(record.CustomTableId, cancellationToken);
 
-        string[] orderedKeys = [.. customFields.OrderBy(x => x.Order).Select(f => f.Key)];
+        string[] orderedKeys = [.. customFields.OrderBy(x => x.Order).Select(f => f.Id.ToString())];
 
         LogCustomRecordByIdFetched(logger, record.Id);
 
-        return new CustomRecordDto(record.Id, record.Data.ReorderKeys(orderedKeys));
+        return new CustomRecordDto(
+            record.Id,
+            record.Data.ReorderKeys(orderedKeys));
     }
 
     [LoggerMessage(EventId = LogEventIds.FetchingCustomRecordById, Level = LogLevel.Information, Message = "Fetching custom record by ID: {RecordId}")]

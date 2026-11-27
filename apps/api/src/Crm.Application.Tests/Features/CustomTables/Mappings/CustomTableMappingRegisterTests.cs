@@ -2,7 +2,6 @@ using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Features.CustomTables.Commands;
 using Crm.Application.Features.CustomTables.Mappings;
 using Crm.Domain.Entities;
-using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Entities;
 using Mapster;
 using Shouldly;
@@ -16,44 +15,28 @@ public class CustomTableMappingRegisterTests
 {
     private readonly TypeAdapterConfig _config;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CustomTableMappingRegisterTests"/> class.
-    /// Sets up an isolated <see cref="TypeAdapterConfig"/> instance with <see cref="CustomTableMappingRegister"/>.
-    /// </summary>
     public CustomTableMappingRegisterTests()
     {
         _config = new TypeAdapterConfig();
         new CustomTableMappingRegister().Register(_config);
     }
 
-    /// <summary>
-    /// Verifies that adapting an <see cref="UpdateCustomFieldDto"/> with a <see langword="null"/> ID
-    /// onto an existing <see cref="CustomField"/> preserves the target entity's existing identifier.
-    /// </summary>
     [Fact]
     public void AdaptUpdateCustomFieldDtoWhenIdIsNullShouldPreserveTargetId()
     {
         // Arrange
-        var existingId = Guid.NewGuid();
-        var tableId = Guid.NewGuid();
+        var existingId = Guid.CreateVersion7();
+        var tableId = Guid.CreateVersion7();
         var existingField = new CustomField
         {
             Id = existingId,
             CustomTableId = tableId,
-            Key = "status",
             Name = "Initial Status",
-            DataType = FieldDataType.Text,
             IsRequired = false,
             Order = 1,
         };
 
-        var dto = new UpdateCustomFieldDto(
-            null,
-            "Updated Status",
-            "status",
-            FieldDataType.Text,
-            true,
-            2);
+        var dto = new UpdateCustomFieldDto(null, "Updated Status", true, 2);
 
         // Act
         dto.Adapt(existingField, _config);
@@ -66,32 +49,21 @@ public class CustomTableMappingRegisterTests
         existingField.Order.ShouldBe((byte)2);
     }
 
-    /// <summary>
-    /// Verifies that adapting an <see cref="UpdateCustomFieldDto"/> onto an existing <see cref="CustomField"/>
-    /// ignores the foreign key and navigation properties.
-    /// </summary>
     [Fact]
     public void AdaptUpdateCustomFieldDtoShouldIgnoreCustomTableNavigationAndForeignKey()
     {
         // Arrange
-        var originalTableId = Guid.NewGuid();
+        var originalTableId = Guid.CreateVersion7();
         var originalTable = new CustomTable { Id = originalTableId, Name = "Original Table" };
         var existingField = new CustomField
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             CustomTableId = originalTableId,
             CustomTable = originalTable,
-            Key = "notes",
             Name = "Notes",
         };
 
-        var dto = new UpdateCustomFieldDto(
-            Guid.NewGuid(),
-            "Modified Notes",
-            "notes",
-            FieldDataType.Text,
-            false,
-            0);
+        var dto = new UpdateCustomFieldDto(Guid.CreateVersion7(), "Modified Notes", false, 0);
 
         // Act
         dto.Adapt(existingField, _config);
@@ -102,18 +74,14 @@ public class CustomTableMappingRegisterTests
         existingField.Name.ShouldBe("Modified Notes");
     }
 
-    /// <summary>
-    /// Verifies that adapting an <see cref="UpdateCustomTableCommand"/> onto an existing <see cref="CustomTable"/>
-    /// updates table metadata while ignoring the entity identifier and fields collection.
-    /// </summary>
     [Fact]
     public void AdaptUpdateCustomTableCommandShouldUpdateMetadataAndIgnoreIdAndFields()
     {
         // Arrange
-        var existingId = Guid.NewGuid();
+        var existingId = Guid.CreateVersion7();
         var existingFields = new List<CustomField>
         {
-            new() { Id = Guid.NewGuid(), Key = "field_one", Name = "Field One" },
+            new() { Id = Guid.CreateVersion7(), Name = "Field One" },
         };
         var existingTable = new CustomTable
         {
@@ -127,10 +95,10 @@ public class CustomTableMappingRegisterTests
             "New Name",
             "New Description",
             [
-                new UpdateCustomFieldDto(Guid.NewGuid(), "New Field", "field_new", FieldDataType.Number, false, 0),
+                new UpdateCustomFieldDto(Guid.CreateVersion7(), "New Field", false, 0),
             ])
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
         };
 
         // Act
@@ -144,34 +112,22 @@ public class CustomTableMappingRegisterTests
         existingTable.Fields.Count.ShouldBe(1);
     }
 
-    /// <summary>
-    /// Verifies that adapting an <see cref="IIdentifiableField"/> reference with a <see langword="null"/> ID
-    /// onto an existing <see cref="CustomField"/> preserves the target entity's existing identifier.
-    /// </summary>
     [Fact]
     public void AdaptIdentifiableFieldInterfaceWhenIdIsNullShouldPreserveTargetId()
     {
         // Arrange
-        var existingId = Guid.NewGuid();
-        var tableId = Guid.NewGuid();
+        var existingId = Guid.CreateVersion7();
+        var tableId = Guid.CreateVersion7();
         var existingField = new CustomField
         {
             Id = existingId,
             CustomTableId = tableId,
-            Key = "city",
             Name = "City",
-            DataType = FieldDataType.Text,
             IsRequired = false,
             Order = 0,
         };
 
-        IIdentifiableField dto = new UpdateCustomFieldDto(
-            null,
-            "Updated City",
-            "city",
-            FieldDataType.Text,
-            true,
-            1);
+        IIdentifiableField dto = new UpdateCustomFieldDto(null, "Updated City", true, 1);
 
         // Act
         dto.Adapt(existingField, _config);

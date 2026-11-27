@@ -1,4 +1,5 @@
 using Crm.Application.Common.Consts;
+using Crm.Application.Common.Validators;
 using Crm.Domain.Constants.Validation;
 using FluentValidation;
 
@@ -20,8 +21,7 @@ internal static class ProjectValidationRuleExtensions
             .NotEmpty().WithMessage(ValidationMessages.ProjectTitleRequired)
             .MaximumLength(ProjectValidationConstants.MaxTitleLength)
             .WithMessage(ValidationMessages.ProjectTitleMaxLength)
-            .Must(ContainsNoNullChar)
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+            .NotContainNullChars()!;
 
     /// <summary>
     /// Applies standard validation rules for an optional project description.
@@ -31,11 +31,9 @@ internal static class ProjectValidationRuleExtensions
     /// <returns>The configured rule builder options.</returns>
     public static IRuleBuilderOptions<T, string?> ValidProjectDescription<T>(
         this IRuleBuilder<T, string?> ruleBuilder)
-        => ruleBuilder
-            .MaximumLength(ProjectValidationConstants.MaxDescriptionLength)
-            .WithMessage(ValidationMessages.ProjectDescriptionMaxLength)
-            .Must(ContainsNoNullChar)
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+        => ruleBuilder.ApplyOptionalTextRules(
+            ProjectValidationConstants.MaxDescriptionLength,
+            ValidationMessages.ProjectDescriptionMaxLength);
 
     /// <summary>
     /// Applies standard validation rules for a project member's optional custom functional role title.
@@ -45,11 +43,9 @@ internal static class ProjectValidationRuleExtensions
     /// <returns>The configured rule builder options.</returns>
     public static IRuleBuilderOptions<T, string?> ValidProjectRoleTitle<T>(
         this IRuleBuilder<T, string?> ruleBuilder)
-        => ruleBuilder
-            .MaximumLength(ProjectValidationConstants.MaxRoleTitleLength)
-            .WithMessage(ValidationMessages.ProjectRoleTitleMaxLength)
-            .Must(ContainsNoNullChar)
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+        => ruleBuilder.ApplyOptionalTextRules(
+            ProjectValidationConstants.MaxRoleTitleLength,
+            ValidationMessages.ProjectRoleTitleMaxLength);
 
     /// <summary>
     /// Applies standard validation rules for a project-scoped tag title.
@@ -62,8 +58,7 @@ internal static class ProjectValidationRuleExtensions
             .NotEmpty().WithMessage(ValidationMessages.TagTitleRequired)
             .MaximumLength(ProjectValidationConstants.MaxTagTitleLength)
             .WithMessage(ValidationMessages.TagTitleMaxLength)
-            .Must(ContainsNoNullChar)
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
+            .NotContainNullChars()!;
 
     /// <summary>
     /// Applies standard validation rules for a board topic title.
@@ -76,9 +71,5 @@ internal static class ProjectValidationRuleExtensions
             .NotEmpty().WithMessage(ValidationMessages.TopicTitleRequired)
             .MaximumLength(ProjectValidationConstants.MaxTopicTitleLength)
             .WithMessage(ValidationMessages.TopicTitleMaxLength)
-            .Must(ContainsNoNullChar)
-            .WithMessage(ValidationMessages.NullCharacterNotAllowed);
-
-    private static bool ContainsNoNullChar(string? value)
-        => value is null || !value.Contains('\0', StringComparison.Ordinal);
+            .NotContainNullChars()!;
 }

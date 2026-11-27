@@ -6,9 +6,10 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.CustomRecords.Commands;
 
 /// <summary>
-/// Handles the <see cref="DeleteCustomRecordCommand"/> to remove an existing custom record from the database.
+/// Handles the <see cref="DeleteCustomRecordCommand"/> to delete an existing custom record directly from the database.
+/// Because row order uses fractional indexing, deletion requires zero neighbor updates.
 /// </summary>
-/// <param name="customRecordRepository">The repository used for fetching and deleting custom record entities.</param>
+/// <param name="customRecordRepository">The repository used for deleting custom records.</param>
 /// <param name="logger">The logger instance for tracking execution flow.</param>
 public sealed partial class DeleteCustomRecordCommandHandler(
     ICustomRecordRepository customRecordRepository,

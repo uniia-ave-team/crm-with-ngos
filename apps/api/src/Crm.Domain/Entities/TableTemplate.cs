@@ -1,13 +1,13 @@
 using Crm.Domain.Attributes;
 using Crm.Domain.Entities.Base;
 using Crm.Domain.Interfaces.Entities;
+using Crm.Domain.ValueObjects;
 
 namespace Crm.Domain.Entities;
 
 /// <summary>
 /// Represents a reusable blueprint (template) for creating custom tables.
-/// This entity defines the schema but does not store any actual user data.
-/// It acts as a predefined structure that NGOs can instantiate into actual <see cref="CustomTable"/>s.
+/// Stores its column blueprint directly as a JSONB collection of <see cref="TemplateFieldDefinition"/> value objects.
 /// </summary>
 [Auditable]
 public class TableTemplate : BaseEntity, IAuditableEntity, IAuthorTrackedEntity
@@ -24,7 +24,7 @@ public class TableTemplate : BaseEntity, IAuditableEntity, IAuthorTrackedEntity
 
     /// <summary>
     /// Gets or sets a value indicating whether this template is a global system preset provided by default.
-    /// System presets typically cannot be deleted or modified by regular users.
+    /// System presets cannot be deleted or modified by regular users.
     /// </summary>
     public bool IsSystemPreset { get; set; }
 
@@ -59,7 +59,7 @@ public class TableTemplate : BaseEntity, IAuditableEntity, IAuthorTrackedEntity
     public User? Updater { get; set; }
 
     /// <summary>
-    /// Gets the collection of field definitions that make up the schema of this template.
+    /// Gets or sets the ordered column blueprint definitions stored as JSONB on this template.
     /// </summary>
-    public ICollection<TemplateField> Fields { get; init; } = [];
+    public List<TemplateFieldDefinition> Fields { get; set; } = [];
 }

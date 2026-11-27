@@ -42,7 +42,7 @@ public record GetProjectTasksQuery(
     string? OrderBy = null,
     string? SortOrder = SortOrderConstants.Ascending,
     int PageNumber = PaginationConstants.MinPageNumber,
-    int PageSize = PaginationConstants.DefaultPageSize) : IQuery<PagedResult<TaskSummaryDto>>, IPagedSearchQuery, IProjectScoped
+    int PageSize = PaginationConstants.DefaultPageSize) : IQuery<PagedResult<TaskSummaryDto>>, IPagedSearchQuery, IProjectScoped, ICurrentUserAware
 {
     /// <summary>
     /// Gets the optional unique identifier of the project, populated from the route parameter or <c>null</c> for global task queries.
@@ -51,10 +51,10 @@ public record GetProjectTasksQuery(
     public Guid? ProjectId { get; init; }
 
     /// <summary>
-    /// Gets the unique identifier of the currently authenticated user, populated by the controller.
+    /// Gets or sets the unique identifier of the currently authenticated user, populated by the request pipeline.
     /// </summary>
     [JsonIgnore]
-    public Guid CurrentUserId { get; init; }
+    public Guid CurrentUserId { get; set; }
 
     /// <inheritdoc />
     ProjectClaim IProjectScoped.RequiredProjectClaim => ProjectClaim.View;

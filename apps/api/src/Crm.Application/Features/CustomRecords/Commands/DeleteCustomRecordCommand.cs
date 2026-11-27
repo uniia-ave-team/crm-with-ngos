@@ -9,4 +9,4 @@ namespace Crm.Application.Features.CustomRecords.Commands;
 /// <param name="Id">The unique identifier of the record to delete.</param>
 /// <returns>Unit signaling command completion.</returns>
 public record DeleteCustomRecordCommand(
-    Guid Id) : ICommand, ITransactionalCommand;
+    Guid Id) : ICommand, ITransactionalCommand, IHasEntityId;

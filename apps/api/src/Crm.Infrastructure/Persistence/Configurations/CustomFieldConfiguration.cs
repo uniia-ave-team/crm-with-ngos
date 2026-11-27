@@ -15,9 +15,6 @@ public sealed class CustomFieldConfiguration : IEntityTypeConfiguration<CustomFi
     {
         builder.ConfigureFieldDefinition();
 
-        builder.HasIndex(f => new { f.CustomTableId, f.Key })
-            .IsUnique();
-
         builder.HasIndex(f => new { f.CustomTableId, f.Order });
 
         builder.HasQueryFilter(f => !f.CustomTable.IsDeleted);

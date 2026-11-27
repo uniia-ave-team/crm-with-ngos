@@ -1,24 +1,36 @@
 using Crm.Domain.Entities;
-using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories.Generic;
 
 namespace Crm.Domain.Interfaces.Repositories;
 
 /// <summary>
-/// Defines the contract for the repository managing <see cref="UserCustomField"/> entities.
-/// Inherits standard data access operations from <see cref="IGenericRepository{T}"/>.
+/// Repository interface for managing global <see cref="UserCustomField"/> schema definitions.
 /// </summary>
 public interface IUserCustomFieldRepository : IGenericRepository<UserCustomField>
 {
     /// <summary>
-    /// Asynchronously checks if a custom field with the specified key already exists for the user.
-    /// Throws an exception if the key is found.
+    /// Retrieves all global user custom field definitions ordered by <see cref="Domain.Entities.Base.FieldDefinitionBase.Order"/> and <see cref="Domain.Entities.Base.BaseEntity.Id"/> without tracking.
     /// </summary>
-    /// <param name="userId">The unique identifier of the user.</param>
-    /// <param name="key">The key to check.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <exception cref="EntityAlreadyExistsException">Thrown if the key already exists for the user.</exception>
-    Task EnsureKeyDoesNotExistAsync(Guid userId, string key, CancellationToken cancellationToken = default);
+    /// <returns>An ordered read-only list of all global user custom fields.</returns>
+    Task<IReadOnlyList<UserCustomField>> GetAllOrderedAsync(CancellationToken cancellationToken = default);
 
-    // TODO: Add Task<IReadOnlyList<string>> GetDistinctKeysAsync(CancellationToken cancellationToken = default); for frontend table columns.
+    /// <summary>
+    /// Retrieves all tracked global user custom field definitions for transactional schema synchronization.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A tracked list of all global user custom fields.</returns>
+    Task<List<UserCustomField>> GetAllForUpdateAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stages newly added and removed <see cref="UserCustomField"/> entities on the underlying database context.
+    /// </summary>
+    /// <param name="addedFields">Newly created user custom field definitions to add.</param>
+    /// <param name="removedFields">Removed user custom field definitions to delete.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task ApplySchemaChangesAsync(
+        IEnumerable<UserCustomField> addedFields,
+        IEnumerable<UserCustomField> removedFields,
+        CancellationToken cancellationToken = default);
 }

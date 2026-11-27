@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Crm.Domain.Constants.Validation;
+using Crm.Domain.Entities.Base;
 using Crm.Domain.Interfaces.Entities;
 using Crm.Infrastructure.Persistence.Consts;
 using Crm.Infrastructure.Persistence.ValueComparers;
@@ -30,29 +31,21 @@ internal static class EntityTypeBuilderCommonExtensions
     }
 
     /// <summary>
-    /// Configures common schema-field columns (<see cref="IFieldSchema.Name"/>, <see cref="IFieldSchema.Key"/>,
-    /// <see cref="IFieldSchema.DataType"/>, <see cref="IFieldSchema.IsRequired"/>, <see cref="IOrderedEntity.Order"/>)
-    /// shared by custom table fields and template fields.
+    /// Configures common schema-field columns (<see cref="FieldDefinitionBase.Name"/>,
+    /// <see cref="FieldDefinitionBase.IsRequired"/>, <see cref="FieldDefinitionBase.Order"/>)
+    /// shared by custom table fields and global user custom fields.
     /// </summary>
-    /// <typeparam name="TField">The field entity type implementing <see cref="IEntityField"/>.</typeparam>
+    /// <typeparam name="TField">The field entity type inheriting <see cref="FieldDefinitionBase"/>.</typeparam>
     /// <param name="builder">The EF Core entity type builder.</param>
-    public static void ConfigureFieldDefinition<TField>(this EntityTypeBuilder<TField> builder)
-        where TField : class, IEntityField
+    public static void ConfigureFieldDefinition<TField>(
+        this EntityTypeBuilder<TField> builder)
+        where TField : FieldDefinitionBase
     {
         builder.ConfigureGuidV7Key();
 
         builder.Property(f => f.Name)
             .IsRequired()
             .HasMaxLength(FieldSchemaValidationConstants.MaxNameLength);
-
-        builder.Property(f => f.Key)
-            .IsRequired()
-            .HasMaxLength(FieldSchemaValidationConstants.MaxKeyLength);
-
-        builder.Property(f => f.DataType)
-            .HasConversion<string>()
-            .IsRequired()
-            .HasMaxLength(FieldSchemaValidationConstants.MaxDataTypeLength);
 
         builder.Property(f => f.IsRequired)
             .IsRequired();

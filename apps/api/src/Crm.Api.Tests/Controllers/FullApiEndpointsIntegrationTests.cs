@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Crm.Application.Dtos.Auth;
+using Crm.Application.Dtos.Common;
 using Crm.Application.Dtos.CustomRecords;
 using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Dtos.LoginPageImages;
@@ -122,13 +123,13 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         (await adminClient.PostAsJsonAsync("/api/v1/ngo", new CreateNgoCommand("Full Coverage NGO"), ct))
             .StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        // 3. TableTemplates: POST, GET /{id}, PUT /{id}, DELETE /{id}
+        // 3. TableTemplates: POST, GET /{id}, PUT /{id}, DELETE /{id} (Fields persisted as JSONB)
         var createTplResp = await adminClient.PostAsJsonAsync(
             "/api/v1/tabletemplates",
             new CreateTableTemplateCommand(
                 "Grant Template",
                 "Initial desc",
-                [new CreateTemplateFieldDto("Title", "title", FieldDataType.Text, true, 0)]),
+                [new FieldDefinitionDto("Title", true, 0)]),
             ct);
         createTplResp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var templateId = await createTplResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
@@ -136,56 +137,145 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         var fetchedTemplate = await adminClient.GetFromJsonAsync<TableTemplateDto>($"/api/v1/tabletemplates/{templateId}", JsonOptions, ct);
         fetchedTemplate.ShouldNotBeNull();
         fetchedTemplate.Name.ShouldBe("Grant Template");
-        var templateFieldId = fetchedTemplate.Fields.ShouldHaveSingleItem().Id;
+        fetchedTemplate.Fields.ShouldHaveSingleItem().Name.ShouldBe("Title");
 
         (await adminClient.PutAsJsonAsync(
                 $"/api/v1/tabletemplates/{templateId}",
                 new UpdateTableTemplateCommand(
                     "Grant Template Updated",
                     "Updated desc",
-                    [new UpdateTemplateFieldDto(templateFieldId, "Title Updated", "title", FieldDataType.Text, true, 0)]),
+                    [new FieldDefinitionDto("Title Updated", true, 0)]),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         var updatedTemplate = await adminClient.GetFromJsonAsync<TableTemplateDto>($"/api/v1/tabletemplates/{templateId}", JsonOptions, ct);
         updatedTemplate!.Name.ShouldBe("Grant Template Updated");
+        updatedTemplate.Fields.ShouldHaveSingleItem().Name.ShouldBe("Title Updated");
         (await adminClient.DeleteAsync($"/api/v1/tabletemplates/{templateId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // 4. CustomTables & CustomRecords: GET /{id}, PUT /{id}, SearchTerm, HARD-DELETE record, SOFT-DELETE table
+        // 4. CustomTables & CustomRecords: server-generated keys, string-only payloads, partial PATCH cells, fractional Position insert/move/delete, SearchTerm, HARD-DELETE record, SOFT-DELETE table
         var createTableResp = await adminClient.PostAsJsonAsync(
             "/api/v1/customtables",
             new CreateCustomTableCommand(
                 "Donors",
                 "Active donors",
-                [new CreateCustomFieldDto("Organization", "org_name", FieldDataType.Text, true, 0)]),
+                [
+                    new FieldDefinitionDto("Organization", true, 0),
+                    new FieldDefinitionDto("Note", false, 1),
+                ]),
             ct);
         createTableResp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var tableId = await createTableResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
+        var fetchedTable = await adminClient.GetFromJsonAsync<CustomTableDto>($"/api/v1/customtables/{tableId}", JsonOptions, ct);
+        fetchedTable.ShouldNotBeNull();
+        fetchedTable.Fields.Count.ShouldBe(2);
+        var orgField = fetchedTable.Fields[0];
+        var noteField = fetchedTable.Fields[1];
+        orgField.Id.ShouldNotBe(Guid.Empty);
+        noteField.Id.ShouldNotBe(Guid.Empty);
+        string orgKey = orgField.Id.ToString();
+        string noteKey = noteField.Id.ToString();
+
+        // Non-string JSON value -> 400
+        (await adminClient.PostAsJsonAsync(
+                "/api/v1/customrecords",
+                new CreateCustomRecordCommand(tableId, new JsonObject { [orgKey] = 12345 }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
         var rec1Resp = await adminClient.PostAsJsonAsync(
             "/api/v1/customrecords",
-            new CreateCustomRecordCommand(tableId, new JsonObject { ["org_name"] = "Kyiv Aid Foundation" }),
+            new CreateCustomRecordCommand(tableId, new JsonObject { [orgKey] = "Kyiv Aid Foundation", [noteKey] = "Initial note" }),
             ct);
         rec1Resp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var record1Id = await rec1Resp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
         var rec2Resp = await adminClient.PostAsJsonAsync(
             "/api/v1/customrecords",
-            new CreateCustomRecordCommand(tableId, new JsonObject { ["org_name"] = "Lviv Relief" }),
+            new CreateCustomRecordCommand(tableId, new JsonObject { [orgKey] = "Lviv Relief" }),
             ct);
         rec2Resp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var record2Id = await rec2Resp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
-        var fetchedRecord = await adminClient.GetFromJsonAsync<CustomRecordDto>($"/api/v1/customrecords/{record1Id}", JsonOptions, ct);
-        fetchedRecord.ShouldNotBeNull();
-        fetchedRecord.Data["org_name"]?.GetValue<string>().ShouldBe("Kyiv Aid Foundation");
+        // Insert record3 in the middle between record1 and record2
+        var rec3Resp = await adminClient.PostAsJsonAsync(
+            "/api/v1/customrecords",
+            new CreateCustomRecordCommand(tableId, new JsonObject { [orgKey] = "Odesa Support" }, record1Id, record2Id),
+            ct);
+        rec3Resp.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var record3Id = await rec3Resp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
-        (await adminClient.PutAsJsonAsync(
-                $"/api/v1/customrecords/{record1Id}",
-                new UpdateCustomRecordCommand(new JsonObject { ["org_name"] = "Kyiv Humanitarian Hub" }),
+        // Stale neighbors (record1 and record2 are no longer adjacent) -> 409 Conflict
+        (await adminClient.PostAsJsonAsync(
+                "/api/v1/customrecords",
+                new CreateCustomRecordCommand(tableId, new JsonObject { [orgKey] = "Stale Insert" }, record1Id, record2Id),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        // Default Position ordering returns [record1, record3, record2]
+        var orderedPage = (await adminClient.GetFromJsonAsync<PagedResult<CustomRecordDto>>(
+            $"/api/v1/customrecords?CustomTableId={tableId}",
+            JsonOptions,
+            ct))!;
+        orderedPage.Items.Select(r => r.Id).ShouldBe([record1Id, record3Id, record2Id]);
+
+        // Drag-and-drop: move record2 to head (before record1) -> [record2, record1, record3]
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/customrecords/{record2Id}/position",
+                new MoveCustomRecordCommand(null, record1Id),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var movedPage = (await adminClient.GetFromJsonAsync<PagedResult<CustomRecordDto>>(
+            $"/api/v1/customrecords?CustomTableId={tableId}",
+            JsonOptions,
+            ct))!;
+        movedPage.Items.Select(r => r.Id).ShouldBe([record2Id, record1Id, record3Id]);
+
+        var fetchedRecord = await adminClient.GetFromJsonAsync<CustomRecordDto>($"/api/v1/customrecords/{record1Id}", JsonOptions, ct);
+        fetchedRecord.ShouldNotBeNull();
+        fetchedRecord.Data[orgKey]?.GetValue<string>().ShouldBe("Kyiv Aid Foundation");
+        fetchedRecord.Data[noteKey]?.GetValue<string>().ShouldBe("Initial note");
+
+        // Partial PATCH updates only Organization while preserving untouched Note
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/customrecords/{record1Id}",
+                new UpdateCustomRecordCommand(new JsonObject { [orgKey] = "Kyiv Humanitarian Hub" }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Second partial PATCH updates only Note while preserving Organization
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/customrecords/{record1Id}",
+                new UpdateCustomRecordCommand(new JsonObject { [noteKey] = "Priority partner" }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Clearing required field with null -> 400
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/customrecords/{record1Id}",
+                new UpdateCustomRecordCommand(new JsonObject { [orgKey] = null }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var patchedRecord = await adminClient.GetFromJsonAsync<CustomRecordDto>($"/api/v1/customrecords/{record1Id}", JsonOptions, ct);
+        patchedRecord.ShouldNotBeNull();
+        patchedRecord.Data[orgKey]?.GetValue<string>().ShouldBe("Kyiv Humanitarian Hub");
+        patchedRecord.Data[noteKey]?.GetValue<string>().ShouldBe("Priority partner");
+
+        // Clearing optional Note with null -> 204 while preserving Organization
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/customrecords/{record1Id}",
+                new UpdateCustomRecordCommand(new JsonObject { [noteKey] = null }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var clearedNoteRecord = await adminClient.GetFromJsonAsync<CustomRecordDto>($"/api/v1/customrecords/{record1Id}", JsonOptions, ct);
+        clearedNoteRecord.ShouldNotBeNull();
+        clearedNoteRecord.Data[orgKey]?.GetValue<string>().ShouldBe("Kyiv Humanitarian Hub");
+        clearedNoteRecord.Data[noteKey].ShouldBeNull();
 
         var searchRecords = await adminClient.GetFromJsonAsync<PagedResult<CustomRecordDto>>(
             $"/api/v1/customrecords?CustomTableId={tableId}&SearchTerm=Humanitarian",
@@ -193,9 +283,15 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
             ct);
         searchRecords!.Items.ShouldHaveSingleItem().Id.ShouldBe(record1Id);
 
-        // Hard-delete CustomRecord -> row is physically removed from DB
+        // Hard-delete CustomRecord (middle node record1) -> row physically removed and manual order preserved ([record2, record3])
         (await adminClient.DeleteAsync($"/api/v1/customrecords/{record1Id}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var afterDeletePage = (await adminClient.GetFromJsonAsync<PagedResult<CustomRecordDto>>(
+            $"/api/v1/customrecords?CustomTableId={tableId}",
+            JsonOptions,
+            ct))!;
+        afterDeletePage.Items.Select(r => r.Id).ShouldBe([record2Id, record3Id]);
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -265,37 +361,146 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         (await adminClient.DeleteAsync($"/api/v1/roles/{customRoleId}/claims/{viewUserClaim}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // 7. Users: invite secondary user, test admin role/avatar/custom-field endpoints, self custom-fields, last-admin guard, deactivated login, DELETE /me
+        // 7. Users: invite secondary user (short opaque token, list, revoke, validate, single-use accept),
+        // password-reset validate/list/revoke/single-use flow, admin role/avatar/custom-field endpoints, self custom-fields, last-admin guard, deactivated login, DELETE /me
+        var revocableInviteResp = await adminClient.PostAsJsonAsync(
+            "/api/v1/invitations",
+            new InviteUserCommand("revoked-invite@ngo.org", [customRoleId]),
+            ct);
+        revocableInviteResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var revocableInviteToken = (await revocableInviteResp.Content.ReadFromJsonAsync<TokenResultDto>(JsonOptions, ct))!;
+        revocableInviteToken.Token.Length.ShouldBe(24);
+
         var inviteResp = await adminClient.PostAsJsonAsync(
             "/api/v1/invitations",
             new InviteUserCommand("member@ngo.org", [customRoleId]),
             ct);
         inviteResp.StatusCode.ShouldBe(HttpStatusCode.OK);
         var inviteToken = (await inviteResp.Content.ReadFromJsonAsync<TokenResultDto>(JsonOptions, ct))!;
+        inviteToken.Token.Length.ShouldBe(24);
+
+        var activeInvitesPage = (await adminClient.GetFromJsonAsync<PagedResult<ActiveInvitationDto>>("/api/v1/invitations", JsonOptions, ct))!;
+        activeInvitesPage.TotalCount.ShouldBe(2);
+        var revocableInviteRecord = activeInvitesPage.Items.Single(i => i.Email == "revoked-invite@ngo.org");
+        (await adminClient.DeleteAsync($"/api/v1/invitations/{revocableInviteRecord.Id}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await adminClient.DeleteAsync($"/api/v1/invitations/{revocableInviteRecord.Id}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await anonClient.GetAsync($"/api/v1/invitations/validate?Token={Uri.EscapeDataString(revocableInviteToken.Token)}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var validInviteDetails = (await anonClient.GetFromJsonAsync<InvitationDetailsDto>(
+            $"/api/v1/invitations/validate?Token={Uri.EscapeDataString(inviteToken.Token)}",
+            JsonOptions,
+            ct))!;
+        validInviteDetails.Email.ShouldBe("member@ngo.org");
 
         var memberClient = factory.CreateClient();
         var acceptResp = await memberClient.PostAsJsonAsync(
             "/api/v1/invitations/accept",
-            new CompleteRegistrationCommand(inviteToken.Token, "Olena", "Petrenko", null, "StrongPass2!", "StrongPass2!"),
+            new CompleteRegistrationCommand(inviteToken.Token, "Olena", "Petrenko", null, "InitialPass2!", "InitialPass2!"),
             ct);
         acceptResp.StatusCode.ShouldBe(HttpStatusCode.OK);
         var memberTokens = (await acceptResp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
         memberClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberTokens.AccessToken);
 
+        // Consumed invitation token cannot be reused
+        (await anonClient.GetAsync($"/api/v1/invitations/validate?Token={Uri.EscapeDataString(inviteToken.Token)}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
         var memberProfile = (await memberClient.GetFromJsonAsync<UserProfileDto>("/api/v1/users/me", JsonOptions, ct))!;
         var memberId = memberProfile.Id;
 
-        // Admin assigns & removes extra role on user
+        // Password reset token lifecycle: short opaque token, validate (account identity check), paged list + search, revoke, single-use reset
+        var revocableResetResp = await adminClient.PostAsync($"/api/v1/users/{memberId}/password-reset-token", null, ct);
+        revocableResetResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var revocableResetToken = (await revocableResetResp.Content.ReadFromJsonAsync<TokenResultDto>(JsonOptions, ct))!;
+        revocableResetToken.Token.Length.ShouldBe(24);
+
+        var activeResetResp = await adminClient.PostAsync($"/api/v1/users/{memberId}/password-reset-token", null, ct);
+        activeResetResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var activeResetToken = (await activeResetResp.Content.ReadFromJsonAsync<TokenResultDto>(JsonOptions, ct))!;
+        activeResetToken.Token.Length.ShouldBe(24);
+
+        var resetTokensPage = (await adminClient.GetFromJsonAsync<PagedResult<ActivePasswordResetTokenDto>>(
+            $"/api/v1/users/password-reset-tokens?userId={memberId}&searchTerm=Olena&orderBy=CreatedAt&sortOrder=desc&pageNumber=1&pageSize=10",
+            JsonOptions,
+            ct))!;
+        resetTokensPage.TotalCount.ShouldBe(2);
+        resetTokensPage.Items.All(t => t.Email == "member@ngo.org" && t.FirstName == "Olena" && t.LastName == "Petrenko").ShouldBeTrue();
+
+        // Validate endpoint identifies the target user so two users cannot mix up reset links
+        var resetDetails = (await anonClient.GetFromJsonAsync<PasswordResetDetailsDto>(
+            $"/api/v1/users/reset-password/validate?Token={Uri.EscapeDataString(activeResetToken.Token)}",
+            JsonOptions,
+            ct))!;
+        resetDetails.Email.ShouldBe("member@ngo.org");
+        resetDetails.FirstName.ShouldBe("Olena");
+        resetDetails.LastName.ShouldBe("Petrenko");
+        (await anonClient.GetAsync("/api/v1/users/reset-password/validate?Token=not-a-valid-token", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // Revoke the older reset token and verify it is immediately invalidated
+        var olderResetId = resetTokensPage.Items.Last().Id;
+        (await adminClient.DeleteAsync($"/api/v1/users/password-reset-tokens/{olderResetId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await adminClient.DeleteAsync($"/api/v1/users/password-reset-tokens/{olderResetId}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await anonClient.GetAsync($"/api/v1/users/reset-password/validate?Token={Uri.EscapeDataString(revocableResetToken.Token)}", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // Complete password reset using the valid token and confirm single-use + login with new password
+        (await anonClient.PostAsJsonAsync(
+                "/api/v1/users/reset-password",
+                new ResetPasswordCommand(activeResetToken.Token, "StrongPass2!"),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await anonClient.PostAsJsonAsync(
+                "/api/v1/users/reset-password",
+                new ResetPasswordCommand(activeResetToken.Token, "AnotherPass2!"),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await adminClient.GetFromJsonAsync<PagedResult<ActivePasswordResetTokenDto>>(
+            $"/api/v1/users/password-reset-tokens?userId={memberId}",
+            JsonOptions,
+            ct))!.Items.ShouldBeEmpty();
+
+        var reLoginResp = await anonClient.PostAsJsonAsync(
+            "/api/v1/auth/login",
+            new AuthenticateUserCommand("member@ngo.org", "StrongPass2!"),
+            ct);
+        reLoginResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        memberTokens = (await reLoginResp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
+        memberClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberTokens.AccessToken);
+
+        // Admin assigns & removes extra role on user: stale access token must immediately get 401 until refreshed
         var extraRoleResp = await adminClient.PostAsJsonAsync("/api/v1/roles", new CreateRoleCommand("Volunteer", null, null), ct);
         extraRoleResp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var extraRoleId = await extraRoleResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
         (await adminClient.PostAsync($"/api/v1/users/{memberId}/roles/{extraRoleId}", null, ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Old token issued before role assignment is rejected immediately with 401
+        (await memberClient.GetAsync("/api/v1/users/me", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
         (await adminClient.DeleteAsync($"/api/v1/users/{memberId}/roles/{extraRoleId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await adminClient.DeleteAsync($"/api/v1/roles/{extraRoleId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Refreshing restores access with up-to-date role_id claims while old token stays rejected
+        var refreshedAfterRoleChangeResp = await anonClient.PostAsJsonAsync(
+            "/api/v1/auth/refresh-token",
+            new RefreshTokensCommand(memberTokens.AccessToken, memberTokens.RefreshToken),
+            ct);
+        refreshedAfterRoleChangeResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+        memberTokens = (await refreshedAfterRoleChangeResp.Content.ReadFromJsonAsync<AuthTokensDto>(JsonOptions, ct))!;
+        memberClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", memberTokens.AccessToken);
+
+        (await memberClient.GetAsync("/api/v1/users/me", ct))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Admin uploads & retrieves user avatar (plus invalid format -> 400)
         using (var badAvatarForm = CreateMultipartFile("file", "bad.png", "image/png", Encoding.UTF8.GetBytes("invalid")))
@@ -313,41 +518,133 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         (await adminClient.GetAsync($"/api/v1/users/{memberId}/avatar", ct))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        // Admin adds, updates, removes custom field on target user
-        (await adminClient.PostAsJsonAsync(
-                $"/api/v1/users/{memberId}/custom-fields",
-                new AddUserCustomFieldCommand("telegram", "@olena", true),
-                ct))
-            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-
-        var memberWithField = (await adminClient.GetFromJsonAsync<UserProfileDto>($"/api/v1/users/{memberId}", JsonOptions, ct))!;
-        var adminAddedFieldId = memberWithField.CustomFields.ShouldHaveSingleItem().Id;
-
+        // Global user custom fields schema + string JSONB values: server-generated immutable keys,
+        // update self & target values, verify smart sorting & plain SearchTerm filtering, rename label keeping key, and remove columns.
         (await adminClient.PutAsJsonAsync(
-                $"/api/v1/users/{memberId}/custom-fields/{adminAddedFieldId}",
-                new UpdateUserCustomFieldCommand("@olena_updated", false),
+                "/api/v1/users/custom-fields",
+                new SyncUserCustomFieldsCommand(
+                [
+                    new UpdateUserCustomFieldDto(null, "Досвід (років)", IsRequired: true, IsPublic: true, Order: 0),
+                    new UpdateUserCustomFieldDto(null, "Внутрішній бал", IsRequired: false, IsPublic: false, Order: 1),
+                    new UpdateUserCustomFieldDto(null, "Місто", IsRequired: false, IsPublic: true, Order: 2),
+                ]),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await adminClient.DeleteAsync($"/api/v1/users/{memberId}/custom-fields/{adminAddedFieldId}", ct))
-            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // Self user adds, updates, removes own custom field
-        (await memberClient.PostAsJsonAsync(
+        var adminHeaders = (await adminClient.GetFromJsonAsync<List<UserCustomFieldDto>>("/api/v1/users/custom-fields", JsonOptions, ct))!;
+        adminHeaders.Count.ShouldBe(3);
+        var expField = adminHeaders[0];
+        expField.Id.ShouldNotBe(Guid.Empty);
+        expField.Name.ShouldBe("Досвід (років)");
+        expField.IsRequired.ShouldBeTrue();
+        expField.IsPublic.ShouldBeTrue();
+        var internalField = adminHeaders[1];
+        internalField.Id.ShouldNotBe(Guid.Empty);
+        internalField.IsPublic.ShouldBeFalse();
+        var cityField = adminHeaders[2];
+        cityField.Id.ShouldNotBe(Guid.Empty);
+
+        string expKey = expField.Id.ToString();
+        string internalKey = internalField.Id.ToString();
+        string cityKey = cityField.Id.ToString();
+
+        // Member sees all schema columns on /me/custom-fields to fill their own profile
+        var selfHeaders = (await memberClient.GetFromJsonAsync<List<UserCustomFieldDto>>("/api/v1/users/me/custom-fields", JsonOptions, ct))!;
+        selfHeaders.Count.ShouldBe(3);
+
+        // Non-string JSON value (number instead of string) -> 400
+        (await memberClient.PatchAsJsonAsync(
                 "/api/v1/users/me/custom-fields",
-                new AddUserCustomFieldCommand("city", "Kyiv", true),
+                new UpdateUserCustomFieldsCommand(new JsonObject { [expKey] = 10 }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // Member updates own custom field values (all values stored as JSON strings)
+        (await memberClient.PatchAsJsonAsync(
+                "/api/v1/users/me/custom-fields",
+                new UpdateUserCustomFieldsCommand(new JsonObject
+                {
+                    [expKey] = "10",
+                    [internalKey] = "95",
+                    [cityKey] = "Dnipro",
+                }),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        var selfProfile = (await memberClient.GetFromJsonAsync<UserProfileDto>("/api/v1/users/me", JsonOptions, ct))!;
-        var selfFieldId = selfProfile.CustomFields.ShouldHaveSingleItem().Id;
-
-        (await memberClient.PutAsJsonAsync(
-                $"/api/v1/users/me/custom-fields/{selfFieldId}",
-                new UpdateUserCustomFieldCommand("Lviv", true),
+        // Partial PATCH on /me/custom-fields updates only City while preserving Experience ("10") and Internal score ("95")
+        (await memberClient.PatchAsJsonAsync(
+                "/api/v1/users/me/custom-fields",
+                new UpdateUserCustomFieldsCommand(new JsonObject { [cityKey] = "Lviv" }),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await memberClient.DeleteAsync($"/api/v1/users/me/custom-fields/{selfFieldId}", ct))
+
+        var memberProfileAfterPartialPatch = (await adminClient.GetFromJsonAsync<UserProfileDto>($"/api/v1/users/{memberId}", JsonOptions, ct))!;
+        memberProfileAfterPartialPatch.CustomFields[expKey]?.GetValue<string>().ShouldBe("10");
+        memberProfileAfterPartialPatch.CustomFields[internalKey]?.GetValue<string>().ShouldBe("95");
+        memberProfileAfterPartialPatch.CustomFields[cityKey]?.GetValue<string>().ShouldBe("Lviv");
+
+        // Admin updates admin's own custom field values via PATCH /{id}/custom-fields ("2" > "10" lexicographically, but 10 > 2 numerically)
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/users/{adminId}/custom-fields",
+                new UpdateUserCustomFieldsCommand(new JsonObject
+                {
+                    [expKey] = "2",
+                    [cityKey] = "Kyiv",
+                }),
+                ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Partial PATCH via /{id}/custom-fields changes only City while preserving Experience ("2")
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/users/{adminId}/custom-fields",
+                new UpdateUserCustomFieldsCommand(new JsonObject { [cityKey] = "Odesa" }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var adminProfileAfterPartialPatch = (await adminClient.GetFromJsonAsync<UserProfileDto>($"/api/v1/users/{adminId}", JsonOptions, ct))!;
+        adminProfileAfterPartialPatch.CustomFields[expKey]?.GetValue<string>().ShouldBe("2");
+        adminProfileAfterPartialPatch.CustomFields[cityKey]?.GetValue<string>().ShouldBe("Odesa");
+
+        // Admin sorts users by field ID (smart numeric DESC puts "10" ahead of "2") and searches via plain SearchTerm
+        var sortedUsers = (await adminClient.GetFromJsonAsync<PagedResult<UserDto>>(
+                $"/api/v1/users?OrderBy={expKey}&SortOrder=desc",
+                JsonOptions,
+                ct))!;
+        sortedUsers.Items.Count.ShouldBe(2);
+        var topSortedUser = sortedUsers.Items.First();
+        topSortedUser.Id.ShouldBe(memberId);
+        topSortedUser.CustomFields[expKey]?.GetValue<string>().ShouldBe("10");
+
+        var filteredUsers = (await adminClient.GetFromJsonAsync<PagedResult<UserDto>>(
+                "/api/v1/users?SearchTerm=Lviv",
+                JsonOptions,
+                ct))!;
+        filteredUsers.Items.ShouldHaveSingleItem().Id.ShouldBe(memberId);
+
+        // Admin renames display label (field ID stays immutable!) & removes internal_score -> dropped ID stripped across all users
+        (await adminClient.PutAsJsonAsync(
+                "/api/v1/users/custom-fields",
+                new SyncUserCustomFieldsCommand(
+                [
+                    new UpdateUserCustomFieldDto(expField.Id, "Роки активності", IsRequired: true, IsPublic: true, Order: 0),
+                    new UpdateUserCustomFieldDto(cityField.Id, "Місто", IsRequired: false, IsPublic: true, Order: 1),
+                ]),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var headersAfterUpdate = (await adminClient.GetFromJsonAsync<List<UserCustomFieldDto>>("/api/v1/users/custom-fields", JsonOptions, ct))!;
+        headersAfterUpdate.Single(h => h.Id == expField.Id).Name.ShouldBe("Роки активності");
+
+        var memberProfileAfterUpdate = (await adminClient.GetFromJsonAsync<UserProfileDto>($"/api/v1/users/{memberId}", JsonOptions, ct))!;
+        memberProfileAfterUpdate.CustomFields[expKey]?.GetValue<string>().ShouldBe("10");
+        memberProfileAfterUpdate.CustomFields.ContainsKey(internalKey).ShouldBeFalse();
+
+        // Clean up global user custom fields schema (sync to empty)
+        (await adminClient.PutAsJsonAsync("/api/v1/users/custom-fields", new SyncUserCustomFieldsCommand([]), ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var adminProfileAfterDelete = (await adminClient.GetFromJsonAsync<UserProfileDto>("/api/v1/users/me", JsonOptions, ct))!;
+        adminProfileAfterDelete.CustomFields.Count.ShouldBe(0);
 
         // Last admin protection -> 400
         (await adminClient.PostAsync($"/api/v1/users/{adminId}/deactivate", null, ct))

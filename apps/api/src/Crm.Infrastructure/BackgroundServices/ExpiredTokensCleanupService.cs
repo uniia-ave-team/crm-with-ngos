@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Infrastructure.BackgroundServices;
 
 /// <summary>
-/// Background service responsible for periodically removing expired refresh tokens from the database.
+/// Background service responsible for periodically removing expired refresh tokens and action tokens from the database.
 /// Ensures the token storage does not grow indefinitely.
 /// </summary>
 /// <param name="scopeFactory">The DI scope factory used to resolve scoped repositories.</param>
@@ -55,8 +55,10 @@ public sealed partial class ExpiredTokensCleanupService(
 
             await using var scope = scopeFactory.CreateAsyncScope();
             var refreshTokenRepository = scope.ServiceProvider.GetRequiredService<IUserRefreshTokenRepository>();
+            var actionTokenRepository = scope.ServiceProvider.GetRequiredService<IUserActionTokenRepository>();
 
             await refreshTokenRepository.RemoveExpiredTokensAsync(cancellationToken);
+            await actionTokenRepository.RemoveExpiredTokensAsync(cancellationToken);
 
             LogCleanupSuccessfullyFinished(logger);
         }
@@ -79,12 +81,12 @@ public sealed partial class ExpiredTokensCleanupService(
     [LoggerMessage(EventId = LogEventIds.CleanupServiceFatalError, Level = LogLevel.Critical, Message = "A fatal error occurred in the expired tokens cleanup service.")]
     private static partial void LogCleanupServiceFatalError(ILogger logger, Exception exception);
 
-    [LoggerMessage(EventId = LogEventIds.CleanupStarted, Level = LogLevel.Information, Message = "Starting expired refresh tokens cleanup...")]
+    [LoggerMessage(EventId = LogEventIds.CleanupStarted, Level = LogLevel.Information, Message = "Starting expired tokens cleanup...")]
     private static partial void LogCleanupStarted(ILogger logger);
 
-    [LoggerMessage(EventId = LogEventIds.CleanupSuccessfullyFinished, Level = LogLevel.Information, Message = "Successfully finished expired refresh tokens cleanup.")]
+    [LoggerMessage(EventId = LogEventIds.CleanupSuccessfullyFinished, Level = LogLevel.Information, Message = "Successfully finished expired tokens cleanup.")]
     private static partial void LogCleanupSuccessfullyFinished(ILogger logger);
 
-    [LoggerMessage(EventId = LogEventIds.CleanupFailed, Level = LogLevel.Error, Message = "Failed to clean up expired refresh tokens from the database.")]
+    [LoggerMessage(EventId = LogEventIds.CleanupFailed, Level = LogLevel.Error, Message = "Failed to clean up expired tokens from the database.")]
     private static partial void LogCleanupFailed(ILogger logger, Exception exception);
 }

@@ -2,7 +2,6 @@ using Crm.Application.Dtos.CustomRecords;
 using Crm.Application.Features.CustomRecords.Queries;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
-using Crm.Domain.Enums;
 using Crm.Domain.Interfaces.Repositories;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -15,31 +14,59 @@ namespace Crm.Application.Tests.Features.CustomRecords;
 public class GetCustomRecordsPagedQueryHandlerOrderingTests
 {
     private readonly ICustomTableRepository _tableRepo = Substitute.For<ICustomTableRepository>();
-    private readonly ICustomFieldRepository _fieldRepo = Substitute.For<ICustomFieldRepository>();
     private readonly ICustomRecordRepository _recordRepo = Substitute.For<ICustomRecordRepository>();
     private readonly ILogger<GetCustomRecordsPagedQueryHandler> _logger = Substitute.For<ILogger<GetCustomRecordsPagedQueryHandler>>();
 
-    /// <summary>
-    /// Verifies that sorting by <see cref="CustomRecord.CustomTableId"/> preserves the property ordering
-    /// and checks table existence when no custom fields are returned.
-    /// </summary>
+    [Fact]
+    public async Task HandleWhenOrderByIsOmittedShouldPassNullForManualPositionOrdering()
+    {
+        // Arrange
+        var handler = new GetCustomRecordsPagedQueryHandler(_tableRepo, _recordRepo, _logger);
+        var tableId = Guid.CreateVersion7();
+        var query = new GetCustomRecordsPagedQuery(tableId);
+
+        _tableRepo.GetFieldsByCustomTableIdAsync(tableId, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<CustomField>>([new CustomField { Name = "Age" }]));
+
+        _recordRepo.GetPagedAsync<CustomRecordDto>(
+                tableId,
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<string?>(),
+                Arg.Any<int>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new PagedResult<CustomRecordDto>([], 0, 1, 20)));
+
+        // Act
+        await handler.Handle(query, CancellationToken.None);
+
+        // Assert
+        await _recordRepo.Received(1).GetPagedAsync<CustomRecordDto>(
+            customTableId: tableId,
+            searchTerm: Arg.Any<string?>(),
+            orderBy: null,
+            sortOrder: "asc",
+            pageNumber: Arg.Any<int>(),
+            pageSize: Arg.Any<int>(),
+            cancellationToken: Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task HandleWhenSortingByCustomTableIdShouldPreserveCustomTableIdOrdering()
     {
         // Arrange
-        var handler = new GetCustomRecordsPagedQueryHandler(_tableRepo, _fieldRepo, _recordRepo, _logger);
-        var tableId = Guid.NewGuid();
-
+        var handler = new GetCustomRecordsPagedQueryHandler(_tableRepo, _recordRepo, _logger);
+        var tableId = Guid.CreateVersion7();
         var query = new GetCustomRecordsPagedQuery(tableId, OrderBy: nameof(CustomRecord.CustomTableId), SortOrder: "DESC");
 
-        _fieldRepo.GetByCustomTableIdAsync(tableId, Arg.Any<CancellationToken>())
+        _tableRepo.GetFieldsByCustomTableIdAsync(tableId, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyList<CustomField>>([]));
 
         _recordRepo.GetPagedAsync<CustomRecordDto>(
                 tableId,
                 Arg.Any<string?>(),
-                Arg.Any<string>(),
-                Arg.Any<FieldDataType?>(),
+                Arg.Any<string?>(),
                 Arg.Any<string?>(),
                 Arg.Any<int>(),
                 Arg.Any<int>(),
@@ -55,34 +82,28 @@ public class GetCustomRecordsPagedQueryHandlerOrderingTests
             customTableId: tableId,
             searchTerm: Arg.Any<string?>(),
             orderBy: nameof(CustomRecord.CustomTableId),
-            fieldDataType: null,
             sortOrder: "DESC",
             pageNumber: Arg.Any<int>(),
             pageSize: Arg.Any<int>(),
             cancellationToken: Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Verifies that sorting by a valid custom field passes the field key and data type
-    /// and skips the redundant table existence check when custom fields exist.
-    /// </summary>
     [Fact]
-    public async Task HandleWhenSortingByValidCustomFieldShouldPassCustomFieldKeyAndDataType()
+    public async Task HandleWhenSortingByValidCustomFieldIdShouldPassCanonicalLowercaseFieldId()
     {
         // Arrange
-        var handler = new GetCustomRecordsPagedQueryHandler(_tableRepo, _fieldRepo, _recordRepo, _logger);
-        var tableId = Guid.NewGuid();
+        var ageField = new CustomField { Name = "Age" };
+        var handler = new GetCustomRecordsPagedQueryHandler(_tableRepo, _recordRepo, _logger);
+        var tableId = Guid.CreateVersion7();
+        var query = new GetCustomRecordsPagedQuery(tableId, OrderBy: ageField.Id.ToString().ToUpperInvariant(), SortOrder: "ASC");
 
-        var query = new GetCustomRecordsPagedQuery(tableId, OrderBy: "data['age']", SortOrder: "ASC");
-
-        _fieldRepo.GetByCustomTableIdAsync(tableId, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<CustomField>>([new CustomField { Key = "age", DataType = FieldDataType.Number }]));
+        _tableRepo.GetFieldsByCustomTableIdAsync(tableId, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<CustomField>>([ageField]));
 
         _recordRepo.GetPagedAsync<CustomRecordDto>(
                 tableId,
                 Arg.Any<string?>(),
-                Arg.Any<string>(),
-                Arg.Any<FieldDataType?>(),
+                Arg.Any<string?>(),
                 Arg.Any<string?>(),
                 Arg.Any<int>(),
                 Arg.Any<int>(),
@@ -97,34 +118,28 @@ public class GetCustomRecordsPagedQueryHandlerOrderingTests
         await _recordRepo.Received(1).GetPagedAsync<CustomRecordDto>(
             customTableId: tableId,
             searchTerm: Arg.Any<string?>(),
-            orderBy: "age",
-            fieldDataType: FieldDataType.Number,
+            orderBy: ageField.Id.ToString(),
             sortOrder: "ASC",
             pageNumber: Arg.Any<int>(),
             pageSize: Arg.Any<int>(),
             cancellationToken: Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Verifies that sorting by a nonexistent dynamic field falls back to <see cref="CustomRecordDto.Id"/>.
-    /// </summary>
     [Fact]
-    public async Task HandleWhenSortingByGhostFieldShouldFallbackToId()
+    public async Task HandleWhenSortingByGhostOrPrefixedFieldShouldFallbackToId()
     {
         // Arrange
-        var handler = new GetCustomRecordsPagedQueryHandler(_tableRepo, _fieldRepo, _recordRepo, _logger);
-        var tableId = Guid.NewGuid();
-
+        var handler = new GetCustomRecordsPagedQueryHandler(_tableRepo, _recordRepo, _logger);
+        var tableId = Guid.CreateVersion7();
         var query = new GetCustomRecordsPagedQuery(tableId, OrderBy: "data.nonexistent_field", SortOrder: "ASC");
 
-        _fieldRepo.GetByCustomTableIdAsync(tableId, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<CustomField>>([new CustomField { Key = "age", DataType = FieldDataType.Number }]));
+        _tableRepo.GetFieldsByCustomTableIdAsync(tableId, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<CustomField>>([new CustomField { Name = "Age" }]));
 
         _recordRepo.GetPagedAsync<CustomRecordDto>(
                 tableId,
                 Arg.Any<string?>(),
-                Arg.Any<string>(),
-                Arg.Any<FieldDataType?>(),
+                Arg.Any<string?>(),
                 Arg.Any<string?>(),
                 Arg.Any<int>(),
                 Arg.Any<int>(),
@@ -140,33 +155,27 @@ public class GetCustomRecordsPagedQueryHandlerOrderingTests
             customTableId: tableId,
             searchTerm: Arg.Any<string?>(),
             orderBy: nameof(CustomRecordDto.Id),
-            fieldDataType: null,
             sortOrder: "ASC",
             pageNumber: Arg.Any<int>(),
             pageSize: Arg.Any<int>(),
             cancellationToken: Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Verifies that sorting by a navigation property falls back to <see cref="CustomRecordDto.Id"/>.
-    /// </summary>
     [Fact]
     public async Task HandleWhenSortingByNavigationPropertyShouldFallbackToId()
     {
         // Arrange
-        var handler = new GetCustomRecordsPagedQueryHandler(_tableRepo, _fieldRepo, _recordRepo, _logger);
-        var tableId = Guid.NewGuid();
-
+        var handler = new GetCustomRecordsPagedQueryHandler(_tableRepo, _recordRepo, _logger);
+        var tableId = Guid.CreateVersion7();
         var query = new GetCustomRecordsPagedQuery(tableId, OrderBy: nameof(CustomRecord.CustomTable), SortOrder: "ASC");
 
-        _fieldRepo.GetByCustomTableIdAsync(tableId, Arg.Any<CancellationToken>())
+        _tableRepo.GetFieldsByCustomTableIdAsync(tableId, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyList<CustomField>>([]));
 
         _recordRepo.GetPagedAsync<CustomRecordDto>(
                 tableId,
                 Arg.Any<string?>(),
-                Arg.Any<string>(),
-                Arg.Any<FieldDataType?>(),
+                Arg.Any<string?>(),
                 Arg.Any<string?>(),
                 Arg.Any<int>(),
                 Arg.Any<int>(),
@@ -182,7 +191,6 @@ public class GetCustomRecordsPagedQueryHandlerOrderingTests
             customTableId: tableId,
             searchTerm: Arg.Any<string?>(),
             orderBy: nameof(CustomRecordDto.Id),
-            fieldDataType: null,
             sortOrder: "ASC",
             pageNumber: Arg.Any<int>(),
             pageSize: Arg.Any<int>(),

@@ -4,7 +4,6 @@ using Crm.Api.Security;
 using Crm.Application.Dtos.Projects;
 using Crm.Application.Features.Projects.Commands;
 using Crm.Application.Features.Projects.Queries;
-using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Mediator;
@@ -16,15 +15,12 @@ namespace Crm.Api.Controllers.V1;
 /// Controller responsible for managing projects, project-level user roles/claims, board topics, and project-scoped tags.
 /// </summary>
 /// <param name="mediator">The mediator instance used for dispatching commands and queries.</param>
-/// <param name="currentUserService">The service for retrieving the currently authenticated user's identifier.</param>
 [ApiController]
 [ApiVersion(ApiVersions.V1)]
 [Route(ApiRouteConstants.DefaultControllerRoute)]
 [ProducesResponseType(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(StatusCodes.Status403Forbidden)]
-public sealed class ProjectsController(
-    IMediator mediator,
-    ICurrentUserService currentUserService) : ControllerBase
+public sealed class ProjectsController(IMediator mediator) : ControllerBase
 {
     /// <summary>
     /// Retrieves a paginated, filtered, and sorted list of projects visible to the currently authenticated user.
@@ -40,9 +36,7 @@ public sealed class ProjectsController(
         [FromQuery] GetProjectsQuery query,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(
-            query with { CurrentUserId = currentUserService.GetUserId() },
-            cancellationToken);
+        var result = await mediator.Send(query, cancellationToken);
         return Ok(result);
     }
 
@@ -60,9 +54,7 @@ public sealed class ProjectsController(
         Guid id,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(
-            new GetProjectByIdQuery(id, currentUserService.GetUserId()),
-            cancellationToken);
+        var result = await mediator.Send(new GetProjectByIdQuery(id), cancellationToken);
         return Ok(result);
     }
 
@@ -80,9 +72,7 @@ public sealed class ProjectsController(
         [FromBody] CreateProjectCommand command,
         CancellationToken cancellationToken)
     {
-        var id = await mediator.Send(
-            command with { CurrentUserId = currentUserService.GetUserId() },
-            cancellationToken);
+        var id = await mediator.Send(command, cancellationToken);
         return CreatedAtRoute(nameof(GetProjectById), new { id }, id);
     }
 
@@ -103,9 +93,7 @@ public sealed class ProjectsController(
         [FromBody] UpdateProjectCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(
-            command with { Id = id, CurrentUserId = currentUserService.GetUserId() },
-            cancellationToken);
+        await mediator.Send(command with { Id = id }, cancellationToken);
         return NoContent();
     }
 
@@ -123,7 +111,7 @@ public sealed class ProjectsController(
         Guid id,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(new DeleteProjectCommand(id, currentUserService.GetUserId()), cancellationToken);
+        await mediator.Send(new DeleteProjectCommand(id), cancellationToken);
         return NoContent();
     }
 
@@ -141,9 +129,7 @@ public sealed class ProjectsController(
         Guid projectId,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(
-            new GetProjectMembersQuery(projectId, currentUserService.GetUserId()),
-            cancellationToken);
+        var result = await mediator.Send(new GetProjectMembersQuery(projectId), cancellationToken);
         return Ok(result);
     }
 

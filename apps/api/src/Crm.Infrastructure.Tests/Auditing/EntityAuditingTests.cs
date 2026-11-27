@@ -52,6 +52,11 @@ public class EntityAuditingTests
         tagMeta.EntityName.ShouldBe(nameof(Tag));
         tagMeta.IgnoredProperties.ShouldContain(nameof(Tag.NormalizedTitle));
 
+        var customRecordMeta = AuditMetadataCache.TryGetMetadata(typeof(CustomRecord));
+        customRecordMeta.ShouldNotBeNull();
+        customRecordMeta.EntityName.ShouldBe(nameof(CustomRecord));
+        customRecordMeta.IgnoredProperties.ShouldContain(nameof(CustomRecord.Position));
+
         var customMeta = AuditMetadataCache.TryGetMetadata(typeof(CustomNamedAuditedEntity));
         customMeta.ShouldNotBeNull();
         customMeta.EntityName.ShouldBe("SecretItem");
@@ -156,20 +161,22 @@ public class EntityAuditingTests
         {
             Id = recordId,
             CustomTableId = Guid.CreateVersion7(),
+            Position = "a0",
             Data = new JsonObject
             {
                 ["email"] = "old@ngo.org",
                 ["legacy"] = "remove-me",
-                ["unchanged"] = 42,
+                ["unchanged"] = "42",
             },
         };
 
         context.Attach(record);
+        record.Position = "a0V";
         record.Data = new JsonObject
         {
             ["email"] = "new@ngo.org",
             ["phone"] = "+380501234567",
-            ["unchanged"] = 42,
+            ["unchanged"] = "42",
         };
         context.ChangeTracker.DetectChanges();
 
@@ -190,6 +197,7 @@ public class EntityAuditingTests
         diff["Data.legacy"].NewValue.ShouldBeNull();
 
         diff.ShouldNotContainKey("Data.unchanged");
+        diff.ShouldNotContainKey(nameof(CustomRecord.Position));
     }
 
     [Fact]

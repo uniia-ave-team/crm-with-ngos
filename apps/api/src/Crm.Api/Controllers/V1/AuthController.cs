@@ -2,7 +2,6 @@ using Asp.Versioning;
 using Crm.Api.Consts;
 using Crm.Application.Dtos.Auth;
 using Crm.Application.Features.Users.Commands;
-using Crm.Application.Interfaces;
 using Mediator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,12 +11,11 @@ namespace Crm.Api.Controllers.V1;
 /// <summary>
 /// Controller responsible for authentication and token management processes.
 /// </summary>
+/// <param name="mediator">The mediator instance used for dispatching commands.</param>
 [ApiController]
 [ApiVersion(ApiVersions.V1)]
 [Route(ApiRouteConstants.DefaultControllerRoute)]
-public sealed class AuthController(
-    IMediator mediator,
-    ICurrentUserService currentUserService) : ControllerBase
+public sealed class AuthController(IMediator mediator) : ControllerBase
 {
     /// <summary>
     /// Authenticates a user and issues access and refresh tokens.
@@ -73,7 +71,7 @@ public sealed class AuthController(
         [FromBody] LogoutCommand command,
         CancellationToken cancellationToken)
     {
-        await mediator.Send(command with { UserId = currentUserService.GetUserId() }, cancellationToken);
+        await mediator.Send(command, cancellationToken);
         return NoContent();
     }
 }

@@ -35,7 +35,7 @@ apps/api/
 └── src/
     ├── Crm.Domain/                   # Core business models — entities, enums, expressions, interfaces, exceptions
     │   ├── Entities/                 # Domain entities (User, Ngo, Role, CustomTable, CustomRecord, TableTemplate, etc.)
-    │   ├── Enums/                    # Domain enumerations (AccessRight, FieldDataType, status flags)
+    │   ├── Enums/                    # Domain enumerations (AccessRight, status flags)
     │   ├── Exceptions/               # Domain validation, not-found, and conflict exceptions (ConflictException, ConcurrencyConflictException, etc.)
     │   ├── Expressions/              # Reusable LINQ expression trees
     │   └── Interfaces/               # Repository & schema contracts (IGenericRepository<T>, IFieldSchema, etc.)
@@ -451,7 +451,7 @@ apps/api/
 └── src/
     ├── Crm.Domain/              # Кореневий шар бізнес-моделей
     │   ├── Entities/            # Доменні сутності (User, Ngo, Role, CustomTable, CustomRecord, TableTemplate тощо)
-    │   ├── Enums/               # Переліки прав (AccessRight), типів полів (FieldDataType), статусів тощо
+    │   ├── Enums/               # Переліки прав (AccessRight), статусів тощо
     │   ├── Exceptions/          # Доменні винятки валідації, відсутності сутностей і конфліктів (ConflictException, ConcurrencyConflictException тощо)
     │   ├── Expressions/         # Перевикористовувані LINQ-вирази
     │   └── Interfaces/          # Контракти репозиторіїв і схем (IGenericRepository<T>, IFieldSchema тощо)
