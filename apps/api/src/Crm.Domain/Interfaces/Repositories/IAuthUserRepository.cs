@@ -41,7 +41,7 @@ public interface IAuthUserRepository :
     /// <param name="pageNumber">The current page number (1-based index). Defaults to 1.</param>
     /// <param name="pageSize">The number of items per page. Defaults to 10.</param>
     /// <param name="showDeleted">A value indicating whether to include soft-deleted entities in the results. Defaults to false.</param>
-    /// <param name="customFieldSort">Optional resolved custom field sort specification for typed SQL ordering.</param>
+    /// <param name="customFieldSortKey">Optional resolved custom field key for smart SQL ordering.</param>
     /// <param name="searchablePublicCustomFieldKeys">Optional list of public custom field JSONB keys eligible for text search across all users.</param>
     /// <param name="searchablePrivateCustomFieldKeys">Optional list of private custom field JSONB keys eligible for text search on the requesting user's own row.</param>
     /// <param name="currentUserId">The optional identifier of the requesting user for self-visibility search enforcement.</param>
@@ -54,7 +54,7 @@ public interface IAuthUserRepository :
         int pageNumber = PaginationConstants.MinPageNumber,
         int pageSize = PaginationConstants.DefaultPageSize,
         bool showDeleted = false,
-        UserCustomFieldSort? customFieldSort = null,
+        string? customFieldSortKey = null,
         IReadOnlyList<string>? searchablePublicCustomFieldKeys = null,
         IReadOnlyList<string>? searchablePrivateCustomFieldKeys = null,
         Guid? currentUserId = null,

@@ -36,7 +36,7 @@ public sealed partial class GetUsersQueryHandler(
             pageNumber: query.PageNumber,
             pageSize: query.PageSize,
             showDeleted: query.ShowDeleted,
-            customFieldSort: context.CustomFieldSort,
+            customFieldSortKey: context.CustomFieldSortKey,
             searchablePublicCustomFieldKeys: context.SearchablePublicCustomFieldKeys,
             searchablePrivateCustomFieldKeys: context.SearchablePrivateCustomFieldKeys,
             currentUserId: query.CurrentUserId,

@@ -1,4 +1,3 @@
-using System.Linq.Expressions;
 using System.Text.Json.Nodes;
 using Crm.Domain.Common;
 using Crm.Domain.Entities;
@@ -98,42 +97,12 @@ public sealed class UserRepository(
             .ExecuteUpdateAsync(s => s.SetProperty(u => u.LastLoginAt, lastLoginAt), cancellationToken);
 
     /// <inheritdoc />
-    public async Task<HashSet<string>> GetKeysWithNonNullCustomFieldValuesAsync(
-        IEnumerable<string> keys,
-        CancellationToken cancellationToken = default)
-    {
-        List<string> distinctKeys = [.. keys.Distinct(StringComparer.Ordinal)];
-        if (distinctKeys.Count == 0)
-        {
-            return [];
-        }
-
-        HashSet<string> keysWithValues = new(StringComparer.Ordinal);
-        foreach (string key in distinctKeys)
-        {
-            string capturedKey = key;
-            bool hasValue = await DbSet
-                .AsNoTracking()
-                .AnyAsync(
-                    u => JsonbFunctionsExtensions.JsonbExtractPathText(u.CustomFields, capturedKey) != null,
-                    cancellationToken);
-
-            if (hasValue)
-            {
-                keysWithValues.Add(capturedKey);
-            }
-        }
-
-        return keysWithValues;
-    }
-
-    /// <inheritdoc />
-    public Task<int> SyncCustomFieldsSchemaAsync(SchemaDiffResult diff, CancellationToken cancellationToken = default)
-    {
-        var updateLambda = ((Expression<Func<User, JsonObject>>)(u => u.CustomFields)).ToSchemaUpdateLambda(diff);
-
-        return updateLambda is null
+    public Task<int> SyncCustomFieldsSchemaAsync(SchemaSyncPlan plan, CancellationToken cancellationToken = default)
+        => !plan.RequiresJsonbSync
             ? Task.FromResult(0)
-            : DbSet.ExecuteUpdateAsync(s => s.SetProperty(u => u.CustomFields, updateLambda), cancellationToken);
-    }
+            : DbSet.ExecuteUpdateAsync(
+                s => s.SetProperty(
+                    u => u.CustomFields,
+                    u => JsonbFunctionsExtensions.SyncJsonbKeys(u.CustomFields, plan.KeysToDrop, plan.KeysToBackfill)),
+                cancellationToken);
 }

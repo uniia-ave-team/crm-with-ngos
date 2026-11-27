@@ -1,7 +1,6 @@
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
-using Crm.Infrastructure.Persistence.Extensions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
@@ -48,8 +47,4 @@ public sealed class UserCustomFieldRepository(
             await DbSet.AddRangeAsync(added, cancellationToken);
         }
     }
-
-    /// <inheritdoc />
-    public Task ResolveFieldKeyCollisionsAsync(CancellationToken cancellationToken = default)
-        => Context.ResolveFieldKeyCollisionsAsync<UserCustomField>(cancellationToken);
 }

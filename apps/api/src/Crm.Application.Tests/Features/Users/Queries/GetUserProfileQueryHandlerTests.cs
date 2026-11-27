@@ -17,6 +17,11 @@ namespace Crm.Application.Tests.Features.Users.Queries;
 
 public class GetUserProfileQueryHandlerTests
 {
+    private static readonly Guid PublicBioFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000101");
+    private static readonly Guid SecretNoteFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000102");
+    private static readonly string PublicBioKey = PublicBioFieldId.ToString();
+    private static readonly string SecretNoteKey = SecretNoteFieldId.ToString();
+
     private readonly IAuthUserRepository _authUserRepository = Substitute.For<IAuthUserRepository>();
     private readonly IAuthRoleRepository _authRoleRepository = Substitute.For<IAuthRoleRepository>();
     private readonly IUserCustomFieldRepository _userCustomFieldRepository = Substitute.For<IUserCustomFieldRepository>();
@@ -36,8 +41,8 @@ public class GetUserProfileQueryHandlerTests
         _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
             .Returns(
             [
-                new UserCustomField { Id = Guid.CreateVersion7(), Name = "Public Bio", Key = "public_bio", DataType = FieldDataType.Text, IsPublic = true, Order = 0 },
-                new UserCustomField { Id = Guid.CreateVersion7(), Name = "Secret Note", Key = "secret_note", DataType = FieldDataType.Text, IsPublic = false, Order = 1 },
+                new UserCustomField { Id = PublicBioFieldId, Name = "Public Bio", IsPublic = true, Order = 0 },
+                new UserCustomField { Id = SecretNoteFieldId, Name = "Secret Note", IsPublic = false, Order = 1 },
             ]);
 
         _handler = new GetUserProfileQueryHandler(
@@ -78,8 +83,8 @@ public class GetUserProfileQueryHandlerTests
             Roles: [],
             CustomFields: new JsonObject
             {
-                ["public_bio"] = "Hello",
-                ["secret_note"] = "Private",
+                [PublicBioKey] = "Hello",
+                [SecretNoteKey] = "Private",
             });
 
         var roles = new List<RoleDto> { new(roleId, "Volunteer", "Volonterka", "Volunteers") };
@@ -106,7 +111,7 @@ public class GetUserProfileQueryHandlerTests
         result.AvatarUrl.ShouldBe("https://api.crm.org/api/v1/users/me/avatar");
         result.IsActive.ShouldBeTrue();
         result.Roles.Single().Name.ShouldBe("Volonterka");
-        result.CustomFields.Select(kvp => kvp.Key).ShouldBe(["public_bio", "secret_note"]);
+        result.CustomFields.Select(kvp => kvp.Key).ShouldBe([PublicBioKey, SecretNoteKey]);
 
         await _permissionService.DidNotReceive()
             .HasAccessAsync(Arg.Any<List<Guid>>(), Arg.Any<AccessRight>(), Arg.Any<CancellationToken>());
@@ -141,8 +146,8 @@ public class GetUserProfileQueryHandlerTests
             Roles: [],
             CustomFields: new JsonObject
             {
-                ["public_bio"] = "Hello",
-                ["secret_note"] = "Private",
+                [PublicBioKey] = "Hello",
+                [SecretNoteKey] = "Private",
             });
 
         var roles = new List<RoleDto> { new(roleId, "Volunteer", "Volonterka", "Volunteers") };
@@ -202,8 +207,8 @@ public class GetUserProfileQueryHandlerTests
             Roles: [],
             CustomFields: new JsonObject
             {
-                ["public_bio"] = "Public Info",
-                ["secret_note"] = "Top Secret",
+                [PublicBioKey] = "Public Info",
+                [SecretNoteKey] = "Top Secret",
             });
 
         var roles = new List<RoleDto> { new(Guid.NewGuid(), "Coordinator", "Koordynatorka", "Coordinators") };
@@ -224,7 +229,7 @@ public class GetUserProfileQueryHandlerTests
         result.EmergencyContact.ShouldBeNull();
         result.AvatarUrl.ShouldBe($"https://api.crm.org/api/v1/users/{targetUserId}/avatar");
         result.Roles.Single().Name.ShouldBe("Coordinator");
-        result.CustomFields.Select(kvp => kvp.Key).ShouldBe(["public_bio"]);
+        result.CustomFields.Select(kvp => kvp.Key).ShouldBe([PublicBioKey]);
     }
 
     [Fact]
@@ -262,8 +267,8 @@ public class GetUserProfileQueryHandlerTests
             Roles: [],
             CustomFields: new JsonObject
             {
-                ["public_bio"] = "Public Info",
-                ["secret_note"] = "Top Secret",
+                [PublicBioKey] = "Public Info",
+                [SecretNoteKey] = "Top Secret",
             });
 
         _authUserRepository.GetAsync<UserProfileResult>(targetUserId, Arg.Any<CancellationToken>())

@@ -5,16 +5,10 @@ using Crm.Domain.Entities;
 namespace Crm.Domain.Extensions;
 
 /// <summary>
-/// Provides reflection-based helper extension methods and sets for the <see cref="CustomRecord"/> entity.
-/// Facilitates the validation of reserved system keys and the identification of scalar sortable properties.
+/// Provides reflection-based metadata identifying scalar sortable properties on <see cref="CustomRecord"/>.
 /// </summary>
 public static class CustomRecordExtensions
 {
-    /// <summary>
-    /// Case-insensitive set of reserved property names belonging to <see cref="CustomRecord"/> that cannot be used as dynamic field keys.
-    /// </summary>
-    public static readonly FrozenSet<string> ReservedKeys;
-
     /// <summary>
     /// Case-insensitive map of scalar <see cref="CustomRecord"/> property names that support direct SQL sorting.
     /// </summary>
@@ -22,25 +16,22 @@ public static class CustomRecordExtensions
 
     static CustomRecordExtensions()
     {
-        var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var sortable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var prop in typeof(CustomRecord).GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            reserved.Add(prop.Name);
             if (prop.Name != nameof(CustomRecord.Data) && prop.PropertyType.IsScalarType())
             {
                 sortable[prop.Name] = prop.Name;
             }
         }
 
-        ReservedKeys = reserved.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
         SortablePropertiesMap = sortable.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
     /// Determines whether the specified <see cref="Type"/> represents a scalar value type
-    /// (e.g., primitive, enum, string, decimal, Guid, or date/time structure) that can be directly sorted in SQL via EF Core.
+    /// that can be directly sorted in SQL via EF Core.
     /// </summary>
     /// <param name="type">The type to evaluate.</param>
     /// <returns><see langword="true"/> if the type is a scalar value; otherwise, <see langword="false"/>.</returns>

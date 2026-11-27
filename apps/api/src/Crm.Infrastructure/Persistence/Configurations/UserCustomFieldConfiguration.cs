@@ -13,13 +13,10 @@ public sealed class UserCustomFieldConfiguration : IEntityTypeConfiguration<User
     /// <inheritdoc />
     public void Configure(EntityTypeBuilder<UserCustomField> builder)
     {
-        builder.ConfigureFieldDefinition(storeDataTypeAsString: false);
+        builder.ConfigureFieldDefinition();
 
         builder.Property(cf => cf.IsPublic)
             .IsRequired();
-
-        builder.HasIndex(cf => cf.Key)
-            .IsUnique();
 
         builder.HasIndex(cf => cf.Order);
     }

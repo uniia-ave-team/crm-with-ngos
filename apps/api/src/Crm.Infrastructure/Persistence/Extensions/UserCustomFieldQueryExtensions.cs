@@ -1,5 +1,4 @@
 using System.Linq.Expressions;
-using Crm.Domain.Common;
 using Crm.Domain.Constants;
 using Crm.Infrastructure.Entities;
 using Crm.Infrastructure.Persistence.Expressions;
@@ -11,8 +10,8 @@ namespace Crm.Infrastructure.Persistence.Extensions;
 /// <summary>
 /// Provides SQL-translatable extension methods for searching and dynamically sorting <see cref="AuthUser"/>
 /// queries by JSONB <see cref="Domain.Entities.User.CustomFields"/> values, reusing
-/// <see cref="JsonbFunctionsExtensions.JsonbExtractPathText"/>, <see cref="QueryFilterExpressions"/>,
-/// and <see cref="TypedOrderingExtensions.ApplyTypedNullsLastOrdering{TEntity}"/> (with zero reflection).
+/// <see cref="JsonbFunctionsExtensions.JsonbExtractPathText(System.Text.Json.Nodes.JsonObject, string)"/>, <see cref="QueryFilterExpressions"/>,
+/// and <see cref="TypedOrderingExtensions.ApplySmartNullsLastOrdering{TEntity}"/> (with zero reflection).
 /// </summary>
 public static class UserCustomFieldQueryExtensions
 {
@@ -49,23 +48,25 @@ public static class UserCustomFieldQueryExtensions
     }
 
     /// <summary>
-    /// Applies dynamic NULLS-LAST sorting on a user JSONB custom field using safe PostgreSQL typed casting
+    /// Applies smart NULLS-LAST sorting on a user JSONB custom field
     /// (identical to <see cref="CustomRecordQueryExtensions.OrderByCustomRecord"/>).
     /// </summary>
     /// <param name="query">The input user queryable sequence.</param>
-    /// <param name="sort">The resolved visible custom field key and data type.</param>
+    /// <param name="key">The canonical visible custom field key.</param>
     /// <param name="sortOrder">The sort direction (<see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>).</param>
+    /// <param name="sortKind">The inferred smart sort kind for the column.</param>
     /// <returns>The ordered user queryable sequence.</returns>
     public static IQueryable<AuthUser> OrderByUserCustomField(
         this IQueryable<AuthUser> query,
-        UserCustomFieldSort sort,
-        string? sortOrder)
+        string key,
+        string? sortOrder,
+        InferredSortKind sortKind = InferredSortKind.Text)
     {
-        string key = sort.Key;
+        string capturedKey = key;
 
-        return query.ApplyTypedNullsLastOrdering(
-            u => JsonbFunctionsExtensions.JsonbExtractPathText(u.UserProfile.CustomFields, key),
-            sort.DataType,
+        return query.ApplySmartNullsLastOrdering(
+            u => JsonbFunctionsExtensions.JsonbExtractPathText(u.UserProfile.CustomFields, capturedKey),
+            sortKind,
             IdSelector,
             sortOrder.IsDescending());
     }

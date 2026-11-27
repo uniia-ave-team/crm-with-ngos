@@ -1,6 +1,6 @@
 using Crm.Application.Common.Consts;
+using Crm.Application.Interfaces;
 using Crm.Domain.Entities;
-using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
 using Mediator;
@@ -9,15 +9,18 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.CustomRecords.Commands;
 
 /// <summary>
-/// Handles the <see cref="CreateCustomRecordCommand"/> to validate the payload against the table schema,
-/// backfill default values for missing required fields, and persist a new custom record in the database.
+/// Handles the <see cref="CreateCustomRecordCommand"/> to lock the parent custom table,
+/// validate the payload against the latest table schema, compute the target fractional position,
+/// and insert the new custom record atomically.
 /// </summary>
-/// <param name="customFieldRepository">The repository used for retrieving custom field definitions.</param>
-/// <param name="customRecordRepository">The repository used for storing new custom record entities.</param>
+/// <param name="customTableRepository">The repository used for locking tables and retrieving custom table field definitions.</param>
+/// <param name="customRecordRepository">The repository used for persisting newly created custom records.</param>
+/// <param name="customRecordPositionService">The shared service managing fractional-index record positioning.</param>
 /// <param name="logger">The logger instance for tracking execution flow.</param>
 public sealed partial class CreateCustomRecordCommandHandler(
-    ICustomFieldRepository customFieldRepository,
+    ICustomTableRepository customTableRepository,
     ICustomRecordRepository customRecordRepository,
+    ICustomRecordPositionService customRecordPositionService,
     ILogger<CreateCustomRecordCommandHandler> logger) : ICommandHandler<CreateCustomRecordCommand, Guid>
 {
     /// <inheritdoc />
@@ -25,18 +28,27 @@ public sealed partial class CreateCustomRecordCommandHandler(
     {
         LogCreatingCustomRecord(logger, command.CustomTableId);
 
-        var customFields = await customFieldRepository.GetByCustomTableIdAsync(command.CustomTableId, cancellationToken);
+        await customTableRepository.LockForUpdateAsync(command.CustomTableId, cancellationToken);
+
+        var customFields = await customTableRepository.GetFieldsByCustomTableIdAsync(command.CustomTableId, cancellationToken);
 
         if (customFields.Count == 0)
         {
-            throw new EntityNotFoundException<CustomTable>(command.CustomTableId);
+            await customTableRepository.EnsureExistsAsync(command.CustomTableId, cancellationToken);
         }
 
         var alignedData = command.Data.ValidateAndBackfillPayload(customFields);
 
+        string position = await customRecordPositionService.ComputeInsertPositionAsync(
+            command.CustomTableId,
+            command.PreviousRecordId,
+            command.NextRecordId,
+            cancellationToken);
+
         var record = new CustomRecord
         {
             CustomTableId = command.CustomTableId,
+            Position = position,
             Data = alignedData,
         };
 

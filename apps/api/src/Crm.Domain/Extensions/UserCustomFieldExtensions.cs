@@ -1,23 +1,15 @@
 using System.Collections.Frozen;
-using System.Reflection;
-using Crm.Domain.Common;
 using Crm.Domain.Constants;
 using Crm.Domain.Entities;
 
 namespace Crm.Domain.Extensions;
 
 /// <summary>
-/// Provides reserved-key protection, dynamic JSONB sort-key resolution, and schema key extraction helpers
-/// for <see cref="UserCustomField"/>, reusing <see cref="CustomFieldExtensions"/>.
+/// Provides built-in user sort validation, custom-field sort resolution, and visibility key partitioning
+/// for <see cref="UserCustomField"/> using field identifiers (<see cref="Entities.Base.BaseEntity.Id"/>) as JSONB keys.
 /// </summary>
 public static class UserCustomFieldExtensions
 {
-    /// <summary>
-    /// The optional container prefix used in <c>OrderBy</c> expressions targeting user custom fields
-    /// (e.g., <c>customFields.city</c>, <c>customFields['birth_date']</c>, or bare <c>city</c>).
-    /// </summary>
-    public const string SortPrefix = UserConstants.CustomFieldsSortPrefix;
-
     /// <summary>
     /// Case-insensitive set of allowed built-in user sort properties and aliases.
     /// </summary>
@@ -39,37 +31,6 @@ public static class UserCustomFieldExtensions
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Case-insensitive set of reserved user, DTO, and identity property names that cannot be used as user custom field keys.
-    /// </summary>
-    public static readonly FrozenSet<string> ReservedKeys;
-
-    static UserCustomFieldExtensions()
-    {
-        var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (string key in BuiltInSortFields)
-        {
-            reserved.Add(key);
-        }
-
-        reserved.Add(UserConstants.AvatarUrl);
-        reserved.Add(UserConstants.Roles);
-        reserved.Add(UserConstants.CustomFields);
-
-        foreach (string identityKey in UserConstants.IdentityReservedKeys)
-        {
-            reserved.Add(identityKey);
-        }
-
-        foreach (var prop in typeof(User).GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            reserved.Add(prop.Name);
-        }
-
-        ReservedKeys = reserved.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
     /// Checks whether <paramref name="orderBy"/> matches one of the built-in user sort fields.
     /// </summary>
     /// <param name="orderBy">The candidate sort field name.</param>
@@ -78,49 +39,29 @@ public static class UserCustomFieldExtensions
         => !string.IsNullOrWhiteSpace(orderBy) && BuiltInSortFields.Contains(orderBy.Trim());
 
     /// <summary>
-    /// Checks whether the given key matches a reserved user, DTO, or identity property name.
-    /// </summary>
-    /// <param name="key">The candidate custom field key.</param>
-    /// <returns><see langword="true"/> if the key is blank or reserved; otherwise, <see langword="false"/>.</returns>
-    public static bool IsReservedKey(string? key)
-        => string.IsNullOrWhiteSpace(key) || ReservedKeys.Contains(key.Trim());
-
-    /// <summary>
-    /// Checks whether <paramref name="orderBy"/> is either a valid built-in sort field or a syntactically valid custom field sort expression.
+    /// Checks whether <paramref name="orderBy"/> is either a valid built-in sort field or a non-empty custom field GUID.
     /// </summary>
     /// <param name="orderBy">The raw <c>OrderBy</c> value.</param>
     /// <returns><see langword="true"/> if valid; otherwise, <see langword="false"/>.</returns>
     public static bool IsAllowedUserOrderBy(string? orderBy)
         => orderBy is null
             || IsBuiltInSortField(orderBy)
-            || ExtractSortKey(orderBy) is not null;
+            || CustomFieldExtensions.IsValidFieldId(orderBy);
 
     /// <summary>
-    /// Extracts the JSONB custom field key from a user <c>OrderBy</c> expression, supporting both prefixed
-    /// (<c>customFields.key</c>, <c>customFields['key']</c>, <c>customFields["key"]</c>) and bare (<c>key</c>) forms,
-    /// delegating directly to <see cref="CustomFieldExtensions.ExtractKey(string?, ReadOnlySpan{char}, FrozenSet{string})"/>.
-    /// </summary>
-    /// <param name="orderBy">The raw sort expression.</param>
-    /// <returns>The extracted custom field key, or <see langword="null"/> if blank, reserved, or syntactically invalid.</returns>
-    public static string? ExtractSortKey(string? orderBy)
-        => CustomFieldExtensions.ExtractKey(orderBy, SortPrefix, ReservedKeys);
-
-    /// <summary>
-    /// Resolves a user <paramref name="orderBy"/> expression against the caller's visible custom field schema,
-    /// returning the canonical key and <see cref="Enums.FieldDataType"/> when matched.
+    /// Resolves a user <paramref name="orderBy"/> field ID against the caller's visible custom field schema,
+    /// returning the canonical lowercase GUID key when matched.
     /// </summary>
     /// <param name="fields">The visible user custom field schema definitions.</param>
-    /// <param name="orderBy">The raw sort expression.</param>
-    /// <returns>A <see cref="UserCustomFieldSort"/> if a visible matching column exists; otherwise, <see langword="null"/>.</returns>
-    public static UserCustomFieldSort? ResolveOrdering(
+    /// <param name="orderBy">The requested sort field ID.</param>
+    /// <returns>The canonical lowercase field ID string if a visible matching column exists; otherwise, <see langword="null"/>.</returns>
+    public static string? ResolveOrdering(
         this IEnumerable<UserCustomField>? fields,
         string? orderBy)
-        => fields.FindFieldByKey(ExtractSortKey(orderBy)) is { } field
-            ? new UserCustomFieldSort(field.Key, field.DataType)
-            : null;
+        => fields.FindFieldById(orderBy)?.Id.ToString();
 
     /// <summary>
-    /// Splits ordered <see cref="UserCustomField"/> schema definitions into all ordered keys,
+    /// Splits ordered <see cref="UserCustomField"/> schema definitions into all ordered field ID keys,
     /// public-only keys, and private-only keys for response projection, privacy filtering, and SQL search.
     /// </summary>
     /// <param name="orderedFields">The schema definitions already ordered by <see cref="Entities.Base.FieldDefinitionBase.Order"/>.</param>
@@ -140,15 +81,16 @@ public static class UserCustomFieldExtensions
         for (int i = 0; i < orderedFields.Count; i++)
         {
             var field = orderedFields[i];
-            allKeys[i] = field.Key;
+            string key = field.Id.ToString();
+            allKeys[i] = key;
 
             if (field.IsPublic)
             {
-                publicKeys.Add(field.Key);
+                publicKeys.Add(key);
             }
             else
             {
-                privateKeys.Add(field.Key);
+                privateKeys.Add(key);
             }
         }
 

@@ -96,7 +96,7 @@ public class User : BaseEntity, IAuditableEntity
 
     /// <summary>
     /// Gets or sets the dynamic JSONB payload storing this user's values for the global <see cref="UserCustomField"/> schema.
-    /// Keys correspond to <see cref="FieldDefinitionBase.Key"/> definitions.
+    /// Keys correspond to <see cref="BaseEntity.Id"/> strings of <see cref="UserCustomField"/> definitions.
     /// </summary>
     public JsonObject CustomFields { get; set; } = [];
 }

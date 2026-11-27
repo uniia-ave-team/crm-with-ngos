@@ -1,7 +1,6 @@
 using System.Linq.Expressions;
 using Crm.Domain.Constants;
 using Crm.Domain.Entities;
-using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
 using Crm.Infrastructure.Persistence.Consts;
 using Crm.Infrastructure.Persistence.Sorting;
@@ -43,20 +42,18 @@ public static class CustomRecordQueryExtensions
     }
 
     /// <summary>
-    /// Applies dynamic sorting to the query based on entity properties or dynamic JSONB keys within <see cref="CustomRecord.Data"/>.
-    /// Reuses <see cref="TypedPropertyOrderBuilder"/> for scalar properties and <see cref="TypedOrderingExtensions"/>
-    /// for safe PostgreSQL typed casting (<c>numeric</c>, <c>boolean</c>, <c>date</c>, <c>timestamp</c>, or <c>text</c>).
+    /// Applies dynamic sorting to the query based on scalar entity properties or canonical JSONB field ID keys within <see cref="CustomRecord.Data"/>.
     /// </summary>
     /// <param name="query">The input <see cref="IQueryable{CustomRecord}"/> sequence to be sorted.</param>
-    /// <param name="orderBy">The property name or JSONB key path (e.g., <c>"name"</c>, <c>"data.age"</c>, <c>"data['age']"</c>).</param>
+    /// <param name="orderBy">The scalar property name or custom field GUID string.</param>
     /// <param name="sortOrder">The sort direction (<see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>).</param>
-    /// <param name="fieldDataType">The optional target data type used to perform strongly-typed SQL casting for dynamic JSON values.</param>
+    /// <param name="sortKind">The inferred smart sort kind used when sorting by a JSONB key.</param>
     /// <returns>The sorted <see cref="IQueryable{CustomRecord}"/> sequence.</returns>
     public static IQueryable<CustomRecord> OrderByCustomRecord(
         this IQueryable<CustomRecord> query,
         string? orderBy,
         string? sortOrder,
-        FieldDataType? fieldDataType = null)
+        InferredSortKind sortKind = InferredSortKind.Text)
     {
         if (string.IsNullOrWhiteSpace(orderBy))
         {
@@ -64,21 +61,32 @@ public static class CustomRecordQueryExtensions
         }
 
         bool isDescending = sortOrder.IsDescending();
+        string trimmed = orderBy.Trim();
 
-        if (CustomRecordExtensions.SortablePropertiesMap.TryGetValue(orderBy.Trim(), out var canonicalProperty)
-            && TypedPropertyOrderBuilder.TryApplyOrdering(query, canonicalProperty, isDescending, out var ordered))
-        {
-            return ordered;
-        }
-
-        var jsonKey = CustomFieldExtensions.ExtractKey(orderBy);
-
-        return string.IsNullOrWhiteSpace(jsonKey)
-            ? query.OrderBy(IdSelector)
-            : query.ApplyTypedNullsLastOrdering(
-                r => JsonbFunctionsExtensions.JsonbExtractPathText(r.Data, jsonKey),
-                fieldDataType,
-                IdSelector,
-                isDescending);
+        return CustomRecordExtensions.SortablePropertiesMap.TryGetValue(trimmed, out var canonicalProperty)
+            && TypedPropertyOrderBuilder.TryApplyOrdering(query, canonicalProperty, isDescending, out var ordered)
+                ? ordered
+                : CustomFieldExtensions.TryNormalizeFieldId(trimmed, out string normalizedFieldId)
+                    ? query.OrderByNormalizedFieldId(normalizedFieldId, sortKind, isDescending)
+                    : query.OrderBy(IdSelector);
     }
+
+    /// <summary>
+    /// Applies smart NULLS-LAST ordering against a pre-normalized JSONB field ID key within <see cref="CustomRecord.Data"/>.
+    /// </summary>
+    /// <param name="query">The input <see cref="IQueryable{CustomRecord}"/> sequence to be sorted.</param>
+    /// <param name="normalizedFieldId">The canonical lowercase GUID string matching the JSONB property key.</param>
+    /// <param name="sortKind">The inferred smart sort kind for the column.</param>
+    /// <param name="isDescending">Whether to sort non-null values in descending order.</param>
+    /// <returns>The sorted <see cref="IQueryable{CustomRecord}"/> sequence.</returns>
+    public static IQueryable<CustomRecord> OrderByNormalizedFieldId(
+        this IQueryable<CustomRecord> query,
+        string normalizedFieldId,
+        InferredSortKind sortKind,
+        bool isDescending)
+        => query.ApplySmartNullsLastOrdering(
+            r => JsonbFunctionsExtensions.JsonbExtractPathText(r.Data, normalizedFieldId),
+            sortKind,
+            IdSelector,
+            isDescending);
 }

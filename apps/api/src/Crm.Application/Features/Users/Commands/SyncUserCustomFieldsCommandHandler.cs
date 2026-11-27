@@ -10,7 +10,7 @@ namespace Crm.Application.Features.Users.Commands;
 
 /// <summary>
 /// Handles <see cref="SyncUserCustomFieldsCommand"/> to atomically reconcile global <see cref="UserCustomField"/> schema definitions
-/// and apply matching JSONB payload patches across all users.
+/// with immutable server-generated keys and synchronize user JSONB payloads when keys are added or removed.
 /// </summary>
 public sealed partial class SyncUserCustomFieldsCommandHandler(
     IUserCustomFieldRepository userCustomFieldRepository,
@@ -24,23 +24,19 @@ public sealed partial class SyncUserCustomFieldsCommandHandler(
 
         var existingFields = await userCustomFieldRepository.GetAllForUpdateAsync(cancellationToken);
 
-        var keysChangingType = existingFields.FindKeysWithDataTypeChange(command.Fields);
-        HashSet<string> keysWithValues = keysChangingType.Count > 0
-            ? await userRepository.GetKeysWithNonNullCustomFieldValuesAsync(keysChangingType, cancellationToken)
-            : [];
-
-        var diff = existingFields.ComputeSchemaDiff(command.Fields, existing => keysWithValues.Contains(existing.Key));
+        var plan = existingFields.SynchronizeFields(command.Fields);
 
         existingFields.EnsureValidFieldSchema(allowEmpty: true);
 
         await userCustomFieldRepository.ApplySchemaChangesAsync(
-            addedFields: diff.FieldsToAdd.Cast<UserCustomField>(),
-            removedFields: diff.FieldsToRemove.Cast<UserCustomField>(),
+            addedFields: plan.AddedFields,
+            removedFields: plan.RemovedFields,
             cancellationToken: cancellationToken);
 
-        await userCustomFieldRepository.ResolveFieldKeyCollisionsAsync(cancellationToken);
-
-        await userRepository.SyncCustomFieldsSchemaAsync(diff, cancellationToken);
+        if (plan.RequiresJsonbSync)
+        {
+            await userRepository.SyncCustomFieldsSchemaAsync(plan, cancellationToken);
+        }
 
         LogUserCustomFieldsSyncedSuccessfully(logger, existingFields.Count);
 

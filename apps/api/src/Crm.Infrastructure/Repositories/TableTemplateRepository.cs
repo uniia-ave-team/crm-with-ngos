@@ -2,11 +2,9 @@ using System.Linq.Expressions;
 using Crm.Domain.Common;
 using Crm.Domain.Constants;
 using Crm.Domain.Entities;
-using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
-using Crm.Infrastructure.Persistence.Extensions;
 using LinqKit;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,27 +37,10 @@ public sealed class TableTemplateRepository(
             cancellationToken: cancellationToken);
 
     /// <inheritdoc />
-    public async Task<TableTemplate> GetForUpdateWithFieldsAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        return await DbSet
-            .Include(x => x.Fields)
-            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
-            ?? throw new EntityNotFoundException<TableTemplate>(id);
-    }
-
-    /// <inheritdoc />
-    public Task<List<string>> GetSystemPresetNamesAsync(CancellationToken cancellationToken = default)
+    public Task<List<TableTemplate>> GetSystemPresetsForUpdateAsync(CancellationToken cancellationToken = default)
         => DbSet
-            .AsNoTracking()
             .Where(t => t.IsSystemPreset)
-            .Select(t => t.Name)
             .ToListAsync(cancellationToken);
-
-    /// <inheritdoc />
-    public Task ResolveFieldKeyCollisionsAsync(
-        Guid templateId,
-        CancellationToken cancellationToken = default)
-        => Context.ResolveFieldKeyCollisionsAsync<TemplateField>(templateId, f => f.TemplateId, cancellationToken);
 
     private static Expression<Func<TableTemplate, bool>>? BuildTableTemplateFilter(string? searchTerm, bool? onlySystemPresets)
     {

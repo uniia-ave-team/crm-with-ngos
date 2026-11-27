@@ -1,5 +1,5 @@
 using Crm.Application.Common.Validators;
-using Crm.Application.Dtos.CustomTables;
+using Crm.Application.Dtos.Common;
 using Crm.Application.Features.CustomTables.Commands;
 using Crm.Domain.Constants.Validation;
 using FluentValidation;
@@ -30,6 +30,6 @@ public sealed class CreateCustomTableCommandValidator : AbstractValidator<Create
 
         RuleFor(x => x.Fields)
             .NotEmpty().WithMessage("At least one field is required.")
-            .SetValidator(new FieldListValidator<CreateCustomFieldDto>());
+            .SetValidator(new FieldListValidator<FieldDefinitionDto>());
     }
 }

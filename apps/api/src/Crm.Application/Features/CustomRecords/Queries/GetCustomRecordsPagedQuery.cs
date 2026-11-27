@@ -11,7 +11,7 @@ namespace Crm.Application.Features.CustomRecords.Queries;
 /// </summary>
 /// <param name="CustomTableId">The unique identifier of the parent custom table.</param>
 /// <param name="SearchTerm">An optional search keyword to filter records.</param>
-/// <param name="OrderBy">The field to sort by.</param>
+/// <param name="OrderBy">Optional field or property to sort by; omit (<see langword="null"/>) to return records in manual linked-list order.</param>
 /// <param name="SortOrder">The sorting direction (<see cref="SortOrderConstants.Ascending"/> or <see cref="SortOrderConstants.Descending"/>).</param>
 /// <param name="PageNumber">The page index number (1-based).</param>
 /// <param name="PageSize">The number of items per page.</param>
@@ -19,7 +19,7 @@ namespace Crm.Application.Features.CustomRecords.Queries;
 public record GetCustomRecordsPagedQuery(
     Guid CustomTableId,
     string? SearchTerm = null,
-    string? OrderBy = nameof(CustomRecordDto.Id),
+    string? OrderBy = null,
     string? SortOrder = SortOrderConstants.Ascending,
     int PageNumber = PaginationConstants.MinPageNumber,
     int PageSize = PaginationConstants.DefaultPageSize) : IQuery<PagedResult<CustomRecordDto>>, IPagedSearchQuery;

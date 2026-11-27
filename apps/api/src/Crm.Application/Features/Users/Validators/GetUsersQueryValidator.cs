@@ -19,7 +19,7 @@ public sealed class GetUsersQueryValidator : AbstractValidator<GetUsersQuery>
 
         RuleFor(x => x.OrderBy)
             .Must(UserCustomFieldExtensions.IsAllowedUserOrderBy)
-            .WithMessage(x => $"OrderBy property '{x.OrderBy}' is invalid. Provide a standard user sort field or a valid custom field key.")
+            .WithMessage(x => $"OrderBy property '{x.OrderBy}' is invalid. Provide a standard user sort field or a valid custom field ID.")
             .When(x => !string.IsNullOrWhiteSpace(x.OrderBy));
     }
 }

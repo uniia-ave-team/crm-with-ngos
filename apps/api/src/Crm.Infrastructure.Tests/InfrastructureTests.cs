@@ -232,11 +232,13 @@ public class InfrastructureTests
             .ToQueryString();
         CountOccurrences(tableDtoSql, "LEFT JOIN").ShouldBe(1);
 
-        // 3. TableTemplateDto must join TemplateField at most once (not 3x N^3).
+        // 3. TableTemplateDto expands Fields from the TableTemplate JSONB column via jsonb_to_recordset with ZERO TemplateField table joins.
         string templateDtoSql = context.Set<TableTemplate>()
             .AsNoTracking()
             .ProjectToType<TableTemplateDto>()
             .ToQueryString();
+        templateDtoSql.ShouldNotContain("\"TemplateField\"");
+        templateDtoSql.ShouldContain("jsonb_to_recordset");
         CountOccurrences(templateDtoSql, "LEFT JOIN").ShouldBe(1);
 
         // 4. UserProfileResult projects CustomFields directly from Users JSONB with ZERO UserCustomField joins.

@@ -90,20 +90,21 @@ public static class UserSecurityExtensions
         var merged = new JsonObject();
         foreach (var field in schemaFields)
         {
+            string fieldKey = field.Id.ToString();
             if (field.IsPublic)
             {
-                validatedPublic.Remove(field.Key, out var publicNode);
-                merged.Add(field.Key, publicNode);
+                validatedPublic.Remove(fieldKey, out var publicNode);
+                merged.Add(fieldKey, publicNode);
             }
-            else if (existingData is not null && existingData.TryGetPropertyValue(field.Key, out var existingNode))
+            else if (existingData is not null && existingData.TryGetPropertyValue(fieldKey, out var existingNode))
             {
-                merged.Add(field.Key, existingNode?.DeepClone());
+                merged.Add(fieldKey, existingNode?.DeepClone());
             }
             else
             {
                 merged.Add(
-                    field.Key,
-                    field.IsRequired ? JsonNode.Parse(field.DataType.GetBackfillJson()) : null);
+                    fieldKey,
+                    field.IsRequired ? JsonValue.Create(string.Empty) : null);
             }
         }
 

@@ -2,14 +2,14 @@ using Crm.Application.Common.Consts;
 using Crm.Domain.Entities;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using Mapster;
 using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTables.Commands;
 
 /// <summary>
-/// Handles the <see cref="CreateCustomTableCommand"/> to create a new custom table from scratch.
+/// Handles the <see cref="CreateCustomTableCommand"/> to create a new custom table from scratch
+/// with server-generated immutable field keys.
 /// </summary>
 /// <param name="ngoRepository">The repository used for accessing NGO data.</param>
 /// <param name="customTableRepository">The repository used for accessing and persisting custom table data.</param>
@@ -26,9 +26,21 @@ public sealed partial class CreateCustomTableCommandHandler(
 
         LogCreatingCustomTable(logger, command.Name, ngoId);
 
-        var table = command.Adapt<CustomTable>();
-
-        table.NgoId = ngoId;
+        var table = new CustomTable
+        {
+            NgoId = ngoId,
+            Name = command.Name,
+            Description = command.Description,
+            Fields =
+            [
+                .. command.Fields.Select(f => new CustomField
+                {
+                    Name = f.Name,
+                    IsRequired = f.IsRequired,
+                    Order = f.Order,
+                }),
+            ],
+        };
 
         table.Fields.EnsureValidFieldSchema();
 

@@ -52,7 +52,7 @@ public class ProjectsAndTasksHttpPipelineTests
         {
             Handler = request => request switch
             {
-                CreateProjectCommand cmd when cmd.Title == "Bad" => throw new EmptyFieldSchemaException(),
+                CreateProjectCommand cmd when cmd.Title == "Bad" => throw new DomainValidationException("Field schema cannot be empty."),
                 CreateProjectCommand cmd when cmd.Title == "UniqueConflict" => throw new ConflictException(
                     "A resource with the same unique value already exists.",
                     ConflictKind.UniqueViolation,

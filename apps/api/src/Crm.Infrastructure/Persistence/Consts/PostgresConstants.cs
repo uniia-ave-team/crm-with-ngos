@@ -1,8 +1,8 @@
 namespace Crm.Infrastructure.Persistence.Consts;
 
 /// <summary>
-/// Provides PostgreSQL store-type and index-method constants used across EF Core entity configurations
-/// and custom database function translations.
+/// Provides PostgreSQL store-type, index-method, collation, and custom SQL function constants
+/// used across EF Core entity configurations and database function registrations.
 /// </summary>
 internal static class PostgresConstants
 {
@@ -15,6 +15,12 @@ internal static class PostgresConstants
     /// PostgreSQL Generalized Inverted Index method (<c>gin</c>).
     /// </summary>
     public const string Gin = "gin";
+
+    /// <summary>
+    /// PostgreSQL POSIX binary collation (<c>C</c>) matching C# <see cref="StringComparer.Ordinal"/>
+    /// for language-independent ASCII fractional index ordering.
+    /// </summary>
+    public const string CCollation = "C";
 
     /// <summary>
     /// PostgreSQL text store type (<c>text</c>).
@@ -47,7 +53,32 @@ internal static class PostgresConstants
     public const string TimestampWithTimeZone = "timestamp with time zone";
 
     /// <summary>
-    /// PostgreSQL timezone-naive timestamp store type (<c>timestamp without time zone</c>).
+    /// Built-in PostgreSQL function extracting a text value from a JSONB object at a top-level key.
     /// </summary>
-    public const string TimestampWithoutTimeZone = "timestamp without time zone";
+    public const string JsonbExtractPathTextFunction = "jsonb_extract_path_text";
+
+    /// <summary>
+    /// Custom PostgreSQL function atomically dropping removed keys and backfilling newly required keys in JSONB payloads.
+    /// </summary>
+    public const string SyncJsonbKeysFunction = "crm_sync_jsonb_keys";
+
+    /// <summary>
+    /// Custom PostgreSQL function safely casting text to <c>numeric</c> (excluding NaN and Infinity).
+    /// </summary>
+    public const string TryNumericFunction = "crm_try_numeric";
+
+    /// <summary>
+    /// Custom PostgreSQL function safely casting text to <c>boolean</c>.
+    /// </summary>
+    public const string TryBooleanFunction = "crm_try_boolean";
+
+    /// <summary>
+    /// Custom PostgreSQL function safely casting text to UTC-normalized <c>date</c>.
+    /// </summary>
+    public const string TryDateFunction = "crm_try_date";
+
+    /// <summary>
+    /// Custom PostgreSQL function safely casting text to <c>timestamp with time zone</c> (excluding Infinity).
+    /// </summary>
+    public const string TryTimestampTzFunction = "crm_try_timestamptz";
 }

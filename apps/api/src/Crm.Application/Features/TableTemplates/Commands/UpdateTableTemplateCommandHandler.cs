@@ -1,17 +1,15 @@
 using Crm.Application.Common.Consts;
-using Crm.Application.Extensions;
-using Crm.Domain.Entities;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using Mapster;
+using Crm.Domain.ValueObjects;
 using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.TableTemplates.Commands;
 
 /// <summary>
-/// Handles the <see cref="UpdateTableTemplateCommand"/> to update an existing table template blueprint and synchronize its fields.
+/// Handles the <see cref="UpdateTableTemplateCommand"/> to update an existing non-system table template blueprint.
 /// </summary>
 /// <param name="tableTemplateRepository">The repository used for accessing and persisting table template data.</param>
 /// <param name="logger">The logger instance for tracking command execution.</param>
@@ -25,7 +23,7 @@ public sealed partial class UpdateTableTemplateCommandHandler(
         LogUpdatingTableTemplate(logger, command.Id, command.Name);
 
         await tableTemplateRepository.LockForUpdateAsync(command.Id, cancellationToken);
-        var template = await tableTemplateRepository.GetForUpdateWithFieldsAsync(command.Id, cancellationToken);
+        var template = await tableTemplateRepository.GetForUpdateAsync(command.Id, cancellationToken);
 
         if (template.IsSystemPreset)
         {
@@ -33,18 +31,12 @@ public sealed partial class UpdateTableTemplateCommandHandler(
             throw new CannotModifySystemPresetException(template.Id);
         }
 
-        command.Adapt(template);
-
-        FieldSchemaSynchronizer.Synchronize(
-            template.Fields,
-            command.Fields,
-            id => new TemplateFieldNotFoundException(id, template.Id),
-            dto => dto.Adapt<TemplateField>(),
-            (existing, dto) => dto.Adapt(existing));
+        template.Name = command.Name;
+        template.Description = command.Description;
+        template.Fields.Clear();
+        template.Fields.AddRange(command.Fields.Select(f => new TemplateFieldDefinition(f.Name, f.IsRequired, f.Order)));
 
         template.Fields.EnsureValidFieldSchema();
-
-        await tableTemplateRepository.ResolveFieldKeyCollisionsAsync(template.Id, cancellationToken);
 
         LogTableTemplateUpdatedSuccessfully(logger, template.Id);
 

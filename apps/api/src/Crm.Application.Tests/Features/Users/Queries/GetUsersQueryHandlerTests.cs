@@ -16,8 +16,16 @@ namespace Crm.Application.Tests.Features.Users.Queries;
 
 public class GetUsersQueryHandlerTests
 {
-    private static readonly string[] CityOnlyKeys = ["city"];
-    private static readonly string[] SecretOnlyKeys = ["secret"];
+    private static readonly Guid CityFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000201");
+    private static readonly Guid SalaryFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000202");
+    private static readonly Guid AgeFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000203");
+    private static readonly Guid SecretFieldId = Guid.Parse("019a0000-0000-7000-8000-000000000204");
+    private static readonly string CityKey = CityFieldId.ToString();
+    private static readonly string SalaryKey = SalaryFieldId.ToString();
+    private static readonly string AgeKey = AgeFieldId.ToString();
+    private static readonly string SecretKey = SecretFieldId.ToString();
+    private static readonly string[] CityOnlyKeys = [CityKey];
+    private static readonly string[] SecretOnlyKeys = [SecretKey];
 
     private readonly IAuthUserRepository _userRepository = Substitute.For<IAuthUserRepository>();
     private readonly IAuthRoleRepository _authRoleRepository = Substitute.For<IAuthRoleRepository>();
@@ -56,7 +64,7 @@ public class GetUsersQueryHandlerTests
                 pageNumber: query.PageNumber,
                 pageSize: query.PageSize,
                 showDeleted: query.ShowDeleted,
-                customFieldSort: null,
+                customFieldSortKey: null,
                 searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 currentUserId: query.CurrentUserId,
@@ -87,8 +95,8 @@ public class GetUsersQueryHandlerTests
         _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
             .Returns(
             [
-                new UserCustomField { Id = Guid.CreateVersion7(), Name = "City", Key = "city", DataType = FieldDataType.Text, IsPublic = true, Order = 0 },
-                new UserCustomField { Id = Guid.CreateVersion7(), Name = "Salary", Key = "salary", DataType = FieldDataType.Number, IsPublic = false, Order = 1 },
+                new UserCustomField { Id = CityFieldId, Name = "City", IsPublic = true, Order = 0 },
+                new UserCustomField { Id = SalaryFieldId, Name = "Salary", IsPublic = false, Order = 1 },
             ]);
 
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
@@ -110,7 +118,7 @@ public class GetUsersQueryHandlerTests
             AvatarUrl: "avatars/self.png",
             IsActive: true,
             Roles: [],
-            CustomFields: new JsonObject { ["city"] = "Kyiv", ["salary"] = 4500 });
+            CustomFields: new JsonObject { [CityKey] = "Kyiv", [SalaryKey] = "4500" });
 
         var userOther = new UserDto(
             Id: otherUserId,
@@ -126,7 +134,7 @@ public class GetUsersQueryHandlerTests
             AvatarUrl: "avatars/other.png",
             IsActive: true,
             Roles: [],
-            CustomFields: new JsonObject { ["city"] = "Lviv", ["salary"] = 5000 });
+            CustomFields: new JsonObject { [CityKey] = "Lviv", [SalaryKey] = "5000" });
 
         var pagedUsers = new PagedResult<UserDto>([userSelf, userOther], 2, 1, 10);
 
@@ -137,7 +145,7 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
-                customFieldSort: Arg.Any<UserCustomFieldSort?>(),
+                customFieldSortKey: Arg.Any<string?>(),
                 searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 currentUserId: Arg.Any<Guid?>(),
@@ -179,7 +187,7 @@ public class GetUsersQueryHandlerTests
         enrichedSelf.IsActive.ShouldBeTrue();
         enrichedSelf.Roles.Count().ShouldBe(1);
         enrichedSelf.Roles.First().Name.ShouldBe("Adminka");
-        enrichedSelf.CustomFields.Select(kvp => kvp.Key).ShouldBe(["city", "salary"]);
+        enrichedSelf.CustomFields.Select(kvp => kvp.Key).ShouldBe([CityKey, SalaryKey]);
 
         var enrichedOther = result.Items.First(u => u.Id == otherUserId);
         enrichedOther.AvatarUrl.ShouldBe($"https://api.crm.org/api/v1/users/{otherUserId}/avatar");
@@ -187,7 +195,7 @@ public class GetUsersQueryHandlerTests
         enrichedOther.IsActive.ShouldBeTrue();
         enrichedOther.Roles.Count().ShouldBe(1);
         enrichedOther.Roles.First().Name.ShouldBe("Volunteer");
-        enrichedOther.CustomFields.Select(kvp => kvp.Key).ShouldBe(["city"]);
+        enrichedOther.CustomFields.Select(kvp => kvp.Key).ShouldBe([CityKey]);
 
         await _permissionService.Received(1)
             .HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>());
@@ -206,7 +214,7 @@ public class GetUsersQueryHandlerTests
         _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
             .Returns(
             [
-                new UserCustomField { Id = Guid.CreateVersion7(), Name = "Salary", Key = "salary", DataType = FieldDataType.Number, IsPublic = false, Order = 0 },
+                new UserCustomField { Id = SalaryFieldId, Name = "Salary", IsPublic = false, Order = 0 },
             ]);
 
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewEmergencyContact, Arg.Any<CancellationToken>())
@@ -228,7 +236,7 @@ public class GetUsersQueryHandlerTests
             AvatarUrl: null,
             IsActive: true,
             Roles: [],
-            CustomFields: new JsonObject { ["salary"] = 5000 });
+            CustomFields: new JsonObject { [SalaryKey] = "5000" });
 
         var pagedUsers = new PagedResult<UserDto>([userOther], 1, 1, 10);
 
@@ -239,7 +247,7 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
-                customFieldSort: Arg.Any<UserCustomFieldSort?>(),
+                customFieldSortKey: Arg.Any<string?>(),
                 searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 currentUserId: Arg.Any<Guid?>(),
@@ -263,7 +271,7 @@ public class GetUsersQueryHandlerTests
         var enrichedOther = result.Items.Single();
         enrichedOther.EmergencyContact.ShouldBe("Sister: +380679998877");
         enrichedOther.IsActive.ShouldBeTrue();
-        enrichedOther.CustomFields.Select(kvp => kvp.Key).ShouldBe(["salary"]);
+        enrichedOther.CustomFields.Select(kvp => kvp.Key).ShouldBe([SalaryKey]);
     }
 
     [Fact]
@@ -319,7 +327,7 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: true,
-                customFieldSort: Arg.Any<UserCustomFieldSort?>(),
+                customFieldSortKey: Arg.Any<string?>(),
                 searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 currentUserId: Arg.Any<Guid?>(),
@@ -364,7 +372,7 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
-                customFieldSort: null,
+                customFieldSortKey: null,
                 searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 currentUserId: currentUserId,
@@ -389,7 +397,7 @@ public class GetUsersQueryHandlerTests
             pageNumber: 1,
             pageSize: 10,
             showDeleted: false,
-            customFieldSort: null,
+            customFieldSortKey: null,
             searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
             searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
             currentUserId: currentUserId,
@@ -415,7 +423,7 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
-                customFieldSort: null,
+                customFieldSortKey: null,
                 searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 currentUserId: currentUserId,
@@ -440,7 +448,7 @@ public class GetUsersQueryHandlerTests
             pageNumber: 1,
             pageSize: 10,
             showDeleted: false,
-            customFieldSort: null,
+            customFieldSortKey: null,
             searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
             searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
             currentUserId: currentUserId,
@@ -448,10 +456,9 @@ public class GetUsersQueryHandlerTests
     }
 
     [Theory]
-    [InlineData("age")]
-    [InlineData("customFields.age")]
-    [InlineData("customFields['age']")]
-    public async Task HandleWhenOrderByIsBareOrPrefixedCustomFieldShouldResolveCanonicalKeyAndDataType(string orderBy)
+    [InlineData("019a0000-0000-7000-8000-000000000203")]
+    [InlineData("  019A0000-0000-7000-8000-000000000203  ")]
+    public async Task HandleWhenOrderByIsCanonicalCustomFieldIdShouldResolveKey(string orderBy)
     {
         // Arrange
         var currentUserId = Guid.NewGuid();
@@ -461,7 +468,7 @@ public class GetUsersQueryHandlerTests
             .Returns(true);
 
         _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
-            .Returns([new UserCustomField { Id = Guid.CreateVersion7(), Name = "Age", Key = "age", DataType = FieldDataType.Number, IsPublic = true, Order = 0 }]);
+            .Returns([new UserCustomField { Id = AgeFieldId, Name = "Age", IsPublic = true, Order = 0 }]);
 
         _userRepository.GetPagedAsync<UserDto>(
                 searchTerm: null,
@@ -470,7 +477,7 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
-                customFieldSort: Arg.Is<UserCustomFieldSort?>(s => s != null && s.Key == "age" && s.DataType == FieldDataType.Number),
+                customFieldSortKey: AgeKey,
                 searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
                 currentUserId: currentUserId,
@@ -495,7 +502,7 @@ public class GetUsersQueryHandlerTests
             pageNumber: 1,
             pageSize: 10,
             showDeleted: false,
-            customFieldSort: Arg.Is<UserCustomFieldSort?>(s => s != null && s.Key == "age" && s.DataType == FieldDataType.Number),
+            customFieldSortKey: AgeKey,
             searchablePublicCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
             searchablePrivateCustomFieldKeys: Arg.Any<IReadOnlyList<string>?>(),
             currentUserId: currentUserId,
@@ -512,8 +519,8 @@ public class GetUsersQueryHandlerTests
         _userCustomFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>())
             .Returns(
             [
-                new UserCustomField { Id = Guid.CreateVersion7(), Name = "City", Key = "city", DataType = FieldDataType.Text, IsPublic = true, Order = 0 },
-                new UserCustomField { Id = Guid.CreateVersion7(), Name = "Secret", Key = "secret", DataType = FieldDataType.Text, IsPublic = false, Order = 1 },
+                new UserCustomField { Id = CityFieldId, Name = "City", IsPublic = true, Order = 0 },
+                new UserCustomField { Id = SecretFieldId, Name = "Secret", IsPublic = false, Order = 1 },
             ]);
 
         _permissionService.HasAccessAsync(currentUserRoleIds, AccessRight.ViewCustomFields, Arg.Any<CancellationToken>())
@@ -526,7 +533,7 @@ public class GetUsersQueryHandlerTests
                 pageNumber: 1,
                 pageSize: 10,
                 showDeleted: false,
-                customFieldSort: null,
+                customFieldSortKey: null,
                 searchablePublicCustomFieldKeys: Arg.Is<IReadOnlyList<string>?>(k => k != null && k.SequenceEqual(CityOnlyKeys)),
                 searchablePrivateCustomFieldKeys: Arg.Is<IReadOnlyList<string>?>(k => k != null && k.SequenceEqual(SecretOnlyKeys)),
                 currentUserId: currentUserId,

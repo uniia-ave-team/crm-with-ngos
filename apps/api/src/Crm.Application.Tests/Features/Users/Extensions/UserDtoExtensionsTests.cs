@@ -33,7 +33,7 @@ public class UserDtoExtensionsTests
             "contact-123",
             "avatar.png",
             PronounCategory.Feminine,
-            new JsonObject { ["private_field"] = 42, ["public_field"] = "val1" });
+            new JsonObject { ["private_field"] = "42", ["public_field"] = "val1" });
         var roles = new[] { new RoleDto(Guid.NewGuid(), "Admin", "Adminka", "Admins") };
 
         _fileUrlProvider.ResolveUserAvatarUrl("avatar.png", userId, true)
@@ -56,7 +56,7 @@ public class UserDtoExtensionsTests
         result.Roles.Single().Name.ShouldBe("Adminka");
         result.CustomFields.Select(kvp => kvp.Key).ShouldBe(["public_field", "private_field"]);
         result.CustomFields["public_field"]?.GetValue<string>().ShouldBe("val1");
-        result.CustomFields["private_field"]?.GetValue<int>().ShouldBe(42);
+        result.CustomFields["private_field"]?.GetValue<string>().ShouldBe("42");
     }
 
     [Fact]

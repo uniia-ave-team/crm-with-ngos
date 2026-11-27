@@ -1,5 +1,5 @@
 using Crm.Domain.Entities;
-using Crm.Domain.Enums;
+using Crm.Domain.ValueObjects;
 
 namespace Crm.Infrastructure.Persistence.Seeders.SystemPresets;
 
@@ -8,6 +8,7 @@ namespace Crm.Infrastructure.Persistence.Seeders.SystemPresets;
 /// </summary>
 public class DonorBaseSystemTableTemplate : ISystemTableTemplate
 {
+    /// <inheritdoc />
     public TableTemplate GetTemplate()
     {
         return new TableTemplate
@@ -17,46 +18,11 @@ public class DonorBaseSystemTableTemplate : ISystemTableTemplate
             IsSystemPreset = true,
             Fields =
             [
-                new()
-                {
-                    Name = "Назва",
-                    Key = "name",
-                    DataType = FieldDataType.Text,
-                    IsRequired = true,
-                    Order = 0,
-                },
-                new()
-                {
-                    Name = "Напрямки та пріоритети",
-                    Key = "priorities",
-                    DataType = FieldDataType.Text,
-                    IsRequired = false,
-                    Order = 1,
-                },
-                new()
-                {
-                    Name = "Особливості подання",
-                    Key = "submission_features",
-                    DataType = FieldDataType.Text,
-                    IsRequired = false,
-                    Order = 2,
-                },
-                new()
-                {
-                    Name = "Терміни",
-                    Key = "terms",
-                    DataType = FieldDataType.Text,
-                    IsRequired = false,
-                    Order = 3,
-                },
-                new()
-                {
-                    Name = "Контакти",
-                    Key = "contacts",
-                    DataType = FieldDataType.Text,
-                    IsRequired = false,
-                    Order = 4,
-                },
+                new TemplateFieldDefinition("Назва", isRequired: true, order: 0),
+                new TemplateFieldDefinition("Напрямки та пріоритети", isRequired: false, order: 1),
+                new TemplateFieldDefinition("Особливості подання", isRequired: false, order: 2),
+                new TemplateFieldDefinition("Терміни", isRequired: false, order: 3),
+                new TemplateFieldDefinition("Контакти", isRequired: false, order: 4),
             ],
         };
     }

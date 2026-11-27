@@ -230,6 +230,9 @@ public static class LogEventIds
     public const int CheckingTableTemplates = 9035;
     public const int TableTemplatesAlreadySeeded = 9036;
     public const int TableTemplatesSeededSuccessfully = 9037;
+    public const int MovingCustomRecord = 9038;
+    public const int CustomRecordMovedSuccessfully = 9039;
+    public const int TableTemplatesUpdatedSuccessfully = 9040;
 
     // 10000s: Projects, Members, Topics, Tags, Tasks, Comments, and Attachments
     public const int CreatingProject = 10001;

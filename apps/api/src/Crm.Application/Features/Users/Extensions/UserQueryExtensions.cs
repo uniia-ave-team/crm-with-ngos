@@ -1,7 +1,6 @@
 using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Queries;
 using Crm.Application.Interfaces;
-using Crm.Domain.Common;
 using Crm.Domain.Enums;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
@@ -46,7 +45,7 @@ public static class UserQueryExtensions
 
         bool isBuiltInSort = UserCustomFieldExtensions.IsBuiltInSortField(effectiveOrderBy);
         bool isOrderingByCustomField = !isBuiltInSort
-            && UserCustomFieldExtensions.ExtractSortKey(effectiveOrderBy) is not null;
+            && CustomFieldExtensions.IsValidFieldId(effectiveOrderBy);
 
         var schemaFields = await userCustomFieldRepository.GetAllOrderedAsync(cancellationToken);
         var (allKeys, publicKeys, privateKeys) = schemaFields.PartitionSchemaKeys();
@@ -61,7 +60,7 @@ public static class UserQueryExtensions
                 cancellationToken)
             : null;
 
-        UserCustomFieldSort? customFieldSort = null;
+        string? customFieldSortKey = null;
         if (isOrderingByCustomField)
         {
             if (schemaFields.Count > 0)
@@ -70,7 +69,7 @@ public static class UserQueryExtensions
                     ? schemaFields
                     : schemaFields.Where(f => f.IsPublic);
 
-                customFieldSort = visibleFields.ResolveOrdering(effectiveOrderBy);
+                customFieldSortKey = visibleFields.ResolveOrdering(effectiveOrderBy);
             }
 
             effectiveOrderBy = null;
@@ -97,7 +96,7 @@ public static class UserQueryExtensions
 
         return new ResolvedUserQueryContext(
             effectiveOrderBy,
-            customFieldSort,
+            customFieldSortKey,
             allKeys,
             publicKeys,
             searchablePublicKeys,

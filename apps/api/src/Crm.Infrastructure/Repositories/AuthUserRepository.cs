@@ -43,14 +43,14 @@ public class AuthUserRepository(
     }
 
     /// <inheritdoc />
-    public Task<PagedResult<TResult>> GetPagedAsync<TResult>(
+    public async Task<PagedResult<TResult>> GetPagedAsync<TResult>(
         string? searchTerm = null,
         string? orderBy = null,
         string? sortOrder = SortOrderConstants.Ascending,
         int pageNumber = PaginationConstants.MinPageNumber,
         int pageSize = PaginationConstants.DefaultPageSize,
         bool showDeleted = false,
-        UserCustomFieldSort? customFieldSort = null,
+        string? customFieldSortKey = null,
         IReadOnlyList<string>? searchablePublicCustomFieldKeys = null,
         IReadOnlyList<string>? searchablePrivateCustomFieldKeys = null,
         Guid? currentUserId = null,
@@ -70,13 +70,25 @@ public class AuthUserRepository(
             query = query.Where(basePredicate);
         }
 
-        query = customFieldSort is not null
-            ? query.OrderByUserCustomField(customFieldSort, sortOrder)
-            : string.IsNullOrWhiteSpace(orderBy)
+        if (!string.IsNullOrWhiteSpace(customFieldSortKey))
+        {
+            string key = customFieldSortKey;
+            InferredSortKind sortKind = await query
+                .OrderBy(u => u.Id)
+                .DetectSortKindAsync(
+                    u => JsonbFunctionsExtensions.JsonbExtractPathText(u.UserProfile.CustomFields, key),
+                    cancellationToken);
+
+            query = query.OrderByUserCustomField(key, sortOrder, sortKind);
+        }
+        else
+        {
+            query = string.IsNullOrWhiteSpace(orderBy)
                 ? query.OrderBy(u => u.Id)
                 : ApplyOrdering<TResult>(query, orderBy, sortOrder);
+        }
 
-        return ToPagedResultAsync<TResult>(query, pageNumber, pageSize, cancellationToken);
+        return await ToPagedResultAsync<TResult>(query, pageNumber, pageSize, cancellationToken);
     }
 
     /// <inheritdoc />

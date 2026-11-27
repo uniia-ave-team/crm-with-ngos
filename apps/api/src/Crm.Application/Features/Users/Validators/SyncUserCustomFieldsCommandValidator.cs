@@ -1,14 +1,13 @@
 using Crm.Application.Common.Validators;
 using Crm.Application.Dtos.Users;
 using Crm.Application.Features.Users.Commands;
-using Crm.Domain.Extensions;
 using FluentValidation;
 
 namespace Crm.Application.Features.Users.Validators;
 
 /// <summary>
 /// Provides validation rules for <see cref="SyncUserCustomFieldsCommand"/>, reusing
-/// <see cref="IdentifiableFieldListValidator{TField}"/> with user-specific reserved key checks.
+/// <see cref="IdentifiableFieldListValidator{TField}"/>.
 /// </summary>
 public sealed class SyncUserCustomFieldsCommandValidator : AbstractValidator<SyncUserCustomFieldsCommand>
 {
@@ -18,6 +17,6 @@ public sealed class SyncUserCustomFieldsCommandValidator : AbstractValidator<Syn
     public SyncUserCustomFieldsCommandValidator()
     {
         RuleFor(x => x.Fields)
-            .SetValidator(new IdentifiableFieldListValidator<UpdateUserCustomFieldDto>(UserCustomFieldExtensions.IsReservedKey));
+            .SetValidator(new IdentifiableFieldListValidator<UpdateUserCustomFieldDto>());
     }
 }

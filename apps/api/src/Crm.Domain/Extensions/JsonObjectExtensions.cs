@@ -1,32 +1,36 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
-using Crm.Domain.Enums;
+using Crm.Domain.Entities.Base;
 using Crm.Domain.Exceptions;
-using Crm.Domain.Interfaces.Entities;
 
 namespace Crm.Domain.Extensions;
 
 /// <summary>
-/// Provides extension methods for <see cref="JsonObject"/> schema validation, default payload creation, null backfilling, and key reordering.
+/// Provides extension methods for <see cref="JsonObject"/> schema validation, default payload creation, null backfilling, and key reordering
+/// keyed by each <see cref="FieldDefinitionBase"/> identifier (<see cref="BaseEntity.Id"/>).
 /// </summary>
 public static class JsonObjectExtensions
 {
     /// <summary>
-    /// Validates field data types and requirements against the schema, prevents unknown properties,
-    /// and populates null values for missing optional fields. Intended for write operations (Create/Update).
+    /// Validates that every value is a JSON string (or <see langword="null"/> for optional fields), prevents unknown properties,
+    /// and populates <see langword="null"/> values for missing optional fields. Intended for write operations (Create/Update).
     /// </summary>
     /// <param name="incomingData">The source JSON payload object.</param>
-    /// <param name="customFields">The list of field schema definitions.</param>
-    /// <returns>A validated and normalized <see cref="JsonObject"/> payload containing schema-only keys.</returns>
-    /// <exception cref="InvalidCustomRecordPayloadException">Thrown when any field value fails data type or required validation, or when unknown fields are present.</exception>
-    public static JsonObject ValidateAndBackfillPayload(this JsonObject incomingData, IReadOnlyList<IFieldSchema> customFields)
+    /// <param name="customFields">The list of persisted field definitions.</param>
+    /// <returns>A validated and normalized <see cref="JsonObject"/> payload containing schema-only field ID keys.</returns>
+    /// <exception cref="InvalidCustomRecordPayloadException">Thrown when any field value is not a string, a required field is missing or null, or unknown fields are present.</exception>
+    public static JsonObject ValidateAndBackfillPayload(this JsonObject incomingData, IReadOnlyList<FieldDefinitionBase> customFields)
     {
         ArgumentNullException.ThrowIfNull(incomingData);
         ArgumentNullException.ThrowIfNull(customFields);
 
+        var fieldKeys = new string[customFields.Count];
         var allowedKeys = new HashSet<string>(customFields.Count, StringComparer.Ordinal);
         for (var i = 0; i < customFields.Count; i++)
         {
-            allowedKeys.Add(customFields[i].Key);
+            string key = customFields[i].Id.ToString();
+            fieldKeys[i] = key;
+            allowedKeys.Add(key);
         }
 
         List<string>? unknownKeys = null;
@@ -49,19 +53,20 @@ public static class JsonObjectExtensions
         for (var i = 0; i < customFields.Count; i++)
         {
             var field = customFields[i];
+            string fieldKey = fieldKeys[i];
 
-            if (incomingData.TryGetPropertyValue(field.Key, out var valueNode))
+            if (incomingData.TryGetPropertyValue(fieldKey, out var valueNode))
             {
-                field.DataType.ValidateJsonValue(field.Key, valueNode, field.IsRequired);
-                alignedData.Add(field.Key, NormalizeValidatedValue(field.DataType, valueNode));
+                ValidateStringOrNullValue(fieldKey, valueNode, field.IsRequired);
+                alignedData.Add(fieldKey, valueNode?.DeepClone());
             }
             else if (field.IsRequired)
             {
-                throw new InvalidCustomRecordPayloadException($"Field '{field.Key}' is required.");
+                throw new InvalidCustomRecordPayloadException($"Field '{fieldKey}' is required.");
             }
             else
             {
-                alignedData.Add(field.Key, null);
+                alignedData.Add(fieldKey, null);
             }
         }
 
@@ -69,12 +74,12 @@ public static class JsonObjectExtensions
     }
 
     /// <summary>
-    /// Constructs a new <see cref="JsonObject"/> with keys strictly ordered according to the provided sequence of schema keys.
+    /// Constructs a new <see cref="JsonObject"/> with keys strictly ordered according to the provided sequence of field ID keys.
     /// Moves nodes directly from <paramref name="payload"/> without performing DeepClone and explicitly populates missing schema keys with <see langword="null"/>.
     /// Intended for read operations before sending payloads to callers.
     /// </summary>
     /// <param name="payload">The source JSON payload object retrieved from storage.</param>
-    /// <param name="orderedKeys">The pre-ordered list or array of schema keys.</param>
+    /// <param name="orderedKeys">The pre-ordered list or array of field ID keys.</param>
     /// <returns>A new <see cref="JsonObject"/> with properties ordered according to <paramref name="orderedKeys"/>, with missing keys explicitly set to <see langword="null"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="payload"/> or <paramref name="orderedKeys"/> is <see langword="null"/>.</exception>
     public static JsonObject ReorderKeys(
@@ -98,33 +103,41 @@ public static class JsonObjectExtensions
 
     /// <summary>
     /// Creates an initial schema-aligned <see cref="JsonObject"/> payload for newly created entities (such as newly registered users),
-    /// backfilling mandatory fields with their default typed values and setting optional fields to <see langword="null"/>.
+    /// backfilling mandatory fields with an empty string and setting optional fields to <see langword="null"/>.
     /// </summary>
     /// <param name="fields">The ordered field schema definitions.</param>
     /// <returns>A schema-aligned <see cref="JsonObject"/> initialized with defaults.</returns>
-    public static JsonObject CreateDefaultPayload(this IEnumerable<IFieldSchema> fields)
+    public static JsonObject CreateDefaultPayload(this IEnumerable<FieldDefinitionBase> fields)
     {
         ArgumentNullException.ThrowIfNull(fields);
 
         var payload = new JsonObject();
         foreach (var field in fields.OrderBy(f => f.Order))
         {
-            payload[field.Key] = field.IsRequired
-                ? JsonNode.Parse(field.DataType.GetBackfillJson())
+            payload[field.Id.ToString()] = field.IsRequired
+                ? JsonValue.Create(string.Empty)
                 : null;
         }
 
         return payload;
     }
 
-    private static JsonNode? NormalizeValidatedValue(FieldDataType dataType, JsonNode? valueNode)
-        => valueNode switch
+    private static void ValidateStringOrNullValue(string fieldKey, JsonNode? node, bool isRequired)
+    {
+        if (node is null || node.GetValueKind() == JsonValueKind.Null)
         {
-            null => null,
-            JsonValue jsonValue when dataType == FieldDataType.DateTime
-                && jsonValue.TryGetValue<string>(out var rawDateTime)
-                && FieldDataTypeExtensions.TryNormalizeDateTimeString(rawDateTime, out var normalizedDateTime)
-                => JsonValue.Create(normalizedDateTime),
-            _ => valueNode.DeepClone(),
-        };
+            if (isRequired)
+            {
+                throw new InvalidCustomRecordPayloadException($"Field '{fieldKey}' is required and cannot be null.");
+            }
+
+            return;
+        }
+
+        if (node is not JsonValue jsonValue || jsonValue.GetValueKind() != JsonValueKind.String)
+        {
+            throw new InvalidCustomRecordPayloadException(
+                $"Field '{fieldKey}' has an invalid value type. Expected 'String', but received '{node.GetValueKind()}'.");
+        }
+    }
 }

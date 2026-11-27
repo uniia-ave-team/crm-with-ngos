@@ -1,5 +1,6 @@
 using Crm.Application.Common.Behaviors;
 using Crm.Application.Common.Security;
+using Crm.Application.Features.CustomRecords.Services;
 using Crm.Application.Features.Tasks.Services;
 using Crm.Application.Interfaces;
 using FluentValidation;
@@ -32,6 +33,7 @@ public static class ApplicationServiceCollectionExtensions
     {
         services.AddScoped<IProjectAccessService, ProjectAccessService>();
         services.AddScoped<ITaskAssigneeValidator, TaskAssigneeValidator>();
+        services.AddScoped<ICustomRecordPositionService, CustomRecordPositionService>();
 
         services.AddMediator(options =>
         {

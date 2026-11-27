@@ -91,7 +91,6 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<ITableTemplateRepository, TableTemplateRepository>();
         services.AddScoped<ICustomRecordRepository, CustomRecordRepository>();
         services.AddScoped<ICustomTableRepository, CustomTableRepository>();
-        services.AddScoped<ICustomFieldRepository, CustomFieldRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<ITopicRepository, TopicRepository>();
         services.AddScoped<ITagRepository, TagRepository>();

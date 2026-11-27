@@ -3,14 +3,14 @@ using Crm.Application.Dtos.TableTemplates;
 using Crm.Domain.Entities;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
-using Mapster;
 using Mediator;
 using Microsoft.Extensions.Logging;
 
 namespace Crm.Application.Features.CustomTables.Commands;
 
 /// <summary>
-/// Handles the <see cref="CreateCustomTableFromTemplateCommand"/> to instantiate a new custom table from an existing template preset.
+/// Handles the <see cref="CreateCustomTableFromTemplateCommand"/> to instantiate a new custom table
+/// from an existing template blueprint with freshly generated immutable field keys.
 /// </summary>
 /// <param name="customTableRepository">The repository used for accessing and persisting custom table data.</param>
 /// <param name="tableTemplateRepository">The repository used for retrieving the source table template.</param>
@@ -31,17 +31,26 @@ public sealed partial class CreateCustomTableFromTemplateCommandHandler(
 
         var template = await tableTemplateRepository.GetAsync<TableTemplateDto>(command.SourceTemplateId, cancellationToken);
 
-        var customTable = template.Adapt<CustomTable>();
+        string? description = command.Description is not null
+            ? (string.IsNullOrWhiteSpace(command.Description) ? null : command.Description.Trim())
+            : template.Description;
 
-        customTable.Name = command.Name;
-        customTable.NgoId = ngoId;
-
-        if (command.Description is not null)
+        var customTable = new CustomTable
         {
-            customTable.Description = string.IsNullOrWhiteSpace(command.Description)
-                ? null
-                : command.Description.Trim();
-        }
+            NgoId = ngoId,
+            Name = command.Name,
+            Description = description,
+            SourceTemplateId = template.Id,
+            Fields =
+            [
+                .. template.Fields.Select(f => new CustomField
+                {
+                    Name = f.Name,
+                    IsRequired = f.IsRequired,
+                    Order = f.Order,
+                }),
+            ],
+        };
 
         customTable.Fields.EnsureValidFieldSchema();
 

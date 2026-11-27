@@ -1,5 +1,5 @@
 using Crm.Application.Common.Validators;
-using Crm.Application.Dtos.TableTemplates;
+using Crm.Application.Dtos.Common;
 using Crm.Application.Features.TableTemplates.Commands;
 using Crm.Domain.Constants.Validation;
 using FluentValidation;
@@ -18,18 +18,18 @@ public sealed class CreateTableTemplateCommandValidator : AbstractValidator<Crea
     {
         RuleFor(x => x.Name)
             .ApplyRequiredTextRules(
-                TableTemplateValidationConstants.MaxNameLength,
+                CustomTableValidationConstants.MaxNameLength,
                 "Template name is required.",
-                $"Template name must not exceed {TableTemplateValidationConstants.MaxNameLength} characters.");
+                $"Template name must not exceed {CustomTableValidationConstants.MaxNameLength} characters.");
 
         RuleFor(x => x.Description)
             .ApplyOptionalTextRules(
-                TableTemplateValidationConstants.MaxDescriptionLength,
-                $"Description must not exceed {TableTemplateValidationConstants.MaxDescriptionLength} characters.")
+                CustomTableValidationConstants.MaxDescriptionLength,
+                $"Description must not exceed {CustomTableValidationConstants.MaxDescriptionLength} characters.")
             .When(x => !string.IsNullOrEmpty(x.Description));
 
         RuleFor(x => x.Fields)
             .NotEmpty().WithMessage("At least one field is required.")
-            .SetValidator(new FieldListValidator<CreateTemplateFieldDto>());
+            .SetValidator(new FieldListValidator<FieldDefinitionDto>());
     }
 }

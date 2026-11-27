@@ -1,5 +1,4 @@
 using Crm.Application.Dtos.CustomTables;
-using Crm.Application.Dtos.TableTemplates;
 using Crm.Application.Features.CustomTables.Commands;
 using Crm.Domain.Entities;
 using Crm.Domain.Interfaces.Entities;
@@ -37,19 +36,9 @@ public sealed class CustomTableMappingRegister : IRegister
                     .Select(f => new CustomFieldDto(
                         f.Id,
                         f.Name,
-                        f.Key,
-                        f.DataType,
                         f.IsRequired,
                         f.Order))
                     .ToList()));
-
-        config.NewConfig<TableTemplateDto, CustomTable>()
-            .Map(dest => dest.SourceTemplateId, src => src.Id)
-            .Ignore(dest => dest.Id);
-
-        config.NewConfig<TemplateFieldDto, CustomField>()
-            .Ignore(dest => dest.Id)
-            .Ignore(dest => dest.CustomTableId);
 
         config.NewConfig<UpdateCustomTableCommand, CustomTable>()
             .Ignore(dest => dest.Id)

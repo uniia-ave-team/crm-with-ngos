@@ -6,14 +6,13 @@ using Crm.Domain.Exceptions;
 using Crm.Domain.Interfaces.Repositories;
 using Crm.Infrastructure.Persistence;
 using Crm.Infrastructure.Persistence.Expressions;
-using Crm.Infrastructure.Persistence.Extensions;
 using LinqKit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Crm.Infrastructure.Repositories;
 
 /// <summary>
-/// Provides repository operations for managing <see cref="CustomTable"/> entities in the database.
+/// Provides repository operations for managing <see cref="CustomTable"/> entities and querying their <see cref="CustomField"/> schemas.
 /// </summary>
 /// <param name="appDbContext">The application database context.</param>
 public sealed class CustomTableRepository(
@@ -48,10 +47,38 @@ public sealed class CustomTableRepository(
     }
 
     /// <inheritdoc />
-    public Task ResolveFieldKeyCollisionsAsync(
+    public async Task<IReadOnlyList<CustomField>> GetFieldsByCustomTableIdAsync(
         Guid customTableId,
         CancellationToken cancellationToken = default)
-        => Context.ResolveFieldKeyCollisionsAsync<CustomField>(customTableId, f => f.CustomTableId, cancellationToken);
+        => await Context.Set<CustomField>()
+            .AsNoTracking()
+            .Where(x => x.CustomTableId == customTableId)
+            .OrderBy(x => x.Order)
+            .ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+    /// <inheritdoc />
+    public Task ApplyFieldSchemaChangesAsync(
+        Guid customTableId,
+        IEnumerable<CustomField> addedFields,
+        IEnumerable<CustomField> removedFields,
+        CancellationToken cancellationToken = default)
+    {
+        var added = addedFields as IReadOnlyCollection<CustomField> ?? [.. addedFields];
+        foreach (var field in added)
+        {
+            field.CustomTableId = customTableId;
+            Context.Entry(field).State = EntityState.Added;
+        }
+
+        var removed = removedFields as IReadOnlyCollection<CustomField> ?? [.. removedFields];
+        if (removed.Count > 0)
+        {
+            Context.Set<CustomField>().RemoveRange(removed);
+        }
+
+        return Task.CompletedTask;
+    }
 
     private static Expression<Func<CustomTable, bool>> BuildCustomTableFilter(string? searchTerm, Guid ngoId)
     {

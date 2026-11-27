@@ -298,7 +298,7 @@
         "tags": [
           "CustomRecords"
         ],
-        "summary": "Creates a new dynamic data record inside a target custom table.",
+        "summary": "Creates a new dynamic data record inside a target custom table.\nOptionally accepts `previousRecordId` and `nextRecordId` to insert at a specific position\nin the table's manual row order; when both are omitted, the record is appended at the end.",
         "description": "> 🔒 **Required Permissions:** `Permissions.CreateCustomRecord`",
         "operationId": "CustomRecordsCreate",
         "requestBody": {
@@ -355,6 +355,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -453,7 +463,7 @@
         "tags": [
           "CustomRecords"
         ],
-        "summary": "Updates the JSON data payload of an existing custom record.",
+        "summary": "Updates the JSON data payload of an existing custom record without changing its row position.",
         "description": "> 🔒 **Required Permissions:** `Permissions.UpdateCustomRecord`",
         "operationId": "CustomRecordsUpdate",
         "parameters": [
@@ -584,6 +594,98 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/customrecords/{id}/position": {
+      "patch": {
+        "tags": [
+          "CustomRecords"
+        ],
+        "summary": "Moves an existing custom record to a new position in its table's manual row order (drag-and-drop).\nWhen both `previousRecordId` and `nextRecordId` are `null`, the record is moved to the end of the table.",
+        "description": "> 🔒 **Required Permissions:** `Permissions.UpdateCustomRecord`",
+        "operationId": "CustomRecordsMovePosition",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The unique identifier of the custom record to move.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveCustomRecordCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -7730,7 +7832,7 @@
         "tags": [
           "Users"
         ],
-        "summary": "Retrieves the ordered list of global user custom field definitions visible to the current user\n(for rendering dynamic user table column headers and typed sort controls).",
+        "summary": "Retrieves the ordered list of global user custom field definitions visible to the current user\n(for rendering dynamic user table column headers and smart sort controls).",
         "description": "> 🔒 **Required Permissions:** `Permissions.ViewUser`",
         "operationId": "UsersGetUserCustomFields",
         "responses": {
@@ -8944,38 +9046,6 @@
           }
         }
       },
-      "CreateCustomFieldDto": {
-        "required": [
-          "name",
-          "key",
-          "dataType",
-          "isRequired",
-          "order"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
-          },
-          "isRequired": {
-            "type": "boolean"
-          },
-          "order": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "uint8"
-          }
-        }
-      },
       "CreateCustomRecordCommand": {
         "required": [
           "customTableId",
@@ -8989,6 +9059,20 @@
           },
           "data": {
             "$ref": "#/components/schemas/JsonObject"
+          },
+          "previousRecordId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "nextRecordId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -9012,7 +9096,7 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CreateCustomFieldDto"
+              "$ref": "#/components/schemas/FieldDefinitionDto"
             }
           }
         }
@@ -9129,7 +9213,7 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CreateTemplateFieldDto"
+              "$ref": "#/components/schemas/FieldDefinitionDto"
             }
           }
         }
@@ -9238,38 +9322,6 @@
           }
         }
       },
-      "CreateTemplateFieldDto": {
-        "required": [
-          "name",
-          "key",
-          "dataType",
-          "isRequired",
-          "order"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
-          },
-          "isRequired": {
-            "type": "boolean"
-          },
-          "order": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "uint8"
-          }
-        }
-      },
       "CreateTopicCommand": {
         "required": [
           "title",
@@ -9328,8 +9380,6 @@
         "required": [
           "id",
           "name",
-          "key",
-          "dataType",
           "isRequired",
           "order"
         ],
@@ -9341,12 +9391,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
           },
           "isRequired": {
             "type": "boolean"
@@ -9469,8 +9513,29 @@
           }
         }
       },
-      "FieldDataType": {
-        "type": "integer"
+      "FieldDefinitionDto": {
+        "required": [
+          "name",
+          "isRequired",
+          "order"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "order": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint8"
+          }
+        }
       },
       "IdentityOptionsDto": {
         "required": [
@@ -9603,6 +9668,25 @@
           "endsAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "MoveCustomRecordCommand": {
+        "type": "object",
+        "properties": {
+          "previousRecordId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "nextRecordId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -10808,7 +10892,7 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/TemplateFieldDto"
+              "$ref": "#/components/schemas/FieldDefinitionDto"
             }
           }
         }
@@ -11227,43 +11311,6 @@
           }
         }
       },
-      "TemplateFieldDto": {
-        "required": [
-          "id",
-          "name",
-          "key",
-          "dataType",
-          "isRequired",
-          "order"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
-          },
-          "isRequired": {
-            "type": "boolean"
-          },
-          "order": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "uint8"
-          }
-        }
-      },
       "TokenResultDto": {
         "required": [
           "token",
@@ -11314,8 +11361,6 @@
         "required": [
           "id",
           "name",
-          "key",
-          "dataType",
           "isRequired",
           "order"
         ],
@@ -11330,12 +11375,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
           },
           "isRequired": {
             "type": "boolean"
@@ -11505,7 +11544,7 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/UpdateTemplateFieldDto"
+              "$ref": "#/components/schemas/FieldDefinitionDto"
             }
           }
         }
@@ -11641,46 +11680,6 @@
           }
         }
       },
-      "UpdateTemplateFieldDto": {
-        "required": [
-          "id",
-          "name",
-          "key",
-          "dataType",
-          "isRequired",
-          "order"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
-          },
-          "isRequired": {
-            "type": "boolean"
-          },
-          "order": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "uint8"
-          }
-        }
-      },
       "UpdateTopicCommand": {
         "required": [
           "title",
@@ -11705,8 +11704,6 @@
         "required": [
           "id",
           "name",
-          "key",
-          "dataType",
           "isRequired",
           "isPublic",
           "order"
@@ -11722,12 +11719,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
           },
           "isRequired": {
             "type": "boolean"
@@ -11828,8 +11819,6 @@
         "required": [
           "id",
           "name",
-          "key",
-          "dataType",
           "isRequired",
           "isPublic",
           "order"
@@ -11842,12 +11831,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "key": {
-            "type": "string"
-          },
-          "dataType": {
-            "$ref": "#/components/schemas/FieldDataType"
           },
           "isRequired": {
             "type": "boolean"

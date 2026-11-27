@@ -14,7 +14,7 @@ public sealed partial class UsersController
 {
     /// <summary>
     /// Retrieves the ordered list of global user custom field definitions visible to the current user
-    /// (for rendering dynamic user table column headers and typed sort controls).
+    /// (for rendering dynamic user table column headers and smart sort controls).
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>An ordered list of visible user custom field column definitions.</returns>

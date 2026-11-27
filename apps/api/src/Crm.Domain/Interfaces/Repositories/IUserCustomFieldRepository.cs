@@ -1,48 +1,36 @@
 using Crm.Domain.Entities;
-using Crm.Domain.Interfaces.Entities;
 using Crm.Domain.Interfaces.Repositories.Generic;
 
 namespace Crm.Domain.Interfaces.Repositories;
 
 /// <summary>
-/// Defines the contract for the repository managing global <see cref="UserCustomField"/> schema definitions.
+/// Repository interface for managing global <see cref="UserCustomField"/> schema definitions.
 /// </summary>
 public interface IUserCustomFieldRepository : IGenericRepository<UserCustomField>
 {
     /// <summary>
-    /// Asynchronously retrieves all <see cref="UserCustomField"/> definitions ordered by <see cref="IOrderedEntity.Order"/>
-    /// without change tracking.
+    /// Retrieves all global user custom field definitions ordered by <see cref="Domain.Entities.Base.FieldDefinitionBase.Order"/> and <see cref="Domain.Entities.Base.BaseEntity.Id"/> without tracking.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>An ordered read-only list of all user custom field schema definitions.</returns>
+    /// <returns>An ordered read-only list of all global user custom fields.</returns>
     Task<IReadOnlyList<UserCustomField>> GetAllOrderedAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Asynchronously retrieves all tracked <see cref="UserCustomField"/> definitions ordered by <see cref="IOrderedEntity.Order"/>
-    /// for atomic schema synchronization.
+    /// Retrieves all tracked global user custom field definitions for transactional schema synchronization.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A mutable list of tracked user custom field entities.</returns>
+    /// <returns>A tracked list of all global user custom fields.</returns>
     Task<List<UserCustomField>> GetAllForUpdateAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Stages newly added and removed <see cref="UserCustomField"/> entities in the EF Core change tracker
-    /// following schema reconciliation.
+    /// Stages newly added and removed <see cref="UserCustomField"/> entities on the underlying database context.
     /// </summary>
-    /// <param name="addedFields">The new field definitions appended to the schema.</param>
-    /// <param name="removedFields">The field definitions removed from the schema.</param>
+    /// <param name="addedFields">Newly created user custom field definitions to add.</param>
+    /// <param name="removedFields">Removed user custom field definitions to delete.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous staging operation.</returns>
+    /// <returns>A task representing the asynchronous operation.</returns>
     Task ApplySchemaChangesAsync(
         IEnumerable<UserCustomField> addedFields,
         IEnumerable<UserCustomField> removedFields,
         CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Resolves unique key constraint collisions when existing <see cref="UserCustomField"/> definitions swap or chain-rename keys
-    /// within a single schema synchronization pass.
-    /// </summary>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous collision resolution operation.</returns>
-    Task ResolveFieldKeyCollisionsAsync(CancellationToken cancellationToken = default);
 }
