@@ -125,6 +125,7 @@ public sealed partial class DemoDataSeeder(
             await CreateUsersAsync(accounts, ngoId, now, userFields, cancellationToken);
             await CreateDonorTableAsync(ngoId, now, cancellationToken);
             await CreateVolunteerTableAsync(ngoId, now, cancellationToken);
+            await CreateTopicTablesAsync(ngoId, now, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -329,6 +330,22 @@ public sealed partial class DemoDataSeeder(
         };
 
         return CreateTableWithRecordsAsync(table, DemoDataContent.CreateVolunteerRows(now), now, cancellationToken);
+    }
+
+    private async Task CreateTopicTablesAsync(Guid ngoId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        foreach (var definition in DemoTables.All)
+        {
+            var table = new CustomTable
+            {
+                Name = definition.Name,
+                Description = definition.Description,
+                NgoId = ngoId,
+                Fields = definition.CreateFields(),
+            };
+
+            await CreateTableWithRecordsAsync(table, definition.CreateRows(now), now, cancellationToken);
+        }
     }
 
     private async Task CreateTableWithRecordsAsync(
