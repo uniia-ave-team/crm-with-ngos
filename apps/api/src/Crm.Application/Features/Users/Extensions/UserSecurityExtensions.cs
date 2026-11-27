@@ -64,15 +64,15 @@ public static class UserSecurityExtensions
         => (customFields ?? []).ReorderKeys(isSelf || hasGlobalAccess ? allOrderedKeys : publicOrderedKeys);
 
     /// <summary>
-    /// Validates <paramref name="incomingData"/> against the editable subset of <paramref name="schemaFields"/>
-    /// and merges the result with existing private field values when the caller lacks private-field access.
-    /// Prevents unauthorized editors from overwriting or silently wiping private fields.
+    /// Validates a partial <paramref name="incomingData"/> payload against the editable subset of <paramref name="schemaFields"/>
+    /// and merges only the provided keys onto <paramref name="existingData"/>, preserving untouched editable values as well as
+    /// protected private fields when the caller lacks private-field access.
     /// </summary>
-    /// <param name="incomingData">The incoming JSON payload from the update request.</param>
-    /// <param name="existingData">The target user's currently persisted custom fields JSON payload.</param>
+    /// <param name="incomingData">The incoming partial JSON payload from the patch request.</param>
+    /// <param name="existingData">The target user's currently persisted custom fields JSON payload loaded under row lock.</param>
     /// <param name="schemaFields">The ordered global user custom field definitions.</param>
     /// <param name="canEditPrivate">Whether the caller is editing their own profile or has <see cref="Domain.Enums.AccessRight.ViewCustomFields"/>.</param>
-    /// <returns>A validated, schema-ordered <see cref="JsonObject"/> ready to persist.</returns>
+    /// <returns>A validated, merged, schema-ordered <see cref="JsonObject"/> ready to persist.</returns>
     public static JsonObject ValidateAndMergeCustomFields(
         this JsonObject incomingData,
         JsonObject? existingData,
@@ -81,11 +81,11 @@ public static class UserSecurityExtensions
     {
         if (canEditPrivate)
         {
-            return incomingData.ValidateAndBackfillPayload(schemaFields);
+            return incomingData.ValidateAndApplyPatch(existingData, schemaFields);
         }
 
         List<UserCustomField> publicFields = [.. schemaFields.Where(f => f.IsPublic)];
-        JsonObject validatedPublic = incomingData.ValidateAndBackfillPayload(publicFields);
+        JsonObject validatedPublic = incomingData.ValidateAndApplyPatch(existingData, publicFields);
 
         var merged = new JsonObject();
         foreach (var field in schemaFields)

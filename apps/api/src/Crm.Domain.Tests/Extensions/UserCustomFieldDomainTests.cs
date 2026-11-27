@@ -63,6 +63,57 @@ public class UserCustomFieldDomainTests
     }
 
     [Fact]
+    public void ValidateAndApplyPatchShouldMergeOnlyProvidedKeysPreserveUntouchedFieldsAndEnforceSchemaRules()
+    {
+        // Arrange
+        var phoneField = new CustomField { Name = "Phone", IsRequired = true, Order = 0 };
+        var noteField = new CustomField { Name = "Note", IsRequired = false, Order = 1 };
+        var emailField = new CustomField { Name = "Email", IsRequired = false, Order = 2 };
+        var schema = new List<CustomField> { phoneField, noteField, emailField };
+
+        string phoneKey = phoneField.Id.ToString();
+        string noteKey = noteField.Id.ToString();
+        string emailKey = emailField.Id.ToString();
+
+        var existing = new JsonObject
+        {
+            [phoneKey] = "+380991112233",
+            [noteKey] = "Original note",
+            ["stale-deleted-key"] = "should-be-dropped",
+        };
+
+        // Act 1: patch only Note -> Phone preserved, Email backfilled as null, stale key dropped
+        var mergedNote = new JsonObject { [noteKey] = "Updated note" }.ValidateAndApplyPatch(existing, schema);
+
+        // Assert 1
+        mergedNote.Select(kvp => kvp.Key).ShouldBe([phoneKey, noteKey, emailKey]);
+        mergedNote[phoneKey]?.GetValue<string>().ShouldBe("+380991112233");
+        mergedNote[noteKey]?.GetValue<string>().ShouldBe("Updated note");
+        mergedNote[emailKey].ShouldBeNull();
+
+        // Act 2: clear optional Note with null -> Phone still preserved
+        var clearedNote = new JsonObject { [noteKey] = null }.ValidateAndApplyPatch(mergedNote, schema);
+        clearedNote[phoneKey]?.GetValue<string>().ShouldBe("+380991112233");
+        clearedNote[noteKey].ShouldBeNull();
+
+        // Act 3: empty patch preserves all existing values
+        var emptyPatch = new JsonObject().ValidateAndApplyPatch(mergedNote, schema);
+        emptyPatch[phoneKey]?.GetValue<string>().ShouldBe("+380991112233");
+        emptyPatch[noteKey]?.GetValue<string>().ShouldBe("Updated note");
+        emptyPatch[emailKey].ShouldBeNull();
+
+        // Assert error cases: null on required field, non-string value, unknown key, or required field missing from both
+        Should.Throw<InvalidCustomRecordPayloadException>(() =>
+            new JsonObject { [phoneKey] = null }.ValidateAndApplyPatch(mergedNote, schema));
+        Should.Throw<InvalidCustomRecordPayloadException>(() =>
+            new JsonObject { [noteKey] = 42 }.ValidateAndApplyPatch(mergedNote, schema));
+        Should.Throw<InvalidCustomRecordPayloadException>(() =>
+            new JsonObject { [Guid.CreateVersion7().ToString()] = "unknown" }.ValidateAndApplyPatch(mergedNote, schema));
+        Should.Throw<InvalidCustomRecordPayloadException>(() =>
+            new JsonObject { [noteKey] = "only note" }.ValidateAndApplyPatch([], schema));
+    }
+
+    [Fact]
     public void CreateDefaultPayloadShouldBackfillRequiredFieldsWithEmptyStringAndSetOptionalFieldsToNullInOrder()
     {
         // Arrange

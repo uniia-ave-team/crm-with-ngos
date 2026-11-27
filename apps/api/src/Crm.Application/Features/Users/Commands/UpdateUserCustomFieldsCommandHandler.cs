@@ -9,9 +9,9 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.Users.Commands;
 
 /// <summary>
-/// Handles <see cref="UpdateUserCustomFieldsCommand"/> to validate a user's JSON payload against the editable
-/// <see cref="Domain.Entities.UserCustomField"/> schema, preserve protected private fields for non-privileged editors,
-/// and persist the aligned payload.
+/// Handles <see cref="UpdateUserCustomFieldsCommand"/> to lock the target user row, merge only the provided custom field
+/// values onto the latest persisted payload against the editable <see cref="Domain.Entities.UserCustomField"/> schema,
+/// preserve untouched fields (including protected private fields for non-privileged editors), and persist the aligned payload.
 /// </summary>
 public sealed partial class UpdateUserCustomFieldsCommandHandler(
     IUserRepository userRepository,
@@ -24,6 +24,7 @@ public sealed partial class UpdateUserCustomFieldsCommandHandler(
     {
         LogUpdatingUserCustomFields(logger, command.UserId);
 
+        await userRepository.LockForUpdateAsync(command.UserId, cancellationToken);
         var user = await userRepository.GetForUpdateAsync(command.UserId, cancellationToken);
         var schemaFields = await userCustomFieldRepository.GetAllOrderedAsync(cancellationToken);
 

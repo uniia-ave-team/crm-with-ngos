@@ -6,9 +6,10 @@ using Mediator;
 namespace Crm.Application.Features.Users.Commands;
 
 /// <summary>
-/// Represents a command to validate and update a user's custom fields JSON payload against the global schema.
+/// Represents a command to validate and partially update a user's custom fields JSON payload against the global schema.
+/// Only the keys present in <paramref name="Data"/> are merged onto the latest persisted values; omitted keys remain untouched.
 /// </summary>
-/// <param name="Data">The JSON object containing custom field values keyed by schema field key.</param>
+/// <param name="Data">The partial JSON object containing changed custom field values keyed by schema field ID.</param>
 public record UpdateUserCustomFieldsCommand(
     JsonObject Data) : ICommand, ITransactionalCommand, ICurrentUserAware, ICurrentUserRolesAware, ISelfTargetableUserRequest
 {

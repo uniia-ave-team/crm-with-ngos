@@ -154,22 +154,29 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         (await adminClient.DeleteAsync($"/api/v1/tabletemplates/{templateId}", ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // 4. CustomTables & CustomRecords: server-generated keys, string-only payloads, fractional Position insert/move/delete, SearchTerm, HARD-DELETE record, SOFT-DELETE table
+        // 4. CustomTables & CustomRecords: server-generated keys, string-only payloads, partial PATCH cells, fractional Position insert/move/delete, SearchTerm, HARD-DELETE record, SOFT-DELETE table
         var createTableResp = await adminClient.PostAsJsonAsync(
             "/api/v1/customtables",
             new CreateCustomTableCommand(
                 "Donors",
                 "Active donors",
-                [new FieldDefinitionDto("Organization", true, 0)]),
+                [
+                    new FieldDefinitionDto("Organization", true, 0),
+                    new FieldDefinitionDto("Note", false, 1),
+                ]),
             ct);
         createTableResp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var tableId = await createTableResp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
 
         var fetchedTable = await adminClient.GetFromJsonAsync<CustomTableDto>($"/api/v1/customtables/{tableId}", JsonOptions, ct);
         fetchedTable.ShouldNotBeNull();
-        var orgField = fetchedTable.Fields.ShouldHaveSingleItem();
+        fetchedTable.Fields.Count.ShouldBe(2);
+        var orgField = fetchedTable.Fields[0];
+        var noteField = fetchedTable.Fields[1];
         orgField.Id.ShouldNotBe(Guid.Empty);
+        noteField.Id.ShouldNotBe(Guid.Empty);
         string orgKey = orgField.Id.ToString();
+        string noteKey = noteField.Id.ToString();
 
         // Non-string JSON value -> 400
         (await adminClient.PostAsJsonAsync(
@@ -180,7 +187,7 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
 
         var rec1Resp = await adminClient.PostAsJsonAsync(
             "/api/v1/customrecords",
-            new CreateCustomRecordCommand(tableId, new JsonObject { [orgKey] = "Kyiv Aid Foundation" }),
+            new CreateCustomRecordCommand(tableId, new JsonObject { [orgKey] = "Kyiv Aid Foundation", [noteKey] = "Initial note" }),
             ct);
         rec1Resp.StatusCode.ShouldBe(HttpStatusCode.Created);
         var record1Id = await rec1Resp.Content.ReadFromJsonAsync<Guid>(JsonOptions, ct);
@@ -230,12 +237,45 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         var fetchedRecord = await adminClient.GetFromJsonAsync<CustomRecordDto>($"/api/v1/customrecords/{record1Id}", JsonOptions, ct);
         fetchedRecord.ShouldNotBeNull();
         fetchedRecord.Data[orgKey]?.GetValue<string>().ShouldBe("Kyiv Aid Foundation");
+        fetchedRecord.Data[noteKey]?.GetValue<string>().ShouldBe("Initial note");
 
-        (await adminClient.PutAsJsonAsync(
+        // Partial PATCH updates only Organization while preserving untouched Note
+        (await adminClient.PatchAsJsonAsync(
                 $"/api/v1/customrecords/{record1Id}",
                 new UpdateCustomRecordCommand(new JsonObject { [orgKey] = "Kyiv Humanitarian Hub" }),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Second partial PATCH updates only Note while preserving Organization
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/customrecords/{record1Id}",
+                new UpdateCustomRecordCommand(new JsonObject { [noteKey] = "Priority partner" }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Clearing required field with null -> 400
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/customrecords/{record1Id}",
+                new UpdateCustomRecordCommand(new JsonObject { [orgKey] = null }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        var patchedRecord = await adminClient.GetFromJsonAsync<CustomRecordDto>($"/api/v1/customrecords/{record1Id}", JsonOptions, ct);
+        patchedRecord.ShouldNotBeNull();
+        patchedRecord.Data[orgKey]?.GetValue<string>().ShouldBe("Kyiv Humanitarian Hub");
+        patchedRecord.Data[noteKey]?.GetValue<string>().ShouldBe("Priority partner");
+
+        // Clearing optional Note with null -> 204 while preserving Organization
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/customrecords/{record1Id}",
+                new UpdateCustomRecordCommand(new JsonObject { [noteKey] = null }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var clearedNoteRecord = await adminClient.GetFromJsonAsync<CustomRecordDto>($"/api/v1/customrecords/{record1Id}", JsonOptions, ct);
+        clearedNoteRecord.ShouldNotBeNull();
+        clearedNoteRecord.Data[orgKey]?.GetValue<string>().ShouldBe("Kyiv Humanitarian Hub");
+        clearedNoteRecord.Data[noteKey].ShouldBeNull();
 
         var searchRecords = await adminClient.GetFromJsonAsync<PagedResult<CustomRecordDto>>(
             $"/api/v1/customrecords?CustomTableId={tableId}&SearchTerm=Humanitarian",
@@ -513,26 +553,38 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
         selfHeaders.Count.ShouldBe(3);
 
         // Non-string JSON value (number instead of string) -> 400
-        (await memberClient.PutAsJsonAsync(
+        (await memberClient.PatchAsJsonAsync(
                 "/api/v1/users/me/custom-fields",
                 new UpdateUserCustomFieldsCommand(new JsonObject { [expKey] = 10 }),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
         // Member updates own custom field values (all values stored as JSON strings)
-        (await memberClient.PutAsJsonAsync(
+        (await memberClient.PatchAsJsonAsync(
                 "/api/v1/users/me/custom-fields",
                 new UpdateUserCustomFieldsCommand(new JsonObject
                 {
                     [expKey] = "10",
                     [internalKey] = "95",
-                    [cityKey] = "Lviv",
+                    [cityKey] = "Dnipro",
                 }),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        // Admin updates admin's own custom field values via /{id}/custom-fields ("2" > "10" lexicographically, but 10 > 2 numerically)
-        (await adminClient.PutAsJsonAsync(
+        // Partial PATCH on /me/custom-fields updates only City while preserving Experience ("10") and Internal score ("95")
+        (await memberClient.PatchAsJsonAsync(
+                "/api/v1/users/me/custom-fields",
+                new UpdateUserCustomFieldsCommand(new JsonObject { [cityKey] = "Lviv" }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var memberProfileAfterPartialPatch = (await adminClient.GetFromJsonAsync<UserProfileDto>($"/api/v1/users/{memberId}", JsonOptions, ct))!;
+        memberProfileAfterPartialPatch.CustomFields[expKey]?.GetValue<string>().ShouldBe("10");
+        memberProfileAfterPartialPatch.CustomFields[internalKey]?.GetValue<string>().ShouldBe("95");
+        memberProfileAfterPartialPatch.CustomFields[cityKey]?.GetValue<string>().ShouldBe("Lviv");
+
+        // Admin updates admin's own custom field values via PATCH /{id}/custom-fields ("2" > "10" lexicographically, but 10 > 2 numerically)
+        (await adminClient.PatchAsJsonAsync(
                 $"/api/v1/users/{adminId}/custom-fields",
                 new UpdateUserCustomFieldsCommand(new JsonObject
                 {
@@ -541,6 +593,17 @@ public sealed class FullApiEndpointsIntegrationTests(ProjectsAndTasksEndpointsIn
                 }),
                 ct))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Partial PATCH via /{id}/custom-fields changes only City while preserving Experience ("2")
+        (await adminClient.PatchAsJsonAsync(
+                $"/api/v1/users/{adminId}/custom-fields",
+                new UpdateUserCustomFieldsCommand(new JsonObject { [cityKey] = "Odesa" }),
+                ct))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var adminProfileAfterPartialPatch = (await adminClient.GetFromJsonAsync<UserProfileDto>($"/api/v1/users/{adminId}", JsonOptions, ct))!;
+        adminProfileAfterPartialPatch.CustomFields[expKey]?.GetValue<string>().ShouldBe("2");
+        adminProfileAfterPartialPatch.CustomFields[cityKey]?.GetValue<string>().ShouldBe("Odesa");
 
         // Admin sorts users by field ID (smart numeric DESC puts "10" ahead of "2") and searches via plain SearchTerm
         var sortedUsers = (await adminClient.GetFromJsonAsync<PagedResult<UserDto>>(

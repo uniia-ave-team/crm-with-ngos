@@ -3,13 +3,16 @@ using Crm.Application.Dtos.Common;
 using Crm.Application.Dtos.CustomRecords;
 using Crm.Application.Dtos.CustomTables;
 using Crm.Application.Dtos.Users;
+using Crm.Application.Features.CustomRecords.Commands;
 using Crm.Application.Features.CustomRecords.Mappings;
 using Crm.Application.Features.CustomRecords.Services;
 using Crm.Application.Features.CustomTables.Commands;
 using Crm.Application.Features.CustomTables.Mappings;
 using Crm.Application.Features.TableTemplates.Commands;
 using Crm.Application.Features.TableTemplates.Mappings;
+using Crm.Application.Features.Users.Commands;
 using Crm.Application.Features.Users.Mappings;
+using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Constants;
 using Crm.Domain.Entities;
@@ -24,6 +27,7 @@ using Crm.Infrastructure.Repositories;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Shouldly;
 using Testcontainers.PostgreSql;
 
@@ -809,6 +813,127 @@ public class CustomTableAndRecordPostgresIntegrationTests(
         await deleteCtx.Set<Ngo>().Where(n => n.Id == ngoId).ExecuteDeleteAsync(ct);
         (await deleteCtx.Set<CustomRecord>().IgnoreQueryFilters().AnyAsync(r => r.CustomTableId == tableId, ct))
             .ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ConcurrentPartialPatchesToDifferentCellsShouldPreserveBothUpdatesInPostgres()
+    {
+        if (!fixture.IsDockerAvailable)
+        {
+            Assert.Skip("Docker is not running on host machine.");
+            return;
+        }
+
+        var ct = TestContext.Current.CancellationToken;
+        var ngo = new Ngo { Id = Guid.CreateVersion7(), Name = $"NGO-Patch-{Guid.NewGuid():N}", CreatedAt = DateTime.UtcNow };
+        var table = new CustomTable { Id = Guid.CreateVersion7(), NgoId = ngo.Id, Name = "ConcurrentPatchTable" };
+        var recordPhoneField = new CustomField { CustomTableId = table.Id, Name = "Phone", IsRequired = true, Order = 0 };
+        var recordNoteField = new CustomField { CustomTableId = table.Id, Name = "Note", IsRequired = false, Order = 1 };
+        string recordPhoneKey = recordPhoneField.Id.ToString();
+        string recordNoteKey = recordNoteField.Id.ToString();
+
+        var record = new CustomRecord
+        {
+            Id = Guid.CreateVersion7(),
+            CustomTableId = table.Id,
+            Position = FractionalIndex.Initial,
+            Data = new JsonObject
+            {
+                [recordPhoneKey] = "+380991111111",
+                [recordNoteKey] = "Initial note",
+            },
+        };
+
+        var userPhoneField = new UserCustomField { Name = $"Phone-{Guid.NewGuid():N}", IsRequired = true, IsPublic = true, Order = 100 };
+        var userNoteField = new UserCustomField { Name = $"Note-{Guid.NewGuid():N}", IsRequired = false, IsPublic = true, Order = 101 };
+        string userPhoneKey = userPhoneField.Id.ToString();
+        string userNoteKey = userNoteField.Id.ToString();
+
+        var authUser = CreateAuthUser(
+            $"patch-{Guid.NewGuid():N}@example.com",
+            new JsonObject
+            {
+                [userPhoneKey] = "+380991111111",
+                [userNoteKey] = "Initial user note",
+            });
+
+        await using (var setupCtx = fixture.CreateDbContext())
+        {
+            setupCtx.AddRange(ngo, table, recordPhoneField, recordNoteField, record, userPhoneField, userNoteField, authUser);
+            await setupCtx.SaveChangesAsync(ct);
+        }
+
+        try
+        {
+            // 1. Concurrent partial patches to different cells of the SAME CustomRecord -> both changes preserved!
+            async Task PatchRecordAsync(JsonObject patch)
+            {
+                await using var ctx = fixture.CreateDbContext();
+                await using var uow = new UnitOfWork(ctx);
+                var handler = new UpdateCustomRecordCommandHandler(
+                    new CustomRecordRepository(ctx),
+                    new CustomTableRepository(ctx),
+                    NullLogger<UpdateCustomRecordCommandHandler>.Instance);
+
+                await uow.BeginTransactionAsync(ct);
+                await handler.Handle(new UpdateCustomRecordCommand(patch) { Id = record.Id }, ct);
+                await uow.CommitTransactionAsync(ct);
+            }
+
+            await Task.WhenAll(
+                PatchRecordAsync(new JsonObject { [recordPhoneKey] = "+380992222222" }),
+                PatchRecordAsync(new JsonObject { [recordNoteKey] = "Colleague updated note" }));
+
+            await using (var verifyCtx = fixture.CreateDbContext())
+            {
+                var updatedRecord = await verifyCtx.Set<CustomRecord>().AsNoTracking().SingleAsync(r => r.Id == record.Id, ct);
+                updatedRecord.Data[recordPhoneKey]?.GetValue<string>().ShouldBe("+380992222222");
+                updatedRecord.Data[recordNoteKey]?.GetValue<string>().ShouldBe("Colleague updated note");
+            }
+
+            // 2. Concurrent partial patches to different custom fields of the SAME User -> both changes preserved!
+            async Task PatchUserAsync(JsonObject patch)
+            {
+                await using var ctx = fixture.CreateDbContext();
+                await using var uow = new UnitOfWork(ctx);
+                var handler = new UpdateUserCustomFieldsCommandHandler(
+                    new UserRepository(ctx),
+                    new UserCustomFieldRepository(ctx),
+                    Substitute.For<IPermissionService>(),
+                    NullLogger<UpdateUserCustomFieldsCommandHandler>.Instance);
+
+                await uow.BeginTransactionAsync(ct);
+                await handler.Handle(
+                    new UpdateUserCustomFieldsCommand(patch)
+                    {
+                        UserId = authUser.Id,
+                        CurrentUserId = authUser.Id,
+                        TargetCurrentUser = true,
+                    },
+                    ct);
+                await uow.CommitTransactionAsync(ct);
+            }
+
+            await Task.WhenAll(
+                PatchUserAsync(new JsonObject { [userPhoneKey] = "+380993333333" }),
+                PatchUserAsync(new JsonObject { [userNoteKey] = "Colleague updated user note" }));
+
+            await using (var verifyCtx = fixture.CreateDbContext())
+            {
+                var updatedUser = await verifyCtx.Set<User>().AsNoTracking().SingleAsync(u => u.Id == authUser.Id, ct);
+                updatedUser.CustomFields[userPhoneKey]?.GetValue<string>().ShouldBe("+380993333333");
+                updatedUser.CustomFields[userNoteKey]?.GetValue<string>().ShouldBe("Colleague updated user note");
+            }
+        }
+        finally
+        {
+            await using var cleanupCtx = fixture.CreateDbContext();
+            await cleanupCtx.Set<UserCustomField>()
+                .Where(f => f.Id == userPhoneField.Id || f.Id == userNoteField.Id)
+                .ExecuteDeleteAsync(ct);
+            await cleanupCtx.Set<AuthUser>().Where(u => u.Id == authUser.Id).ExecuteDeleteAsync(ct);
+            await cleanupCtx.Set<Ngo>().Where(n => n.Id == ngo.Id).ExecuteDeleteAsync(ct);
+        }
     }
 
     private static void AssignPositions(params CustomRecord[] records)

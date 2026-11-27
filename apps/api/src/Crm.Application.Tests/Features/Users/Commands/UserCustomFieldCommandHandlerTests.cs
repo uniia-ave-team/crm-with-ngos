@@ -251,6 +251,97 @@ public class UserCustomFieldCommandHandlerTests
     }
 
     [Fact]
+    public async Task UpdateUserCustomFieldsWhenPatchingSingleFieldShouldPreserveUntouchedPublicAndPrivateFields()
+    {
+        // Arrange
+        var targetUserId = Guid.CreateVersion7();
+        var editorUserId = Guid.CreateVersion7();
+        var editorRoles = new List<Guid> { Guid.CreateVersion7() };
+        var phoneField = new UserCustomField { Name = "Phone", IsRequired = true, IsPublic = true, Order = 0 };
+        var noteField = new UserCustomField { Name = "Note", IsRequired = false, IsPublic = true, Order = 1 };
+        var salaryField = new UserCustomField { Name = "Salary", IsRequired = false, IsPublic = false, Order = 2 };
+        string phoneKey = phoneField.Id.ToString();
+        string noteKey = noteField.Id.ToString();
+        string salaryKey = salaryField.Id.ToString();
+
+        var user = new User
+        {
+            Id = targetUserId,
+            CustomFields = new JsonObject
+            {
+                [phoneKey] = "+380991112233",
+                [noteKey] = "Old note",
+                [salaryKey] = "5000",
+            },
+        };
+        var schema = new List<UserCustomField> { phoneField, noteField, salaryField };
+
+        _userRepository.GetForUpdateAsync(targetUserId, Arg.Any<CancellationToken>()).Returns(user);
+        _customFieldRepository.GetAllOrderedAsync(Arg.Any<CancellationToken>()).Returns(schema);
+        _permissionService.HasAccessAsync(editorRoles, AccessRight.ViewCustomFields, Arg.Any<CancellationToken>()).Returns(false);
+
+        var handler = new UpdateUserCustomFieldsCommandHandler(
+            _userRepository,
+            _customFieldRepository,
+            _permissionService,
+            Substitute.For<ILogger<UpdateUserCustomFieldsCommandHandler>>());
+
+        // Act 1: non-privileged editor patches ONLY optional public Note -> required public Phone and private Salary preserved
+        await handler.Handle(
+            new UpdateUserCustomFieldsCommand(new JsonObject { [noteKey] = "New note" })
+            {
+                UserId = targetUserId,
+                CurrentUserId = editorUserId,
+                CurrentUserRoleIds = editorRoles,
+            },
+            CancellationToken.None);
+
+        user.CustomFields[phoneKey]?.GetValue<string>().ShouldBe("+380991112233");
+        user.CustomFields[noteKey]?.GetValue<string>().ShouldBe("New note");
+        user.CustomFields[salaryKey]?.GetValue<string>().ShouldBe("5000");
+        await _userRepository.Received(1).LockForUpdateAsync(targetUserId, Arg.Any<CancellationToken>());
+
+        // Act 2: self patches ONLY private Salary -> Phone and Note preserved
+        await handler.Handle(
+            new UpdateUserCustomFieldsCommand(new JsonObject { [salaryKey] = "6000" })
+            {
+                UserId = targetUserId,
+                CurrentUserId = targetUserId,
+                TargetCurrentUser = true,
+            },
+            CancellationToken.None);
+
+        user.CustomFields[phoneKey]?.GetValue<string>().ShouldBe("+380991112233");
+        user.CustomFields[noteKey]?.GetValue<string>().ShouldBe("New note");
+        user.CustomFields[salaryKey]?.GetValue<string>().ShouldBe("6000");
+
+        // Act 3: self clears optional Note with null -> Phone and Salary preserved
+        await handler.Handle(
+            new UpdateUserCustomFieldsCommand(new JsonObject { [noteKey] = null })
+            {
+                UserId = targetUserId,
+                CurrentUserId = targetUserId,
+                TargetCurrentUser = true,
+            },
+            CancellationToken.None);
+
+        user.CustomFields[phoneKey]?.GetValue<string>().ShouldBe("+380991112233");
+        user.CustomFields[noteKey].ShouldBeNull();
+        user.CustomFields[salaryKey]?.GetValue<string>().ShouldBe("6000");
+
+        // Act & Assert 4: clearing required Phone with null is rejected
+        await Should.ThrowAsync<InvalidCustomRecordPayloadException>(async () =>
+            await handler.Handle(
+                new UpdateUserCustomFieldsCommand(new JsonObject { [phoneKey] = null })
+                {
+                    UserId = targetUserId,
+                    CurrentUserId = targetUserId,
+                    TargetCurrentUser = true,
+                },
+                CancellationToken.None));
+    }
+
+    [Fact]
     public async Task GetUserCustomFieldsQueryHandlerShouldFilterPrivateFieldsUnlessAuthorizedOrIncludePrivate()
     {
         // Arrange

@@ -9,8 +9,9 @@ using Microsoft.Extensions.Logging;
 namespace Crm.Application.Features.CustomRecords.Commands;
 
 /// <summary>
-/// Handles the <see cref="UpdateCustomRecordCommand"/> to acquire the parent table write lock,
-/// validate the payload against the latest table schema, and update an existing custom record's JSON payload.
+/// Handles the <see cref="UpdateCustomRecordCommand"/> to acquire the parent table and record write locks,
+/// merge only the provided cell values onto the latest stored payload, validate against the current table schema,
+/// and persist the result without overwriting concurrent edits to other columns.
 /// </summary>
 /// <param name="customRecordRepository">The repository used for fetching and updating custom record entities.</param>
 /// <param name="customTableRepository">The repository used for locking tables and retrieving custom table field definitions.</param>
@@ -34,9 +35,7 @@ public sealed partial class UpdateCustomRecordCommandHandler(
 
         var customFields = await customTableRepository.GetFieldsByCustomTableIdAsync(record.CustomTableId, cancellationToken);
 
-        var alignedData = command.Data.ValidateAndBackfillPayload(customFields);
-
-        record.Data = alignedData;
+        record.Data = command.Data.ValidateAndApplyPatch(record.Data, customFields);
 
         LogCustomRecordUpdatedSuccessfully(logger, record.Id, record.CustomTableId);
 

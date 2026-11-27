@@ -13,65 +13,33 @@ public static class JsonObjectExtensions
 {
     /// <summary>
     /// Validates that every value is a JSON string (or <see langword="null"/> for optional fields), prevents unknown properties,
-    /// and populates <see langword="null"/> values for missing optional fields. Intended for write operations (Create/Update).
+    /// and populates <see langword="null"/> values for missing optional fields. Intended for full-payload creation (<c>POST</c>).
     /// </summary>
     /// <param name="incomingData">The source JSON payload object.</param>
     /// <param name="customFields">The list of persisted field definitions.</param>
     /// <returns>A validated and normalized <see cref="JsonObject"/> payload containing schema-only field ID keys.</returns>
     /// <exception cref="InvalidCustomRecordPayloadException">Thrown when any field value is not a string, a required field is missing or null, or unknown fields are present.</exception>
     public static JsonObject ValidateAndBackfillPayload(this JsonObject incomingData, IReadOnlyList<FieldDefinitionBase> customFields)
-    {
-        ArgumentNullException.ThrowIfNull(incomingData);
-        ArgumentNullException.ThrowIfNull(customFields);
+        => ValidateAndAlignPayload(incomingData, existingData: null, customFields);
 
-        var fieldKeys = new string[customFields.Count];
-        var allowedKeys = new HashSet<string>(customFields.Count, StringComparer.Ordinal);
-        for (var i = 0; i < customFields.Count; i++)
-        {
-            string key = customFields[i].Id.ToString();
-            fieldKeys[i] = key;
-            allowedKeys.Add(key);
-        }
-
-        List<string>? unknownKeys = null;
-        foreach (var (key, _) in incomingData)
-        {
-            if (!allowedKeys.Contains(key))
-            {
-                unknownKeys ??= [];
-                unknownKeys.Add(key);
-            }
-        }
-
-        if (unknownKeys is not null && unknownKeys.Count > 0)
-        {
-            throw new InvalidCustomRecordPayloadException($"Payload contains unknown field(s): '{string.Join("', '", unknownKeys)}'.");
-        }
-
-        var alignedData = new JsonObject();
-
-        for (var i = 0; i < customFields.Count; i++)
-        {
-            var field = customFields[i];
-            string fieldKey = fieldKeys[i];
-
-            if (incomingData.TryGetPropertyValue(fieldKey, out var valueNode))
-            {
-                ValidateStringOrNullValue(fieldKey, valueNode, field.IsRequired);
-                alignedData.Add(fieldKey, valueNode?.DeepClone());
-            }
-            else if (field.IsRequired)
-            {
-                throw new InvalidCustomRecordPayloadException($"Field '{fieldKey}' is required.");
-            }
-            else
-            {
-                alignedData.Add(fieldKey, null);
-            }
-        }
-
-        return alignedData;
-    }
+    /// <summary>
+    /// Validates a partial <paramref name="patchData"/> JSON payload against <paramref name="customFields"/> and merges only the
+    /// provided keys onto <paramref name="existingData"/>, preserving untouched stored cell values so concurrent edits to different
+    /// columns never overwrite one another.
+    /// </summary>
+    /// <param name="patchData">The incoming partial JSON payload containing only changed cell keys and values.</param>
+    /// <param name="existingData">The currently persisted JSON payload loaded under row lock, or <see langword="null"/> if uninitialized.</param>
+    /// <param name="customFields">The list of persisted field definitions allowed for this update.</param>
+    /// <returns>A validated, merged, and schema-ordered <see cref="JsonObject"/> payload ready to persist.</returns>
+    /// <exception cref="InvalidCustomRecordPayloadException">
+    /// Thrown when any field value is not a string, a required field is set to <see langword="null"/> or missing from both
+    /// <paramref name="patchData"/> and <paramref name="existingData"/>, or unknown field keys are present in <paramref name="patchData"/>.
+    /// </exception>
+    public static JsonObject ValidateAndApplyPatch(
+        this JsonObject patchData,
+        JsonObject? existingData,
+        IReadOnlyList<FieldDefinitionBase> customFields)
+        => ValidateAndAlignPayload(patchData, existingData, customFields);
 
     /// <summary>
     /// Constructs a new <see cref="JsonObject"/> with keys strictly ordered according to the provided sequence of field ID keys.
@@ -120,6 +88,68 @@ public static class JsonObjectExtensions
         }
 
         return payload;
+    }
+
+    private static JsonObject ValidateAndAlignPayload(
+        JsonObject incomingData,
+        JsonObject? existingData,
+        IReadOnlyList<FieldDefinitionBase> customFields)
+    {
+        ArgumentNullException.ThrowIfNull(incomingData);
+        ArgumentNullException.ThrowIfNull(customFields);
+
+        var fieldKeys = new string[customFields.Count];
+        var allowedKeys = new HashSet<string>(customFields.Count, StringComparer.Ordinal);
+        for (var i = 0; i < customFields.Count; i++)
+        {
+            string key = customFields[i].Id.ToString();
+            fieldKeys[i] = key;
+            allowedKeys.Add(key);
+        }
+
+        List<string>? unknownKeys = null;
+        foreach (var (key, _) in incomingData)
+        {
+            if (!allowedKeys.Contains(key))
+            {
+                unknownKeys ??= [];
+                unknownKeys.Add(key);
+            }
+        }
+
+        if (unknownKeys is not null && unknownKeys.Count > 0)
+        {
+            throw new InvalidCustomRecordPayloadException($"Payload contains unknown field(s): '{string.Join("', '", unknownKeys)}'.");
+        }
+
+        var alignedData = new JsonObject();
+
+        for (var i = 0; i < customFields.Count; i++)
+        {
+            var field = customFields[i];
+            string fieldKey = fieldKeys[i];
+
+            if (incomingData.TryGetPropertyValue(fieldKey, out var valueNode))
+            {
+                ValidateStringOrNullValue(fieldKey, valueNode, field.IsRequired);
+                alignedData.Add(fieldKey, valueNode?.DeepClone());
+            }
+            else if (existingData is not null && existingData.TryGetPropertyValue(fieldKey, out var existingNode))
+            {
+                ValidateStringOrNullValue(fieldKey, existingNode, field.IsRequired);
+                alignedData.Add(fieldKey, existingNode?.DeepClone());
+            }
+            else if (field.IsRequired)
+            {
+                throw new InvalidCustomRecordPayloadException($"Field '{fieldKey}' is required.");
+            }
+            else
+            {
+                alignedData.Add(fieldKey, null);
+            }
+        }
+
+        return alignedData;
     }
 
     private static void ValidateStringOrNullValue(string fieldKey, JsonNode? node, bool isRequired)

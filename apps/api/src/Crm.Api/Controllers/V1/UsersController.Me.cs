@@ -172,12 +172,13 @@ public sealed partial class UsersController
     }
 
     /// <summary>
-    /// Validates and updates the custom fields JSON payload for the currently authenticated user against the global schema.
+    /// Validates and partially updates the custom fields JSON payload for the currently authenticated user against the global schema.
+    /// Only the keys supplied in <c>data</c> are merged onto the latest stored values; omitted keys remain untouched.
     /// </summary>
-    /// <param name="command">The JSON object containing the current user's custom field values.</param>
+    /// <param name="command">The partial JSON object containing changed custom field values for the current user.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status indicating the outcome of the operation.</returns>
-    [HttpPut("me/custom-fields")]
+    [HttpPatch("me/custom-fields")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

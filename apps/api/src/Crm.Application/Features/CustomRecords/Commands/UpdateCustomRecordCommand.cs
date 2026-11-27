@@ -6,9 +6,10 @@ using Mediator;
 namespace Crm.Application.Features.CustomRecords.Commands;
 
 /// <summary>
-/// Represents a command to update an existing custom record's data payload.
+/// Represents a command to partially update an existing custom record's data payload.
+/// Only the keys present in <paramref name="Data"/> are merged onto the latest persisted payload; omitted keys remain untouched.
 /// </summary>
-/// <param name="Data">The JSON object containing the updated field values for the custom record.</param>
+/// <param name="Data">The partial JSON object containing changed field values keyed by field ID.</param>
 /// <returns>Unit signaling command completion.</returns>
 public record UpdateCustomRecordCommand(
     JsonObject Data) : ICommand, ITransactionalCommand

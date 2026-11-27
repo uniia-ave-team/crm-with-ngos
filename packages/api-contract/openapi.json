@@ -459,11 +459,11 @@
           }
         ]
       },
-      "put": {
+      "patch": {
         "tags": [
           "CustomRecords"
         ],
-        "summary": "Updates the JSON data payload of an existing custom record without changing its row position.",
+        "summary": "Partially updates the JSON data payload of an existing custom record without changing its row position.\nOnly the keys supplied in `data` are merged onto the latest stored payload; omitted keys remain untouched.",
         "description": "> 🔒 **Required Permissions:** `Permissions.UpdateCustomRecord`",
         "operationId": "CustomRecordsUpdate",
         "parameters": [
@@ -7956,11 +7956,11 @@
       }
     },
     "/api/v1/users/{id}/custom-fields": {
-      "put": {
+      "patch": {
         "tags": [
           "Users"
         ],
-        "summary": "Validates and updates the custom fields JSON payload for a specific user against the global schema.",
+        "summary": "Validates and partially updates the custom fields JSON payload for a specific user against the global schema.\nOnly the keys supplied in `data` are merged onto the latest stored values; omitted keys remain untouched.",
         "description": "> 🔒 **Required Permissions:** `Permissions.UpdateUser`",
         "operationId": "UsersUpdateUserCustomFields",
         "parameters": [
@@ -8441,11 +8441,11 @@
           }
         ]
       },
-      "put": {
+      "patch": {
         "tags": [
           "Users"
         ],
-        "summary": "Validates and updates the custom fields JSON payload for the currently authenticated user against the global schema.",
+        "summary": "Validates and partially updates the custom fields JSON payload for the currently authenticated user against the global schema.\nOnly the keys supplied in `data` are merged onto the latest stored values; omitted keys remain untouched.",
         "operationId": "UsersUpdateMyCustomFields",
         "requestBody": {
           "content": {

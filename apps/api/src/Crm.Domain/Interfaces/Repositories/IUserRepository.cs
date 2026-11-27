@@ -7,7 +7,7 @@ namespace Crm.Domain.Interfaces.Repositories;
 /// <summary>
 /// Repository interface for managing <see cref="User"/> entities.
 /// </summary>
-public interface IUserRepository : IGenericRepository<User>
+public interface IUserRepository : IGenericRepository<User>, IRowLockRepository
 {
     /// <summary>
     /// Retrieves the avatar file path for a specific user.

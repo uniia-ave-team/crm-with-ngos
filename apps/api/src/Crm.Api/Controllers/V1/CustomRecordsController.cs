@@ -82,13 +82,14 @@ public sealed class CustomRecordsController(IMediator mediator) : ControllerBase
     }
 
     /// <summary>
-    /// Updates the JSON data payload of an existing custom record without changing its row position.
+    /// Partially updates the JSON data payload of an existing custom record without changing its row position.
+    /// Only the keys supplied in <c>data</c> are merged onto the latest stored payload; omitted keys remain untouched.
     /// </summary>
     /// <param name="id">The unique identifier of the custom record to update.</param>
-    /// <param name="command">The command containing the updated JSON data payload.</param>
+    /// <param name="command">The command containing the changed cell values to merge.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A status code indicating successful update.</returns>
-    [HttpPut("{id:guid}")]
+    [HttpPatch("{id:guid}")]
     [HasAccessRight(AccessRight.UpdateCustomRecord)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
