@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   viewEmergencyContact: 'Permissions.ViewEmergencyContact',
   viewCustomFields: 'Permissions.ViewCustomFields',
   canResetPassword: 'Permissions.CanResetPassword',
+  manageUserActionTokens: 'Permissions.ManageUserActionTokens',
   manageRole: 'Permissions.ManageRole',
   createNgo: 'Permissions.CreateNgo',
   updateNgo: 'Permissions.UpdateNgo',
@@ -32,6 +33,14 @@ export const PERMISSIONS = {
   createCustomRecord: 'Permissions.CreateCustomRecord',
   updateCustomRecord: 'Permissions.UpdateCustomRecord',
   deleteCustomRecord: 'Permissions.DeleteCustomRecord',
+  viewProject: 'Permissions.ViewProject',
+  createProject: 'Permissions.CreateProject',
+  updateProject: 'Permissions.UpdateProject',
+  deleteProject: 'Permissions.DeleteProject',
+  viewTask: 'Permissions.ViewTask',
+  createTask: 'Permissions.CreateTask',
+  updateTask: 'Permissions.UpdateTask',
+  deleteTask: 'Permissions.DeleteTask',
 } as const;
 
 /** Назва одного права сервера (одне зі значень `PERMISSIONS`). */
@@ -48,9 +57,11 @@ export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
  * організації й дії в галереї (`admin-panel`).
  *
  * Хто читає списки:
- * - `ADMIN_PANEL_PERMISSIONS`, `COLLEAGUES_PERMISSIONS`, `KNOWLEDGE_BASE_PERMISSIONS` — пункт бічного меню
- *   (`primary-nav`: без права пункту нема) і страж маршруту (`requireAnyPermission` в
- *   `app.routes.ts`: без права на сторінку не пускає й за прямим посиланням);
+ * - `PLANNER_PERMISSIONS`, `KNOWLEDGE_BASE_PERMISSIONS`, `COLLEAGUES_PERMISSIONS`,
+ *   `ADMIN_PANEL_PERMISSIONS` — пункт бічного меню (`primary-nav`: без права пункту нема), страж
+ *   маршруту (`requireAnyPermission` в `app.routes.ts`: без права на сторінку не пускає й за
+ *   прямим посиланням); перші три — ще й стартова сторінка (`start/start-url.ts`: перша
+ *   доступна з них);
  * - `GALLERY_PERMISSIONS` — форма організації (`ngo-form`): чи показувати галерею.
  */
 
@@ -66,6 +77,9 @@ export const GALLERY_PERMISSIONS: readonly string[] = [
   PERMISSIONS.createLoginPageImages,
   PERMISSIONS.deleteLoginPageImages,
 ];
+
+/** Права «Планера»: достатньо `ViewProject` (пункт меню, страж маршруту, стартова сторінка). */
+export const PLANNER_PERMISSIONS: readonly string[] = [PERMISSIONS.viewProject];
 
 /** Права вкладки «Колеги»: достатньо `ViewUser` (пункт меню й страж маршруту). */
 export const COLLEAGUES_PERMISSIONS: readonly string[] = [PERMISSIONS.viewUser];

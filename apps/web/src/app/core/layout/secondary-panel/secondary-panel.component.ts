@@ -6,6 +6,9 @@ import { TranslatePipe } from '@ngx-translate/core';
 
 import { KNOWLEDGE_BASE_PAGE_TYPES, KnowledgeBaseFolder, KnowledgeBasePage, isKnowledgeBaseFolder, knowledgeBaseLink } from '../../knowledge-base/knowledge-base';
 import { KbItemMenuComponent } from '../../knowledge-base/kb-item-menu/kb-item-menu.component';
+import { ProjectMenuComponent } from '../../projects/project-menu/project-menu.component';
+import { ProjectsService, projectLink } from '../../projects/projects.service';
+import { roleColor } from '../../../shared/role-pill/role-color';
 import { KnowledgeBaseService } from '../../knowledge-base/knowledge-base.service';
 import { LayoutSection } from '../layout.service';
 
@@ -38,6 +41,13 @@ interface MenuItem {
  * (до 992px) у рядку лише три крапки — завжди видимі й більші, а «Додати в папку» — у їхньому меню.
  * Між групами більший відступ, ніж між пунктами.
  *
+ * Меню «Планера» — проєкти (`ProjectsService`, з правом `ViewProject`): кружок кольору за назвою
+ * проєкту (як у плашок ролей, `roleColor`: у світлій темі `base`, у темній — `light`) і назва,
+ * обрізана трикрапкою, — посилання на планер проєкту (`/planner/projects/:id`). Відкритий проєкт
+ * виділений (`routerLinkActive`), його кружок заповнений. Поряд, як у «Бази знань», три крапки
+ * (`app-project-menu`; є завжди — доступи можна принаймні переглянути). Проєктів нема — «Проєктів поки нема.»; не вдалося —
+ * повідомлення з «Спробувати ще раз».
+ *
  * Меню «Мої налаштування» — пункти з мовних файлів, кожен веде на власну
  * адресу всередині сторінки налаштувань (`/settings/<вкладка>`).
  */
@@ -45,7 +55,7 @@ interface MenuItem {
   selector: 'app-secondary-panel',
   templateUrl: './secondary-panel.component.html',
   styleUrls: ['./secondary-panel.component.scss'],
-  imports: [IonIcon, KbItemMenuComponent, NgTemplateOutlet, RouterLink, RouterLinkActive, TranslatePipe],
+  imports: [IonIcon, KbItemMenuComponent, NgTemplateOutlet, ProjectMenuComponent, RouterLink, RouterLinkActive, TranslatePipe],
 })
 export class SecondaryPanelComponent {
   readonly section = input.required<LayoutSection>();
@@ -80,13 +90,30 @@ export class SecondaryPanelComponent {
   /** Згорнуті папки дерева бази знань (`id`); запамʼятовуються в `localStorage`. */
   private readonly collapsedGroups = signal<ReadonlySet<string>>(readCollapsedFolders());
 
+  protected readonly projectsService = inject(ProjectsService);
+  /** Проєкти «Планера». */
+  protected readonly projects = this.projectsService.state;
+  /** Колір кружка проєкту — за назвою, як у плашок ролей (`roleColor`). */
+  protected readonly colorOf = roleColor;
+  /** Адреса планера проєкту. */
+  protected readonly projectLink = projectLink;
+
   constructor() {
-    // Зміст бази знань підвантажується, щойно панель показує її дерево.
+    // Зміст бази знань підвантажується, щойно панель показує її дерево; проєкти — у «Планері»
+    // (лише з правом їх бачити).
     effect(() => {
-      if (this.section() === 'knowledge-base') {
+      const section = this.section();
+      if (section === 'knowledge-base') {
         untracked(() => void this.knowledgeBaseService.load());
+      } else if (section === 'planner' && this.projectsService.canView()) {
+        untracked(() => void this.projectsService.load());
       }
     });
+  }
+
+  /** «Спробувати ще раз» після невдалого завантаження проєктів. */
+  protected retryProjects(): void {
+    void this.projectsService.load();
   }
 
   protected isCollapsed(id: string): boolean {

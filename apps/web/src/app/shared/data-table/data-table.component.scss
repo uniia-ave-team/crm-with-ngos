@@ -91,6 +91,13 @@ td:first-child {
   padding-inline-start: 28px;
 }
 
+// Заголовок колонки, яку не сортують: той самий текст, без кнопки.
+.data-table__label {
+  display: block;
+  padding: 22px 12px;
+  padding-inline-start: var(--data-table-head-start);
+}
+
 // Заголовок зі своїм вмістом (`headerTemplate`): вміст на всю комірку (відступи задає він сам; лівий
 // — змінна `--data-table-head-start`: 28px у першій колонці, як у звичайних заголовків), кнопка
 // сортування — іконка праворуч.
@@ -152,6 +159,10 @@ td:first-child {
 
 .data-table__menu-col {
   width: 72px;
+}
+
+.data-table__row--clickable {
+  cursor: pointer;
 }
 
 .data-table__row:hover td,

@@ -1,0 +1,6 @@
+<app-modal width="min(420px, calc(100vw - 32px))" [label]="'planner.dialogs.add.title' | translate" (closed)="onClosed()">
+  @if (opened()) {
+    <app-dialog-header [title]="'planner.dialogs.add.title' | translate" (dismiss)="close()" />
+    <app-project-form [busy]="busy()" [error]="error()" (submitted)="create($event)" />
+  }
+</app-modal>

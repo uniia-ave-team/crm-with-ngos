@@ -2,12 +2,15 @@ import materialAdd from '@material-symbols/svg-400/outlined/add.svg';
 import materialAddColumnLeft from '@material-symbols/svg-400/outlined/add_column_left.svg';
 import materialAddColumnRight from '@material-symbols/svg-400/outlined/add_column_right.svg';
 import materialAddRowBelow from '@material-symbols/svg-400/outlined/add_row_below.svg';
+import materialArrowUpward from '@material-symbols/svg-400/outlined/arrow_upward.svg';
 import materialArrowBack from '@material-symbols/svg-400/outlined/arrow_back.svg';
 import materialArrowDropDown from '@material-symbols/svg-400/outlined/arrow_drop_down.svg';
 import materialArrowDropUp from '@material-symbols/svg-400/outlined/arrow_drop_up.svg';
 import materialBlock from '@material-symbols/svg-400/outlined/block.svg';
 import materialCalendarMonthFill from '@material-symbols/svg-400/outlined/calendar_month-fill.svg';
 import materialCalendarMonth from '@material-symbols/svg-400/outlined/calendar_month.svg';
+import materialChatBubble from '@material-symbols/svg-400/outlined/chat_bubble.svg';
+import materialCheck from '@material-symbols/svg-400/outlined/check.svg';
 import materialCheckBoxFill from '@material-symbols/svg-400/outlined/check_box-fill.svg';
 import materialCheckBox from '@material-symbols/svg-400/outlined/check_box.svg';
 import materialCheckCircleFill from '@material-symbols/svg-400/outlined/check_circle-fill.svg';
@@ -16,6 +19,7 @@ import materialChevronLeft from '@material-symbols/svg-400/outlined/chevron_left
 import materialChevronRight from '@material-symbols/svg-400/outlined/chevron_right.svg';
 import materialCircle from '@material-symbols/svg-400/outlined/circle.svg';
 import materialClose from '@material-symbols/svg-400/outlined/close.svg';
+import materialCloudSync from '@material-symbols/svg-400/outlined/cloud_sync.svg';
 import materialCloudDone from '@material-symbols/svg-400/outlined/cloud_done.svg';
 import materialCloudDownload from '@material-symbols/svg-400/outlined/cloud_download.svg';
 import materialCloudOff from '@material-symbols/svg-400/outlined/cloud_off.svg';
@@ -44,6 +48,9 @@ import materialIndeterminateCheckBox from '@material-symbols/svg-400/outlined/in
 import materialInkEraser from '@material-symbols/svg-400/outlined/ink_eraser.svg';
 import materialIosShare from '@material-symbols/svg-400/outlined/ios_share.svg';
 import materialKey from '@material-symbols/svg-400/outlined/key.svg';
+import materialVisibility from '@material-symbols/svg-400/outlined/visibility.svg';
+import materialPublic from '@material-symbols/svg-400/outlined/public.svg';
+import materialLock from '@material-symbols/svg-400/outlined/lock.svg';
 import materialKeyboardArrowDown from '@material-symbols/svg-400/outlined/keyboard_arrow_down.svg';
 import materialLayers from '@material-symbols/svg-400/outlined/layers.svg';
 import materialLightbulbFill from '@material-symbols/svg-400/outlined/lightbulb-fill.svg';
@@ -53,13 +60,16 @@ import materialMenu from '@material-symbols/svg-400/outlined/menu.svg';
 import materialMoreHoriz from '@material-symbols/svg-400/outlined/more_horiz.svg';
 import materialNotifications from '@material-symbols/svg-400/outlined/notifications.svg';
 import materialPerson from '@material-symbols/svg-400/outlined/person.svg';
+import materialInfo from '@material-symbols/svg-400/outlined/info.svg';
 import materialPersonRemove from '@material-symbols/svg-400/outlined/person_remove.svg';
 import materialSearch from '@material-symbols/svg-400/outlined/search.svg';
+import materialSend from '@material-symbols/svg-400/outlined/send.svg';
 import materialSettings from '@material-symbols/svg-400/outlined/settings.svg';
 import materialShare from '@material-symbols/svg-400/outlined/share.svg';
 import materialSync from '@material-symbols/svg-400/outlined/sync.svg';
 import materialTable from '@material-symbols/svg-400/outlined/table.svg';
 import lucideArrowLeft from 'lucide-static/icons/arrow-left.svg';
+import lucideArrowUp from 'lucide-static/icons/arrow-up.svg';
 import lucideBan from 'lucide-static/icons/ban.svg';
 import lucideBell from 'lucide-static/icons/bell.svg';
 import lucideBold from 'lucide-static/icons/bold.svg';
@@ -69,8 +79,13 @@ import lucideChevronLeft from 'lucide-static/icons/chevron-left.svg';
 import lucideChevronRight from 'lucide-static/icons/chevron-right.svg';
 import lucideChevronUp from 'lucide-static/icons/chevron-up.svg';
 import lucideCircleAlert from 'lucide-static/icons/circle-alert.svg';
+import lucideCheck from 'lucide-static/icons/check.svg';
+import lucideSend from 'lucide-static/icons/send.svg';
+import lucideInfo from 'lucide-static/icons/info.svg';
+import lucideMessageSquare from 'lucide-static/icons/message-square.svg';
 import lucideCircleCheck from 'lucide-static/icons/circle-check.svg';
 import lucideCircle from 'lucide-static/icons/circle.svg';
+import lucideCloudSync from 'lucide-static/icons/cloud-sync.svg';
 import lucideCloudCheck from 'lucide-static/icons/cloud-check.svg';
 import lucideCloudDownload from 'lucide-static/icons/cloud-download.svg';
 import lucideCloudOff from 'lucide-static/icons/cloud-off.svg';
@@ -86,7 +101,10 @@ import lucideFolder from 'lucide-static/icons/folder.svg';
 import lucideHammer from 'lucide-static/icons/hammer.svg';
 import lucideHouse from 'lucide-static/icons/house.svg';
 import lucideItalic from 'lucide-static/icons/italic.svg';
+import lucideEye from 'lucide-static/icons/eye.svg';
+import lucideGlobe from 'lucide-static/icons/globe.svg';
 import lucideKeyRound from 'lucide-static/icons/key-round.svg';
+import lucideLock from 'lucide-static/icons/lock.svg';
 import lucideLayers from 'lucide-static/icons/layers.svg';
 import lucideLightbulb from 'lucide-static/icons/lightbulb.svg';
 import lucideListFilter from 'lucide-static/icons/list-filter.svg';
@@ -155,6 +173,7 @@ export const ICONS = {
   'alert-circle': { lucide: lucideCircleAlert, material: materialErrorFill },
   'alert-circle-outline': { lucide: lucideCircleAlert, material: materialError },
   'arrow-back-outline': { lucide: lucideArrowLeft, material: materialArrowBack },
+  'arrow-up-outline': { lucide: lucideArrowUp, material: materialArrowUpward },
   'ban-outline': { lucide: lucideBan, material: materialBlock },
   'bulb': { lucide: lucideLightbulb, material: materialLightbulbFill },
   'bulb-outline': { lucide: lucideLightbulb, material: materialLightbulb },
@@ -165,6 +184,8 @@ export const ICONS = {
   'checkbox': { lucide: lucideSquareCheck, material: materialCheckBoxFill },
   'checkbox-outline': { lucide: lucideSquareCheck, material: materialCheckBox },
   'checkbox-remove': { lucide: lucideSquareMinus, material: materialIndeterminateCheckBox },
+  'chatbubble-outline': { lucide: lucideMessageSquare, material: materialChatBubble },
+  'checkmark': { lucide: lucideCheck, material: materialCheck },
   'checkmark-circle': { lucide: lucideCircleCheck, material: materialCheckCircleFill },
   'checkmark-circle-outline': { lucide: lucideCircleCheck, material: materialCheckCircle },
   'chevron-back-outline': { lucide: lucideChevronLeft, material: materialChevronLeft },
@@ -174,6 +195,7 @@ export const ICONS = {
   'cloud-done-outline': { lucide: lucideCloudCheck, material: materialCloudDone },
   'cloud-download-outline': { lucide: lucideCloudDownload, material: materialCloudDownload },
   'cloud-offline-outline': { lucide: lucideCloudOff, material: materialCloudOff },
+  'cloud-sync-outline': { lucide: lucideCloudSync, material: materialCloudSync },
   'cloud-upload-outline': { lucide: lucideCloudUpload, material: materialCloudUpload },
   'cog-outline': { lucide: lucideSettings, material: materialSettings },
   'color-fill': { lucide: lucidePaintBucket, material: materialFormatColorFill },
@@ -196,7 +218,11 @@ export const ICONS = {
   'hammer': { lucide: lucideHammer, material: materialHardwareFill },
   'hammer-outline': { lucide: lucideHammer, material: materialHardware },
   'home-outline': { lucide: lucideHouse, material: materialHome },
+  'eye-outline': { lucide: lucideEye, material: materialVisibility },
+  'globe-outline': { lucide: lucideGlobe, material: materialPublic },
+  'information-circle-outline': { lucide: lucideInfo, material: materialInfo },
   'key-outline': { lucide: lucideKeyRound, material: materialKey },
+  'lock-closed-outline': { lucide: lucideLock, material: materialLock },
   'layers-outline': { lucide: lucideLayers, material: materialLayers },
   'log-out-outline': { lucide: lucideLogOut, material: materialLogout },
   'menu-outline': { lucide: lucideMenu, material: materialMenu },
@@ -209,6 +235,7 @@ export const ICONS = {
   'row-add-below': { lucide: lucideRows2PlusBottom, material: materialAddRowBelow },
   'row-remove': { lucide: lucideRows2MinusBottom, material: materialRemoveRowBelow },
   'search': { lucide: lucideSearch, material: materialSearch },
+  'send-outline': { lucide: lucideSend, material: materialSend },
   'server-outline': { lucide: lucideServer, material: materialDns },
   'share-outline': { lucide: lucideShare, material: materialIosShare },
   'share-social': { lucide: lucideShare2, material: materialShare },

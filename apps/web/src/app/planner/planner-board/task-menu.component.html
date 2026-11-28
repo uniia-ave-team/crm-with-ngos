@@ -1,0 +1,20 @@
+<app-popover width="240px" side="bottom" alignment="end" compactSide="bottom" compactAlignment="end" [label]="'planner.taskActions.label' | translate" (closed)="closed.emit()">
+  <app-action-list [items]="items()" (choose)="onChoose($event)" />
+</app-popover>
+
+<!-- «Видалити» (по центру екрана): шапка з хрестиком і перепитування з назвою завдання в лапках. -->
+<app-modal width="min(420px, calc(100vw - 32px))" [label]="'planner.taskActions.' + (dialog()?.action ?? 'details') | translate" (closed)="onClosed()">
+  @if (dialog(); as current) {
+    <app-dialog-header [title]="'planner.taskActions.' + current.action | translate" (dismiss)="close()" />
+    @let deleteError = error();
+    <app-confirm-dialog
+      [message]="'planner.dialogs.deleteTask' | translate: { title: current.task.title }"
+      [confirmLabel]="'common.yes' | translate"
+      [cancelLabel]="'common.cancel' | translate"
+      [busy]="busy()"
+      [error]="deleteError ? (deleteError | translate) : null"
+      (confirm)="remove(current.task)"
+      (dismiss)="close()"
+    />
+  }
+</app-modal>

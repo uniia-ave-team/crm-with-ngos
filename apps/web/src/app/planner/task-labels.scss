@@ -1,0 +1,87 @@
+// Спільний вигляд стану, пріоритету й тегів завдання (картка на дошці, таблиця «Моїх завдань»).
+// Кольори стану (текст і тло тегу) й пріоритету — для світлої теми, нижче — для темної.
+:host {
+  --task-todo: #5b6b5e;
+  --task-todo-bg: #f2f4f2;
+  --task-progress: #2f6fdc;
+  --task-progress-bg: #eaf1ff;
+  --task-blocked: #c97a2b;
+  --task-blocked-bg: #fdf0e8;
+  --task-done: #2f6b31;
+  --task-done-bg: #e8f3e9;
+  --task-priority-high: #16241a;
+  --task-priority-critical: #c0392b;
+  --task-priority-normal: #5b6b5e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --task-todo: #c7cbc9;
+    --task-todo-bg: #2a2c2e;
+    --task-progress: #6ea8ff;
+    --task-progress-bg: #1b2a47;
+    --task-blocked: #f5a85e;
+    --task-blocked-bg: #3a2a18;
+    --task-done: #2f6b31;
+    --task-done-bg: #4ade80;
+    --task-priority-high: #f2f3f4;
+    --task-priority-normal: #9aa0a8;
+  }
+}
+
+.task-status {
+  padding: 2px 10px;
+  white-space: nowrap;
+  border-radius: 999px;
+  color: var(--task-todo);
+  background: var(--task-todo-bg);
+
+  &[data-status='1'] {
+    color: var(--task-progress);
+    background: var(--task-progress-bg);
+  }
+
+  &[data-status='2'] {
+    color: var(--task-blocked);
+    background: var(--task-blocked-bg);
+  }
+
+  &[data-status='3'],
+  &[data-status='4'] {
+    color: var(--task-done);
+    background: var(--task-done-bg);
+  }
+}
+
+// Пріоритет — з крапкою того самого кольору перед ним.
+.task-priority {
+  color: var(--task-priority-normal);
+
+  &::before {
+    content: '•';
+    margin-right: 4px;
+  }
+
+  &[data-priority='2'] {
+    color: var(--task-priority-high);
+  }
+
+  &[data-priority='3'] {
+    color: var(--task-priority-critical);
+  }
+}
+
+// Тег завдання — сіра плашка.
+.task-tag {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--task-todo-bg);
+  color: var(--nav-fg-active);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

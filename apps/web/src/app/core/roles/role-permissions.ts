@@ -54,6 +54,10 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
     PERMISSIONS.updateCustomRecord,
     PERMISSIONS.deleteCustomRecord,
   ),
+  // Доступ до планера — проєкти й завдання в них; керувати без доступу нема як.
+  groupOf('accessPlanner', PERMISSIONS.viewProject, PERMISSIONS.viewTask),
+  subgroupOf('accessPlanner', 'manageProjects', PERMISSIONS.createProject, PERMISSIONS.updateProject, PERMISSIONS.deleteProject),
+  subgroupOf('accessPlanner', 'manageTasks', PERMISSIONS.createTask, PERMISSIONS.updateTask, PERMISSIONS.deleteTask),
 ];
 
 /**
@@ -71,6 +75,12 @@ export function canGrantGroup(group: PermissionGroup, own: readonly string[]): b
  * права (`ViewNgo` сервер прибрав і відхиляє).
  */
 export const ALWAYS_GRANTED_PERMISSIONS: readonly Permission[] = [PERMISSIONS.viewTableTemplate];
+
+/**
+ * Незадіяні права: інтерфейс на них ще ніде не спирається, тож у формі ролі перемикача нема й з
+ * інтерфейсу їх ролі не дати. Коли функцію зроблять — право переходить у `PERMISSION_GROUPS`.
+ */
+export const UNUSED_PERMISSIONS: readonly Permission[] = [PERMISSIONS.manageUserActionTokens];
 
 /** Чи діє група за вибором `enabledIds`: її ввімкнено, а якщо вона підпункт — то й пункт, від якого вона залежить. */
 export function groupActive(group: PermissionGroup, enabledIds: ReadonlySet<string>): boolean {

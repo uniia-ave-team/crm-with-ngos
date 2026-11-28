@@ -1,4 +1,4 @@
-<div class="search-header" [class.search-header--open]="open()">
+<div class="search-header" [class.search-header--open]="open()" [class.search-header--custom-title]="!title()">
   <div class="search-header__title-slot" [attr.inert]="open() ? '' : null" (transitionend)="onTitleSlotTransitionEnd($event)">
     <!-- Назва (повна — у підказці) виїжджає вліво, коли відкрито пошук; на цей час її ширина
          зафіксована (`titleWidth`), щоб текст не перескладався. -->
@@ -8,43 +8,47 @@
       [class.search-header__title--clamped]="titleLines() > 1"
       [style.--title-lines]="titleLines()"
       [style.width.px]="titleWidth()"
-      [attr.title]="title()"
+      [attr.title]="title() || null"
     >
       {{ title() }}
+      <!-- Власний заголовок замість тексту (наприклад, вкладки планера). -->
+      <ng-content select="[searchHeaderTitle]" />
     </div>
   </div>
   <div class="search-header__actions"><ng-content /></div>
-  <div class="search-header__field-slot" [attr.inert]="open() ? null : ''">
-    <label class="search-header__field">
-      <ion-icon name="search" aria-hidden="true"></ion-icon>
-      <input
-        #input
-        type="search"
-        class="search-header__input"
-        enterkeyhint="search"
-        autocomplete="off"
-        [attr.maxlength]="maxLength()"
-        [attr.aria-label]="'common.search' | translate"
-        [placeholder]="placeholder()"
-        [value]="text()"
-        (input)="onInput($any($event.target).value)"
-        (keydown.escape)="close()"
-      />
-    </label>
-  </div>
-  <button
-    #toggle
-    type="button"
-    class="search-header__toggle"
-    tabindex="0"
-    [attr.aria-label]="(open() ? 'common.searchClose' : 'common.search') | translate"
-    [attr.aria-expanded]="open()"
-    (click)="onToggle()"
-  >
-    @if (open()) {
-      <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
-    } @else {
-      <ion-icon name="search" aria-hidden="true"></ion-icon>
-    }
-  </button>
+  @if (searchable()) {
+    <div class="search-header__field-slot" [attr.inert]="open() ? null : ''">
+      <label class="search-header__field">
+        <ion-icon name="search" aria-hidden="true"></ion-icon>
+        <input
+          #input
+          type="search"
+          class="search-header__input"
+          enterkeyhint="search"
+          autocomplete="off"
+          [attr.maxlength]="maxLength()"
+          [attr.aria-label]="'common.search' | translate"
+          [placeholder]="placeholder()"
+          [value]="text()"
+          (input)="onInput($any($event.target).value)"
+          (keydown.escape)="close()"
+        />
+      </label>
+    </div>
+    <button
+      #toggle
+      type="button"
+      class="search-header__toggle"
+      tabindex="0"
+      [attr.aria-label]="(open() ? 'common.searchClose' : 'common.search') | translate"
+      [attr.aria-expanded]="open()"
+      (click)="onToggle()"
+    >
+      @if (open()) {
+        <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+      } @else {
+        <ion-icon name="search" aria-hidden="true"></ion-icon>
+      }
+    </button>
+  }
 </div>

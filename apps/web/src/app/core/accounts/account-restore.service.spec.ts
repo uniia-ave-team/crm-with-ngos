@@ -320,7 +320,7 @@ describe('AccountRestoreService', () => {
       revoke.flush(null, { status: 204, statusText: 'No Content' });
 
       expect(await result).toBe('ok');
-      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner', { onSameUrlNavigation: 'reload' }));
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/start', { onSameUrlNavigation: 'reload' }));
       expect(accounts.accounts().map((a) => a.id)).toEqual([idOf(second)]);
       expect(accounts.activeId()).toBe(idOf(second));
       expect(localStorage.getItem(`yavir.account.${signedOut}`)).toBeNull();

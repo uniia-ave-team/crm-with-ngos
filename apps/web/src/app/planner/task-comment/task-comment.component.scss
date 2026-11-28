@@ -1,0 +1,114 @@
+:host {
+  display: flex;
+  gap: 12px;
+
+  // Три крапки свого коментаря — при наведенні чи фокусі (без наведення — завжди).
+  &:hover .comment__menu,
+  &:focus-within .comment__menu {
+    opacity: 1;
+  }
+}
+
+.comment__avatar {
+  --avatar-size: 26px;
+  flex: none;
+}
+
+.comment__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.comment__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 2px;
+}
+
+.comment__author {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.comment__time {
+  color: var(--nav-fg-inactive);
+  font-size: 13px;
+}
+
+.comment__text {
+  margin: 0;
+  // Тонкий шрифт — окрема гарнітура «e-Ukraine Light» (та сама, що в описі на сторінці входу).
+  font-family: var(--font-login-body);
+  font-weight: 300;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comment__edit {
+  display: flex;
+  margin-top: 4px;
+}
+
+.comment__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-active);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.comment__menu,
+.comment__send {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+.comment__menu {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nav-fg-inactive);
+  font-size: 18px;
+  opacity: 0;
+
+  &:hover {
+    color: var(--nav-fg-active);
+  }
+
+  @media (hover: none) {
+    opacity: 1;
+  }
+}
+
+.comment__send {
+  align-self: flex-end;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #32670b;
+  color: #fff;
+  font-size: 18px;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    background: #478a7f;
+  }
+}

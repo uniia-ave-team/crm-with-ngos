@@ -1,0 +1,10 @@
+<app-popover
+  width="240px"
+  side="bottom"
+  alignment="end"
+  compactSide="bottom"
+  compactAlignment="end"
+  [label]="'planner.actions.label' | translate"
+>
+  <app-action-list [items]="items()" (choose)="onChoose($event)" />
+</app-popover>

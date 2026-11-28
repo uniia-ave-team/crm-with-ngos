@@ -10,7 +10,7 @@ import { needsSignIn } from '../../accounts/account-login';
 import { AccountRestoreService } from '../../accounts/account-restore.service';
 import { AccountsService } from '../../accounts/accounts.service';
 import { REDIRECT_URL } from '../../auth/auth.service';
-import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, KNOWLEDGE_BASE_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
+import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, KNOWLEDGE_BASE_PERMISSIONS, PLANNER_PERMISSIONS, hasAnyPermission } from '../../auth/permissions';
 import { LanguageService } from '../../i18n/language.service';
 import { mobileLogoBase } from '../../i18n/logos';
 import { CurrentUserService } from '../../users/current-user.service';
@@ -57,10 +57,13 @@ export class PrimaryNavComponent {
   private readonly accountsStore = inject(AccountsService);
   private readonly restore = inject(AccountRestoreService);
 
+  /** Лого веде на стартову сторінку: вона відкриває першу доступну за правами. */
+  protected readonly startUrl = REDIRECT_URL;
+
   private static readonly ITEMS: readonly NavItem[] = [
     // Календар ще не готовий: пункт прихований (`planned`), доки сторінки нема.
     { labelKey: 'nav.calendar', url: '/calendar', icon: 'calendar-outline', iconActive: 'calendar', planned: true },
-    { labelKey: 'nav.planner', url: '/planner', icon: 'checkbox-outline', iconActive: 'checkbox' },
+    { labelKey: 'nav.planner', url: '/planner', icon: 'checkbox-outline', iconActive: 'checkbox', requiresAny: PLANNER_PERMISSIONS },
     {
       labelKey: 'nav.knowledgeBase',
       url: '/knowledge-base',

@@ -1,0 +1,44 @@
+<!-- Додати колегу (як у Figma): пошук колеги, рівень доступу нового учасника праворуч, далі «Додати».
+     Після вибору замість пошуку — вибраний колега з полем назви ролі, а біля «Додати» — хрестик. -->
+<div class="member-search__add">
+  @if (chosen(); as user) {
+    <div class="member-search__chosen">
+      <app-member-choice [user]="user" [ngoName]="ngoName()" [(roleTitle)]="roleTitle" />
+      <ng-container [ngTemplateOutlet]="claimSelect" />
+    </div>
+  } @else {
+    <app-colleague-search class="member-search__search" [excludeIds]="memberIds()" (overlayBottom)="overlayBottom.emit($event)" (choose)="choose($event)">
+      <ng-container [ngTemplateOutlet]="claimSelect" />
+    </app-colleague-search>
+  }
+  <button type="button" class="member-search__add-button" tabindex="0" [disabled]="!chosen()" (click)="submit()">
+    {{ 'planner.access.add' | translate }}
+  </button>
+  @if (chosen()) {
+    <!-- Скинути вибір і повернути поле пошуку. -->
+    <button
+      type="button"
+      class="member-search__reset"
+      tabindex="0"
+      [attr.aria-label]="'planner.access.resetChoice' | translate"
+      [attr.title]="'planner.access.resetChoice' | translate"
+      (click)="reset()"
+    >
+      <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+    </button>
+  }
+</div>
+
+<!-- Рівень доступу — окремий блок у правому верхньому куті поля, вибір колеги на нього не впливає. -->
+<ng-template #claimSelect>
+  <span class="member-search__tag">
+    <select class="member-search__select" tabindex="0" [attr.aria-label]="'planner.access.newClaim' | translate" (change)="onNewClaim($event)">
+      @for (claim of claims; track claim) {
+        <option [value]="claim" [selected]="claim === newClaim()">
+          {{ 'planner.claims.' + claim | translate }}
+        </option>
+      }
+    </select>
+    <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+  </span>
+</ng-template>

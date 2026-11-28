@@ -1,14 +1,16 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { CUSTOM_ELEMENTS_SCHEMA, Signal, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { MenuController, provideIonicAngular } from '@ionic/angular';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import uk from '../../../../assets/i18n/uk.json';
 import { KbItemMenuComponent } from '../../knowledge-base/kb-item-menu/kb-item-menu.component';
 import { KNOWLEDGE_BASE_SAMPLE_URL, KNOWLEDGE_BASE_SOURCE, KnowledgeBaseService } from '../../knowledge-base/knowledge-base.service';
+import { roleColor } from '../../../shared/role-pill/role-color';
+import { CurrentUserService } from '../../users/current-user.service';
 import { LayoutSection } from '../layout.service';
 import { COLLAPSED_FOLDERS_KEY, SecondaryPanelComponent } from './secondary-panel.component';
 
@@ -21,7 +23,7 @@ describe('SecondaryPanelComponent', () => {
       imports: [SecondaryPanelComponent],
       providers: [
         provideIonicAngular(),
-        provideRouter([]),
+        provideRouter([{ path: 'planner/projects/:id', children: [] }]),
         provideHttpClient(),
         provideHttpClientTesting(),
         provideTranslateService({ lang: 'uk', fallbackLang: 'uk' }),
@@ -81,7 +83,7 @@ describe('SecondaryPanelComponent', () => {
     });
   });
 
-  it.each(['settings', 'planner', 'knowledge-base'] as const)('puts 8px between the items on every page (%s)', (section) => {
+  it.each(['settings', 'knowledge-base'] as const)('puts 8px between the items on every page (%s)', (section) => {
     const element = render(section);
     const list = element.querySelector('ul.tree') as HTMLElement;
     const style = getComputedStyle(list);
@@ -90,11 +92,81 @@ describe('SecondaryPanelComponent', () => {
     expect(style.rowGap || style.gap).toBe('8px');
   });
 
-  it('keeps the planner panel as it was, with «Головна» from the language file', () => {
-    const element = render('planner');
-    expect(element.querySelectorAll('a.tree__link')).toHaveLength(1);
-    expect(element.querySelector('a.tree__link')?.textContent?.trim()).toBe(uk.common.home);
-    expect(element.querySelector('.hint')).not.toBeNull();
+  describe('planner section (the projects)', () => {
+    const http = () => TestBed.inject(HttpTestingController);
+    const projectsUrl = (request: { url: string }) => request.url.endsWith('/api/v1/projects');
+    const setPermissions = (permissions: string[]) =>
+      ((TestBed.inject(CurrentUserService) as { permissions: Signal<readonly string[]> }).permissions = signal(permissions));
+
+    async function renderWith(body: object | null, status = 200) {
+      const fixture = TestBed.createComponent(SecondaryPanelComponent);
+      fixture.componentRef.setInput('section', 'planner');
+      fixture.detectChanges();
+      const request = http().expectOne(projectsUrl);
+      request.flush(body, { status, statusText: 'x' });
+      await fixture.whenStable();
+      fixture.detectChanges();
+      return { fixture, element: fixture.nativeElement as HTMLElement, request };
+    }
+
+    beforeEach(() => setPermissions(['Permissions.ViewProject']));
+
+    it('lists the projects by name, each with a ring of the colour of its name (as the roles), 8px apart', async () => {
+      const { element, request } = await renderWith({
+        items: [
+          { id: 'p1', title: 'Явір' },
+          { id: 'p2', title: 'Унія' },
+        ],
+        hasNextPage: false,
+      });
+      expect(request.request.params.get('OrderBy')).toBe('Title');
+      expect(request.request.params.get('SortOrder')).toBe('asc');
+      const items = Array.from(element.querySelectorAll<HTMLElement>('ul.tree > li.tree__project'));
+      expect(items.map((item) => item.textContent?.trim())).toEqual(['Явір', 'Унія']);
+      // Назва — посилання на планер проєкту.
+      expect(items.map((item) => item.querySelector('a.tree__link')?.getAttribute('href'))).toEqual(['/planner/projects/p1', '/planner/projects/p2']);
+      const dot = items[0].querySelector<HTMLElement>('.tree__project-dot')!;
+      expect(dot.style.getPropertyValue('--project-base')).toBe(roleColor('Явір')!.base);
+      expect(dot.style.getPropertyValue('--project-light')).toBe(roleColor('Явір')!.light);
+      const style = getComputedStyle(element.querySelector('ul.tree')!);
+      expect(style.rowGap || style.gap).toBe('8px');
+    });
+
+    it('marks the open project (the ring gets filled), with the three dots named after it', async () => {
+      setPermissions(['Permissions.ViewProject', 'Permissions.UpdateProject']);
+      await TestBed.inject(Router).navigateByUrl('/planner/projects/p2');
+      const { element } = await renderWith({ items: [{ id: 'p1', title: 'Явір' }, { id: 'p2', title: 'Унія' }], hasNextPage: false });
+      const items = Array.from(element.querySelectorAll<HTMLElement>('li.tree__project'));
+      await vi.waitFor(() => expect(items.map((item) => item.classList.contains('tree__link--active'))).toEqual([false, true]));
+      expect(items[1].querySelector('.tree__menu')?.getAttribute('aria-label')).toBe(uk.planner.projectActions.replace('{{title}}', 'Унія'));
+    });
+
+    it('keeps the three dots without the rights for the actions (the access can be viewed)', async () => {
+      const { element } = await renderWith({ items: [{ id: 'p1', title: 'Явір' }], hasNextPage: false });
+      expect(element.querySelector('li.tree__project .tree__menu')).not.toBeNull();
+    });
+
+    it('says there are no projects yet', async () => {
+      const { element } = await renderWith({ items: [], hasNextPage: false });
+      expect(element.querySelector('.hint')?.textContent?.trim()).toBe(uk.planner.projects.empty);
+    });
+
+    it('says the projects did not load and asks again by «Try again»', async () => {
+      const { element, fixture } = await renderWith(null, 500);
+      expect(element.querySelector('.hint--error')?.textContent).toContain(uk.planner.projects.error);
+      element.querySelector<HTMLButtonElement>('.hint__retry')!.click();
+      http().expectOne(projectsUrl).flush({ items: [{ id: 'p1', title: 'Явір' }], hasNextPage: false });
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(element.querySelector('li.tree__project')?.textContent?.trim()).toBe('Явір');
+    });
+
+    it('asks nothing and lists nothing without Permissions.ViewProject', () => {
+      setPermissions([]);
+      const element = render('planner');
+      http().expectNone(projectsUrl);
+      expect(element.querySelector('ul.tree')).toBeNull();
+    });
   });
 
   describe('knowledge base section (the contents loaded by KnowledgeBaseService)', () => {

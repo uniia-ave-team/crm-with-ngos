@@ -1,0 +1,107 @@
+<!-- Сортування на телефоні (замість заголовків таблиці): поле й напрямок, як у колег. -->
+@if (sortOpen()) {
+  <div class="my-tasks__sort">
+    <app-sort-bar [options]="sortOptions()" [value]="sortValue()" (sortChange)="onSortBar($event)" />
+  </div>
+}
+
+<app-data-table
+  [columns]="columns()"
+  [rows]="rows()"
+  [showAddColumn]="false"
+  [clickableRows]="true"
+  minWidth="1704px"
+  [highlightedRowId]="menuTaskId()"
+  labelKey="planner.tabs.my"
+  (rowMenu)="onRowMenu($event)"
+  (rowClick)="openTask.emit(taskOf($event))"
+  (sortChange)="onSort($event)"
+/>
+
+<!-- На телефоні (до 768px) — ті самі картки, що й на дошці. -->
+<ul class="my-tasks__cards" [attr.aria-label]="'planner.tabs.my' | translate">
+  @for (task of state().tasks; track task.id) {
+    <li><app-task-card [task]="task" [projectId]="projectId()" [canEdit]="canEdit()" (open)="openTask.emit(task)" (menu)="openMenu($event.anchor, task)" /></li>
+  }
+</ul>
+
+@switch (state().status) {
+  @case ('failed') {
+    <p class="my-tasks__message my-tasks__message--error" role="alert">
+      <span>{{ 'planner.myTasks.error' | translate }}</span>
+      <button type="button" class="my-tasks__retry" tabindex="0" (click)="reload()">{{ 'planner.board.retry' | translate }}</button>
+    </p>
+  }
+  @case ('loading') {
+    @if (!state().tasks.length) {
+      <p class="my-tasks__message" role="status">{{ 'planner.myTasks.loading' | translate }}</p>
+    }
+  }
+  @case ('ready') {
+    @if (!state().tasks.length) {
+      @if (search().trim()) {
+        <p class="my-tasks__message">{{ 'planner.myTasks.notFound' | translate }}</p>
+      } @else {
+        <app-empty-state class="my-tasks__empty" />
+      }
+    }
+  }
+}
+
+<ion-infinite-scroll threshold="200px" [disabled]="!state().hasMore" (ionInfinite)="onInfiniteScroll($event)">
+  <ion-infinite-scroll-content loadingSpinner="dots"></ion-infinite-scroll-content>
+</ion-infinite-scroll>
+
+<!-- Меню завдання й вікно «Редагувати». -->
+<app-task-menu [projectId]="projectId()" [canEdit]="canEdit()" [canDelete]="canDelete()" (details)="openTask.emit($event)" (edit)="dialog.edit(projectId(), $event)" (closed)="menuTaskId.set(null)" />
+<app-task-dialog #dialog />
+
+<!-- Комірки таблиці. -->
+<ng-template #titleCell let-row>
+  @let task = taskOf(row);
+  <span class="my-tasks__title">
+    <!-- Коментарі: червоний кружок, якщо є нові. -->
+    <span
+      class="my-tasks__comments"
+      [class.my-tasks__comments--unread]="task.unreadComments"
+      role="img"
+      [attr.aria-label]="task.unreadComments ? ('planner.task.unreadComments' | translate: { count: task.unreadComments }) : ('planner.task.comments' | translate)"
+    >
+      <ion-icon name="chatbubble-outline" aria-hidden="true"></ion-icon>
+    </span>
+    <span class="my-tasks__title-text">{{ task.title }}</span>
+  </span>
+</ng-template>
+
+<ng-template #statusCell let-row>
+  <app-task-status [task]="taskOf(row)" [projectId]="projectId()" [canPromote]="canEdit()" />
+</ng-template>
+
+<ng-template #assigneesCell let-row>
+  <app-task-assignees class="my-tasks__assignees" [assignees]="taskOf(row).assignees" />
+</ng-template>
+
+<ng-template #datesCell let-row>
+  @let period = dates(taskOf(row));
+  <span class="my-tasks__dates">
+    @if (period.end) {
+      <span>{{ period.start }} -</span>
+      <span>{{ period.end }}</span>
+    } @else {
+      {{ 'planner.task.from' | translate: { start: period.start } }}
+    }
+  </span>
+</ng-template>
+
+<ng-template #priorityCell let-row>
+  @let task = taskOf(row);
+  <span class="task-priority my-tasks__priority" [attr.data-priority]="task.priority">{{ 'planner.taskPriority.' + task.priority | translate }}</span>
+</ng-template>
+
+<ng-template #tagsCell let-row>
+  <span class="my-tasks__tags">
+    @for (tag of taskOf(row).tags; track tag.id) {
+      <span class="task-tag">{{ tag.title }}</span>
+    }
+  </span>
+</ng-template>

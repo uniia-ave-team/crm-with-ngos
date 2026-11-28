@@ -1,0 +1,44 @@
+<app-popover width="240px" side="bottom" alignment="end" compactSide="bottom" compactAlignment="end" [label]="'planner.topicActions.label' | translate">
+  <app-action-list [items]="items" (choose)="onChoose($event)" />
+</app-popover>
+
+<!-- Вікно дії з колонкою (по центру екрана): шапка з назвою дії й хрестиком, під нею — зміст дії. -->
+<app-modal width="min(420px, calc(100vw - 32px))" [label]="'planner.topicActions.' + (dialog()?.action ?? 'edit') | translate" (closed)="onClosed()">
+  @if (dialog(); as current) {
+    <app-dialog-header [title]="'planner.topicActions.' + current.action | translate" (dismiss)="close()" />
+    @switch (current.action) {
+      @case ('edit') {
+        <app-topic-form
+          submitLabelKey="planner.dialogs.edit.save"
+          [initial]="current.topic.title"
+          [busy]="busy()"
+          [error]="error()"
+          (submitted)="save(current.topic, $event)"
+        />
+      }
+      @case ('delete') {
+        @switch (removal()) {
+          @case ('checking') {
+            <p class="topic-menu__message" role="status">{{ 'planner.dialogs.checkingTopic' | translate }}</p>
+          }
+          @case ('blocked') {
+            <!-- У колонці є завдання: сервер таку не видаляє. -->
+            <p class="topic-menu__message" role="alert">{{ 'planner.dialogs.failure.hasTasks' | translate: { title: current.topic.title } }}</p>
+          }
+          @case ('ready') {
+            @let deleteError = error();
+            <app-confirm-dialog
+              [message]="'planner.dialogs.deleteTopic' | translate: { title: current.topic.title }"
+              [confirmLabel]="'common.yes' | translate"
+              [cancelLabel]="'common.cancel' | translate"
+              [busy]="busy()"
+              [error]="deleteError ? (deleteError | translate) : null"
+              (confirm)="remove(current.topic)"
+              (dismiss)="close()"
+            />
+          }
+        }
+      }
+    }
+  }
+</app-modal>

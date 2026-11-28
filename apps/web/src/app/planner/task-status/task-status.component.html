@@ -1,0 +1,27 @@
+@let status = shown();
+@if (next() !== null || pending()) {
+  <!-- Тег-кнопка: наведення показує наступний стан, клік — підвищує. -->
+  <button
+    type="button"
+    class="task-status task-status__button"
+    tabindex="0"
+    [class.task-status--raised]="raised()"
+    [attr.data-status]="status"
+    [attr.aria-label]="'planner.taskStatusPromote' | translate: { from: ('planner.taskStatus.' + task().status | translate), to: ('planner.taskStatus.' + (next() ?? status) | translate) }"
+    [attr.aria-busy]="pending()"
+    (mouseenter)="onEnter()"
+    (mouseleave)="onLeave()"
+    (focus)="onEnter()"
+    (blur)="onLeave()"
+    (click)="promote($event)"
+  >
+    @if (pending()) {
+      <ion-icon name="cloud-sync-outline" aria-hidden="true"></ion-icon>
+    } @else if (raised()) {
+      <ion-icon name="arrow-up-outline" aria-hidden="true"></ion-icon>
+    }
+    {{ 'planner.taskStatus.' + status | translate }}
+  </button>
+} @else {
+  <span class="task-status" [attr.data-status]="status">{{ 'planner.taskStatus.' + status | translate }}</span>
+}

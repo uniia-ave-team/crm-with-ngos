@@ -1,5 +1,5 @@
 <div class="data-table__scroll">
-  <table class="data-table" [class.data-table--lines]="columnLines()" [attr.aria-label]="labelKey() ? (labelKey()! | translate) : null">
+  <table class="data-table" [class.data-table--lines]="columnLines()" [style.min-width]="minWidth()" [attr.aria-label]="labelKey() ? (labelKey()! | translate) : null">
     <colgroup>
       @for (column of columns(); track column.id) {
         <col [style.width]="column.width ?? null" />
@@ -38,6 +38,9 @@
               >
                 <ion-icon class="data-table__filter" [name]="icon" aria-hidden="true"></ion-icon>
               </button>
+            } @else if (column.sortable === false) {
+              <!-- Колонку не сортують: заголовок — просто текст. -->
+              <span class="data-table__label">{{ label }}</span>
             } @else {
               <button type="button" class="data-table__sort" tabindex="0" (click)="toggleSort(column)">
                 {{ label }}
@@ -67,7 +70,12 @@
     </thead>
     <tbody>
       @for (row of rows(); track row.id) {
-        <tr class="data-table__row" [class.data-table__row--active]="row.id === highlightedRowId()">
+        <tr
+          class="data-table__row"
+          [class.data-table__row--active]="row.id === highlightedRowId()"
+          [class.data-table__row--clickable]="clickableRows()"
+          (click)="onRowClick(row)"
+        >
           @for (column of columns(); track column.id) {
             @let colors = column.cellColors?.(row);
             <td [style.background]="colors?.background ?? null" [style.color]="colors?.color ?? null">

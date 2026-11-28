@@ -10,7 +10,8 @@ $transition: 0.25s ease;
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 56px;
+  // Висоту рядка може задати сторінка (`--search-header-height`, напр. на всю висоту шапки).
+  min-height: var(--search-header-height, 56px);
   box-sizing: border-box;
   padding-inline: 28px 24px;
 }
@@ -22,6 +23,26 @@ $transition: 0.25s ease;
   min-width: 0;
   overflow: hidden;
   transition: flex-grow $transition;
+}
+
+// Свій заголовок (`[searchHeaderTitle]`, напр. вкладки) — на всю висоту рядка.
+.search-header--custom-title {
+  align-items: stretch;
+
+  .search-header__title-slot,
+  .search-header__title {
+    display: flex;
+  }
+
+  .search-header__actions,
+  .search-header__field-slot,
+  .search-header__toggle {
+    align-self: center;
+  }
+
+  .search-header__actions {
+    margin-inline-start: 16px;
+  }
 }
 
 .search-header__title {

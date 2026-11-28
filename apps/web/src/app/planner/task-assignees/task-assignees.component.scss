@@ -1,0 +1,40 @@
+// Аватарки внахлест (як учасники в шапці планера); розмір — `--task-assignee-size`.
+:host {
+  display: inline-flex;
+}
+
+.task-assignees {
+  display: flex;
+}
+
+.task-assignees__item {
+  --avatar-size: var(--task-assignee-size, 24px);
+  position: relative;
+  box-sizing: content-box;
+  border: 2px solid #fff;
+  border-radius: 38%;
+
+  & + & {
+    margin-inline-start: calc(var(--avatar-size) / -2);
+  }
+
+  // Кожна наступна лежить на попередній.
+  @for $i from 2 through 12 {
+    &:nth-child(#{$i}) {
+      z-index: $i - 1;
+    }
+  }
+
+  &--more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+    border: 2px dashed var(--nav-fg-inactive);
+    background: var(--nav-bg);
+    color: var(--nav-fg-inactive);
+    font-size: 11px;
+    font-weight: 700;
+  }
+}

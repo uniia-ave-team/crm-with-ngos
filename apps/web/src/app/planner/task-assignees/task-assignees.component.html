@@ -1,0 +1,21 @@
+@if (assignees().length) {
+  <span class="task-assignees" role="img" [attr.title]="names()" [attr.aria-label]="('planner.task.assignees' | translate) + ': ' + names()">
+    @for (assignee of shown(); track assignee.id) {
+      <app-avatar
+        class="task-assignees__item"
+        [firstName]="assignee.firstName"
+        [lastName]="assignee.lastName"
+        [avatarUrl]="assignee.avatarUrl"
+        [ngoName]="ngoName()"
+      />
+    }
+    @if (hidden()) {
+      <span class="task-assignees__item task-assignees__item--more">{{ 'planner.members.moreMark' | translate }}</span>
+    }
+  </span>
+} @else {
+  <!-- Виконавців нема — порожня аватарка з пунктирним контуром. -->
+  <span class="task-assignees" role="img" [attr.title]="'planner.task.noAssignees' | translate" [attr.aria-label]="'planner.task.noAssignees' | translate">
+    <span class="task-assignees__item task-assignees__item--more"></span>
+  </span>
+}

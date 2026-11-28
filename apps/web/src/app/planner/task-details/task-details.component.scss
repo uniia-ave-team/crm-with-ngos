@@ -1,0 +1,228 @@
+:host {
+  display: contents;
+}
+
+.task-details__header {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+// Тег проєкту: колір — як у кружка проєкту в бічному меню (світла тема — `base`, темна — `light`).
+.task-details__project {
+  --project-color: var(--project-base, var(--nav-fg-inactive));
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--project-color) 14%, transparent);
+  color: var(--project-color);
+  font-family: var(--font-menu);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  @media (prefers-color-scheme: dark) {
+    --project-color: var(--project-light, var(--nav-fg-inactive));
+  }
+}
+
+.task-details__menu {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-active);
+  font-size: 20px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+  }
+}
+
+.task-details {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  font-family: var(--font-menu);
+  color: var(--nav-fg-active);
+}
+
+.task-details__title {
+  margin: 0 0 14px;
+  font-family: var(--font-login-title);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.task-details__status {
+  align-self: flex-start;
+  font-size: 14px;
+}
+
+// Відомості: підпис великими літерами, під ним значення; згори й знизу — лінії.
+.task-details__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 20px 0 0;
+  padding: 20px 0;
+  border-top: 1px solid var(--nav-border);
+  border-bottom: 1px solid var(--nav-border);
+}
+
+.task-details__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  dt {
+    color: var(--nav-fg-inactive);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 15px;
+  }
+}
+
+.task-details__label {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.task-details__priority {
+  font-weight: 700;
+
+  &::before {
+    content: none;
+  }
+}
+
+.task-details__description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.task-details__assignees {
+  --task-assignee-size: 32px;
+}
+
+.task-details__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-details__none,
+.task-details__note {
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+}
+
+.task-details__comments {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 0;
+}
+
+.task-details__note {
+  margin: 0;
+
+  &--error {
+    color: var(--nav-unavailable-icon);
+  }
+}
+
+.task-details__retry {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.task-details__sentinel {
+  height: 1px;
+}
+
+// Поле нового коментаря — внизу вікна, поверх прокрученого.
+.task-details__composer {
+  position: sticky;
+  bottom: -16px;
+  display: flex;
+  gap: 10px;
+  margin: 0 -16px -16px;
+  padding: 12px 16px 16px;
+  background: var(--ion-background-color);
+}
+
+.task-details__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--nav-active-bg);
+  color: var(--nav-fg-active);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+
+  &:focus {
+    border-color: var(--nav-border);
+  }
+}
+
+.task-details__send {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: #32670b;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    background: #478a7f;
+  }
+}

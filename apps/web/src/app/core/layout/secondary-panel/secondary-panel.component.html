@@ -97,20 +97,52 @@
   }
 
   @case ('planner') {
-    <ul class="tree">
-      <li>
-        <a
-          class="tree__link tree__link--home"
-          routerLink="/planner"
-          routerLinkActive="tree__link--active"
-          [routerLinkActiveOptions]="{ exact: true }"
-        >
-          <ion-icon name="home-outline" aria-hidden="true"></ion-icon>
-          <span>{{ 'common.home' | translate }}</span>
-        </a>
-      </li>
-    </ul>
-    <p class="hint">Структуру розділу ще не визначено.</p>
+    <!-- Проєкти (з `ViewProject`): кружок кольору за назвою (як у ролей) і назва. -->
+    @if (projectsService.canView()) {
+      @switch (projects().status) {
+        @case ('ready') {
+          @if (projects().projects.length) {
+            <!-- Три крапки біля проєкту: як у «Бази знань» — при наведенні (на телефоні завжди). -->
+            <app-project-menu #projectMenu />
+            <ul class="tree" [attr.aria-label]="'planner.projects.label' | translate">
+              @for (project of projects().projects; track project.id) {
+                @let color = colorOf(project.title);
+                <!-- Посилання на планер проєкту; відкритий проєкт виділений, кружок заповнений. -->
+                <li class="tree__row tree__row--item tree__project" routerLinkActive="tree__link--active">
+                  <a class="tree__link" [routerLink]="projectLink(project.id)" (click)="closeMenu()">
+                    <span
+                      class="tree__project-dot"
+                      aria-hidden="true"
+                      [style.--project-base]="color?.base ?? null"
+                      [style.--project-light]="color?.light ?? null"
+                    ></span>
+                    <span class="tree__name" [title]="project.title">{{ project.title }}</span>
+                  </a>
+                  <!-- Три крапки є завжди: доступи можна принаймні переглянути. -->
+                  <button
+                    type="button"
+                    class="tree__menu"
+                    tabindex="0"
+                    [attr.aria-label]="'planner.projectActions' | translate: { title: project.title }"
+                    (click)="projectMenu.open($event, project)"
+                  >
+                    <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="hint">{{ 'planner.projects.empty' | translate }}</p>
+          }
+        }
+        @case ('failed') {
+          <p class="hint hint--error" role="alert">
+            <span>{{ 'planner.projects.error' | translate }}</span>
+            <button type="button" class="hint__retry" tabindex="0" (click)="retryProjects()">{{ 'planner.projects.retry' | translate }}</button>
+          </p>
+        }
+      }
+    }
   }
 
   @case ('settings') {

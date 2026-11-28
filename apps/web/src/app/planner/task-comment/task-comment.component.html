@@ -1,0 +1,53 @@
+@let current = comment();
+<app-avatar class="comment__avatar" [firstName]="current.firstName" [lastName]="current.lastName" [avatarUrl]="current.avatarUrl" [ngoName]="ngoName()" />
+<div class="comment__body">
+  <p class="comment__head">
+    <span class="comment__author">{{ author() }}</span>
+    <time class="comment__time" [attr.datetime]="current.createdAt">{{ time() }}</time>
+  </p>
+  @if (editing()) {
+    <!-- Редагування свого коментаря: поле з текстом. -->
+    <form class="comment__edit" (submit)="$event.preventDefault(); submit()">
+      <input
+        type="text"
+        class="comment__input"
+        tabindex="0"
+        autocomplete="off"
+        [attr.maxlength]="maxLength"
+        [attr.aria-label]="'planner.details.commentActions.edit' | translate"
+        [value]="text()"
+        [disabled]="busy()"
+        (input)="onText($event)"
+        (keydown.enter)="$event.preventDefault(); onText($event); submit()"
+      />
+    </form>
+  } @else {
+    <p class="comment__text">{{ current.content }}</p>
+  }
+</div>
+@if (editing()) {
+  <!-- Замість трьох крапок — завжди видима кнопка «Надіслати». -->
+  <button
+    type="button"
+    class="comment__send"
+    tabindex="0"
+    [disabled]="busy() || !text().trim()"
+    [attr.aria-label]="'planner.details.send' | translate"
+    [attr.title]="'planner.details.send' | translate"
+    (click)="submit()"
+  >
+    <ion-icon name="send-outline" aria-hidden="true"></ion-icon>
+  </button>
+} @else if (own()) {
+  <!-- Три крапки свого коментаря: при наведенні. -->
+  <button
+    type="button"
+    class="comment__menu"
+    tabindex="0"
+    [disabled]="busy()"
+    [attr.aria-label]="'planner.details.commentActions.label' | translate"
+    (click)="menu.emit($event)"
+  >
+    <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+  </button>
+}
