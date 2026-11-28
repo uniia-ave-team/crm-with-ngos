@@ -104,6 +104,14 @@
   }
 }
 
+// Дуже вузький екран з відкритим пошуком: поле займає місце учасників і кнопки сортування.
+@media (max-width: 480px) {
+  .search-header-host--open app-member-avatars,
+  .search-header-host--open .planner__sort-toggle {
+    display: none;
+  }
+}
+
 // Вид вкладки — на всю висоту змісту (дошка прокручується всередині себе).
 .planner__view {
   height: 100%;
