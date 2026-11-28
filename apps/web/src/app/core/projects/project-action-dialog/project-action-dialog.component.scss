@@ -1,0 +1,12 @@
+// Повідомлення у вікні «Редагувати», поки проєкт завантажується чи якщо не вдалося.
+.project-dialog__message {
+  margin: 16px 0 0;
+  color: var(--nav-fg-inactive);
+  font-family: var(--font-menu);
+  font-size: 14px;
+  line-height: 1.4;
+
+  &--error {
+    color: var(--nav-unavailable-icon);
+  }
+}

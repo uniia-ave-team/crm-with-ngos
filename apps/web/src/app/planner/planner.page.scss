@@ -1,4 +1,160 @@
-// Заголовок сторінки — жирний (як і на решті основних сторінок).
-ion-title {
+// Колір підкреслення активної вкладки — зелений тієї теми (як акцент форм налаштувань).
+:host {
+  --planner-accent: #32670b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --planner-accent: #478a7f;
+  }
+}
+
+// Шапка планера проєкту без внутрішніх відступів: рядок (`app-search-header`) — на всю її висоту
+// (як у шапок сторінок: 56px, на десктопі 65px), тож смужка вкладки лягає на нижній край шапки.
+.planner__toolbar {
+  --padding-top: 0;
+  --padding-bottom: 0;
+
+  app-search-header {
+    --search-header-height: 56px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+@media (min-width: 992px) {
+  .planner__toolbar app-search-header {
+    --search-header-height: 65px;
+  }
+}
+
+// Місце заголовка: вкладки (десктоп, планшет) чи назва проєкту (телефон).
+.planner__title {
+  display: flex;
+  min-width: 0;
+}
+
+.planner__project-title {
+  display: none;
+  align-self: center;
+  overflow: hidden;
+  color: var(--nav-fg-active);
+  font-size: 20px;
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Панель вкладок унизу — лише на телефоні.
+.planner__footer {
+  display: none;
+}
+
+// Вкладки на всю висоту рядка: активна підкреслена смужкою по низу (заокруглена згори).
+.planner__tabs {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.planner__tab {
+  position: relative;
+  flex: none;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font-family: var(--font-menu);
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: 4px;
+    border-radius: 4px 4px 0 0;
+    background: transparent;
+  }
+
+  &--active::after {
+    background: var(--planner-accent);
+  }
+
+  &:hover:not(.planner__tab--active)::after {
+    background: var(--nav-border);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: -2px;
+    border-radius: 8px;
+  }
+}
+
+// Кнопка сортування «Моїх завдань» — лише на телефоні (до 768px), де нема заголовків таблиці.
+.planner__sort-toggle {
+  display: none;
+
+  @media (max-width: 767px) {
+    display: inline-flex;
+  }
+}
+
+// Вид вкладки — на всю висоту змісту (дошка прокручується всередині себе).
+.planner__view {
+  height: 100%;
+}
+
+// Телефон: у шапці назва проєкту, вкладки — тонкою панеллю внизу, рівними частинами, підкреслення
+// активної — згори (заокруглене знизу).
+@media (max-width: 767px) {
+  .planner__title > .planner__tabs {
+    display: none;
+  }
+
+  .planner__project-title {
+    display: block;
+  }
+
+  .planner__footer {
+    display: block;
+    border-top: 1px solid var(--nav-border);
+    background: var(--nav-bg);
+    box-shadow: none;
+  }
+
+  .planner__tabs--bottom {
+    height: 44px;
+    gap: 0;
+
+    .planner__tab {
+      flex: 1 1 0;
+      padding: 0 8px;
+      font-size: 14px;
+
+      &::after {
+        inset: 0 0 auto;
+        border-radius: 0 0 4px 4px;
+      }
+    }
+  }
+}
+
+// Порожній «Планер» (нема доступних проєктів): ілюстрація й підпис посередині екрана.
+.planner__empty {
+  min-height: 100%;
+  justify-content: center;
+  padding: 24px 16px;
+  box-sizing: border-box;
+}
+
+// Без проєкту шапка потрібна лише для кнопки бокового меню (до 992px; на ширшому меню видно).
+@media (min-width: 992px) {
+  .planner__header--bare {
+    display: none;
+  }
 }

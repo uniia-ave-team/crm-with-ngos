@@ -1,0 +1,143 @@
+<app-side-panel width="440px" [label]="task()?.title ?? null" (closed)="onClosed()">
+  @if (task(); as current) {
+    <!-- Шапка на рівні хрестика: тег проєкту ліворуч, три крапки — біля хрестика. -->
+    <div sidePanelHeader class="task-details__header">
+      @let projectInfo = project();
+      @if (projectInfo.title) {
+        <span
+          class="task-details__project"
+          [style.--project-base]="projectInfo.color?.base ?? null"
+          [style.--project-light]="projectInfo.color?.light ?? null"
+          [attr.title]="projectInfo.title"
+          >{{ projectInfo.title }}</span
+        >
+      }
+      <button
+        type="button"
+        class="task-details__menu"
+        tabindex="0"
+        [attr.aria-label]="'planner.task.actions' | translate: { title: current.title }"
+        (click)="menu.open($event, current)"
+      >
+        <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+      </button>
+    </div>
+  }
+  @if (task(); as current) {
+    <div class="task-details">
+      <h2 class="task-details__title">{{ current.title }}</h2>
+      <app-task-status class="task-details__status" [task]="current" [projectId]="projectId()" [canPromote]="canEdit()" />
+
+      <dl class="task-details__facts">
+        @if (period(); as dates) {
+          <div class="task-details__fact">
+            <dt>{{ 'planner.details.period' | translate }}</dt>
+            <dd>{{ dates.key | translate: { start: dates.start, end: dates.end } }}</dd>
+          </div>
+        }
+        <div class="task-details__fact">
+          <dt>{{ 'planner.details.priority' | translate }}</dt>
+          <dd>
+            <span class="task-priority task-details__priority" [attr.data-priority]="current.priority">{{
+              'planner.taskPriority.' + current.priority | translate
+            }}</span>
+          </dd>
+        </div>
+        @if (current.description) {
+          <div class="task-details__fact">
+            <dt>{{ 'planner.details.description' | translate }}</dt>
+            <dd class="task-details__description">{{ current.description }}</dd>
+          </div>
+        }
+        <div class="task-details__fact">
+          <dt>{{ 'planner.details.assignees' | translate }}</dt>
+          <dd><app-task-assignees class="task-details__assignees" [assignees]="current.assignees" [max]="8" /></dd>
+        </div>
+        <div class="task-details__fact">
+          <dt>{{ 'planner.details.tags' | translate }}</dt>
+          <dd class="task-details__tags">
+            @for (tag of current.tags; track tag.id) {
+              <span class="task-tag">{{ tag.title }}</span>
+            } @empty {
+              <span class="task-details__none">{{ 'common.empty' | translate }}</span>
+            }
+          </dd>
+        </div>
+      </dl>
+
+      <section class="task-details__comments" [attr.aria-label]="'planner.details.comments' | translate">
+        <h3 class="task-details__label">{{ 'planner.details.comments' | translate }}</h3>
+        @let thread = comments();
+        @for (comment of thread.comments; track comment.id) {
+          @let own = comment.userId !== null && comment.userId === selfId();
+          <app-task-comment
+            [comment]="comment"
+            [author]="authorOf(comment)"
+            [time]="timeOf(comment)"
+            [own]="own"
+            [editing]="editing()?.id === comment.id"
+            [busy]="commentBusy() === comment.id"
+            (menu)="openCommentMenu($event, comment)"
+            (save)="saveComment(comment, $event)"
+          />
+        } @empty {
+          @if (thread.status === 'ready') {
+            <p class="task-details__note">{{ 'planner.details.noComments' | translate }}</p>
+          }
+        }
+        @if (thread.status === 'loading') {
+          <p class="task-details__note" role="status">{{ 'planner.details.loadingComments' | translate }}</p>
+        } @else if (thread.status === 'failed') {
+          <p class="task-details__note task-details__note--error" role="alert">
+            <span>{{ 'planner.details.commentsError' | translate }}</span>
+            <button type="button" class="task-details__retry" tabindex="0" (click)="loadComments()">{{ 'planner.board.retry' | translate }}</button>
+          </p>
+        }
+        @if (commentError(); as errorKey) {
+          <p class="task-details__note task-details__note--error" role="alert">{{ errorKey | translate }}</p>
+        }
+        <!-- Кінець списку: коли його видно, підвантажується наступна сторінка. -->
+        <div #sentinel class="task-details__sentinel" aria-hidden="true"></div>
+      </section>
+
+      <!-- Новий коментар: Enter чи кнопка. -->
+      <form class="task-details__composer" (submit)="$event.preventDefault(); send()">
+        <input
+          type="text"
+          class="task-details__input"
+          tabindex="0"
+          autocomplete="off"
+          [attr.maxlength]="commentMaxLength"
+          [placeholder]="'planner.details.commentPlaceholder' | translate"
+          [attr.aria-label]="'planner.details.commentPlaceholder' | translate"
+          [value]="draft()"
+          [disabled]="sending()"
+          (input)="onDraft($event)"
+          (keydown.enter)="$event.preventDefault(); onDraft($event); send()"
+        />
+        <button
+          type="submit"
+          class="task-details__send"
+          tabindex="0"
+          [disabled]="sending() || !draft().trim()"
+          [attr.aria-label]="'planner.details.send' | translate"
+          [attr.title]="'planner.details.send' | translate"
+        >
+          <ion-icon name="send-outline" aria-hidden="true"></ion-icon>
+        </button>
+      </form>
+      @if (sendError(); as errorKey) {
+        <p class="task-details__note task-details__note--error" role="alert">{{ errorKey | translate }}</p>
+      }
+    </div>
+  }
+</app-side-panel>
+
+<!-- Меню свого коментаря: «Редагувати» й «Видалити». -->
+<app-popover #commentMenu width="220px" side="bottom" alignment="end" compactSide="bottom" compactAlignment="end" [label]="'planner.details.commentActions.label' | translate">
+  <app-action-list [items]="commentItems" (choose)="onCommentAction($event)" />
+</app-popover>
+
+<!-- Меню трьох крапок (те саме, що на картці) і вікно «Редагувати». -->
+<app-task-menu #menu [projectId]="projectId()" [canEdit]="canEdit()" [canDelete]="canDelete()" (edit)="dialog.edit(projectId(), $event)" />
+<app-task-dialog #dialog />

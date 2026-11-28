@@ -1,0 +1,130 @@
+// Поле додавання колеги (як у Figma).
+:host {
+  --member-search-accent: #32670b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --member-search-accent: #478a7f;
+  }
+}
+
+:host {
+  display: block;
+  margin-bottom: 20px;
+}
+
+.member-search__add {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.member-search__search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// Колегу вибрано: він (з полем назви ролі) і рівень доступу — без рамки й тла поля пошуку.
+.member-search__chosen {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 4px 6px 4px 0;
+}
+
+// Тег рівня доступу (вибір зі стрілкою вниз праворуч) — у правому верхньому куті поля.
+.member-search__tag {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  height: 26px;
+  margin-top: 2px;
+  border: 1.5px solid var(--nav-border);
+  border-radius: 999px;
+  color: var(--nav-fg-active);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  ion-icon {
+    position: absolute;
+    right: 8px;
+    font-size: 14px;
+    pointer-events: none;
+  }
+
+  &:focus-within {
+    border-color: var(--nav-fg-active);
+  }
+}
+
+.member-search__reset {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.member-search__add-button {
+  flex: none;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--member-search-accent);
+  color: #fff;
+  font-family: var(--font-login-title);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+.member-search__select {
+  height: 100%;
+  padding: 0 26px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+
+  option {
+    background: var(--nav-bg);
+    color: var(--nav-fg-active);
+  }
+}
+

@@ -602,7 +602,7 @@ describe('LoginPage', () => {
       http.expectNone((r) => !r.url.endsWith('/loginpageimages/random'));
     });
 
-    it('logs in, keeps the tokens and goes to the planner when the NGO exists', async () => {
+    it('logs in, keeps the tokens and goes to the start page when the NGO exists', async () => {
       const { connection, form, navigate, fill } = createLoginForm();
       fill(' a@b.org ', 'Abcde1!x');
       const done = form.submit();
@@ -617,7 +617,7 @@ describe('LoginPage', () => {
 
       expect(TestBed.inject(AuthService).accessToken()).toBe('access');
       expect(TestBed.inject(AccountsService).active()?.refreshToken).toBe('refresh');
-      expect(navigate).toHaveBeenCalledWith('/planner');
+      expect(navigate).toHaveBeenCalledWith('/start');
       // Токени щойно видані — окремого оновлення нема.
       http.expectNone(`${connection.serverUrl()}/api/v1/auth/refresh-token`);
     });
@@ -785,14 +785,14 @@ describe('LoginPage', () => {
       expect(element.querySelector('.login-form, .login__card ion-input')).toBeNull();
     });
 
-    it('takes the first valid account, makes it active, fills its snapshot and goes to the planner', async () => {
+    it('takes the first valid account, makes it active, fills its snapshot and goes to the start page', async () => {
       const { request, store } = createWithAccounts([{ identity: 'user-1', access: jwtAt(600), refresh: 'r1' }]);
       request.flush({ status: 'Healthy' });
 
       const me = await vi.waitFor(() => http.expectOne(meUrl()));
       expect(me.request.method).toBe('GET');
       me.flush(profile);
-      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/start'));
 
       expect(store.accounts()).toHaveLength(1);
       expect(store.active()).toMatchObject({ firstName: profile.firstName, lastName: profile.lastName, userId: 'user-1' });
@@ -806,7 +806,7 @@ describe('LoginPage', () => {
       expect(store.active()?.ngoLogoUrl).toBe('/files/logo.png');
     });
 
-    it('refreshes an expired access token first, then confirms the login and goes to the planner', async () => {
+    it('refreshes an expired access token first, then confirms the login and goes to the start page', async () => {
       const { request, store } = createWithAccounts([{ identity: 'user-1', access: jwtAt(-60), refresh: 'r1' }]);
       request.flush({ status: 'Healthy' });
 
@@ -815,7 +815,7 @@ describe('LoginPage', () => {
       refresh.flush({ accessToken: jwtAt(600), refreshToken: 'r2' });
 
       (await vi.waitFor(() => http.expectOne(meUrl()))).flush(profile);
-      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/start'));
       expect(store.active()?.refreshToken).toBe('r2');
     });
 
@@ -836,7 +836,7 @@ describe('LoginPage', () => {
       expect(store.accounts()[0]).toMatchObject({ outdated: true, unavailable: false });
       expect(localStorage.getItem('yavir.language')).toBe('uk');
       expect(element.querySelector('.login-form')).toBeNull();
-      expect(navigate).not.toHaveBeenCalledWith('/planner');
+      expect(navigate).not.toHaveBeenCalledWith('/start');
     });
 
     it('shows the forms when it is entered again after the last account was removed on /relogin', async () => {
@@ -893,7 +893,7 @@ describe('LoginPage', () => {
       // Лише чинний: без оновлення токенів застарілого, одразу підтвердження входу.
       http.expectNone(refreshUrl());
       (await vi.waitFor(() => http.expectOne(meUrl()))).flush(profile);
-      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/start'));
       expect(store.activeId()).toBe(AccountsService.accountId(pageServer(), 'good'));
       expect(store.accounts().find((a) => a.id === old.id)?.outdated).toBe(true);
     });
@@ -911,7 +911,7 @@ describe('LoginPage', () => {
 
       (await vi.waitFor(() => http.expectOne(healthUrl()))).flush({ status: 'Healthy' });
       (await vi.waitFor(() => http.expectOne(meUrl()))).flush({ ...profile, id: 'second' });
-      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner'));
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/start'));
 
       // Застарілий не видалено, а позначено.
       expect(store.accounts().map((a) => [a.userId, a.outdated])).toEqual([
@@ -952,7 +952,7 @@ describe('LoginPage', () => {
       await vi.waitFor(() => http.expectOne(healthUrl()));
     });
 
-    it('keeps the loading text until the planner is reached, without flashing the forms', async () => {
+    it('keeps the loading text until the start page is reached, without flashing the forms', async () => {
       const { fixture, element, request } = createWithAccounts([{ identity: 'user-1', access: jwtAt(600), refresh: 'r1' }]);
       request.flush({ status: 'Healthy' });
       (await vi.waitFor(() => http.expectOne(meUrl()))).flush(profile);
@@ -1326,7 +1326,7 @@ describe('LoginPage', () => {
       expect(element.textContent).toContain(uk.login.form.title);
     });
 
-    it('creates the organization with a null logoUrl, then redirects to the planner', async () => {
+    it('creates the organization with a null logoUrl, then redirects to the start page', async () => {
       const { connection, page } = createWithoutNgo();
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
       page.onNgoNameChange('Організація');
@@ -1337,7 +1337,7 @@ describe('LoginPage', () => {
       create.flush(null, { status: 201, statusText: 'Created' });
       await done;
 
-      expect(navigate).toHaveBeenCalledWith('/planner');
+      expect(navigate).toHaveBeenCalledWith('/start');
       http.expectNone(`${connection.serverUrl()}/api/v1/system/status`);
     });
 
@@ -1380,7 +1380,7 @@ describe('LoginPage', () => {
         (await vi.waitFor(() => http.expectOne(ngoUrl))).flush({ name: 'Організація', logoUrl: '/files/logo.png' });
         await done;
 
-        expect(navigate).toHaveBeenCalledWith('/planner');
+        expect(navigate).toHaveBeenCalledWith('/start');
       });
 
       it('sends no logo request when no logo was chosen', async () => {
@@ -1389,7 +1389,7 @@ describe('LoginPage', () => {
         http.expectOne(ngoUrl).flush(null, created);
         await done;
         http.expectNone(logoUrl);
-        expect(navigate).toHaveBeenCalledWith('/planner');
+        expect(navigate).toHaveBeenCalledWith('/start');
       });
 
       it('does not send the logo when the organization was not created', async () => {
@@ -1453,7 +1453,7 @@ describe('LoginPage', () => {
         (await vi.waitFor(() => http.expectOne(ngoUrl))).flush({ name: 'Організація', logoUrl: '/files/logo.png' });
         await second;
 
-        expect(navigate).toHaveBeenCalledWith('/planner');
+        expect(navigate).toHaveBeenCalledWith('/start');
         fixture.detectChanges();
         expect(element.querySelector('.auth-error')).toBeNull();
       });
@@ -1485,7 +1485,7 @@ describe('LoginPage', () => {
 
         http.expectNone(ngoUrl);
         http.expectNone(logoUrl);
-        expect(navigate).toHaveBeenCalledWith('/planner');
+        expect(navigate).toHaveBeenCalledWith('/start');
       });
     });
 

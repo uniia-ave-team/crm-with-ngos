@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
@@ -15,6 +15,19 @@ import { SearchHeaderComponent } from './search-header.component';
   imports: [SearchHeaderComponent, ActionButtonComponent],
 })
 class HostComponent {
+  readonly searches: string[] = [];
+}
+
+@Component({
+  template: `
+    <app-search-header [searchable]="searchable()" (searchChange)="searches.push($event)">
+      <div searchHeaderTitle class="own-title">Вкладки</div>
+    </app-search-header>
+  `,
+  imports: [SearchHeaderComponent],
+})
+class OwnTitleHostComponent {
+  readonly searchable = signal(true);
   readonly searches: string[] = [];
 }
 
@@ -167,6 +180,38 @@ describe('SearchHeaderComponent', () => {
       const { title } = renderTitle(2);
       expect(title.classList).toContain('search-header__title--clamped');
       expect(title.style.getPropertyValue('--title-lines')).toBe('2');
+    });
+  });
+
+  describe('with its own title and the search that can be taken away', () => {
+    function renderOwn() {
+      const fixture = TestBed.createComponent(OwnTitleHostComponent);
+      fixture.detectChanges();
+      return { fixture, host: fixture.componentInstance, element: fixture.nativeElement as HTMLElement };
+    }
+
+    it('puts its own title (searchHeaderTitle) in the place of the title, on the whole height of the row', () => {
+      const { element } = renderOwn();
+      expect(element.querySelector('.search-header__title .own-title')?.textContent).toBe('Вкладки');
+      expect(element.querySelector('.search-header')!.classList).toContain('search-header--custom-title');
+      expect(element.querySelector('.search-header__title')!.hasAttribute('title')).toBe(false);
+    });
+
+    it('has no magnifier and no field without the search, and closes an open search (emptying the field) when it is taken away', () => {
+      const { fixture, host, element } = renderOwn();
+      element.querySelector<HTMLButtonElement>('.search-header__toggle')!.click();
+      fixture.detectChanges();
+      const input = element.querySelector<HTMLInputElement>('.search-header__input')!;
+      input.value = 'задача';
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      host.searchable.set(false);
+      fixture.detectChanges();
+      expect(element.querySelector('.search-header__toggle')).toBeNull();
+      expect(element.querySelector('.search-header__input')).toBeNull();
+      expect(element.querySelector('.search-header')!.classList).not.toContain('search-header--open');
+      expect(host.searches).toEqual(['задача', '']);
     });
   });
 });

@@ -1,0 +1,127 @@
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <div class="settings-field">
+    <label class="settings-field__label" for="task-title">
+      {{ 'planner.tasks.add.name' | translate
+      }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span>
+    </label>
+    <input
+      id="task-title"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      required
+      autocomplete="off"
+      [attr.maxlength]="titleMaxLength"
+      [value]="title()"
+      [attr.aria-invalid]="titleError() ? true : null"
+      [attr.aria-describedby]="titleError() ? 'task-title-error' : null"
+      (input)="onText(title, $event)"
+    />
+    @if (titleError(); as errorKey) {
+      <p id="task-title-error" class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="task-description">{{ 'planner.tasks.add.description' | translate }}</label>
+    <textarea
+      id="task-description"
+      class="settings-input settings-input--area"
+      tabindex="0"
+      rows="3"
+      [attr.maxlength]="descriptionMaxLength"
+      [value]="description()"
+      (input)="onText(description, $event)"
+    ></textarea>
+  </div>
+
+  <!-- Статус і пріоритет — двома стовпчиками, а у вузькому вікні один під одним. -->
+  <div class="task-form__pair">
+    <div class="settings-field">
+      <label class="settings-field__label" for="task-status">{{ 'planner.tasks.add.status' | translate }}</label>
+      <span class="settings-select-wrap">
+        <select id="task-status" class="settings-select" tabindex="0" (change)="onStatus($event)">
+          @for (option of statuses; track option) {
+            <option [value]="option" [selected]="option === status()">{{ 'planner.taskStatus.' + option | translate }}</option>
+          }
+        </select>
+        <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+      </span>
+    </div>
+    <div class="settings-field">
+      <label class="settings-field__label" for="task-priority">{{ 'planner.tasks.add.priority' | translate }}</label>
+      <span class="settings-select-wrap">
+        <select id="task-priority" class="settings-select" tabindex="0" (change)="onPriority($event)">
+          @for (option of priorities; track option) {
+            <option [value]="option" [selected]="option === priority()">{{ 'planner.taskPriority.' + option | translate }}</option>
+          }
+        </select>
+        <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+      </span>
+    </div>
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="task-assignees">{{ 'planner.tasks.add.assignees' | translate }}</label>
+    <app-colleague-search
+      inputId="task-assignees"
+      placeholderKey="planner.tasks.add.assigneesPlaceholder"
+      [labelKey]="null"
+      [source]="colleagues()"
+      [multiple]="true"
+      [selectedIds]="assigneeIds()"
+      (overlayBottom)="onOverlay($event, 'colleagues')"
+      (choose)="addAssignee($event)"
+      (deselect)="removeAssignee($event)"
+    />
+    @if (assignees().length) {
+      <!-- Вибрані виконавці: аватар, ПІБ і хрестик «Прибрати». -->
+      <ul class="task-form__assignees" [attr.aria-label]="'planner.tasks.add.assignees' | translate">
+        @for (colleague of assignees(); track colleague.id) {
+          <li class="task-form__assignee">
+            <app-avatar
+              class="task-form__avatar"
+              [firstName]="colleague.firstName"
+              [lastName]="colleague.lastName"
+              [avatarUrl]="colleague.avatarUrl"
+              [ngoName]="ngoName()"
+            />
+            <span class="task-form__name">{{ nameOf(colleague) }}</span>
+            <button
+              type="button"
+              class="task-form__remove"
+              tabindex="0"
+              [attr.aria-label]="'planner.tasks.add.removeAssignee' | translate: { name: nameOf(colleague) }"
+              [attr.title]="'planner.tasks.add.removeAssignee' | translate: { name: nameOf(colleague) }"
+              (click)="removeAssignee(colleague)"
+            >
+              <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="task-tags">{{ 'planner.tasks.tags.label' | translate }}</label>
+    <app-tag-input
+      inputId="task-tags"
+      [(tags)]="tags"
+      [suggestions]="tagSuggestions()"
+      [allowNew]="allowNewTags()"
+      (overlayBottom)="onOverlay($event, 'tags')"
+    />
+    @if (!allowNewTags()) {
+      <p class="task-form__hint">{{ 'planner.tasks.tags.onlyExisting' | translate }}</p>
+    }
+  </div>
+
+  <app-date-range idPrefix="task" [(start)]="startDate" [(end)]="endDate" [showErrors]="submittedOnce()" />
+
+  @if (error(); as errorKey) {
+    <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+  }
+
+  <button type="submit" class="settings-submit" tabindex="0" [disabled]="busy()">{{ submitLabelKey() | translate }}</button>
+</form>

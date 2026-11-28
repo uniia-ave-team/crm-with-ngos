@@ -1,0 +1,60 @@
+// Вибраний колега: аватар і ПІБ, як у рядках учасників, під ПІБ — поле назви ролі (з тлом і контуром,
+// яких тоді нема в самого поля додавання).
+:host {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.choice__avatar {
+  --avatar-size: 40px;
+  flex: none;
+}
+
+.choice__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.choice__name {
+  overflow: hidden;
+  font-family: var(--font-secondary-title);
+  font-size: 15px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.choice__role {
+  min-width: 0;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--nav-border);
+  border-radius: 8px;
+  background: var(--nav-bg);
+  color: var(--nav-fg-active);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+
+  &::placeholder {
+    color: var(--nav-fg-inactive);
+  }
+
+  &:focus {
+    border-color: #32670b;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .choice__role:focus {
+    border-color: #478a7f;
+  }
+}

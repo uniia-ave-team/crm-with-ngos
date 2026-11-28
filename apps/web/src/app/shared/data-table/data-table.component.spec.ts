@@ -8,7 +8,7 @@ import { DataTableComponent } from './data-table.component';
 
 @Component({
   template: `
-    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [addColumnPlanned]="addPlanned()" [highlightedRowId]="highlighted()" [columnLines]="lines()" [defaultSortColumnId]="defaultSort()" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
+    <app-data-table [columns]="columns()" [rows]="rows()" [labelKey]="label()" [showRowMenu]="rowMenuShown()" [showAddColumn]="addShown()" [addColumnPlanned]="addPlanned()" [highlightedRowId]="highlighted()" [columnLines]="lines()" [defaultSortColumnId]="defaultSort()" [clickableRows]="clickable()" [minWidth]="minWidth()" (rowClick)="clicked.push($event)" (rowMenu)="opened.push($event)" (columnAdd)="columnAdds = columnAdds + 1" (sortChange)="sorts.push($event)" />
     <ng-template #custom let-row let-column="column"><b class="custom">{{ column.id }}:{{ row['title'] }}</b></ng-template>
     <ng-template #customHeader let-column><i class="custom-header">{{ column.id }}</i></ng-template>
   `,
@@ -24,6 +24,9 @@ class HostComponent {
   readonly highlighted = signal<string | null>(null);
   readonly defaultSort = signal<string | null>(null);
   readonly lines = signal(false);
+  readonly clickable = signal(false);
+  readonly minWidth = signal<string | null>(null);
+  readonly clicked: DataTableRow[] = [];
   readonly opened: DataTableRowMenuEvent[] = [];
   columnAdds = 0;
   readonly sorts: (DataTableSort | null)[] = [];
@@ -76,6 +79,35 @@ describe('DataTableComponent', () => {
     expect(element.querySelector('.data-table__menu-cell')).toBeNull();
     expect(element.querySelectorAll('col')).toHaveLength(2);
     expect(Array.from(element.querySelectorAll('tbody tr')).map((row) => row.querySelectorAll('td').length)).toEqual([2, 2]);
+  });
+
+  it('gives a click on a row only when the rows are clickable, and not for its three dots', () => {
+    const { fixture, host, element } = render(base, rows);
+    const row = () => element.querySelector<HTMLElement>('.data-table__row')!;
+    row().click();
+    expect(host.clicked).toEqual([]);
+    host.clickable.set(true);
+    fixture.detectChanges();
+    expect(row().classList).toContain('data-table__row--clickable');
+    row().click();
+    row().querySelector<HTMLButtonElement>('.data-table__menu')!.click();
+    expect(host.clicked).toEqual([rows[0]]);
+    expect(host.opened).toHaveLength(1);
+  });
+
+  it('takes a wider least width when asked', () => {
+    const { fixture, host, element } = render(base, rows);
+    host.minWidth.set('1200px');
+    fixture.detectChanges();
+    expect(element.querySelector<HTMLElement>('table')!.style.minWidth).toBe('1200px');
+  });
+
+  it('draws a plain header without the sort button for a column that is not sorted', () => {
+    const { element } = render([base[0], { id: 'tags', labelKey: 'colleagues.columns.email', sortable: false }], rows);
+    const headers = element.querySelectorAll('th');
+    expect(headers[0].querySelector('button.data-table__sort')).not.toBeNull();
+    expect(headers[1].querySelector('button')).toBeNull();
+    expect(headers[1].querySelector('.data-table__label')?.textContent?.trim()).toBe(uk.colleagues.columns.email);
   });
 
   it('draws lines between the columns only when asked', () => {

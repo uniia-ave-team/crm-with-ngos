@@ -1,0 +1,43 @@
+@let current = task();
+<!-- Картка відкриває завдання (клік, Enter, пробіл); три крапки — окремо. -->
+<article
+  class="task-card"
+  role="button"
+  tabindex="0"
+  [attr.aria-label]="current.title"
+  (click)="open.emit()"
+  (keydown.enter)="onKey($event)"
+  (keydown.space)="onKey($event)"
+>
+  <h3 class="task-card__title">{{ current.title }}</h3>
+  <!-- Три крапки — у правому верхньому куті, видно при наведенні чи фокусі (назва під ними обрізається). -->
+  <button
+    type="button"
+    class="task-card__menu"
+    tabindex="0"
+    [attr.aria-label]="'planner.task.actions' | translate: { title: current.title }"
+    (click)="onMenu($event)"
+  >
+    <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+  </button>
+  @let period = dates();
+  <p class="task-card__dates">{{ period.key | translate: { start: period.start, end: period.end } }}</p>
+
+  <div class="task-card__labels">
+    <app-task-status [task]="current" [projectId]="projectId()" [canPromote]="canEdit()" />
+    <span class="task-priority" [attr.data-priority]="current.priority">{{ 'planner.taskPriorityLabel.' + current.priority | translate }}</span>
+  </div>
+
+  <div class="task-card__footer">
+    <!-- Коментарі: є нові — їх число й червоний кружок на іконці, нема — просто «Коментарі». -->
+    <span class="task-card__comments" [class.task-card__comments--unread]="current.unreadComments">
+      <span class="task-card__comments-icon"><ion-icon name="chatbubble-outline" aria-hidden="true"></ion-icon></span>
+      @if (current.unreadComments) {
+        {{ 'planner.task.unreadComments' | translate: { count: current.unreadComments } }}
+      } @else {
+        {{ 'planner.task.comments' | translate }}
+      }
+    </span>
+    <app-task-assignees class="task-card__assignees" [assignees]="current.assignees" />
+  </div>
+</article>

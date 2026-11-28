@@ -36,6 +36,17 @@
                       <ion-icon slot="icon-only" name="add-outline"></ion-icon>
                     </ion-button>
                   }
+                  <!-- «Планер»: «+» відкриває вікно «Новий проєкт» (з `CreateProject`). -->
+                  @if (section === 'planner' && projects.canCreate()) {
+                    <ion-button
+                      class="shell__menu-add"
+                      (click)="projectDialog.open()"
+                      [attr.aria-label]="'planner.addProject' | translate"
+                      [attr.title]="'planner.addProject' | translate"
+                    >
+                      <ion-icon slot="icon-only" name="add-outline"></ion-icon>
+                    </ion-button>
+                  }
                   @if (section === 'knowledge-base' && canViewTemplates()) {
                     <ion-button
                       class="shell__menu-templates"
@@ -101,8 +112,21 @@
         </div>
       }
 
+      <!-- Те саме для «Планера»: «+» проєкту. -->
+      @if (layout.section() === 'planner' && menuOpen() && projects.canCreate()) {
+        <div class="shell__menu-fabs">
+          <button type="button" class="shell__menu-fab" tabindex="0" (click)="projectDialog.open()" [attr.aria-label]="'planner.addProject' | translate">
+            <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+          </button>
+        </div>
+      }
+
       <!-- Вікно «Додати» бази знань: одне для всіх «+» (бокове меню, «Посібник», плаваюча кнопка). -->
       <app-kb-add-dialog />
+      <!-- Вікно «Новий проєкт»: для «+» «Планера» (шапка бокового меню й плаваюча кнопка). -->
+      <app-project-add-dialog #projectDialog />
+      <!-- Вікно дії з проєктом (редагувати, доступи, видалити): з трьох крапок і аватарок у шапці планера. -->
+      <app-project-action-dialog />
     </div>
   }
 

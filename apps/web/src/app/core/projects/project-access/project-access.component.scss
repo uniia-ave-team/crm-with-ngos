@@ -1,0 +1,273 @@
+// Список учасників у вікні доступів: рядок — аватар, ПІБ з роллю під ним (як у таблиці колег) і
+// тег рівня доступу (з правом — вибір, що виглядає як тег зі стрілкою) та кнопка «Прибрати».
+:host {
+  display: block;
+  padding: 16px 0 0;
+  box-sizing: border-box;
+  font-family: var(--font-menu);
+  color: var(--nav-fg-active);
+}
+
+// Поки йдуть запити «Додати»: колесо й текст посередині вікна.
+.project-access__adding {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 0;
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+}
+
+// Невдачі «Додати» — червоним блоком; успіх — маленьким зеленим текстом під полем.
+.project-access__failures {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgb(220 38 38 / 15%);
+  color: var(--nav-unavailable-icon);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.project-access__failure {
+  margin: 0;
+}
+
+.project-access__added {
+  margin: -12px 0 16px;
+  color: #32670b;
+  font-size: 13px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .project-access__added {
+    color: #6fae9e;
+  }
+}
+
+.project-access__message {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+  line-height: 1.4;
+
+  &--error {
+    margin-bottom: 12px;
+    color: var(--nav-unavailable-icon);
+  }
+}
+
+// «У кого є доступ до проєкту» — підпис між пошуком і списком (як у Figma).
+.project-access__heading {
+  margin: 0 0 6px;
+  color: var(--nav-fg-inactive);
+  font-family: var(--font-menu);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+// Рядок доступності проєкту: іконка в місці розміру аватара (назва — на лінії імен учасників),
+// назва, стрілка праворуч (на лінії тегів).
+.project-access__visibility {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 15px;
+  padding: 8px 4px 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font: inherit;
+  text-align: start;
+
+  &--link {
+    border-radius: 10px;
+    cursor: pointer;
+
+    &:hover .project-access__chevron {
+      color: var(--nav-fg-active);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--nav-fg-active);
+      outline-offset: 2px;
+    }
+  }
+}
+
+.project-access__visibility-icon {
+  flex: none;
+  box-sizing: content-box;
+  width: 22px;
+  padding: 0 9px;
+  font-size: 22px;
+}
+
+.project-access__visibility-name {
+  flex: 1 1 auto;
+  font-family: var(--font-secondary-title);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.project-access__chevron {
+  flex: none;
+  color: var(--nav-fg-inactive);
+  font-size: 18px;
+}
+
+// Учасники: блок без підложки й рамки, що прокручується, якщо їх багато.
+.project-access__list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-height: min(320px, 50vh);
+  margin: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.project-access__member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  &--disabled .project-access__name {
+    color: var(--nav-fg-inactive);
+  }
+}
+
+.project-access__avatar {
+  --avatar-size: 40px;
+  flex: none;
+}
+
+.project-access__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.project-access__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  font-family: var(--font-secondary-title);
+  font-size: 15px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-access__disabled-icon {
+  flex: none;
+  font-size: 16px;
+}
+
+.project-access__role {
+  overflow: hidden;
+  color: var(--nav-fg-inactive);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Тег рівня доступу; вибір має той самий вигляд, лише зі стрілкою вниз праворуч.
+.project-access__tag {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  // Однакова ширина для всіх тегів рівня (і вибору): стовпчиком, як таблиця.
+  width: 132px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1.5px solid var(--nav-border);
+  border-radius: 999px;
+  color: var(--nav-fg-active);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  &--select {
+    padding: 0;
+
+    ion-icon {
+      position: absolute;
+      right: 8px;
+      font-size: 14px;
+      pointer-events: none;
+    }
+
+    &:focus-within {
+      border-color: var(--nav-fg-active);
+    }
+  }
+}
+
+.project-access__select {
+  width: 100%;
+  height: 100%;
+  padding: 0 26px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+
+  option {
+    background: var(--nav-bg);
+    color: var(--nav-fg-active);
+  }
+}
+
+.project-access__remove-spacer {
+  flex: none;
+  width: 32px;
+}
+
+.project-access__remove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nav-fg-inactive);
+  font-size: 18px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--nav-active-bg);
+    color: var(--nav-unavailable-icon);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+}

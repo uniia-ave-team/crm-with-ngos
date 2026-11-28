@@ -144,8 +144,8 @@ describe('RoleFormComponent', () => {
       const { element } = render();
       const names = Array.from(element.querySelectorAll('.role-form__permission-name')).map((n) => n.textContent?.trim());
       expect(names).toEqual(PERMISSION_GROUPS.map((group) => (uk.colleagues.roleForm.permissions as Record<string, string>)[group.id]));
-      expect(names).toHaveLength(10);
-      expect(switches(element)).toHaveLength(10);
+      expect(names).toHaveLength(13);
+      expect(switches(element)).toHaveLength(13);
       expect(switches(element).every((s) => !s.checked)).toBe(true);
       expect(element.querySelector('legend')?.textContent?.trim()).toBe(uk.colleagues.roleForm.permissionsTitle);
     });
@@ -198,11 +198,14 @@ describe('RoleFormComponent', () => {
     it('lets switch on every group when the user has all the permissions (the sub-items wait only for their item)', () => {
       const { fixture, element } = render();
       const childrenOf = (parent: string) => PERMISSION_GROUPS.filter((group) => group.parent === parent).map((group) => group.id);
-      expect(idsOfLocked(element)).toEqual([...childrenOf('viewUsers'), ...childrenOf('viewTables')]);
+      expect(idsOfLocked(element)).toEqual([...childrenOf('viewUsers'), ...childrenOf('viewTables'), ...childrenOf('accessPlanner')]);
       switchOf(element, 'viewUsers').click();
       fixture.detectChanges();
-      expect(idsOfLocked(element)).toEqual(childrenOf('viewTables'));
+      expect(idsOfLocked(element)).toEqual([...childrenOf('viewTables'), ...childrenOf('accessPlanner')]);
       switchOf(element, 'viewTables').click();
+      fixture.detectChanges();
+      expect(idsOfLocked(element)).toEqual(childrenOf('accessPlanner'));
+      switchOf(element, 'accessPlanner').click();
       fixture.detectChanges();
       expect(idsOfLocked(element)).toEqual([]);
     });
@@ -561,16 +564,17 @@ describe('RoleFormComponent', () => {
     /** Пункт і його підпункти в порядку форми. */
     const COLLEAGUES_BLOCK = ['viewUsers', 'viewEmergencyContacts', 'viewCustomFields', 'editUsers', 'resetPasswords', 'disableUsers', 'manageRoles'];
     const TABLES_BLOCK = ['viewTables', 'manageTables'];
+    const PLANNER_BLOCK = ['accessPlanner', 'manageProjects', 'manageTasks'];
 
     it('come right after their item, with the lines of the tree before the name: the last one ends with the corner', () => {
       const { element } = render();
       const ids = PERMISSION_GROUPS.map((group) => group.id);
-      for (const block of [COLLEAGUES_BLOCK, TABLES_BLOCK]) {
+      for (const block of [COLLEAGUES_BLOCK, TABLES_BLOCK, PLANNER_BLOCK]) {
         expect(ids.slice(ids.indexOf(block[0]), ids.indexOf(block[0]) + block.length)).toEqual(block);
       }
-      const children = [...COLLEAGUES_BLOCK.slice(1), ...TABLES_BLOCK.slice(1)];
+      const children = [...COLLEAGUES_BLOCK.slice(1), ...TABLES_BLOCK.slice(1), ...PLANNER_BLOCK.slice(1)];
       for (const id of children) {
-        const last = id === COLLEAGUES_BLOCK.at(-1) || id === TABLES_BLOCK.at(-1);
+        const last = id === COLLEAGUES_BLOCK.at(-1) || id === TABLES_BLOCK.at(-1) || id === PLANNER_BLOCK.at(-1);
         const row = rowOf(element, id);
         expect(row.classList).toContain('role-form__permission--child');
         const branch = row.querySelector('.role-form__branch') as HTMLElement;
@@ -589,7 +593,7 @@ describe('RoleFormComponent', () => {
         (group) => group.id,
       );
       // Без лінії знизу — усі рядки блоку, крім останнього підпункту.
-      expect(joined).toEqual([...COLLEAGUES_BLOCK.slice(0, -1), ...TABLES_BLOCK.slice(0, -1)]);
+      expect(joined).toEqual([...COLLEAGUES_BLOCK.slice(0, -1), ...TABLES_BLOCK.slice(0, -1), ...PLANNER_BLOCK.slice(0, -1)]);
     });
 
     it('turn off together with their item', () => {

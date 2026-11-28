@@ -1,0 +1,17 @@
+<button
+  type="button"
+  class="member-avatars"
+  tabindex="0"
+  [attr.aria-label]="label() ? label() + ': ' + names() : names()"
+  [attr.title]="names()"
+  (click)="activate.emit()"
+>
+  @for (member of shown(); track member.userId) {
+    <app-avatar class="member-avatars__item" [firstName]="member.firstName" [lastName]="member.lastName" [avatarUrl]="member.avatarUrl" [ngoName]="ngoName()" />
+  }
+  @if (hidden()) {
+    <span class="member-avatars__item member-avatars__item--more" [attr.title]="'planner.members.more' | translate: { count: hidden() }">
+      {{ 'planner.members.moreMark' | translate }}
+    </span>
+  }
+</button>

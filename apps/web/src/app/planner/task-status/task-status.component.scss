@@ -1,0 +1,33 @@
+:host {
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.task-status__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+
+  ion-icon {
+    font-size: 13px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+// Підказка наступного стану (наведення) — синя палітра; після кліку — кольори нового стану.
+.task-status.task-status--raised {
+  color: var(--task-progress);
+  background: var(--task-progress-bg);
+}
+
+.task-status__button[aria-busy='true'] {
+  cursor: progress;
+}

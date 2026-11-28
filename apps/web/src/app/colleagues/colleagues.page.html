@@ -284,7 +284,8 @@
   </div>
 </ng-template>
 
-<!-- Посада: ролі колеги плашками в рядок і рядки «проєкт — роль» з кольоровою крапкою. -->
+<!-- Посада: ролі колеги плашками в рядок і рядки «проєкт — роль» з кольоровою крапкою (заплановані:
+     запиту ролей колеги в проєктах сервер ще не має, тож рядки приховані класом `planned`). -->
 <ng-template #positionCell let-row>
   @let colleague = asColleague(row);
   <div class="position">
@@ -294,7 +295,7 @@
       }
     </div>
     @for (line of colleague.lines; track $index) {
-      <span class="position__line">
+      <span class="position__line planned">
         <span class="position__dot" [class]="'position__dot position__dot--' + line.color" aria-hidden="true"></span>
         {{ line.text }}
       </span>

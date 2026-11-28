@@ -1,0 +1,72 @@
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <div class="settings-field">
+    <label class="settings-field__label" for="project-title">
+      {{ 'planner.dialogs.add.name' | translate
+      }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span>
+    </label>
+    <input
+      id="project-title"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      required
+      autocomplete="off"
+      [attr.maxlength]="titleMaxLength"
+      [value]="title()"
+      [attr.aria-invalid]="titleError() ? true : null"
+      [attr.aria-describedby]="titleError() ? 'project-title-error' : null"
+      (input)="onText(title, $event)"
+    />
+    @if (titleError(); as errorKey) {
+      <p id="project-title-error" class="settings-field__error" role="alert">
+        {{ errorKey | translate }}
+      </p>
+    }
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="project-description">{{ 'planner.dialogs.add.description' | translate }}</label>
+    <textarea
+      id="project-description"
+      class="settings-input settings-input--area"
+      tabindex="0"
+      rows="3"
+      [attr.maxlength]="descriptionMaxLength"
+      [value]="description()"
+      (input)="onText(description, $event)"
+    ></textarea>
+  </div>
+
+  <div class="settings-field">
+    <label class="settings-field__label" for="project-visibility">{{ 'planner.dialogs.add.visibility' | translate }}</label>
+    <!-- Іконка вибраної доступності (замок, око, глобус) перед вибором. -->
+    <span class="project-form__visibility">
+      <ion-icon class="project-form__visibility-icon" [name]="visibilityIcons[visibility()]" aria-hidden="true"></ion-icon>
+      <span class="settings-select-wrap project-form__visibility-select">
+        <select id="project-visibility" class="settings-select" tabindex="0" aria-describedby="project-visibility-hint" (change)="onVisibility($event)">
+          @for (option of visibilities; track option) {
+            <option [value]="option" [selected]="option === visibility()">
+              {{ 'planner.visibility.' + option | translate }}
+            </option>
+          }
+        </select>
+        <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+      </span>
+    </span>
+    <!-- Що означає вибрана доступність. -->
+    <p id="project-visibility-hint" class="project-form__hint">
+      {{ 'planner.visibilityHint.' + visibility() | translate }}
+    </p>
+  </div>
+
+  <!-- Дати — двома стовпчиками, а у вузькому вікні одна під одною. -->
+  <app-date-range idPrefix="project" [(start)]="startDate" [(end)]="endDate" [showErrors]="submittedOnce()" />
+
+  @if (error(); as errorKey) {
+    <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+  }
+
+  <button type="submit" class="settings-submit" tabindex="0" [disabled]="busy()">
+    {{ submitLabelKey() | translate }}
+  </button>
+</form>

@@ -14,6 +14,7 @@ import {
 } from '../../core/knowledge-base/knowledge-base';
 import { KbItemMenuComponent } from '../../core/knowledge-base/kb-item-menu/kb-item-menu.component';
 import { KnowledgeBaseService } from '../../core/knowledge-base/knowledge-base.service';
+import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
 
 /** Блок сітки «Посібника»: група сторінок (розділ) чи всі матеріали без папки одним стовпчиком. */
 type ContentsBlock = { readonly group: KnowledgeBaseFolder } | { readonly pages: readonly KnowledgeBasePage[] };
@@ -38,8 +39,8 @@ type ContentsBlock = { readonly group: KnowledgeBaseFolder } | { readonly pages:
  * Назва папки (групи) виглядає наведеною завжди: підложка, обрис і видимі «+» (додати сторінку в
  * папку — `KnowledgeBaseService.requestInsert` з її `id` і назвою) та три крапки.
  *
- * Ні таблиць, ні сторінок, ні папок — під вітальним текстом ілюстрація (`assets/empty_light.svg`,
- * у темній темі — `empty_dark.svg`) і «Тут поки порожньо».
+ * Ні таблиць, ні сторінок, ні папок — під вітальним текстом спільний порожній стан
+ * (`app-empty-state`: ілюстрація й «Тут поки порожньо»).
  *
  * Сітка — колонки щонайменше 280px, скільки вміщується: на телефоні одна, на широкому екрані
  * три й більше; блоки йдуть рядками, а висота рядка — за найвищим блоком у ньому.
@@ -48,7 +49,7 @@ type ContentsBlock = { readonly group: KnowledgeBaseFolder } | { readonly pages:
   selector: 'app-kb-contents',
   templateUrl: './kb-contents.component.html',
   styleUrls: ['./kb-contents.component.scss'],
-  imports: [IonIcon, KbItemMenuComponent, NgTemplateOutlet, RouterLink, TranslatePipe],
+  imports: [EmptyStateComponent, IonIcon, KbItemMenuComponent, NgTemplateOutlet, RouterLink, TranslatePipe],
 })
 export class KbContentsComponent {
   readonly entries = input.required<readonly KnowledgeBaseEntry[]>();

@@ -1,0 +1,155 @@
+@if (adding()) {
+  <!-- Запити «Додати» ще йдуть: замість вмісту вікна — колесо завантаження. -->
+  <div class="project-access__adding" role="status">
+    <ion-spinner name="crescent" aria-hidden="true"></ion-spinner>
+    <span class="project-access__adding-text">{{ 'planner.access.adding' | translate }}</span>
+  </div>
+} @else {
+  @if (addResult()?.failures?.length) {
+    <!-- Невдачі останнього «Додати»: червоний блок із причиною для кожного. -->
+    <div class="project-access__failures" role="alert">
+      @for (failure of addResult()!.failures; track $index) {
+        <p class="project-access__failure">{{ failure }}</p>
+      }
+    </div>
+  }
+  @if (canAdd()) {
+    <!-- Додати колегу (як у Figma): пошук зі списком колег, рівень доступу нового учасника, «Додати».
+       Після «Додати» поле створюється заново (порожнє). -->
+    @for (generation of [searchGeneration()]; track generation) {
+      <app-project-member-search [memberIds]="memberIds()" (overlayBottom)="overlayBottom.set($event)" (add)="addMember($event)" />
+    }
+    @if (addResult()?.added; as added) {
+      <p class="project-access__added" role="status">{{ 'planner.access.added' | translate: { names: added } }}</p>
+    }
+  }
+
+  <h3 class="project-access__heading">
+    {{ 'planner.access.whoHasAccess' | translate }}
+  </h3>
+
+  @let current = visibility();
+  <!-- Перевірка саме на `null`: «Приватний» — це 0. -->
+  @if (current !== null) {
+    <!-- Доступність проєкту (як «Anyone» у Figma): з правом — стрілка на «Редагувати». -->
+    @if (canEditProject()) {
+      <button
+        type="button"
+        class="project-access__row project-access__visibility project-access__visibility--link"
+        tabindex="0"
+        [attr.aria-label]="'planner.access.changeVisibility' | translate: { visibility: ('planner.visibility.' + current | translate) }"
+        (click)="editProject.emit()"
+      >
+        <ion-icon class="project-access__visibility-icon" [name]="visibilityIcons[current]" aria-hidden="true"></ion-icon>
+        <span class="project-access__visibility-name">{{ 'planner.visibility.' + current | translate }}</span>
+        <ion-icon class="project-access__chevron" name="chevron-forward-outline" aria-hidden="true"></ion-icon>
+      </button>
+    } @else {
+      <div class="project-access__row project-access__visibility">
+        <ion-icon class="project-access__visibility-icon" [name]="visibilityIcons[current]" aria-hidden="true"></ion-icon>
+        <span class="project-access__visibility-name">{{ 'planner.visibility.' + current | translate }}</span>
+      </div>
+    }
+  }
+
+  @switch (state().status) {
+    @case ('loading') {
+      <p class="project-access__message">
+        {{ 'planner.access.loading' | translate }}
+      </p>
+    }
+    @case ('failed') {
+      @if (state(); as failed) {
+        @if (failed.status === 'failed') {
+          <p class="project-access__message project-access__message--error" role="alert">
+            {{ failed.errorKey | translate }}
+          </p>
+        }
+      }
+    }
+    @case ('ready') {
+      @if (error(); as errorKey) {
+        <p class="project-access__message project-access__message--error" role="alert">
+          {{ errorKey | translate }}
+        </p>
+      }
+      @if (state(); as ready) {
+        @if (ready.status === 'ready') {
+          @if (ready.members.length) {
+            <!-- Учасники — у блоці, що прокручується (без підложки й рамки). -->
+            <ul class="project-access__list">
+              @for (member of ready.members; track member.userId) {
+                @let name = nameOf(member);
+                <li class="project-access__member" [class.project-access__member--disabled]="!member.isActive">
+                  <app-avatar
+                    class="project-access__avatar"
+                    [firstName]="member.firstName"
+                    [lastName]="member.lastName"
+                    [avatarUrl]="member.avatarUrl"
+                    [ngoName]="ngoName()"
+                  />
+                  <div class="project-access__text">
+                    <span class="project-access__name">
+                      @if (!member.isActive) {
+                        <ion-icon
+                          class="project-access__disabled-icon"
+                          name="person-remove"
+                          role="img"
+                          [attr.aria-label]="'planner.access.disabled' | translate"
+                          [title]="'planner.access.disabled' | translate"
+                        ></ion-icon>
+                      }
+                      {{ name || ('common.empty' | translate) }}
+                    </span>
+                    <!-- Назва ролі в проєкті — як займенники в таблиці колег. -->
+                    <span class="project-access__role">{{ member.roleTitle || ('common.empty' | translate) }}</span>
+                  </div>
+                  @if (canChange(member)) {
+                    <!-- Рівень доступу: вибір, що виглядає як тег зі стрілкою вниз. -->
+                    <span class="project-access__tag project-access__tag--select">
+                      <select
+                        class="project-access__select"
+                        tabindex="0"
+                        [attr.aria-label]="'planner.access.claimOf' | translate: { name }"
+                        [disabled]="busyUserId() === member.userId"
+                        (change)="changeClaim(member, $event)"
+                      >
+                        @for (claim of claims; track claim) {
+                          <option [value]="claim" [selected]="claim === member.claim">
+                            {{ 'planner.claims.' + claim | translate }}
+                          </option>
+                        }
+                      </select>
+                      <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+                    </span>
+                    <button
+                      type="button"
+                      class="project-access__remove"
+                      tabindex="0"
+                      [attr.aria-label]="'planner.access.remove' | translate: { name }"
+                      [attr.title]="'planner.access.remove' | translate: { name }"
+                      [disabled]="busyUserId() === member.userId"
+                      (click)="remove(member)"
+                    >
+                      <ion-icon name="trash-outline" aria-hidden="true"></ion-icon>
+                    </button>
+                  } @else {
+                    <span class="project-access__tag">{{ 'planner.claims.' + member.claim | translate }}</span>
+                    <!-- Свій рядок, коли інші можна змінювати: місце під смітник, щоб теги стояли стовпчиком. -->
+                    @if (editable()) {
+                      <span class="project-access__remove-spacer" aria-hidden="true"></span>
+                    }
+                  }
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="project-access__message">
+              {{ 'planner.access.empty' | translate }}
+            </p>
+          }
+        }
+      }
+    }
+  }
+}

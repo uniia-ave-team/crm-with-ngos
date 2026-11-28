@@ -193,14 +193,14 @@ describe('ReloginPage', () => {
     it.each([
       ['an available account', {}],
       ['an unavailable account that is not outdated', { unavailable: true }],
-    ])('switches to %s and opens the planner again', async (_name, flags) => {
+    ])('switches to %s and opens the start page again', async (_name, flags) => {
       vi.spyOn(TestBed.inject(AuthService), 'refreshStored').mockResolvedValue('unreachable');
       const id = addAccount('u1', flags);
       activate.mockResolvedValue('ok');
       const fixture = openPage();
 
       rows(fixture.nativeElement)[0].click();
-      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/planner', { onSameUrlNavigation: 'reload' }));
+      await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('/start', { onSameUrlNavigation: 'reload' }));
       expect(activate).toHaveBeenCalledWith(id);
       expect(form(fixture.nativeElement)).toBeNull();
     });
@@ -222,7 +222,7 @@ describe('ReloginPage', () => {
         expect(inputs.initialServer()).toBe(server);
         expect(inputs.initialEmail()).toBe('first@organization.org');
         expect(inputs.accountId()).toBeTruthy();
-        expect(navigate).not.toHaveBeenCalledWith('/planner', expect.anything());
+        expect(navigate).not.toHaveBeenCalledWith('/start', expect.anything());
       },
     );
 

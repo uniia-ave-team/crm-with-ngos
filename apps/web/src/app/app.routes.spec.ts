@@ -20,10 +20,12 @@ describe('app routes', () => {
     expect(guards('admin-panel')).toBe(3);
     expect(guards('colleagues')).toBe(3);
     expect(guards('knowledge-base')).toBe(3);
+    expect(guards('planner')).toBe(3);
+    expect(guards('planner/projects/:id')).toBe(3);
   });
 
   it('keeps only the login and connection guards on the pages that do not depend on rights', () => {
-    for (const path of ['calendar', 'planner', 'settings']) {
+    for (const path of ['start', 'calendar', 'settings']) {
       expect(guards(path), path).toBe(2);
     }
   });

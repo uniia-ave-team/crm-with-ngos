@@ -1,0 +1,143 @@
+// Дошка: колонки в один ряд на всю висоту, ряд прокручується по горизонталі.
+:host {
+  position: relative;
+  display: block;
+  height: 100%;
+  font-family: var(--font-menu);
+  color: var(--nav-fg-active);
+}
+
+// Вузький градієнт по правому краю в колір бокових меню — лише коли праворуч є ще колонки.
+:host(.board--more-right)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 32px;
+  background: linear-gradient(to right, transparent, var(--nav-bg));
+  pointer-events: none;
+}
+
+.board__columns {
+  display: flex;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+// Колонка — 385px (стан і пріоритет картки в один рядок), на
+// телефоні — 90% ширини екрана; між колонками — лінія.
+.board__column {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 385px;
+  min-height: 0;
+  box-sizing: border-box;
+  padding-top: 24px;
+  border-right: 1px solid var(--nav-border);
+
+  // Кнопки шапки — при наведенні на колонку чи фокусі в ній.
+  &:hover .board__column-button,
+  &:focus-within .board__column-button {
+    opacity: 1;
+  }
+}
+
+// Шапка колонки: назва ліворуч, кнопки «+» і три крапки праворуч на її рівні.
+.board__column-head {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 50px;
+  padding: 0 24px;
+}
+
+.board__column-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font-size: 18px;
+  cursor: pointer;
+  // Видно при наведенні на колонку (вище); без наведення (сенсорні екрани) — завжди.
+  opacity: 0;
+
+  &:hover {
+    background: var(--nav-active-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 1px;
+  }
+
+  @media (hover: none) {
+    opacity: 1;
+  }
+}
+
+.board__column-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  /* Довга назва — спершу на два рядки, далі обрізається трьома крапками. Перший рядок — на рівні кнопок (28px). */
+  display: -webkit-box;
+  padding: 4px 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.board__message {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 24px;
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+
+  &--error {
+    color: var(--nav-unavailable-icon);
+  }
+}
+
+.board__retry {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.board__empty {
+  min-height: 100%;
+  justify-content: center;
+  padding: 24px 16px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 767px) {
+  .board__column {
+    width: 90vw;
+    padding: 20px 16px 0;
+  }
+}

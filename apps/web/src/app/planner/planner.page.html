@@ -1,16 +1,95 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
+<!-- Без проєкту шапка лише на телефоні й планшеті (кнопка бокового меню), без заголовка. -->
+<ion-header [translucent]="true" [class.planner__header--bare]="!id()">
+  <ion-toolbar [class.planner__toolbar]="!!id()">
     <ion-buttons slot="start">
       <ion-menu-button menu="secondary"></ion-menu-button>
     </ion-buttons>
-    <ion-title>{{ 'page.planner' | translate }}</ion-title>
+    @if (id()) {
+      <!-- Шапка планера проєкту: вкладки замість заголовка, учасники, «Створити» й пошук. -->
+      <app-search-header
+        [searchable]="searchable()"
+        [placeholder]="'planner.searchPlaceholder' | translate"
+        (searchChange)="search.set($event)"
+      >
+        <!-- Десктоп і планшет: вкладки замість заголовка. Телефон: назва проєкту, вкладки — внизу. -->
+        <div searchHeaderTitle class="planner__title">
+          <ng-container *ngTemplateOutlet="tabs; context: { place: 'header' }" />
+          <span class="planner__project-title" [attr.title]="project()?.title">{{ project()?.title ?? ('page.planner' | translate) }}</span>
+        </div>
+
+        @if (members().length) {
+          <!-- Учасники проєкту (аватарки); клік — доступи проєкту (редагувати чи переглянути). -->
+          <app-member-avatars [members]="members()" [label]="accessKey() | translate" (activate)="openAccess()" />
+        }
+        @if (canCreate()) {
+          <!-- «Створити» на «Дошці»: нова колонка. -->
+          <app-action-button icon="add-outline" tone="green" [label]="'planner.createTask' | translate" (click)="createTopic()" />
+        }
+        @if (activeView() === 'my') {
+          <!-- Лише на телефоні (до 768px), де нема заголовків таблиці «Моїх завдань»: рядок сортування. -->
+          <app-action-button
+            class="planner__sort-toggle"
+            icon="filter-outline"
+            [label]="'common.sort.open' | translate"
+            [attr.aria-expanded]="sortOpen()"
+            (click)="sortOpen.set(!sortOpen())"
+          />
+        }
+      </app-search-header>
+    }
   </ion-toolbar>
 </ion-header>
 
+<!-- Перемикач вкладок (у шапці чи в панелі внизу на телефоні). -->
+<ng-template #tabs let-place="place">
+  <div class="planner__tabs" [class.planner__tabs--bottom]="place === 'footer'" role="tablist" [attr.aria-label]="'planner.tabs.label' | translate">
+    @for (view of views; track view) {
+      <button
+        type="button"
+        class="planner__tab"
+        role="tab"
+        tabindex="0"
+        [id]="'planner-tab-' + place + '-' + view"
+        [class.planner__tab--active]="view === activeView()"
+        [class.planned]="isPlanned(view)"
+        [attr.aria-selected]="view === activeView()"
+        aria-controls="planner-view"
+        (click)="choose(view)"
+      >
+        {{ 'planner.tabs.' + view | translate }}
+      </button>
+    }
+  </div>
+</ng-template>
+
 <ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">{{ 'page.planner' | translate }}</ion-title>
-    </ion-toolbar>
-  </ion-header>
+  @if (id()) {
+    <!-- Зміст обраної вкладки (ще порожній). -->
+    <div id="planner-view" class="planner__view" role="tabpanel" [attr.aria-label]="'planner.tabs.' + activeView() | translate">
+      @switch (activeView()) {
+        @case ('my') {
+          <app-my-tasks [projectId]="id()!" [search]="search()" [sortOpen]="sortOpen()" (openTask)="openTask($event)" />
+        }
+        @case ('board') {
+          <app-planner-board [projectId]="id()!" (openTask)="openTask($event)" />
+        }
+        @case ('about') {}
+      }
+    </div>
+  } @else if (noProjects()) {
+    <!-- Доступних проєктів нема: ілюстрація й «Тут поки порожньо». -->
+    <app-empty-state class="planner__empty" />
+  }
 </ion-content>
+
+@if (id()) {
+  <!-- Телефон: вкладки — тонкою панеллю внизу, підкреслення згори. -->
+  <ion-footer class="planner__footer">
+    <ng-container *ngTemplateOutlet="tabs; context: { place: 'footer' }" />
+  </ion-footer>
+}
+
+<!-- Відкрите завдання (клік по картці чи рядку, «Детальніше»): бокове вікно завдання. -->
+@if (id()) {
+  <app-task-details #taskDetails [projectId]="id()!" />
+}

@@ -1,0 +1,59 @@
+// Поля й кнопка — спільні з формами налаштувань (`settings-section.scss`), як у формі «Бази знань»
+// (`kb-item-form`): у вікні — без відступів сторінки, щільніше, поля на всю ширину вікна.
+:host {
+  padding: 16px 0 0;
+}
+
+.settings-form {
+  gap: 20px;
+}
+
+.settings-input,
+.settings-select-wrap {
+  max-width: none;
+}
+
+.settings-input--area {
+  height: auto;
+  min-height: 80px;
+  padding: 8px 12px;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.settings-submit {
+  align-self: stretch;
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+}
+
+// Пояснення вибраної доступності під полем.
+.project-form__hint {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+// Доступність: іконка вибраного значення, а вибір — до правого краю форми.
+.project-form__visibility {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: stretch;
+}
+
+.project-form__visibility-icon {
+  flex: none;
+  color: var(--nav-fg-active);
+  font-size: 22px;
+}
+
+.settings-select-wrap.project-form__visibility-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+}

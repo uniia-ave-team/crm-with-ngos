@@ -1,0 +1,56 @@
+<!-- Вікно дії (по центру екрана): шапка з назвою дії й хрестиком, під нею — зміст дії. -->
+<app-modal
+  [width]="dialog()?.action === 'access' ? 'min(560px, calc(100vw - 32px))' : 'min(420px, calc(100vw - 32px))'"
+  [label]="titleKey() | translate"
+  (closed)="onClosed()"
+>
+  @if (dialog(); as current) {
+    <app-dialog-header [title]="titleKey() | translate" (dismiss)="close()" />
+    @switch (current.action) {
+      @case ('topic') {
+        <app-topic-form [busy]="busy()" [error]="error()" (submitted)="createTopic(current.target, $event)" />
+      }
+      @case ('access') {
+        <app-project-access
+          [projectId]="current.target.id"
+          [editable]="canEditAccess()"
+          [visibility]="current.target.visibility ?? null"
+          [canEditProject]="canEditProject()"
+          (editProject)="editFromAccess(current.target)"
+        />
+      }
+      @case ('edit') {
+        @let state = edit();
+        @switch (state.status) {
+          @case ('loading') {
+            <p class="project-dialog__message">{{ 'planner.dialogs.edit.loading' | translate }}</p>
+          }
+          @case ('failed') {
+            <p class="project-dialog__message project-dialog__message--error" role="alert">{{ state.errorKey | translate }}</p>
+          }
+          @case ('ready') {
+            <app-project-form
+              submitLabelKey="planner.dialogs.edit.save"
+              [initial]="state.project"
+              [busy]="busy()"
+              [error]="error()"
+              (submitted)="save(current.target, state.project, $event)"
+            />
+          }
+        }
+      }
+      @case ('delete') {
+        @let deleteError = error();
+        <app-confirm-dialog
+          [message]="'planner.dialogs.delete' | translate: { title: current.target.title }"
+          [confirmLabel]="'common.yes' | translate"
+          [cancelLabel]="'common.cancel' | translate"
+          [busy]="busy()"
+          [error]="deleteError ? (deleteError | translate) : null"
+          (confirm)="remove(current.target)"
+          (dismiss)="close()"
+        />
+      }
+    }
+  }
+</app-modal>

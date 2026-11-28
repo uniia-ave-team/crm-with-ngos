@@ -79,18 +79,18 @@ describe('requireAnyPermission', () => {
     expect(await result).toBe(true);
   });
 
-  it('redirects to /planner when none of the listed rights is there, whatever others the user has', async () => {
+  it('redirects to the start page when none of the listed rights is there, whatever others the user has', async () => {
     await signedIn(['Permissions.UpdateNgo']);
     const result = run();
     await answer(['Permissions.ViewUser', 'Permissions.UpdateUser']);
-    expect(((await result) as UrlTree).toString()).toBe('/planner');
+    expect(((await result) as UrlTree).toString()).toBe('/start');
   });
 
   it('takes the rights away at once when they were revoked in the database, although they were saved before', async () => {
     await signedIn(ADMIN_PANEL_PERMISSIONS as string[]);
     const result = run();
     await answer(['Permissions.ViewUser']);
-    expect(((await result) as UrlTree).toString()).toBe('/planner');
+    expect(((await result) as UrlTree).toString()).toBe('/start');
     expect(accounts.active()?.permissions).toEqual(['Permissions.ViewUser']);
   });
 
