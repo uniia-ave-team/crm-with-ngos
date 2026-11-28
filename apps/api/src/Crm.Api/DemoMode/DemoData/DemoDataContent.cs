@@ -105,6 +105,14 @@ internal static class DemoDataContent
         AccessRight.CreateCustomRecord,
         AccessRight.UpdateCustomRecord,
         AccessRight.DeleteCustomRecord,
+        AccessRight.ViewProject,
+        AccessRight.CreateProject,
+        AccessRight.UpdateProject,
+        AccessRight.DeleteProject,
+        AccessRight.ViewTask,
+        AccessRight.CreateTask,
+        AccessRight.UpdateTask,
+        AccessRight.DeleteTask,
     ];
 
     private static readonly AccessRight[] VolunteerRights =
@@ -114,6 +122,10 @@ internal static class DemoDataContent
         AccessRight.ViewCustomTable,
         AccessRight.ViewCustomRecord,
         AccessRight.CreateCustomRecord,
+        AccessRight.ViewProject,
+        AccessRight.ViewTask,
+        AccessRight.CreateTask,
+        AccessRight.UpdateTask,
     ];
 
     private static readonly Dictionary<string, RoleBlueprint> RoleBlueprints = new(StringComparer.OrdinalIgnoreCase)
@@ -176,6 +188,11 @@ internal static class DemoDataContent
         new("Ніна Пробна", "nina.probna", "Ужгород", "Робота з літніми людьми", 14, 5, "Новий", false, null, false),
         new("Северин Ескізний", "severyn.eskiznyi", "Житомир", "Водіння (категорія C), вантажні перевезення", 5, 10, "Новий", false, null, false),
     ];
+
+    /// <summary>
+    /// Gets the profiles of the demo accounts, matched to the configured accounts by position.
+    /// </summary>
+    public static IReadOnlyList<DemoPerson> AccountProfiles => AccountPersons;
 
     /// <summary>
     /// Gets the e-mail addresses and profile data of the fictional colleagues created next to the demo accounts.

@@ -5,6 +5,7 @@ using Crm.Application.Interfaces;
 using Crm.Domain.Common;
 using Crm.Domain.Constants;
 using Crm.Domain.Entities;
+using Crm.Domain.Enums;
 using Crm.Domain.Exceptions;
 using Crm.Domain.Extensions;
 using Crm.Domain.Interfaces.Repositories;
@@ -44,6 +45,11 @@ public sealed partial class DemoDataSeeder(
     ITableTemplateRepository tableTemplateRepository,
     ICustomTableRepository customTableRepository,
     ICustomRecordRepository customRecordRepository,
+    IProjectRepository projectRepository,
+    ITopicRepository topicRepository,
+    ITagRepository tagRepository,
+    IProjectTaskRepository taskRepository,
+    ITaskCommentRepository commentRepository,
     TimeProvider timeProvider,
     ILogger<DemoDataSeeder> logger)
 {
@@ -51,6 +57,9 @@ public sealed partial class DemoDataSeeder(
 
     // Long enough to satisfy any configurable RequiredLength (the options allow up to 100 characters).
     private const int UnusablePasswordHexLength = 128;
+
+    // Comments written on the same day are this far apart, so they keep their order.
+    private const int CommentSpacingMinutes = 37;
 
     /// <summary>
     /// Seeds the demo content unless the database already contains users.
@@ -122,10 +131,11 @@ public sealed partial class DemoDataSeeder(
             var ngoId = await EnsureNgoAsync(now, cancellationToken);
             await EnsureRolesAsync(accounts, cancellationToken);
             var userFields = await EnsureUserCustomFieldsAsync(cancellationToken);
-            await CreateUsersAsync(accounts, ngoId, now, userFields, cancellationToken);
+            var people = await CreateUsersAsync(accounts, ngoId, now, userFields, cancellationToken);
             await CreateDonorTableAsync(ngoId, now, cancellationToken);
             await CreateVolunteerTableAsync(ngoId, now, cancellationToken);
             await CreateTopicTablesAsync(ngoId, now, cancellationToken);
+            await CreateProjectsAsync(people, now, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -233,13 +243,16 @@ public sealed partial class DemoDataSeeder(
         return fields;
     }
 
-    private async Task CreateUsersAsync(
+    // Returns the ids of the created fictional people by the e-mail local part of their profile (see DemoProjects).
+    private async Task<Dictionary<string, Guid>> CreateUsersAsync(
         IReadOnlyList<DemoAccountOptions> accounts,
         Guid ngoId,
         DateTimeOffset now,
         IReadOnlyList<UserCustomField> userFields,
         CancellationToken cancellationToken)
     {
+        var people = new Dictionary<string, Guid>(StringComparer.Ordinal);
+
         for (int i = 0; i < accounts.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -249,6 +262,11 @@ public sealed partial class DemoDataSeeder(
 
             var user = await identityService.CreateUserAsync(account.Email, account.Password, profile, cancellationToken);
             await identityService.AddToRoleAsync(user.Id, account.Role, cancellationToken);
+
+            if (i < DemoDataContent.AccountProfiles.Count)
+            {
+                people[DemoDataContent.AccountProfiles[i].EmailLocalPart] = user.Id;
+            }
         }
 
         var accountEmails = accounts.Select(a => a.Email).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -274,6 +292,7 @@ public sealed partial class DemoDataSeeder(
 
             var profile = DemoDataContent.CreateProfile(colleague, ngoId, now, userFields);
             var user = await identityService.CreateUserAsync(email, CreateUnusablePassword(), profile, cancellationToken);
+            people[colleague.EmailLocalPart] = user.Id;
 
             if (colleagueRoles.Count > 0)
             {
@@ -284,6 +303,8 @@ public sealed partial class DemoDataSeeder(
         }
 
         LogDemoUsersCreated(logger, accounts.Count, colleagueCount);
+
+        return people;
     }
 
     private async Task CreateDonorTableAsync(Guid ngoId, DateTimeOffset now, CancellationToken cancellationToken)
@@ -345,6 +366,163 @@ public sealed partial class DemoDataSeeder(
             };
 
             await CreateTableWithRecordsAsync(table, definition.CreateRows(now), now, cancellationToken);
+        }
+    }
+
+    // The same building blocks as the project, topic, tag, task and comment command handlers. A project whose
+    // manager is not among the created people (other demo accounts are configured) is left out; so are members
+    // and assignees who are missing.
+    private async Task CreateProjectsAsync(
+        Dictionary<string, Guid> people,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        foreach (var definition in DemoProjects.All)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            List<DemoProjects.MemberDefinition> members = [.. definition.Members.Where(m => people.ContainsKey(m.Person))];
+            var manager = members.FirstOrDefault(m => m.Claim == ProjectClaim.Manage);
+
+            if (manager is null)
+            {
+                continue;
+            }
+
+            var managerId = people[manager.Person];
+            var createdAt = DemoProjects.At(now, definition.StartDay - DemoProjects.ProjectLeadDays);
+
+            var project = new Project
+            {
+                Title = definition.Title,
+                Description = definition.Description,
+                Visibility = definition.Visibility,
+                StartDate = DemoProjects.At(now, definition.StartDay),
+                EndDate = definition.EndDay is { } endDay ? DemoProjects.At(now, endDay) : null,
+                CreatedAt = createdAt,
+                UpdatedAt = createdAt,
+                CreatedBy = managerId,
+                UpdatedBy = managerId,
+                Members =
+                [
+                    .. members.Select(m => new ProjectMember
+                    {
+                        UserId = people[m.Person],
+                        Claim = m.Claim,
+                        RoleTitle = m.RoleTitle,
+                        JoinedAt = createdAt,
+                    }),
+                ],
+            };
+
+            project.EnsureValidDateRange();
+            await projectRepository.CreateAsync(project, cancellationToken);
+
+            var topicIds = new Dictionary<string, Guid>(StringComparer.Ordinal);
+
+            for (int i = 0; i < definition.Topics.Count; i++)
+            {
+                var topic = new Topic { ProjectId = project.Id, Order = (byte)i, CreatedAt = createdAt, UpdatedAt = createdAt }
+                    .SetTitle(definition.Topics[i]);
+
+                await topicRepository.CreateAsync(topic, cancellationToken);
+                topicIds[definition.Topics[i]] = topic.Id;
+            }
+
+            var tagIds = new Dictionary<string, Guid>(StringComparer.Ordinal);
+
+            foreach (string tagTitle in definition.Tags)
+            {
+                var tag = new Tag { ProjectId = project.Id, CreatedAt = createdAt, UpdatedAt = createdAt }.SetTitle(tagTitle);
+
+                await tagRepository.CreateAsync(tag, cancellationToken);
+                tagIds[tagTitle] = tag.Id;
+            }
+
+            var memberIds = members.Select(m => people[m.Person]).ToHashSet();
+            var comments = new List<(TaskComment Comment, Guid AuthorId)>();
+
+            foreach (var taskDefinition in definition.Tasks)
+            {
+                var taskCreatedAt = DemoProjects.At(now, DemoProjects.CreatedDay(taskDefinition));
+                var authorId = people.TryGetValue(taskDefinition.Author, out Guid author) ? author : managerId;
+
+                var task = new ProjectTask
+                {
+                    ProjectId = project.Id,
+                    TopicId = topicIds[taskDefinition.Topic],
+                    Title = taskDefinition.Title,
+                    Description = taskDefinition.Description,
+                    Priority = taskDefinition.Priority,
+                    StartDate = DemoProjects.At(now, taskDefinition.StartDay),
+                    CreatedAt = taskCreatedAt,
+                    CreatedBy = authorId,
+                    UpdatedBy = authorId,
+                };
+
+                task.ApplyFullStatusUpdate(
+                    taskDefinition.Status,
+                    taskDefinition.EndDay is { } taskEndDay ? DemoProjects.At(now, taskEndDay) : null,
+                    now.UtcDateTime);
+
+                // The last change: the day a finished task was finished, otherwise the day it was created.
+                bool finished = taskDefinition.Status is ProjectTaskStatus.Done or ProjectTaskStatus.Completed;
+                task.UpdatedAt = finished && task.EndDate is { } finishedAt && finishedAt <= now.UtcDateTime
+                    ? finishedAt
+                    : taskCreatedAt;
+
+                await taskRepository.CreateAsync(task, cancellationToken);
+
+                List<Guid> assigneeIds =
+                [
+                    .. taskDefinition.Assignees
+                        .Where(people.ContainsKey)
+                        .Select(person => people[person])
+                        .Where(memberIds.Contains),
+                ];
+
+                await taskRepository.AssignToTaskAsync(task.Id, assigneeIds, cancellationToken);
+                await tagRepository.AddToTaskAsync(task.Id, [.. (taskDefinition.Tags ?? []).Select(t => tagIds[t])], cancellationToken);
+
+                var commentDefinitions = taskDefinition.Comments ?? [];
+
+                for (int i = 0; i < commentDefinitions.Count; i++)
+                {
+                    var commentDefinition = commentDefinitions[i];
+
+                    if (!people.TryGetValue(commentDefinition.Author, out Guid commentAuthorId))
+                    {
+                        continue;
+                    }
+
+                    var writtenAt = DemoProjects.At(now, commentDefinition.Day).AddMinutes(i * CommentSpacingMinutes);
+
+                    comments.Add((
+                        new TaskComment
+                        {
+                            TaskId = task.Id,
+                            UserId = commentAuthorId,
+                            Content = commentDefinition.Content,
+                            CreatedAt = writtenAt,
+                            UpdatedAt = writtenAt,
+                        },
+                        commentAuthorId));
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            // Oldest first, each saved before the next: a comment is unread for everyone else, as when written in the API.
+            foreach (var (comment, commentAuthorId) in comments.OrderBy(c => c.Comment.CreatedAt))
+            {
+                await commentRepository.CreateAsync(comment, cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await commentRepository.MarkUnreadForOtherUsersAsync(comment, commentAuthorId, cancellationToken);
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            LogDemoProjectCreated(logger, project.Title, project.Id, topicIds.Count, definition.Tasks.Count, comments.Count);
         }
     }
 
@@ -410,4 +588,7 @@ public sealed partial class DemoDataSeeder(
 
     [LoggerMessage(EventId = EventIdBase + 10, Level = LogLevel.Information, Message = "Demo user custom fields schema created with {FieldCount} field(s).")]
     private static partial void LogDemoUserCustomFieldsCreated(ILogger logger, int fieldCount);
+
+    [LoggerMessage(EventId = EventIdBase + 11, Level = LogLevel.Information, Message = "Demo project '{ProjectTitle}' created with ID: {ProjectId} containing {TopicCount} topic(s), {TaskCount} task(s) and {CommentCount} comment(s).")]
+    private static partial void LogDemoProjectCreated(ILogger logger, string projectTitle, Guid projectId, int topicCount, int taskCount, int commentCount);
 }

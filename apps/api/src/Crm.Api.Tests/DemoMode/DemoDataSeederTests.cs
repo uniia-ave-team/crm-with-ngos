@@ -50,6 +50,7 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
     private const int MinTopicTables = 10;
     private const int MinTopicTableRows = 8;
     private const int MaxTopicTableRows = 20;
+    private const int MinDemoProjects = 4;
 
     [Fact]
     public async Task SeedAsyncShouldCompleteSystemSetup()
@@ -154,6 +155,14 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
         volunteerRights.ShouldNotContain(AccessRight.UpdateCustomTable.ToClaimValue());
         volunteerRights.ShouldNotContain(AccessRight.CreateUser.ToClaimValue());
         volunteerRights.IsProperSubsetOf(coordinatorRights).ShouldBeTrue();
+
+        // The planner: the coordinator runs projects, the volunteer works on tasks.
+        coordinatorRights.ShouldContain(AccessRight.CreateProject.ToClaimValue());
+        coordinatorRights.ShouldContain(AccessRight.DeleteTask.ToClaimValue());
+        volunteerRights.ShouldContain(AccessRight.ViewProject.ToClaimValue());
+        volunteerRights.ShouldContain(AccessRight.UpdateTask.ToClaimValue());
+        volunteerRights.ShouldNotContain(AccessRight.CreateProject.ToClaimValue());
+        volunteerRights.ShouldNotContain(AccessRight.DeleteTask.ToClaimValue());
     }
 
     [Fact]
@@ -295,6 +304,8 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
         after.ShouldBe(before);
         before.Users.ShouldBeGreaterThan(fixture.Accounts.Count);
         before.Records.ShouldBe(ExpectedDonorRecords + ExpectedVolunteerRecords + TopicRecordCount());
+        before.Projects.ShouldBe(DemoProjects.All.Count);
+        before.Tasks.ShouldBe(DemoProjects.All.Sum(p => p.Tasks.Count));
     }
 
     [Fact]
@@ -379,6 +390,152 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
             profile.CustomFields.ValidateAndBackfillPayload(userFields).Count.ShouldBe(userFields.Count);
             userFields.ShouldAllBe(f => !string.IsNullOrWhiteSpace(profile.CustomFields[f.Id.ToString()]!.GetValue<string>()));
         }
+    }
+
+    [Fact]
+    public async Task SeedAsyncShouldFillThePlannerWithProjectsTasksAndUnreadComments()
+    {
+        if (!fixture.IsDockerAvailable)
+        {
+            Assert.Skip("Docker is not running on host machine.");
+            return;
+        }
+
+        var ct = TestContext.Current.CancellationToken;
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var projects = await dbContext.Set<Project>()
+            .AsNoTracking()
+            .Include(p => p.Members)
+            .Include(p => p.Topics)
+            .Include(p => p.Tags)
+            .Include(p => p.Tasks).ThenInclude(t => t.AssignedUsers)
+            .Include(p => p.Tasks).ThenInclude(t => t.Tags)
+            .Include(p => p.Tasks).ThenInclude(t => t.Comments).ThenInclude(c => c.ReadStates)
+            .ToListAsync(ct);
+
+        projects.Select(p => p.Title).ShouldBe(DemoProjects.All.Select(p => p.Title), ignoreOrder: true);
+
+        foreach (var definition in DemoProjects.All)
+        {
+            var project = projects.Single(p => p.Title == definition.Title);
+            var memberIds = project.Members.Select(m => m.UserId).ToHashSet();
+
+            project.Visibility.ShouldBe(definition.Visibility);
+            project.Members.Count.ShouldBe(definition.Members.Count);
+            project.Members.ShouldContain(m => m.Claim == ProjectClaim.Manage);
+            project.Topics.OrderBy(t => t.Order).Select(t => t.Title).ShouldBe(definition.Topics);
+            project.Tags.Select(t => t.Title).ShouldBe(definition.Tags, ignoreOrder: true);
+            project.Tasks.Count.ShouldBe(definition.Tasks.Count);
+
+            foreach (var task in project.Tasks)
+            {
+                var taskDefinition = definition.Tasks.Single(t => t.Title == task.Title);
+
+                task.Status.ShouldBe(taskDefinition.Status);
+                task.AssignedUsers.Count.ShouldBe(taskDefinition.Assignees.Count);
+                task.AssignedUsers.ShouldAllBe(u => memberIds.Contains(u.Id));
+                task.Tags.Select(t => t.Title).ShouldBe(taskDefinition.Tags ?? [], ignoreOrder: true);
+                task.Comments.Count.ShouldBe(taskDefinition.Comments?.Count ?? 0);
+
+                if (task.EndDate is { } endDate)
+                {
+                    endDate.ShouldBeGreaterThanOrEqualTo(task.StartDate);
+                }
+            }
+        }
+
+        // Every status is on some board, and the comments are unread for someone, as after writing them in the API.
+        projects.SelectMany(p => p.Tasks).Select(t => t.Status).Distinct().Count().ShouldBe(Enum.GetValues<ProjectTaskStatus>().Length);
+        projects.SelectMany(p => p.Tasks).SelectMany(t => t.Comments).ShouldAllBe(c => c.ReadStates.Count > 0);
+
+        // Every demo account has tasks of its own ("My tasks" is never empty).
+        var assigneeIds = projects.SelectMany(p => p.Tasks).SelectMany(t => t.AssignedUsers).Select(u => u.Id).ToHashSet();
+
+        foreach (var account in fixture.Accounts)
+        {
+            var accountId = await dbContext.Users.AsNoTracking().Where(u => u.Email == account.Email).Select(u => u.Id).SingleAsync(ct);
+            assigneeIds.ShouldContain(accountId, $"{account.Email} has no tasks.");
+        }
+    }
+
+    [Fact]
+    public void DemoProjectsShouldBeConsistentAndUseActiveDemoPeople()
+    {
+        Dictionary<string, DemoDataContent.DemoPerson> people = DemoDataContent.AccountProfiles
+            .Concat(DemoDataContent.Colleagues)
+            .ToDictionary(p => p.EmailLocalPart, StringComparer.Ordinal);
+
+        DemoProjects.All.Count.ShouldBeGreaterThanOrEqualTo(MinDemoProjects);
+        DemoProjects.All.Select(p => p.Title).ShouldBeUnique();
+
+        foreach (var project in DemoProjects.All)
+        {
+            project.Title.Length.ShouldBeLessThanOrEqualTo(ProjectValidationConstants.MaxTitleLength);
+            project.Description.Length.ShouldBeLessThanOrEqualTo(ProjectValidationConstants.MaxDescriptionLength);
+            (project.StartDay - DemoProjects.ProjectLeadDays).ShouldBeLessThanOrEqualTo(0);
+            project.EndDay.GetValueOrDefault(int.MaxValue).ShouldBeGreaterThanOrEqualTo(project.StartDay);
+
+            // Members: active demo people who had joined the organisation by then, one of them a manager.
+            project.Members.Select(m => m.Person).ShouldBeUnique();
+            project.Members.ShouldContain(m => m.Claim == ProjectClaim.Manage);
+
+            foreach (var member in project.Members)
+            {
+                people.ShouldContainKey(member.Person);
+                people[member.Person].IsActive.ShouldBeTrue($"{member.Person} is not active.");
+                people[member.Person].JoinedDaysAgo.ShouldBeGreaterThanOrEqualTo(DemoProjects.ProjectLeadDays - project.StartDay, member.Person);
+                member.RoleTitle.Length.ShouldBeLessThanOrEqualTo(ProjectValidationConstants.MaxRoleTitleLength);
+            }
+
+            var memberPeople = project.Members.Select(m => m.Person).ToHashSet(StringComparer.Ordinal);
+
+            project.Topics.ShouldBeUnique();
+            project.Topics.ShouldAllBe(t => t.Length <= ProjectValidationConstants.MaxTopicTitleLength);
+            project.Tags.ShouldBeUnique();
+            project.Tags.ShouldAllBe(t => t.Length <= ProjectValidationConstants.MaxTagTitleLength);
+            project.Tasks.Select(t => t.Title).ShouldBeUnique();
+
+            foreach (var task in project.Tasks)
+            {
+                project.Topics.ShouldContain(task.Topic);
+                (task.Tags ?? []).ShouldAllBe(t => project.Tags.Contains(t));
+                task.Title.Length.ShouldBeLessThanOrEqualTo(TaskValidationConstants.MaxTitleLength);
+                (task.Description ?? string.Empty).Length.ShouldBeLessThanOrEqualTo(TaskValidationConstants.MaxDescriptionLength);
+
+                task.StartDay.ShouldBeGreaterThanOrEqualTo(project.StartDay, task.Title);
+                task.EndDay.GetValueOrDefault(int.MaxValue).ShouldBeGreaterThanOrEqualTo(task.StartDay, task.Title);
+
+                if (project.EndDay is { } projectEnd && task.EndDay is { } taskEnd)
+                {
+                    taskEnd.ShouldBeLessThanOrEqualTo(projectEnd, task.Title);
+                }
+
+                if (task.Status is ProjectTaskStatus.Done or ProjectTaskStatus.Completed)
+                {
+                    task.EndDay.ShouldNotBeNull(task.Title);
+                    task.EndDay.Value.ShouldBeLessThanOrEqualTo(0, task.Title);
+                }
+
+                memberPeople.ShouldContain(task.Author);
+                task.Assignees.ShouldNotBeEmpty(task.Title);
+                task.Assignees.ShouldBeUnique();
+                task.Assignees.ShouldAllBe(a => memberPeople.Contains(a));
+
+                foreach (var comment in task.Comments ?? [])
+                {
+                    memberPeople.ShouldContain(comment.Author);
+                    comment.Content.Length.ShouldBeLessThanOrEqualTo(TaskValidationConstants.MaxCommentContentLength);
+                    comment.Day.ShouldBeLessThan(0, task.Title);
+                    comment.Day.ShouldBeGreaterThan(DemoProjects.CreatedDay(task), task.Title);
+                }
+            }
+        }
+
+        // Each default demo account works on some tasks, so "My tasks" is never empty.
+        var assignees = DemoProjects.All.SelectMany(p => p.Tasks).SelectMany(t => t.Assignees).ToHashSet(StringComparer.Ordinal);
+        DemoDataContent.AccountProfiles.ShouldAllBe(p => assignees.Contains(p.EmailLocalPart));
     }
 
     [Fact]
@@ -507,6 +664,9 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
             Tables: await dbContext.Set<CustomTable>().CountAsync(cancellationToken),
             Fields: await dbContext.Set<CustomField>().CountAsync(cancellationToken),
             Records: await dbContext.Set<CustomRecord>().CountAsync(cancellationToken),
+            Projects: await dbContext.Set<Project>().CountAsync(cancellationToken),
+            Tasks: await dbContext.Set<ProjectTask>().CountAsync(cancellationToken),
+            Comments: await dbContext.Set<TaskComment>().CountAsync(cancellationToken),
             Credentials: string.Join('|', securityStamps));
     }
 
@@ -622,5 +782,8 @@ public sealed partial class DemoDataSeederTests(DemoDataSeederTests.DemoDatabase
         int Tables,
         int Fields,
         int Records,
+        int Projects,
+        int Tasks,
+        int Comments,
         string Credentials);
 }
