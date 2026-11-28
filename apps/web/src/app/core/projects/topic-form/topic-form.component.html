@@ -1,0 +1,31 @@
+<form class="settings-form" novalidate (submit)="$event.preventDefault(); submit()">
+  <div class="settings-field">
+    <label class="settings-field__label" for="topic-title">
+      {{ 'planner.dialogs.topic.name' | translate
+      }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span>
+    </label>
+    <input
+      id="topic-title"
+      class="settings-input"
+      type="text"
+      tabindex="0"
+      required
+      autocomplete="off"
+      autofocus
+      [attr.maxlength]="maxLength"
+      [value]="title()"
+      [attr.aria-invalid]="titleError() ? true : null"
+      [attr.aria-describedby]="titleError() ? 'topic-title-error' : null"
+      (input)="onTitle($event)"
+    />
+    @if (titleError(); as errorKey) {
+      <p id="topic-title-error" class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+    }
+  </div>
+
+  @if (error(); as errorKey) {
+    <p class="settings-field__error" role="alert">{{ errorKey | translate }}</p>
+  }
+
+  <button type="submit" class="settings-submit" tabindex="0" [disabled]="busy()">{{ submitLabelKey() | translate }}</button>
+</form>

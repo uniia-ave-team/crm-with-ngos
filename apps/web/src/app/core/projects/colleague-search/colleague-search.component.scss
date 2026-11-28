@@ -1,0 +1,164 @@
+:host {
+  --colleague-search-accent: #32670b;
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --colleague-search-accent: #478a7f;
+  }
+}
+
+// Поле з прикріпленим списком колег: список під полем на всю його ширину, без відступу, поверх
+// усього нижче; поки він відкритий, у поля немає нижніх заокруглень, у списку — верхніх.
+.colleague-search__field {
+  position: relative;
+  display: flex;
+
+  &--open .colleague-search__box {
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+}
+
+.colleague-search__box {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--nav-bg);
+  cursor: text;
+
+  &:focus-within {
+    border-color: var(--colleague-search-accent);
+  }
+}
+
+.colleague-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+
+  &::placeholder {
+    color: var(--nav-fg-inactive);
+  }
+}
+
+.colleague-search__list {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  right: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  // Видно щонайбільше 4 колеги (рядок 44px, проміжок 2px, відступи 6px), далі прокрутка.
+  max-height: calc(4 * 44px + 3 * 2px + 12px);
+  box-sizing: border-box;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid var(--colleague-search-accent);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--nav-bg);
+}
+
+.colleague-search__message {
+  margin: 0;
+  padding: 8px 6px;
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+
+  &--error {
+    color: var(--nav-unavailable-icon);
+  }
+}
+
+.colleague-search__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nav-fg-active);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--nav-active-bg);
+  }
+
+  &--selected {
+    cursor: default;
+
+    .colleague-search__name {
+      color: var(--colleague-search-accent);
+    }
+  }
+}
+
+// Аватарка; у вибраного — зелений кружок із галочкою в правому нижньому куті.
+.colleague-search__avatar {
+  --avatar-size: 32px;
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+.colleague-search__check {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  padding: 2px;
+  border: 1.5px solid var(--nav-bg);
+  border-radius: 50%;
+  background: var(--colleague-search-accent);
+  color: #fff;
+}
+
+.colleague-search__unpick {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--nav-fg-inactive);
+  font-size: 18px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--nav-fg-active);
+  }
+}
+
+.colleague-search__name {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,22 @@
+// Поля й кнопка — спільні з формами налаштувань (`settings-section.scss`); у вікні — без відступів
+// сторінки, поле на всю ширину вікна (як форма проєкту).
+:host {
+  padding: 16px 0 0;
+}
+
+.settings-form {
+  gap: 20px;
+}
+
+.settings-input {
+  max-width: none;
+}
+
+.settings-submit {
+  align-self: stretch;
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+}

@@ -1,0 +1,74 @@
+<!-- Поле з прикріпленим списком колег; вміст компонента (наприклад, вибір рівня доступу) — у полі праворуч. -->
+<div class="colleague-search__field" [class.colleague-search__field--open]="open()">
+  <label class="colleague-search__box">
+    <input
+      #searchInput
+      type="search"
+      class="colleague-search__input"
+      tabindex="0"
+      autocomplete="off"
+      role="combobox"
+      aria-autocomplete="list"
+      [attr.id]="inputId()"
+      [attr.aria-controls]="listId"
+      [attr.aria-expanded]="open()"
+      [placeholder]="placeholderKey() | translate"
+      [attr.aria-label]="labelKey() ? (labelKey()! | translate) : null"
+      [value]="search()"
+      (focus)="onFocus()"
+      (input)="onInput($event)"
+      (blur)="close()"
+      (keydown.escape)="close()"
+    />
+    <ng-content />
+  </label>
+  @if (open()) {
+    <!-- Колеги під полем (прикріплені, поверх усього нижче): аватар і ПІБ. Вибір мишею не забирає фокус. -->
+    <div #dropdown class="colleague-search__list" role="listbox" [id]="listId" [attr.aria-label]="'planner.access.suggestions.label' | translate">
+      @switch (suggestions().status) {
+        @case ('loading') {
+          <p class="colleague-search__message">{{ 'planner.access.suggestions.loading' | translate }}</p>
+        }
+        @case ('failed') {
+          <p class="colleague-search__message colleague-search__message--error">{{ 'planner.access.suggestions.error' | translate }}</p>
+        }
+        @case ('ready') {
+          @for (colleague of candidates(); track colleague.id) {
+            @let isSelected = selected().has(colleague.id);
+            <!-- Рядок колеги; вибраний (при виборі кількох) — зелений ПІБ, галочка на аватарці й хрестик. -->
+            <div
+              class="colleague-search__option"
+              role="option"
+              [class.colleague-search__option--selected]="isSelected"
+              [attr.aria-selected]="isSelected"
+              (mousedown)="$event.preventDefault()"
+              (click)="pick(colleague)"
+            >
+              <span class="colleague-search__avatar">
+                <app-avatar [firstName]="colleague.firstName" [lastName]="colleague.lastName" [avatarUrl]="colleague.avatarUrl" [ngoName]="ngoName()" />
+                @if (isSelected) {
+                  <ion-icon class="colleague-search__check" name="checkmark" aria-hidden="true"></ion-icon>
+                }
+              </span>
+              <span class="colleague-search__name">{{ nameOf(colleague) }}</span>
+              @if (isSelected) {
+                <button
+                  type="button"
+                  class="colleague-search__unpick"
+                  tabindex="-1"
+                  [attr.aria-label]="'planner.access.suggestions.deselect' | translate: { name: nameOf(colleague) }"
+                  [attr.title]="'planner.access.suggestions.deselect' | translate: { name: nameOf(colleague) }"
+                  (click)="unpick(colleague, $event)"
+                >
+                  <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+                </button>
+              }
+            </div>
+          } @empty {
+            <p class="colleague-search__message">{{ 'planner.access.suggestions.empty' | translate }}</p>
+          }
+        }
+      }
+    </div>
+  }
+</div>

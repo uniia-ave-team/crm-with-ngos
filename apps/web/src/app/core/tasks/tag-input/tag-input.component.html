@@ -1,0 +1,50 @@
+<!-- Поле з плашками тегів і прикріпленим списком підказок. -->
+<div class="tag-input__field" [class.tag-input__field--open]="open()">
+  <label class="tag-input__box">
+    @for (tag of tags(); track tag) {
+      <span class="tag-input__tag">
+        <span class="tag-input__title">{{ tag }}</span>
+        <button
+          type="button"
+          class="tag-input__remove"
+          tabindex="-1"
+          [attr.aria-label]="'planner.tasks.tags.remove' | translate: { title: tag }"
+          [attr.title]="'planner.tasks.tags.remove' | translate: { title: tag }"
+          (mousedown)="$event.preventDefault()"
+          (click)="remove(tag)"
+        >
+          <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+        </button>
+      </span>
+    }
+    <input
+      #textInput
+      type="text"
+      class="tag-input__input"
+      tabindex="0"
+      autocomplete="off"
+      role="combobox"
+      aria-autocomplete="list"
+      [attr.id]="inputId()"
+      [attr.aria-controls]="listId"
+      [attr.aria-expanded]="open()"
+      [attr.maxlength]="maxLength"
+      [placeholder]="tags().length ? '' : ('planner.tasks.tags.placeholder' | translate)"
+      (focus)="focused.set(true)"
+      (blur)="onBlur()"
+      (input)="onInput($event)"
+      (keydown)="onKeydown($event)"
+      (keydown.escape)="focused.set(false)"
+    />
+  </label>
+  @if (open()) {
+    <!-- Наявні теги з набраним; вибір мишею не забирає фокус. -->
+    <div #dropdown class="tag-input__list" role="listbox" [id]="listId" [attr.aria-label]="'planner.tasks.tags.suggestions' | translate">
+      @for (title of matches(); track title) {
+        <div class="tag-input__option" role="option" aria-selected="false" (mousedown)="$event.preventDefault()" (click)="pick(title)">
+          {{ title }}
+        </div>
+      }
+    </div>
+  }
+</div>

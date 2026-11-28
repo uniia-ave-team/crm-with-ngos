@@ -18,9 +18,13 @@ import {
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { AccountsService } from './core/accounts/accounts.service';
+import { AppTitleService } from './core/i18n/app-title.service';
 import { TABLE_TEMPLATES_PERMISSIONS, hasAnyPermission } from './core/auth/permissions';
 import { ConnectionService } from './core/connection/connection.service';
 import { KbAddDialogComponent } from './core/knowledge-base/kb-add-dialog/kb-add-dialog.component';
+import { ProjectActionDialogComponent } from './core/projects/project-action-dialog/project-action-dialog.component';
+import { ProjectAddDialogComponent } from './core/projects/project-add-dialog/project-add-dialog.component';
+import { ProjectsService } from './core/projects/projects.service';
 import { KnowledgeBaseService } from './core/knowledge-base/knowledge-base.service';
 import { DemoBannerComponent } from './core/layout/demo-banner/demo-banner.component';
 import { LayoutService, LayoutSection } from './core/layout/layout.service';
@@ -54,6 +58,8 @@ import { PreloaderComponent } from './shared/preloader/preloader.component';
     SecondaryPanelComponent,
     PreloaderComponent,
     KbAddDialogComponent,
+    ProjectActionDialogComponent,
+    ProjectAddDialogComponent,
     RouterLink,
   ],
 })
@@ -66,6 +72,8 @@ export class AppComponent {
   /** Повідомлення про успіх, що переживає перехід на іншу сторінку (плашка вгорі). */
   protected readonly successNotice = inject(SuccessNoticeService);
   protected readonly knowledgeBase = inject(KnowledgeBaseService);
+  /** Проєкти «Планера»: чи можна створити проєкт (кнопка «+» бокового меню). */
+  protected readonly projects = inject(ProjectsService);
   /** Бокове меню (друга панель) відкрите як шторка (на телефоні): тоді видно плаваючу «+». */
   protected readonly menuOpen = signal(false);
 
@@ -84,6 +92,8 @@ export class AppComponent {
   };
 
   private readonly currentUser = inject(CurrentUserService);
+  /** Заголовок вкладки («ГО — Явір»): сервіс оновлює його сам, досить створити. */
+  private readonly appTitle = inject(AppTitleService);
   private readonly router = inject(Router);
   private readonly menu = inject(MenuController);
 

@@ -43,14 +43,8 @@
 </ng-template>
 
 @if (!blocks().length) {
-  <!-- Ні таблиць, ні сторінок, ні папок: ілюстрація за темою (`prefers-color-scheme`) і підпис. -->
-  <div class="kb-contents__empty">
-    <picture>
-      <source srcset="assets/empty_dark.svg" media="(prefers-color-scheme: dark)" />
-      <img class="kb-contents__empty-image" src="assets/empty_light.svg" alt="" width="184" height="200" />
-    </picture>
-    <p class="kb-contents__empty-text">{{ 'knowledgeBase.empty' | translate }}</p>
-  </div>
+  <!-- Ні таблиць, ні сторінок, ні папок: спільний порожній стан. -->
+  <app-empty-state class="kb-contents__empty" />
 }
 
 <div class="kb-contents__grid">

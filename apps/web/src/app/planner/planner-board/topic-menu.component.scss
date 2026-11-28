@@ -1,0 +1,9 @@
+// Повідомлення у вікні «Видалити» (перевірка завдань колонки чи неможливість видалення).
+.topic-menu__message {
+  margin: 0;
+  padding: 16px 0 4px;
+  font-family: var(--font-menu);
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--nav-fg-active);
+}

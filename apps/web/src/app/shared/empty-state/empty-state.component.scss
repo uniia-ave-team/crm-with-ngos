@@ -1,0 +1,22 @@
+// Ілюстрація й підпис посередині.
+:host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.empty-state__image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.empty-state__text {
+  margin: 0;
+  color: var(--nav-fg-inactive);
+  font-family: var(--font-menu);
+  font-size: 15px;
+  line-height: 1.4;
+}

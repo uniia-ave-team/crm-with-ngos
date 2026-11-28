@@ -1,0 +1,55 @@
+:host {
+  display: flex;
+  align-self: center;
+}
+
+// Аватарки внахлест — кожна наступна лежить на попередній на половину ширини (друга на першій,
+// «...» на другій); у справжніх білий контур, у «...» — пунктирний.
+.member-avatars {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--nav-fg-active);
+    outline-offset: 2px;
+  }
+}
+
+.member-avatars__item {
+  --avatar-size: 36px;
+  position: relative;
+  box-sizing: content-box;
+  border: 2px solid #fff;
+  border-radius: 38%;
+
+  & + & {
+    margin-inline-start: -18px;
+  }
+
+  &:nth-child(2) {
+    z-index: 1;
+  }
+
+  &:nth-child(3) {
+    z-index: 2;
+  }
+
+  &--more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+    border: 2px dashed var(--nav-fg-inactive);
+    background: var(--nav-bg);
+    color: var(--nav-fg-inactive);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+}

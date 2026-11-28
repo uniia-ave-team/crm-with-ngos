@@ -1,0 +1,124 @@
+:host {
+  display: block;
+  font-family: var(--font-menu);
+  color: var(--nav-fg-active);
+}
+
+// Сортування й картки — лише на телефоні (до 768px), замість таблиці.
+.my-tasks__sort,
+.my-tasks__cards {
+  display: none;
+}
+
+.my-tasks__cards {
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 16px;
+  list-style: none;
+}
+
+@media (max-width: 767px) {
+  app-data-table {
+    display: none;
+  }
+
+  .my-tasks__sort {
+    display: block;
+    padding: 8px 16px 0;
+  }
+
+  .my-tasks__cards {
+    display: flex;
+  }
+}
+
+.my-tasks__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+}
+
+.my-tasks__title-text {
+  overflow-wrap: anywhere;
+}
+
+// Іконка коментарів; є нові — червоний кружок у правому верхньому куті.
+.my-tasks__comments {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  color: var(--nav-fg-inactive);
+  font-size: 14px;
+
+  &--unread::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 7px;
+    height: 7px;
+    border: 1.5px solid var(--ion-background-color);
+    border-radius: 50%;
+    background: var(--task-priority-critical);
+  }
+}
+
+.my-tasks__assignees {
+  --task-assignee-size: 28px;
+}
+
+.my-tasks__dates {
+  display: flex;
+  flex-direction: column;
+  color: var(--nav-fg-inactive);
+  font-size: 13px;
+}
+
+// Пріоритет у таблиці — без крапки; високий і критичний — жирніше.
+.my-tasks__priority {
+  font-size: 14px;
+
+  &::before {
+    content: none;
+  }
+
+  &[data-priority='2'],
+  &[data-priority='3'] {
+    font-weight: 700;
+  }
+}
+
+.my-tasks__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.my-tasks__message {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 24px;
+  color: var(--nav-fg-inactive);
+
+  &--error {
+    color: var(--nav-unavailable-icon);
+  }
+}
+
+.my-tasks__retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.my-tasks__empty {
+  min-height: 60vh;
+}

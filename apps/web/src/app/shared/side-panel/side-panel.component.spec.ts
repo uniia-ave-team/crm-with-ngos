@@ -140,6 +140,19 @@ describe('SidePanelComponent', () => {
       expect(panel.isOpen()).toBe(false);
     });
 
+    it('does not close it, when the click is in a popover or a modal on top of the page', () => {
+      const { panel } = opened();
+      for (const name of ['ion-popover', 'ion-modal']) {
+        const overlay = document.createElement(name);
+        const item = document.createElement('button');
+        overlay.append(item);
+        document.body.append(overlay);
+        item.click();
+        overlay.remove();
+      }
+      expect(panel.isOpen()).toBe(true);
+    });
+
     it('does not close it, when the click is on the content, the button of the header or the cross area', () => {
       const { fixture, element, panel, aside } = opened();
       (element.querySelector('.content') as HTMLElement).click();

@@ -65,7 +65,6 @@ describe('PrimaryNavComponent avatar initials', () => {
     const calendarTab = element.querySelector('.bottom-tabs__item[href="/calendar"]')!;
     expect(calendarRail.classList).toContain('planned');
     expect(calendarTab.classList).toContain('planned');
-    expect(element.querySelector('.bottom-tabs__item[href="/planner"]')?.classList).not.toContain('planned');
   });
 
   it('keeps «Зоря» planned in the rail and in the mobile top bar: in the markup, but not shown', () => {
@@ -351,14 +350,14 @@ describe('PrimaryNavComponent admin item', () => {
 
   it('shows the item in the rail and in the bottom tabs when the user has all three rights', () => {
     const { element } = render(ALL);
-    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner', '/admin-panel']);
-    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner', '/admin-panel']);
+    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/admin-panel']);
+    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/admin-panel']);
   });
 
   it('hides the item when there are no rights at all (also until they are received)', () => {
     const { element } = render([]);
-    expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner']);
-    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner']);
+    expect(urls(element, '.rail__item')).toEqual(['/calendar']);
+    expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar']);
   });
 
   it.each(ALL)('shows the item when the user has only the right %s', (right) => {
@@ -430,9 +429,19 @@ describe('PrimaryNavComponent colleagues item', () => {
   }
 
   it('is shown in the rail and in the bottom tabs with Permissions.ViewUser, in its place after the knowledge base', () => {
-    const { element } = render(['Permissions.ViewUser', 'Permissions.ViewCustomTable']);
+    const { element } = render(['Permissions.ViewUser', 'Permissions.ViewCustomTable', 'Permissions.ViewProject']);
     expect(urls(element, '.rail__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues']);
     expect(urls(element, '.bottom-tabs__item')).toEqual(['/calendar', '/planner', '/knowledge-base', '/colleagues']);
+  });
+
+  it('shows «Planner» only with Permissions.ViewProject; the logo leads to the start page', () => {
+    expect(urls(render(['Permissions.ViewProject']).element, '.rail__item')).toContain('/planner');
+    for (const rights of [[], ['Permissions.ViewTask', 'Permissions.CreateProject']]) {
+      const { element } = render(rights);
+      expect(urls(element, '.rail__item')).not.toContain('/planner');
+      expect(urls(element, '.bottom-tabs__item')).not.toContain('/planner');
+      expect(urls(element, '.rail__logo, .mobile-topbar__logo')).toEqual(['/start', '/start']);
+    }
   });
 
   it('shows «Knowledge base» only with Permissions.ViewCustomTable', () => {

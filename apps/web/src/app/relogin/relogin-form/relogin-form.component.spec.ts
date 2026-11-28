@@ -103,7 +103,7 @@ describe('ReloginFormComponent', () => {
       expect(form.accountId()).toBe('a');
     });
 
-    it('checks the connection of the new active account and opens the planner again after a sign-in', async () => {
+    it('checks the connection of the new active account and opens the start page again after a sign-in', async () => {
       const fixture = open();
       const checkApi = vi.spyOn(connection, 'checkApi').mockResolvedValue('healthy');
       const order: string[] = [];
@@ -119,7 +119,7 @@ describe('ReloginFormComponent', () => {
       await signInForm(fixture).afterSignIn()!();
 
       expect(order).toEqual(['check', 'navigate']);
-      expect(navigate).toHaveBeenCalledWith('/planner', { onSameUrlNavigation: 'reload' });
+      expect(navigate).toHaveBeenCalledWith('/start', { onSameUrlNavigation: 'reload' });
     });
   });
 

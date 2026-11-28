@@ -498,6 +498,8 @@ describe('ColleaguesPage', () => {
         const dots = Array.from(element.querySelectorAll('.position__dot'));
         expect(dots.every((d) => d.classList.contains('position__dot--green') || d.classList.contains('position__dot--blue'))).toBe(true);
         expect(element.querySelector('.position__line')?.textContent?.trim()).toBe(uk.colleagues.sample.line);
+        // Заплановані: у розмітці, але приховані, поки сервер не віддає ролей колеги в проєктах.
+        expect(Array.from(element.querySelectorAll('.position__line')).every((line) => line.classList.contains('planned'))).toBe(true);
         const first = rows[0].querySelector('.position') as HTMLElement;
         expect(first.firstElementChild?.classList).toContain('position__roles');
       });

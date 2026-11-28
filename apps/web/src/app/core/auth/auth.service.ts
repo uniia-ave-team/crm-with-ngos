@@ -38,10 +38,11 @@ export function signedOutUrl(accounts: AccountsService): string {
 /**
  * Куди переходить користувач, коли вхід у систему завершено (після входу, коли
  * ГО вже є, після створення ГО й після успішного оновлення сесії) і куди його
- * повертає сторінка, на яку йому бракує прав (`requireAnyPermission`). Щоб
- * змінити цю адресу — міняти лише тут.
+ * повертає сторінка, на яку йому бракує прав (`requireAnyPermission`): стартова
+ * сторінка (`start/start.page.ts`), яка сама веде на першу доступну за правами (Планер, База
+ * знань, Колеги) або, якщо такої нема, показує порожній стан.
  */
-export const REDIRECT_URL = '/planner';
+export const REDIRECT_URL = '/start';
 
 /** Імʼя блокування (Web Locks), що не дає двом вкладкам оновлювати токени одночасно. */
 const REFRESH_LOCK_NAME = 'yavir-refresh-tokens';

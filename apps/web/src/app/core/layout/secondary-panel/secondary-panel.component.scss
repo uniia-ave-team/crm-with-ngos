@@ -239,4 +239,46 @@ a.tree__link {
   color: var(--nav-fg-inactive);
   font-size: 13px;
   font-style: italic;
+
+  // Невдача завантаження: текст і «Спробувати ще раз».
+  &--error {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    color: var(--nav-unavailable-icon);
+    font-style: normal;
+  }
+}
+
+.hint__retry {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+// Проєкт «Планера»: кружок кольору за назвою (обвідка; `--project-base` у світлій темі,
+// `--project-light` у темній) і назва, обрізана трикрапкою; у відкритого проєкту кружок заповнений.
+.tree__project-dot {
+  --project-color: var(--project-base, var(--nav-fg-inactive));
+  flex: none;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 2px solid var(--project-color);
+  border-radius: 50%;
+
+  .tree__link--active & {
+    background: var(--project-color);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .tree__project-dot {
+    --project-color: var(--project-light, var(--nav-fg-inactive));
+  }
 }

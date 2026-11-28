@@ -68,7 +68,7 @@ describe('KbContentsComponent', () => {
     host.entries.set([{ id: 'h', type: 'home', title: '' }]);
     TestBed.tick();
     const empty = element.querySelector('.kb-contents__empty')!;
-    expect(text(empty.querySelector('.kb-contents__empty-text'))).toBe(uk.knowledgeBase.empty);
+    expect(text(empty.querySelector('.empty-state__text'))).toBe('Тут поки порожньо');
     expect(empty.querySelector('img')?.getAttribute('src')).toBe('assets/empty_light.svg');
     expect(empty.querySelector('source')?.getAttribute('srcset')).toBe('assets/empty_dark.svg');
     expect(empty.querySelector('source')?.getAttribute('media')).toBe('(prefers-color-scheme: dark)');

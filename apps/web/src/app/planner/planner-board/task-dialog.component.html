@@ -1,0 +1,17 @@
+<!-- Вікно завдання (по центру екрана): шапка з назвою й хрестиком, під нею — форма. -->
+@let heading = title();
+<app-modal width="min(520px, calc(100vw - 32px))" [label]="heading.key | translate: { title: heading.topic }" (closed)="onClosed()">
+  @if (dialog(); as current) {
+    <app-dialog-header [title]="heading.key | translate: { title: heading.topic }" (dismiss)="close()" />
+    <app-task-form
+      [colleagues]="colleagues()"
+      [initial]="initial()"
+      [tagSuggestions]="tagSuggestions()"
+      [allowNewTags]="allowNewTags()"
+      [submitLabelKey]="current.mode === 'edit' ? 'planner.dialogs.edit.save' : 'planner.tasks.add.submit'"
+      [busy]="busy()"
+      [error]="error()"
+      (submitted)="submit($event)"
+    />
+  }
+</app-modal>

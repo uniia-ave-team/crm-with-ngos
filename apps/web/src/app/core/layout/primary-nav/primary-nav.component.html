@@ -1,6 +1,6 @@
 <!-- Десктоп: вертикальна панель -->
 <nav class="rail" [attr.aria-label]="'common.mainNav' | translate">
-  <a class="rail__logo" routerLink="/planner" [attr.aria-label]="'nav.logo' | translate">
+  <a class="rail__logo" [routerLink]="startUrl" [attr.aria-label]="'nav.logo' | translate">
     <img class="theme-light" src="assets/logo.svg" alt="" />
     <img class="theme-dark" src="assets/logo_dark.svg" alt="" />
   </a>
@@ -56,7 +56,7 @@
   >
     <app-avatar [firstName]="user()?.firstName" [lastName]="user()?.lastName" [avatarUrl]="user()?.avatarUrl" [ngoName]="ngoName()" />
   </button>
-  <a class="mobile-topbar__logo" routerLink="/planner" [attr.aria-label]="'nav.logo' | translate">
+  <a class="mobile-topbar__logo" [routerLink]="startUrl" [attr.aria-label]="'nav.logo' | translate">
     <img class="theme-light" [src]="'assets/' + mobileLogoBase() + '.svg'" alt="" />
     <img class="theme-dark" [src]="'assets/' + mobileLogoBase() + '_dark.svg'" alt="" />
   </a>

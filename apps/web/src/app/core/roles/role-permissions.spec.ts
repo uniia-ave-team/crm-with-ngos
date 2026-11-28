@@ -1,5 +1,5 @@
 import { PERMISSIONS, Permission } from '../auth/permissions';
-import { ALWAYS_GRANTED_PERMISSIONS, PERMISSION_GROUPS, PermissionGroup, canGrantGroup, claimsOfGroups, diffClaims } from './role-permissions';
+import { ALWAYS_GRANTED_PERMISSIONS, UNUSED_PERMISSIONS, PERMISSION_GROUPS, PermissionGroup, canGrantGroup, claimsOfGroups, diffClaims } from './role-permissions';
 
 describe('role-permissions', () => {
   const group = (...rights: string[]): PermissionGroup => ({ id: 'g', permissions: rights.map((right) => `Permissions.${right}` as Permission) });
@@ -32,15 +32,20 @@ describe('role-permissions', () => {
     });
   });
 
-  it('has ten groups with unique ids and no permission in two groups', () => {
-    expect(PERMISSION_GROUPS).toHaveLength(10);
-    expect(new Set(PERMISSION_GROUPS.map((candidate) => candidate.id)).size).toBe(10);
+  it('has thirteen groups with unique ids and no permission in two groups', () => {
+    expect(PERMISSION_GROUPS).toHaveLength(13);
+    expect(new Set(PERMISSION_GROUPS.map((candidate) => candidate.id)).size).toBe(13);
     const all = PERMISSION_GROUPS.flatMap((candidate) => candidate.permissions);
     expect(new Set(all).size).toBe(all.length);
   });
 
-  it('leaves no permission of the server out: each one is in a group, is given to every role, or is CreateNgo of the first user', () => {
-    const placed = [...PERMISSION_GROUPS.flatMap((candidate) => candidate.permissions), ...ALWAYS_GRANTED_PERMISSIONS, PERMISSIONS.createNgo];
+  it('leaves no permission of the server out: each one is in a group, is given to every role, is CreateNgo of the first user or is not used yet', () => {
+    const placed = [
+      ...PERMISSION_GROUPS.flatMap((candidate) => candidate.permissions),
+      ...ALWAYS_GRANTED_PERMISSIONS,
+      PERMISSIONS.createNgo,
+      ...UNUSED_PERMISSIONS,
+    ];
     expect([...placed].sort()).toEqual(Object.values(PERMISSIONS).sort());
   });
 

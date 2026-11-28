@@ -1,0 +1,54 @@
+<div class="settings-field">
+  <label class="settings-field__label" [attr.for]="idPrefix() + '-start'">
+    {{ 'planner.dialogs.add.startDate' | translate
+    }}<span class="settings-field__required" aria-hidden="true" [attr.title]="'common.required' | translate">*</span>
+  </label>
+  <input
+    class="settings-input"
+    type="date"
+    tabindex="0"
+    required
+    [id]="idPrefix() + '-start'"
+    [value]="start()"
+    [attr.aria-invalid]="startError() ? true : null"
+    [attr.aria-describedby]="startError() ? idPrefix() + '-start-error' : null"
+    (input)="onStart($event)"
+  />
+  @if (startError(); as errorKey) {
+    <p class="settings-field__error" role="alert" [id]="idPrefix() + '-start-error'">{{ errorKey | translate }}</p>
+  }
+</div>
+
+<div class="settings-field">
+  <label class="settings-field__label" [attr.for]="idPrefix() + '-end'">{{ 'planner.dialogs.add.endDate' | translate }}</label>
+  <!-- Поле й хрестик «Скинути дату кінця» — одним блоком (хрестик — коли дату вибрано). -->
+  <span class="date-range__end">
+    <input
+      #endInput
+      class="settings-input date-range__end-input"
+      type="date"
+      tabindex="0"
+      [id]="idPrefix() + '-end'"
+      [attr.min]="start() || null"
+      [value]="end()"
+      [attr.aria-invalid]="endError() ? true : null"
+      [attr.aria-describedby]="endError() ? idPrefix() + '-end-error' : null"
+      (input)="onEnd($event)"
+    />
+    @if (end()) {
+      <button
+        type="button"
+        class="date-range__clear"
+        tabindex="0"
+        [attr.aria-label]="'planner.dialogs.add.clearEndDate' | translate"
+        [attr.title]="'planner.dialogs.add.clearEndDate' | translate"
+        (click)="clearEnd(endInput)"
+      >
+        <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+      </button>
+    }
+  </span>
+  @if (endError(); as errorKey) {
+    <p class="settings-field__error" role="alert" [id]="idPrefix() + '-end-error'">{{ errorKey | translate }}</p>
+  }
+</div>

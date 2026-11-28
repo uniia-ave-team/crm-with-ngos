@@ -1,0 +1,77 @@
+@switch (state().status) {
+  @case ('loading') {
+    <p class="board__message" role="status">{{ 'planner.board.loading' | translate }}</p>
+  }
+  @case ('failed') {
+    <p class="board__message board__message--error" role="alert">
+      <span>{{ 'planner.board.error' | translate }}</span>
+      <button type="button" class="board__retry" tabindex="0" (click)="retry()">{{ 'planner.board.retry' | translate }}</button>
+    </p>
+  }
+  @case ('ready') {
+    @if (state(); as ready) {
+      @if (ready.status === 'ready') {
+        @if (ready.topics.length) {
+          <!-- Колонки в один ряд праворуч, ряд прокручується по горизонталі. -->
+          <!-- Три крапки колонки: меню «Редагувати» / «Видалити» з їхніми вікнами. -->
+          <app-topic-menu #topicMenu [projectId]="projectId()" />
+          <!-- «+» колонки — вікно нового завдання в ній, «Редагувати» картки — зміни завдання. -->
+          <app-task-dialog #taskDialog />
+          <!-- Три крапки картки: меню «Детальніше» / «Редагувати» / «Видалити». -->
+          <app-task-menu
+            #taskMenu
+            [projectId]="projectId()"
+            [canEdit]="canEditTasks()"
+            [canDelete]="canDeleteTasks()"
+            (details)="openTask.emit($event)"
+            (edit)="taskDialog.edit(projectId(), $event)"
+          />
+          <div #columns class="board__columns" role="list" [attr.aria-label]="'planner.board.label' | translate" (scroll)="onScroll($event)">
+            @for (topic of ready.topics; track topic.id) {
+              <section class="board__column" role="listitem" [attr.aria-label]="topic.title">
+                <!-- Назва, праворуч «+» (з CreateTask) і три крапки (з UpdateProject). -->
+                <div class="board__column-head">
+                  <h2 class="board__column-title" [title]="topic.title">{{ topic.title }}</h2>
+                  @if (canAddTask()) {
+                    <button
+                      type="button"
+                      class="board__column-button"
+                      tabindex="0"
+                      [attr.aria-label]="'planner.board.addTask' | translate: { title: topic.title }"
+                      [attr.title]="'planner.board.addTask' | translate: { title: topic.title }"
+                      (click)="taskDialog.create(projectId(), topic)"
+                    >
+                      <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+                    </button>
+                  }
+                  @if (canEditTopics()) {
+                    <button
+                      type="button"
+                      class="board__column-button"
+                      tabindex="0"
+                      [attr.aria-label]="'planner.board.topicActions' | translate: { title: topic.title }"
+                      (click)="topicMenu.open($event, topic)"
+                    >
+                      <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+                    </button>
+                  }
+                </div>
+                <!-- Картки завдань колонки: підвантажуються при прокрутці, список прокручується всередині колонки. -->
+                <app-board-tasks
+                  [projectId]="projectId()"
+                  [topicId]="topic.id"
+                  [label]="topic.title"
+                  [canEdit]="canEditTasks()"
+                  (menu)="taskMenu.open($event.anchor, $event.task)"
+                  (openTask)="openTask.emit($event)"
+                />
+              </section>
+            }
+          </div>
+        } @else {
+          <app-empty-state class="board__empty" />
+        }
+      }
+    }
+  }
+}

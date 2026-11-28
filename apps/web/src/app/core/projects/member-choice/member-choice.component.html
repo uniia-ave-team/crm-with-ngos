@@ -1,0 +1,16 @@
+<app-avatar class="choice__avatar" [firstName]="user().firstName" [lastName]="user().lastName" [avatarUrl]="user().avatarUrl" [ngoName]="ngoName()" />
+<div class="choice__text">
+  <span class="choice__name" [title]="name()">{{ name() }}</span>
+  <input
+    class="choice__role"
+    type="text"
+    tabindex="0"
+    autocomplete="off"
+    autofocus
+    [attr.maxlength]="maxLength"
+    [placeholder]="'planner.access.rolePlaceholder' | translate"
+    [attr.aria-label]="'planner.access.roleLabel' | translate: { name: name() }"
+    [value]="roleTitle()"
+    (input)="onRole($event)"
+  />
+</div>

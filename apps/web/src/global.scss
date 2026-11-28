@@ -83,11 +83,12 @@ ion-toolbar::part(background) {
 
 /*
  * Тінь шапки сидить не на ion-header, а на класі .header-md/.header-ios,
- * який Ionic сам додає на той самий елемент (header.md.css) — селектор за
- * класом специфічніший за селектор за тегом, тому й потрібен саме він.
+ * який Ionic сам додає на той самий елемент (header.md.css). Стилі Ionic
+ * підключаються після global.scss, тож лише клас (та сама специфічність)
+ * програє — потрібні тег і клас разом.
  */
-.header-md,
-.header-ios {
+ion-header.header-md,
+ion-header.header-ios {
   box-shadow: none;
 }
 

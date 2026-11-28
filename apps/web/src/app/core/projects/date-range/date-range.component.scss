@@ -1,0 +1,64 @@
+// Поля — спільні з формами налаштувань (`settings-section.scss`), на всю ширину стовпчика.
+// Дата початку й кінця поруч, якщо обом вистачає місця (щонайменше 160px), інакше одна під одною.
+:host {
+  // Без відступів сторінки налаштувань (`settings-section.scss`): блок — частина форми.
+  display: grid;
+  padding: 0;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 20px 16px;
+  align-self: stretch;
+}
+
+.settings-input {
+  max-width: none;
+}
+
+// Дата кінця з хрестиком: рамка й тло — спільні на поле й кнопку, тож вони виглядають одним полем;
+// між ними — риска.
+.date-range__end {
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 40px;
+  border: 1px solid var(--nav-border);
+  border-radius: 10px;
+  background: var(--nav-bg);
+
+  &:focus-within {
+    border-color: var(--settings-accent);
+  }
+}
+
+.date-range__end-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+}
+
+.date-range__clear {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
+  border: 0;
+  // Риска між полем і хрестиком — того самого кольору, що й рамка.
+  border-left: 1px solid var(--nav-border);
+  border-radius: 0 9px 9px 0;
+  background: transparent;
+  color: var(--nav-fg-inactive);
+  font-size: 18px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--nav-fg-active);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--settings-accent);
+    outline-offset: -2px;
+  }
+}

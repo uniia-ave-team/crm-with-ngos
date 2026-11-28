@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, Injector, Signal, afterNextRender, inject, input, output, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, Injector, Signal, afterNextRender, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
 import { IonIcon } from '@ionic/angular';
 import { TranslatePipe } from '@ngx-translate/core';
 
@@ -21,6 +21,11 @@ import { TranslatePipe } from '@ngx-translate/core';
  * 0 → 1), тож рух рівномірний і без стрибків. Схований заголовок і закрите поле — `inert`: до
  * них не дістатися ні клавіатурою, ні допоміжними технологіями.
  *
+ * Замість тексту заголовка можна покласти свій блок з атрибутом `searchHeaderTitle` (`title` тоді
+ * порожній) — він поводиться так само (виїжджає, коли відкрито пошук) і займає всю висоту рядка.
+ * Висоту рядка задає змінна `--search-header-height` (за замовчуванням 56px). Без пошуку
+ * (`searchable` — `false`) лупи й поля нема.
+ *
  * `searchChange` — текст поля при кожній його зміні, як є (з пробілами); закриття з непорожнім полем
  * теж зміна: `searchChange` віддає порожній рядок.
  */
@@ -36,7 +41,10 @@ const CLOSE_FALLBACK_MS = 300;
   imports: [IonIcon, TranslatePipe],
 })
 export class SearchHeaderComponent {
-  readonly title = input.required<string>();
+  /** Текст заголовка; порожній — заголовок свій (`[searchHeaderTitle]` усередині, як вкладки планера). */
+  readonly title = input('');
+  /** Чи є пошук: ні — лупи й поля нема (відкритий пошук закривається). */
+  readonly searchable = input(true);
   /** Підказка в порожньому полі. */
   readonly placeholder = input('');
   /**
@@ -64,12 +72,18 @@ export class SearchHeaderComponent {
   private readonly titleElement = viewChild.required<ElementRef<HTMLElement>>('titleText');
   private releaseTimer: ReturnType<typeof setTimeout> | undefined;
 
-  private readonly input = viewChild.required<ElementRef<HTMLInputElement>>('input');
-  private readonly toggle = viewChild.required<ElementRef<HTMLButtonElement>>('toggle');
+  private readonly input = viewChild<ElementRef<HTMLInputElement>>('input');
+  private readonly toggle = viewChild<ElementRef<HTMLButtonElement>>('toggle');
   private readonly injector = inject(Injector);
 
   constructor() {
     inject(DestroyRef).onDestroy(() => clearTimeout(this.releaseTimer));
+    // Пошук прибрали, поки він відкритий, — закриваємо (поле порожніє).
+    effect(() => {
+      if (!this.searchable() && untracked(() => this.open())) {
+        untracked(() => this.close());
+      }
+    });
   }
 
   protected onToggle(): void {
@@ -81,7 +95,7 @@ export class SearchHeaderComponent {
         this.titleWidth.set(this.titleElement().nativeElement.getBoundingClientRect().width);
       }
       this.openSignal.set(true);
-      afterNextRender(() => this.input().nativeElement.focus(), { injector: this.injector });
+      afterNextRender(() => this.input()?.nativeElement.focus(), { injector: this.injector });
     }
   }
 
@@ -104,12 +118,16 @@ export class SearchHeaderComponent {
   }
 
   protected close(): void {
+    const wasOpen = this.openSignal();
     this.openSignal.set(false);
     // Ширина звільняється, коли місце під назву розгорнулося (`onTitleSlotTransitionEnd`); запасний
     // таймер — якщо анімації нема (`prefers-reduced-motion`) чи подія не прийшла.
     clearTimeout(this.releaseTimer);
     this.releaseTimer = setTimeout(() => this.releaseTitleWidth(), CLOSE_FALLBACK_MS);
-    afterNextRender(() => this.toggle().nativeElement.focus(), { injector: this.injector });
+    // Фокус — на лупу, якщо пошук закрили нею чи Esc (а не прибрали разом із лупою).
+    if (wasOpen && this.searchable()) {
+      afterNextRender(() => this.toggle()?.nativeElement.focus(), { injector: this.injector });
+    }
     if (this.text()) {
       this.onInput('');
     }

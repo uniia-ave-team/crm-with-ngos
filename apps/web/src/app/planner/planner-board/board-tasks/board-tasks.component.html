@@ -1,0 +1,21 @@
+@if (state().tasks.length) {
+  <ul class="board-tasks__list" [attr.aria-label]="label()">
+    @for (task of state().tasks; track task.id) {
+      <li>
+        <app-task-card
+          [task]="task"
+          [projectId]="projectId()"
+          [canEdit]="canEdit()"
+          (menu)="menu.emit($event)"
+          (open)="openTask.emit(task)"
+        />
+      </li>
+    }
+  </ul>
+}
+@if (state().status === 'failed') {
+  <p class="board-tasks__message" role="alert">
+    <span>{{ 'planner.myTasks.error' | translate }}</span>
+    <button type="button" class="board-tasks__retry" tabindex="0" (click)="reload()">{{ 'planner.board.retry' | translate }}</button>
+  </p>
+}

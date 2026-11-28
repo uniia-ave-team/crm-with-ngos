@@ -68,6 +68,8 @@ export interface DataTableColumn {
    * Сама таблиця нічого не надсилає, вона лише віддає колонку подією `sortChange`.
    */
   readonly orderBy?: string;
+  /** `false` — колонку не сортують: заголовок — просто текст, без кнопки й іконки. */
+  readonly sortable?: boolean;
 }
 
 /**
@@ -82,7 +84,8 @@ export interface DataTableColumn {
  * наведенні на рядок (на пристроях без наведення — завжди) і подає `rowMenu` з
  * цим рядком і самою кнопкою (до неї прив'язують спливаюче вікно). В кінці рядка
  * заголовків — завжди видимий «+», що подає `columnAdd`. Наведений рядок
- * виділяється акцентним кольором (`--nav-active-bg`).
+ * виділяється акцентним кольором (`--nav-active-bg`). З `clickableRows` клік по рядку (не по трьох
+ * крапках) подає `rowClick`.
  *
  * Заголовки колонок — кнопки сортування. Клік по заголовку: перший раз «від меншого
  * до більшого» (іконка `caret-down-outline`), другий — навпаки (`caret-up-outline`),
@@ -115,6 +118,8 @@ export class DataTableComponent {
   readonly addColumnPlanned = input(false);
   /** Показувати кнопку з трьома крапками в кінці рядків (без неї комірка порожня). */
   readonly showRowMenu = input(true);
+  /** Найменша ширина таблиці (CSS-значення; `null` — 760px): вужче — горизонтальна прокрутка. */
+  readonly minWidth = input<string | null>(null);
   /** Вертикальні лінії між стовпчиками (таблиці «Бази знань»). */
   readonly columnLines = input(false);
   /**
@@ -129,8 +134,12 @@ export class DataTableComponent {
    * `null` — без порядку за замовчуванням.
    */
   readonly defaultSortColumnId = input<string | null>(null);
+  /** Рядки відкриваються кліком (тоді — курсор-рука й `rowClick`). */
+  readonly clickableRows = input(false);
   /** Натиснули кнопку з трьома крапками в кінці рядка. */
   readonly rowMenu = output<DataTableRowMenuEvent>();
+  /** Клік по рядку (не по трьох крапках) — лише з `clickableRows`. */
+  readonly rowClick = output<DataTableRow>();
   /** Натиснули «+» в кінці рядка заголовків. */
   readonly columnAdd = output<void>();
   /** Змінилося сортування: вибрана колонка з напрямом, `null` — вибір скинуто. */
@@ -168,7 +177,15 @@ export class DataTableComponent {
   }
 
   protected openMenu(row: DataTableRow, event: Event): void {
+    // Три крапки — лише меню, не клік по рядку.
+    event.stopPropagation();
     this.rowMenu.emit({ row, anchor: event.currentTarget as HTMLElement });
+  }
+
+  protected onRowClick(row: DataTableRow): void {
+    if (this.clickableRows()) {
+      this.rowClick.emit(row);
+    }
   }
 
   protected text(row: DataTableRow, column: DataTableColumn): string {

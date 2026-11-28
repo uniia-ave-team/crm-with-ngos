@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { CUSTOM_ELEMENTS_SCHEMA, Signal, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 
 import { Router, provideRouter } from '@angular/router';
 import { MenuController, provideIonicAngular } from '@ionic/angular';
@@ -14,6 +15,7 @@ import { SuccessNoticeService } from './core/notice/success-notice.service';
 import { AccountsService } from './core/accounts/accounts.service';
 import { ConnectionService } from './core/connection/connection.service';
 import { KnowledgeBaseService } from './core/knowledge-base/knowledge-base.service';
+import { ProjectAddDialogComponent } from './core/projects/project-add-dialog/project-add-dialog.component';
 import { CurrentUserService } from './core/users/current-user.service';
 
 describe('AppComponent', () => {
@@ -123,6 +125,45 @@ describe('AppComponent', () => {
     it('is not there in other sections', async () => {
       const { element } = await renderAt('/planner');
       expect(element.querySelector('.shell__menu-add')).toBeNull();
+      expect(element.querySelector('.shell__menu-fab')).toBeNull();
+    });
+  });
+
+  describe('«+» of the planner (a new project)', () => {
+    async function renderAt(permissions: string[]) {
+      (TestBed.inject(CurrentUserService) as { permissions: Signal<readonly string[]> }).permissions = signal(permissions);
+      await TestBed.inject(Router).navigateByUrl('/planner');
+      const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+      return { fixture, element: fixture.nativeElement as HTMLElement };
+    }
+
+    it('stands before the collapse button with Permissions.CreateProject, and floats on a phone while the menu is open', async () => {
+      const { fixture, element } = await renderAt(['Permissions.CreateProject']);
+      const buttons = Array.from(element.querySelectorAll('ion-menu ion-buttons ion-button'));
+      expect(buttons.map((button) => button.getAttribute('title'))).toEqual([uk.planner.addProject, uk.common.collapsePanel]);
+      expect(element.querySelector('.shell__menu-fab')).toBeNull();
+      element.querySelector('ion-menu')!.dispatchEvent(new CustomEvent('ionWillOpen'));
+      fixture.detectChanges();
+      expect(element.querySelector('.shell__menu-fab')?.getAttribute('aria-label')).toBe(uk.planner.addProject);
+    });
+
+    it('opens the window «New project» by the header button and by the floating one', async () => {
+      const { fixture, element } = await renderAt(['Permissions.CreateProject']);
+      const dialog = fixture.debugElement.query(By.directive(ProjectAddDialogComponent)).componentInstance as ProjectAddDialogComponent;
+      const open = vi.spyOn(dialog, 'open').mockImplementation(() => undefined);
+      (element.querySelector('.shell__menu-add') as HTMLElement).click();
+      element.querySelector('ion-menu')!.dispatchEvent(new CustomEvent('ionWillOpen'));
+      fixture.detectChanges();
+      (element.querySelector('.shell__menu-fab') as HTMLElement).click();
+      expect(open).toHaveBeenCalledTimes(2);
+    });
+
+    it('is not there without Permissions.CreateProject', async () => {
+      const { fixture, element } = await renderAt(['Permissions.ViewProject']);
+      expect(element.querySelector('.shell__menu-add')).toBeNull();
+      element.querySelector('ion-menu')!.dispatchEvent(new CustomEvent('ionWillOpen'));
+      fixture.detectChanges();
       expect(element.querySelector('.shell__menu-fab')).toBeNull();
     });
   });

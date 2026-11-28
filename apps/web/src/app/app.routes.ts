@@ -2,7 +2,7 @@ import { Route, Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { requireAnyPermission } from './core/auth/permission.guard';
-import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, KNOWLEDGE_BASE_PERMISSIONS } from './core/auth/permissions';
+import { ADMIN_PANEL_PERMISSIONS, COLLEAGUES_PERMISSIONS, KNOWLEDGE_BASE_PERMISSIONS, PLANNER_PERMISSIONS } from './core/auth/permissions';
 import { connectionGuard } from './core/connection/connection.guard';
 
 /**
@@ -31,6 +31,13 @@ export const routes: Routes = [
     pathMatch: 'full',
   },
   {
+    // Стартова сторінка (`REDIRECT_URL`): веде на першу доступну за правами (див. `start-url.ts`),
+    // а якщо такої нема — лишається з порожнім станом і бічним меню (звідти — Адмін і налаштування).
+    path: 'start',
+    loadComponent: () => import('./start/start.page').then((m) => m.StartPage),
+    ...SIGNED_IN,
+  },
+  {
     path: 'calendar',
     loadComponent: () => import('./calendar/calendar.page').then((m) => m.CalendarPage),
     ...SIGNED_IN,
@@ -38,7 +45,18 @@ export const routes: Routes = [
   {
     path: 'planner',
     loadComponent: () => import('./planner/planner.page').then((m) => m.PlannerPage),
+    // Без права ViewProject — на REDIRECT_URL (те саме, що ховає пункт меню «Планер»).
     ...SIGNED_IN,
+    canActivate: [...SIGNED_IN.canActivate, requireAnyPermission(PLANNER_PERMISSIONS)],
+    data: { layoutSection: 'planner' },
+  },
+  {
+    // Планер одного проєкту (клік по проєкту в боковому меню): та сама сторінка, `id` проєкту
+    // приходить її входом `id`.
+    path: 'planner/projects/:id',
+    loadComponent: () => import('./planner/planner.page').then((m) => m.PlannerPage),
+    ...SIGNED_IN,
+    canActivate: [...SIGNED_IN.canActivate, requireAnyPermission(PLANNER_PERMISSIONS)],
     data: { layoutSection: 'planner' },
   },
   {

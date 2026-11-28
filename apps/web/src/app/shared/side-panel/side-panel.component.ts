@@ -6,7 +6,8 @@ import { TranslatePipe } from '@ngx-translate/core';
  * Універсальне висувне бокове вікно: зміст довільний (`ng-content`), праворуч від
  * вмісту сторінки, згори донизу сторінки (поверх її шапки). Закривається кнопкою
  * з хрестиком, клавішею Esc і кліком будь-де поза вікном (по іншому елементу
- * інтерфейсу чи порожньому тілу сторінки); фокус при відкритті йде на хрестик, а при
+ * інтерфейсу чи порожньому тілу сторінки; клік у спливаючому меню чи вікні Ionic —
+ * `ion-popover`, `ion-modal` — не закриває: їх відкривають і з самого вікна); фокус при відкритті йде на хрестик, а при
  * закритті повертається на елемент, що його мав.
  *
  *   <button (click)="panel.open()">…</button>
@@ -66,7 +67,9 @@ export class SidePanelComponent {
       }
       const onClick = (event: Event) => {
         const panel = this.panel()?.nativeElement;
-        if (panel && !event.composedPath().includes(panel)) {
+        // Спливаюче меню чи вікно поверх сторінки (наприклад, меню, відкрите з бічного вікна) — не «поза».
+        const inOverlay = event.composedPath().some((target) => target instanceof Element && target.matches('ion-popover, ion-modal'));
+        if (panel && !inOverlay && !event.composedPath().includes(panel)) {
           this.close();
         }
       };
