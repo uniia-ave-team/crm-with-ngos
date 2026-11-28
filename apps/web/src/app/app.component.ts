@@ -18,6 +18,7 @@ import {
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { AccountsService } from './core/accounts/accounts.service';
+import { AppTitleService } from './core/i18n/app-title.service';
 import { TABLE_TEMPLATES_PERMISSIONS, hasAnyPermission } from './core/auth/permissions';
 import { KbAddDialogComponent } from './core/knowledge-base/kb-add-dialog/kb-add-dialog.component';
 import { ProjectActionDialogComponent } from './core/projects/project-action-dialog/project-action-dialog.component';
@@ -85,6 +86,8 @@ export class AppComponent {
   };
 
   private readonly currentUser = inject(CurrentUserService);
+  /** Заголовок вкладки («ГО — Явір»): сервіс оновлює його сам, досить створити. */
+  private readonly appTitle = inject(AppTitleService);
   private readonly router = inject(Router);
   private readonly menu = inject(MenuController);
 

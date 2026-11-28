@@ -1,6 +1,8 @@
 {
   "name": "Українська",
   "common": {
+    "appName": "Явір",
+    "pageTitle": "{{ngo}} — {{app}}",
     "emptyState": "Тут поки порожньо",
     "mainNav": "Основна навігація",
     "collapsePanel": "Згорнути панель",

@@ -87,6 +87,12 @@ Production-образ локально: `just up` з кореня репозит
   під мобільні панелі резервується лише всередині оболонки. Поки йде пошук чинного
   акаунта (старт застосунку, перехід на захищену сторінку), поверх усього
   показується повноекранний прелоадер (`shared/preloader`).
+- **Заголовок вкладки й фавіконка.** Заголовок — «Назва ГО — Явір» (`AppTitleService` у
+  `core/i18n`: формат — `common.pageTitle`, назва застосунку — `common.appName` мовою
+  користувача, назва ГО — з активного акаунта); на `/login`, `/relogin`, `/join` і
+  `/reset-password`, а також поки назви ГО нема, — лише «Явір». Оновлюється з переходами, зміною
+  акаунта й мови. Фавіконка — лого застосунку з рейлу ПК-версії (`assets/icon/favicon.svg`; у
+  темній темі — відтінок темного лого; `favicon.png` 64×64 — для браузерів без SVG-іконок).
 - **Одинадцять сторінок:** `start` (стартова, див. нижче), `calendar` (порожня заглушка з
   перекладеним заголовком), `planner` (і `planner/projects/:id` — планер проєкту, див. нижче),
   `knowledge-base` (див. нижче), `colleagues`,
@@ -1741,7 +1747,7 @@ src/
     logos/, logos_white/       лого Унії та партнерів (світла й темна теми)
     login_image.jpg            зображення збоку форми входу за замовчуванням (фолбек)
     logo*.svg, logo_mobile_*.svg, zoria*.svg, shapes.svg
-    icon/                      favicon.png
+    icon/                      favicon.svg, favicon.png (лого застосунку)
   app/
     app.config.ts              провайдери застосунку (Ionic, маршрути, HTTP, переклади)
     app.routes.ts              маршрути сторінок (ліниве завантаження, стражі)
@@ -1753,6 +1759,7 @@ src/
                                 AccountMenuComponent, AddAccountComponent,
                                 SecondaryPanelComponent
       i18n/                    LanguageService, logos.ts (вибір лого «Явір» і Унії),
+                                AppTitleService (заголовок вкладки),
                                 languages.generated.ts (генерується, не комітиться)
       accounts/                AccountsService, AccountRestoreService, account-login.ts,
                                 account-avatar (аватар акаунта зі значками)
