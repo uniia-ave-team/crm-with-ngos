@@ -92,6 +92,27 @@ ion-header.header-ios {
   box-shadow: none;
 }
 
+/*
+ * Режим iOS (iPad, iPhone) малює шапку інакше, ніж решта (Material): заголовок — абсолютно по
+ * центру на всю ширину (довга назва заходить під кнопки), а кнопки шапки й бургер — основним синім
+ * кольором. Як і в Material: заголовок ліворуч у потоці (місце до кнопок), кнопки — кольору тексту меню.
+ */
+ion-title.ios {
+  position: relative;
+  width: auto;
+  height: auto;
+  padding: 0 20px;
+  font-size: 1.25rem;
+  font-weight: 500;
+  text-align: start;
+  pointer-events: auto;
+}
+
+ion-toolbar ion-button,
+ion-menu-button {
+  --color: var(--nav-fg-active);
+}
+
 
 /*
  * .planned — функція запланована, але ще не готова: елемент лишається в
